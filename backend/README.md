@@ -41,11 +41,13 @@ uvicorn app.main:app --reload
 Additional dependencies for the generator:
 
 ```bash
-pip install faker kafka-python
+pip install -r requirements.txt
 ```
 
-Run the generator (from the backend folder):
+Configure database access in `backend/.env` using either `DATABASE_URL` or the `POSTGRES_*` variables shown in `.env.example`.
+
+Run the generator from the `backend` folder:
 
 ```bash
-python -m app.generator.data_generator
+python -m app.generator.orchestrator
 ```
