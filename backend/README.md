@@ -35,3 +35,17 @@ pip install -r requirements.txt
 ```bash
 uvicorn app.main:app --reload
 ```
+
+## Data generator
+
+Additional dependencies for the generator:
+
+```bash
+pip install faker kafka-python
+```
+
+Run the generator (from the backend folder):
+
+```bash
+python -m app.generator.data_generator
+```
