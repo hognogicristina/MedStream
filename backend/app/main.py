@@ -9,17 +9,27 @@ from app.api.patients import router as patients_router
 from app.api.vitals import router as vitals_router
 from app.db.init_db import init_db
 from app.api.ws import router as ws_router
+from app.api.stats import router as stats_router
 
 from app.kafka.consumer import run as run_consumer
 import threading
+
+import time
+from app.batch.patient_stats_job import run as run_batch
+
+
+def batch_loop():
+    while True:
+        time.sleep(15)
+        run_batch()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
 
-    thread = threading.Thread(target=run_consumer, daemon=True)
-    thread.start()
+    threading.Thread(target=run_consumer, daemon=True).start()
+    threading.Thread(target=batch_loop, daemon=True).start()
 
     yield
 
@@ -39,6 +49,7 @@ app.include_router(doctors_router)
 app.include_router(vitals_router)
 app.include_router(alerts_router)
 app.include_router(ws_router)
+app.include_router(stats_router)
 
 
 @app.get("/health")

@@ -1,29 +1,43 @@
-import random
 import time
 
 from app.core.config import settings
+from app.db.session import SessionLocal
 from app.kafka.producer import send_message
+from app.models.patient import Patient
+from app.simulator.patient_profiles import generate_vitals, pick_profile
 
-PATIENT_IDS = [1]
 
-
-def generate_vital(patient_id: int):
-    return {
-        "patient_id": patient_id,
-        "heart_rate": random.randint(70, 140),
-        "oxygen_saturation": random.randint(88, 100),
-        "temperature": random.randint(36, 40),
-        "systolic_bp": random.randint(100, 170),
-        "diastolic_bp": random.randint(65, 110),
-    }
+def load_patients():
+    with SessionLocal() as db:
+        return db.query(Patient).all()
 
 
 def run():
+    patients = load_patients()
+
+    patient_profiles = {
+        p.id: pick_profile() for p in patients
+    }
+
+    print("Assigned profiles:")
+    for pid, profile in patient_profiles.items():
+        print(f"Patient {pid}: {profile['name']}")
+
     while True:
-        for patient_id in PATIENT_IDS:
-            payload = generate_vital(patient_id)
+        for patient in patients:
+            profile = patient_profiles[patient.id]
+
+            vitals = generate_vitals(profile)
+
+            payload = {
+                "patient_id": patient.id,
+                **vitals,
+            }
+
             send_message(settings.kafka_vitals_topic, payload)
-            print("Produced:", payload)
+
+            print(f"P{patient.id} ({profile['name']}):", payload)
+
         time.sleep(2)
 
 
