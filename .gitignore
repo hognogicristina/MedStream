@@ -1,8 +1,14 @@
-# OS files
-.DS_Store
-Thumbs.db
-
-# Editor/IDE
-.vscode/
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+dist/
+build/
+.next/
 .idea/
-*.iml
+.vscode/
+.DS_Store
+pgadmin-data/
+postgres-data/
