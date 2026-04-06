@@ -1,4 +1,5 @@
 import json
+import time
 
 from confluent_kafka import Consumer
 
@@ -9,6 +10,7 @@ from app.models.vital import Vital
 
 from app.websocket.manager import manager
 import asyncio
+from datetime import datetime
 
 
 def build_consumer():
@@ -64,69 +66,96 @@ def create_alerts(db, vital):
 
 
 def run():
-    consumer = build_consumer()
-    consumer.subscribe([settings.kafka_vitals_topic])
-
-    try:
+    while True:
+        consumer = None
         while True:
-            message = consumer.poll(1.0)
+            try:
+                consumer = build_consumer()
+                consumer.subscribe([settings.kafka_vitals_topic, settings.kafka_events_topic])
 
-            if message is None:
-                continue
+                while True:
+                    message = consumer.poll(1.0)
 
-            if message.error():
-                print("Consumer error:", message.error())
-                continue
+                    if message is None:
+                        continue
 
-            payload = json.loads(message.value().decode("utf-8"))
+                    if message.error():
+                        print("Consumer error:", message.error())
+                        raise RuntimeError(str(message.error()))
 
-            with SessionLocal() as db:
-                vital = Vital(**payload)
-                db.add(vital)
-                db.commit()
-                db.refresh(vital)
+                    payload = json.loads(message.value().decode("utf-8"))
 
-                alerts = create_alerts(db, vital)
-                db.commit()
-
-                print("Consumed vital:", payload)
-
-                asyncio.run(
-                    manager.broadcast(
-                        {
-                            "type": "vital",
-                            "data": {
-                                "patient_id": vital.patient_id,
-                                "heart_rate": vital.heart_rate,
-                                "oxygen_saturation": vital.oxygen_saturation,
-                                "temperature": vital.temperature,
-                                "systolic_bp": vital.systolic_bp,
-                                "diastolic_bp": vital.diastolic_bp,
-                                "recorded_at": str(vital.recorded_at),
-                            },
+                    if message.topic() == settings.kafka_events_topic:
+                        event_payload = {
+                            "patient_id": payload.get("patient_id"),
+                            "event_type": payload.get("event_type"),
+                            "message": payload.get("message"),
+                            "timestamp": payload.get("timestamp") or datetime.utcnow().isoformat(),
                         }
-                    )
-                )
 
-                for alert in alerts:
-                    print("Created alert:", alert.alert_type, alert.message)
+                        print("Consumed event:", event_payload)
 
-                    asyncio.run(
-                        manager.broadcast(
-                            {
-                                "type": "alert",
-                                "data": {
-                                    "patient_id": alert.patient_id,
-                                    "type": alert.alert_type,
-                                    "message": alert.message,
-                                    "severity": alert.severity,
-                                },
-                            }
+                        asyncio.run(
+                            manager.broadcast(
+                                {
+                                    "type": "event",
+                                    "data": event_payload,
+                                }
+                            )
                         )
-                    )
+                        continue
 
-    finally:
-        consumer.close()
+                    with SessionLocal() as db:
+                        vital = Vital(**payload)
+                        db.add(vital)
+                        db.commit()
+                        db.refresh(vital)
+
+                        alerts = create_alerts(db, vital)
+                        db.commit()
+
+                        print("Consumed vital:", payload)
+
+                        asyncio.run(
+                            manager.broadcast(
+                                {
+                                    "type": "vital",
+                                    "data": {
+                                        "patient_id": vital.patient_id,
+                                        "heart_rate": vital.heart_rate,
+                                        "oxygen_saturation": vital.oxygen_saturation,
+                                        "temperature": vital.temperature,
+                                        "systolic_bp": vital.systolic_bp,
+                                        "diastolic_bp": vital.diastolic_bp,
+                                        "recorded_at": str(vital.recorded_at),
+                                    },
+                                }
+                            )
+                        )
+
+                        for alert in alerts:
+                            print("Created alert:", alert.alert_type, alert.message)
+
+                            asyncio.run(
+                                manager.broadcast(
+                                    {
+                                        "type": "alert",
+                                        "data": {
+                                            "patient_id": alert.patient_id,
+                                            "type": alert.alert_type,
+                                            "message": alert.message,
+                                            "severity": alert.severity,
+                                        },
+                                    }
+                                )
+                            )
+            except Exception as e:
+                print("Consumer reconnecting after error:", e)
+                time.sleep(5)
+            finally:
+                if consumer is not None:
+                    consumer.close()
+            break
 
 
 if __name__ == "__main__":

@@ -13,32 +13,51 @@ def load_patients():
 
 
 def run():
-    patients = load_patients()
-
-    patient_profiles = {
-        p.id: pick_profile() for p in patients
-    }
-
-    print("Assigned profiles:")
-    for pid, profile in patient_profiles.items():
-        print(f"Patient {pid}: {profile['name']}")
-
     while True:
-        for patient in patients:
-            profile = patient_profiles[patient.id]
+        try:
+            patients = load_patients()
 
-            vitals = generate_vitals(profile)
-
-            payload = {
-                "patient_id": patient.id,
-                **vitals,
+            patient_profiles = {
+                p.id: pick_profile() for p in patients
             }
 
-            send_message(settings.kafka_vitals_topic, payload)
+            print("Assigned profiles:")
+            for pid, profile in patient_profiles.items():
+                print(f"Patient {pid}: {profile['name']}")
 
-            print(f"P{patient.id} ({profile['name']}):", payload)
+            while True:
+                try:
+                    refreshed_patients = load_patients()
 
-        time.sleep(2)
+                    if len(refreshed_patients) != len(patients):
+                        patients = refreshed_patients
+                        for patient in patients:
+                            if patient.id not in patient_profiles:
+                                patient_profiles[patient.id] = pick_profile()
+                    else:
+                        patients = refreshed_patients
+
+                    for patient in patients:
+                        profile = patient_profiles[patient.id]
+
+                        vitals = generate_vitals(profile)
+
+                        payload = {
+                            "patient_id": patient.id,
+                            **vitals,
+                        }
+
+                        send_message(settings.kafka_vitals_topic, payload)
+
+                        print(f"P{patient.id} ({profile['name']}):", payload)
+
+                    time.sleep(2)
+                except Exception as e:
+                    print("Simulator error:", e)
+                    time.sleep(2)
+        except Exception as e:
+            print("Simulator restart after error:", e)
+            time.sleep(5)
 
 
 if __name__ == "__main__":

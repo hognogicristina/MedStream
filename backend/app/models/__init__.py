@@ -3,4 +3,5 @@ from app.models.doctor import Doctor
 from app.models.encounter import Encounter
 from app.models.vital import Vital
 from app.models.alert import Alert
+from app.models.medication_administration import MedicationAdministration
 from app.models.patient_stats import PatientStats

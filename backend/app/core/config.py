@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     kafka_bootstrap_servers: str = "localhost:9092"
     kafka_vitals_topic: str = "vitals-events"
+    kafka_events_topic: str = "hospital-events"
 
     heart_rate_alert_threshold: int = 120
     oxygen_alert_threshold: int = 92

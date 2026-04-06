@@ -1,6 +1,6 @@
 from app.db.base import Base
 from app.db.session import engine
-from app.models import Patient, Doctor, Encounter, Vital, Alert
+from app.models import Alert, Doctor, Encounter, MedicationAdministration, Patient, Vital
 
 
 def init_db():
