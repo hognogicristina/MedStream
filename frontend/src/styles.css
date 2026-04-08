@@ -357,6 +357,12 @@ select {
   height: 100%;
 }
 
+.register-step-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .login-field {
   display: flex;
   flex-direction: column;
@@ -373,19 +379,29 @@ select {
 
 .login-input {
   width: 100%;
-  border: 1px solid #5b646e;
-  border-radius: 12px;
-  background: #161b22;
-  padding: 13px 16px;
-  font-size: 0.95rem;
+  border: 1px solid #2a3441;
+  border-radius: 8px;
+  background: #0f141a;
+  padding: 12px 12px;
+  font-size: 0.875rem;
   color: #ffffff;
   outline: none;
 }
 
 .login-input:focus {
   border-color: #ff9900;
-  outline: 2px solid rgba(255, 153, 0, 0.22);
+  outline: 2px solid rgba(255, 153, 0, 0.4);
   outline-offset: 0;
+}
+
+.phone-field-row {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.auth-phone-prefix {
+  appearance: none;
 }
 
 .login-error {
@@ -505,7 +521,7 @@ select {
     width: 1px;
     height: 100%;
     align-self: stretch;
-    background: #3b424b;
+    background: #2a3441;
     flex: 0 0 1px;
   }
 

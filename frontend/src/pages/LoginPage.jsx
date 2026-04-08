@@ -65,6 +65,7 @@ export default function LoginPage() {
           </aside>
 
           <div className="auth-divider" aria-hidden="true"/>
+          <div className="hidden lg:block w-px bg-[#2a3441] mx-6"/>
 
           <div className="login-panel">
             <div className="login-header">
@@ -74,6 +75,7 @@ export default function LoginPage() {
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
+
               <div className="login-field">
                 <label className="login-label" htmlFor="email">
                   Email

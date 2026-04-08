@@ -9,10 +9,14 @@ export default function RegisterPage() {
     first_name: "",
     last_name: "",
     email: "",
-    password: "",
+    phone_number: "",
     specialization: "",
     license_number: "",
+    password: "",
+    confirm_password: "",
   })
+  const [phonePrefix, setPhonePrefix] = useState("+40")
+  const [phoneLocalNumber, setPhoneLocalNumber] = useState("")
   const [message, setMessage] = useState("")
   const [isError, setIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -22,32 +26,76 @@ export default function RegisterPage() {
     setForm((prev) => ({...prev, [name]: value}))
   }
 
+  const handlePhonePrefixChange = (value) => {
+    setPhonePrefix(value)
+    setForm((prev) => ({
+      ...prev,
+      phone_number: phoneLocalNumber ? `${value}${phoneLocalNumber}` : "",
+    }))
+  }
+
+  const handlePhoneNumberChange = (value) => {
+    const sanitizedValue = value.replace(/\D/g, "")
+    setPhoneLocalNumber(sanitizedValue)
+    setForm((prev) => ({
+      ...prev,
+      phone_number: sanitizedValue ? `${phonePrefix}${sanitizedValue}` : "",
+    }))
+  }
+
   const handleNextStep = () => {
-    if (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim() || !form.password.trim()) {
+    if (step === 1 && (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim() || !form.phone_number.trim())) {
       setIsError(true)
       setMessage("Complete all account details before continuing.")
       return
     }
 
+    if (step === 2 && (!form.specialization.trim() || !form.license_number.trim())) {
+      setIsError(true)
+      setMessage("Complete all professional details before continuing.")
+      return
+    }
+
     setMessage("")
     setIsError(false)
-    setStep(2)
+    setStep((current) => Math.min(current + 1, 3))
   }
 
   const handlePreviousStep = () => {
     setMessage("")
     setIsError(false)
-    setStep(1)
+    setStep((current) => Math.max(current - 1, 1))
   }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setMessage("")
     setIsError(false)
+
+    if (!form.password.trim() || !form.confirm_password.trim()) {
+      setIsError(true)
+      setMessage("Complete password setup before creating the account.")
+      return
+    }
+
+    if (form.password !== form.confirm_password) {
+      setIsError(true)
+      setMessage("Password and confirm password must match.")
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
-      await api.post("/register", form)
+      await api.post("/register", {
+        first_name: form.first_name,
+        last_name: form.last_name,
+        email: form.email,
+        phone_number: form.phone_number,
+        specialization: form.specialization,
+        license_number: form.license_number,
+        password: form.password,
+      })
       navigate("/login", {
         state: {
           message: "Account created. Sign in to open the MedStream dashboard.",
@@ -95,9 +143,8 @@ export default function RegisterPage() {
               <p className="login-brand">Registration</p>
               <h1 className="login-title">Doctor Registration</h1>
               <p className="login-subtitle">Enter account and professional details to activate console access.</p>
-              <div
-                className="mt-4 inline-flex rounded-full border border-[#3b424b] bg-[#151b22] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">
-                Step {step} / Step 2
+              <div className="mt-4 inline-flex rounded-full border border-[#3b424b] bg-[#151b22] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">
+                Step {step} / Step 3
               </div>
             </div>
 
@@ -106,7 +153,7 @@ export default function RegisterPage() {
                 <div className="auth-section register-step-card transition-all duration-200">
                   <div className="auth-section-header">
                     <p className="auth-section-label">Account Details</p>
-                    <p className="auth-section-copy">Basic identity and sign-in information.</p>
+                    <p className="auth-section-copy">Basic identity and contact information.</p>
                   </div>
 
                   <div className="register-grid">
@@ -157,21 +204,33 @@ export default function RegisterPage() {
                   </div>
 
                   <div className="login-field">
-                    <label className="login-label" htmlFor="password">
-                      Password
+                    <label className="login-label" htmlFor="phone_local_number">
+                      Phone Number
                     </label>
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      value={form.password}
-                      onChange={handleChange}
-                      className="login-input"
-                      required
-                    />
+                    <div className="phone-field-row">
+                      <select
+                        value={phonePrefix}
+                        onChange={(event) => handlePhonePrefixChange(event.target.value)}
+                        className="login-input auth-phone-prefix"
+                        aria-label="Country code"
+                      >
+                        <option value="+40">+40</option>
+                        <option value="+44">+44</option>
+                        <option value="+1">+1</option>
+                      </select>
+                      <input
+                        id="phone_local_number"
+                        type="text"
+                        value={phoneLocalNumber}
+                        onChange={(event) => handlePhoneNumberChange(event.target.value)}
+                        className="login-input"
+                        placeholder="712345678"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
-              ) : (
+              ) : step === 2 ? (
                 <div className="auth-section register-step-card transition-all duration-200">
                   <div className="auth-section-header">
                     <p className="auth-section-label">Professional Details</p>
@@ -210,6 +269,43 @@ export default function RegisterPage() {
                     </div>
                   </div>
                 </div>
+              ) : (
+                <div className="auth-section register-step-card transition-all duration-200">
+                  <div className="auth-section-header">
+                    <p className="auth-section-label">Password Setup</p>
+                    <p className="auth-section-copy">Set and confirm the password for the doctor account.</p>
+                  </div>
+
+                  <div className="login-field">
+                    <label className="login-label" htmlFor="password">
+                      Password
+                    </label>
+                    <input
+                      id="password"
+                      name="password"
+                      type="password"
+                      value={form.password}
+                      onChange={handleChange}
+                      className="login-input"
+                      required
+                    />
+                  </div>
+
+                  <div className="login-field">
+                    <label className="login-label" htmlFor="confirm_password">
+                      Confirm Password
+                    </label>
+                    <input
+                      id="confirm_password"
+                      name="confirm_password"
+                      type="password"
+                      value={form.confirm_password}
+                      onChange={handleChange}
+                      className="login-input"
+                      required
+                    />
+                  </div>
+                </div>
               )}
 
               {message && (
@@ -219,14 +315,25 @@ export default function RegisterPage() {
               )}
 
               <div className="auth-actions">
-                {step === 1 ? (
-                  <button
-                    type="button"
-                    onClick={handleNextStep}
-                    className="login-button"
-                  >
-                    Next
-                  </button>
+                {step < 3 ? (
+                  <div className="flex gap-3">
+                    {step > 1 && (
+                      <button
+                        type="button"
+                        onClick={handlePreviousStep}
+                        className="console-button-secondary w-full rounded-2xl px-4 py-3 font-semibold"
+                      >
+                        Back
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleNextStep}
+                      className="login-button"
+                    >
+                      Next
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex gap-3">
                     <button
