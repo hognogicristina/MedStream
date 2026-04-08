@@ -1,9 +1,10 @@
-import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import { api } from "../services/api"
+import {useState} from "react"
+import {Link, useNavigate} from "react-router-dom"
+import {api} from "../services/api"
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const [step, setStep] = useState(1)
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -17,8 +18,26 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleChange = (event) => {
-    const { name, value } = event.target
-    setForm((prev) => ({ ...prev, [name]: value }))
+    const {name, value} = event.target
+    setForm((prev) => ({...prev, [name]: value}))
+  }
+
+  const handleNextStep = () => {
+    if (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim() || !form.password.trim()) {
+      setIsError(true)
+      setMessage("Complete all account details before continuing.")
+      return
+    }
+
+    setMessage("")
+    setIsError(false)
+    setStep(2)
+  }
+
+  const handlePreviousStep = () => {
+    setMessage("")
+    setIsError(false)
+    setStep(1)
   }
 
   const handleSubmit = async (event) => {
@@ -69,30 +88,68 @@ export default function RegisterPage() {
             </div>
           </aside>
 
+          <div className="auth-divider" aria-hidden="true"/>
+
           <div className="login-panel">
             <div className="login-header">
               <p className="login-brand">Registration</p>
               <h1 className="login-title">Doctor Registration</h1>
               <p className="login-subtitle">Enter account and professional details to activate console access.</p>
+              <div
+                className="mt-4 inline-flex rounded-full border border-[#3b424b] bg-[#151b22] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">
+                Step {step} / Step 2
+              </div>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
-              <div className="auth-section">
-                <div className="auth-section-header">
-                  <p className="auth-section-label">Account Details</p>
-                  <p className="auth-section-copy">Basic identity and sign-in information.</p>
-                </div>
+              {step === 1 ? (
+                <div className="auth-section register-step-card transition-all duration-200">
+                  <div className="auth-section-header">
+                    <p className="auth-section-label">Account Details</p>
+                    <p className="auth-section-copy">Basic identity and sign-in information.</p>
+                  </div>
 
-                <div className="register-grid">
+                  <div className="register-grid">
+                    <div className="login-field">
+                      <label className="login-label" htmlFor="first_name">
+                        First Name
+                      </label>
+                      <input
+                        id="first_name"
+                        name="first_name"
+                        type="text"
+                        value={form.first_name}
+                        onChange={handleChange}
+                        className="login-input"
+                        required
+                      />
+                    </div>
+
+                    <div className="login-field">
+                      <label className="login-label" htmlFor="last_name">
+                        Last Name
+                      </label>
+                      <input
+                        id="last_name"
+                        name="last_name"
+                        type="text"
+                        value={form.last_name}
+                        onChange={handleChange}
+                        className="login-input"
+                        required
+                      />
+                    </div>
+                  </div>
+
                   <div className="login-field">
-                    <label className="login-label" htmlFor="first_name">
-                      First Name
+                    <label className="login-label" htmlFor="email">
+                      Email
                     </label>
                     <input
-                      id="first_name"
-                      name="first_name"
-                      type="text"
-                      value={form.first_name}
+                      id="email"
+                      name="email"
+                      type="email"
+                      value={form.email}
                       onChange={handleChange}
                       className="login-input"
                       required
@@ -100,90 +157,60 @@ export default function RegisterPage() {
                   </div>
 
                   <div className="login-field">
-                    <label className="login-label" htmlFor="last_name">
-                      Last Name
+                    <label className="login-label" htmlFor="password">
+                      Password
                     </label>
                     <input
-                      id="last_name"
-                      name="last_name"
-                      type="text"
-                      value={form.last_name}
+                      id="password"
+                      name="password"
+                      type="password"
+                      value={form.password}
                       onChange={handleChange}
                       className="login-input"
                       required
                     />
                   </div>
                 </div>
-
-                <div className="login-field">
-                  <label className="login-label" htmlFor="email">
-                    Email
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={form.email}
-                    onChange={handleChange}
-                    className="login-input"
-                    required
-                  />
-                </div>
-
-                <div className="login-field">
-                  <label className="login-label" htmlFor="password">
-                    Password
-                  </label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    value={form.password}
-                    onChange={handleChange}
-                    className="login-input"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="auth-section">
-                <div className="auth-section-header">
-                  <p className="auth-section-label">Professional Details</p>
-                  <p className="auth-section-copy">Clinical role and license information.</p>
-                </div>
-
-                <div className="register-grid">
-                  <div className="login-field">
-                    <label className="login-label" htmlFor="specialization">
-                      Specialization
-                    </label>
-                    <input
-                      id="specialization"
-                      name="specialization"
-                      type="text"
-                      value={form.specialization}
-                      onChange={handleChange}
-                      className="login-input"
-                      required
-                    />
+              ) : (
+                <div className="auth-section register-step-card transition-all duration-200">
+                  <div className="auth-section-header">
+                    <p className="auth-section-label">Professional Details</p>
+                    <p className="auth-section-copy">Clinical role and license information.</p>
                   </div>
 
-                  <div className="login-field">
-                    <label className="login-label" htmlFor="license_number">
-                      License Number
-                    </label>
-                    <input
-                      id="license_number"
-                      name="license_number"
-                      type="text"
-                      value={form.license_number}
-                      onChange={handleChange}
-                      className="login-input"
-                      required
-                    />
+                  <div className="register-grid">
+                    <div className="login-field">
+                      <label className="login-label" htmlFor="specialization">
+                        Specialization
+                      </label>
+                      <input
+                        id="specialization"
+                        name="specialization"
+                        type="text"
+                        value={form.specialization}
+                        onChange={handleChange}
+                        className="login-input"
+                        required
+                      />
+                    </div>
+
+                    <div className="login-field">
+                      <label className="login-label" htmlFor="license_number">
+                        License Number
+                      </label>
+                      <input
+                        id="license_number"
+                        name="license_number"
+                        type="text"
+                        value={form.license_number}
+                        onChange={handleChange}
+                        className="login-input"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {message && (
                 <p className={isError ? "login-error" : "login-success"}>
@@ -192,13 +219,32 @@ export default function RegisterPage() {
               )}
 
               <div className="auth-actions">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="login-button"
-                >
-                  {isSubmitting ? "Creating account..." : "Create Account"}
-                </button>
+                {step === 1 ? (
+                  <button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="login-button"
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={handlePreviousStep}
+                      className="console-button-secondary w-full rounded-2xl px-4 py-3 font-semibold"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="login-button"
+                    >
+                      {isSubmitting ? "Creating account..." : "Create Account"}
+                    </button>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <Link className="auth-link" to="/login">

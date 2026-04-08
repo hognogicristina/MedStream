@@ -1,10 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react"
+import {createContext, useContext, useEffect, useMemo, useState} from "react"
 
 const AUTH_STORAGE_KEY = "medstream_token"
 
 const AuthContext = createContext(null)
 
-export function AuthProvider({ children }) {
+export function AuthProvider({children}) {
   const [token, setToken] = useState(() => localStorage.getItem(AUTH_STORAGE_KEY))
 
   useEffect(() => {

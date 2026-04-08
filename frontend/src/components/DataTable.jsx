@@ -1,22 +1,22 @@
-import { useEffect, useState } from "react"
+import {useEffect, useState} from "react"
 
 export default function DataTable({
-  items,
-  loading = false,
-  loadingMessage = "Loading data...",
-  emptyMessage = "No records found.",
-  pageSize = 10,
-  sortOptions = [],
-  defaultSort,
-  filters = [],
-  getItemKey,
-  renderHeader,
-  renderRow,
-  rowClassName,
-  bodyClassName = "divide-y divide-[#3b424b]",
-  shellClassName = "overflow-hidden rounded-[24px] border border-[#3b424b] bg-[#151b22]",
-  controlsLayoutClassName,
-}) {
+                                    items,
+                                    loading = false,
+                                    loadingMessage = "Loading data...",
+                                    emptyMessage = "No records found.",
+                                    pageSize = 10,
+                                    sortOptions = [],
+                                    defaultSort,
+                                    filters = [],
+                                    getItemKey,
+                                    renderHeader,
+                                    renderRow,
+                                    rowClassName,
+                                    bodyClassName = "divide-y divide-[#3b424b]",
+                                    shellClassName = "overflow-hidden rounded-[24px] border border-[#3b424b] bg-[#151b22]",
+                                    controlsLayoutClassName,
+                                  }) {
   const pageSizeOptions = [5, 10, 15, 25]
   const buildInitialFilterValues = () =>
     Object.fromEntries(
@@ -32,7 +32,7 @@ export default function DataTable({
     const nextDefaults = buildInitialFilterValues()
 
     setFilterValues((current) => {
-      const nextValues = { ...nextDefaults, ...current }
+      const nextValues = {...nextDefaults, ...current}
       const isSame = Object.keys(nextValues).every((key) => nextValues[key] === current[key])
       return isSame ? current : nextValues
     })
@@ -58,7 +58,7 @@ export default function DataTable({
   const paginatedItems = sortedItems.slice((currentPage - 1) * activePageSize, currentPage * activePageSize)
   const pageNumbers = (() => {
     if (maxPage <= 7) {
-      return Array.from({ length: maxPage }, (_, index) => index + 1)
+      return Array.from({length: maxPage}, (_, index) => index + 1)
     }
 
     if (currentPage <= 4) {
@@ -95,7 +95,7 @@ export default function DataTable({
                 id={filter.id}
                 type="text"
                 value={filterValues[filter.id] ?? ""}
-                onChange={(event) => setFilterValues((current) => ({ ...current, [filter.id]: event.target.value }))}
+                onChange={(event) => setFilterValues((current) => ({...current, [filter.id]: event.target.value}))}
                 placeholder={filter.placeholder}
                 disabled={filter.disabled}
                 className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[#6b7280]"
@@ -104,7 +104,7 @@ export default function DataTable({
               <select
                 id={filter.id}
                 value={filterValues[filter.id] ?? filter.defaultValue ?? "all"}
-                onChange={(event) => setFilterValues((current) => ({ ...current, [filter.id]: event.target.value }))}
+                onChange={(event) => setFilterValues((current) => ({...current, [filter.id]: event.target.value}))}
                 disabled={filter.disabled}
                 className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[#6b7280]"
               >

@@ -1,22 +1,22 @@
-import { useEffect, useState } from "react"
+import {useEffect, useState} from "react"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
-import { Link, useParams } from "react-router-dom"
+import {Link, useParams} from "react-router-dom"
 import DataTable from "../components/DataTable"
-import { api } from "../services/api"
-import { DEPARTMENTS, departmentHref } from "../constants/departments"
+import {api} from "../services/api"
+import {DEPARTMENTS, departmentHref} from "../constants/departments"
 
 const SEVERITY_FILTERS = [
-  { value: "all", label: "All patients" },
-  { value: "critical", label: "Critical alerts present" },
-  { value: "high", label: "High alerts present" },
-  { value: "normal", label: "Normal alerts present" },
-  { value: "any", label: "Any alerts present" },
-  { value: "none", label: "No alerts present" },
+  {value: "all", label: "All patients"},
+  {value: "critical", label: "Critical alerts present"},
+  {value: "high", label: "High alerts present"},
+  {value: "normal", label: "Normal alerts present"},
+  {value: "any", label: "Any alerts present"},
+  {value: "none", label: "No alerts present"},
 ]
 
 export default function DepartmentPage() {
-  const { name } = useParams()
+  const {name} = useParams()
   const departmentName = decodeURIComponent(name || "")
   const [patients, setPatients] = useState([])
   const [stats, setStats] = useState([])
@@ -99,7 +99,7 @@ export default function DepartmentPage() {
           <div className="flex flex-col gap-4">
             <div className="flex items-start justify-between gap-4">
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#9dccff]">Department Analytics</p>
-              <BackButton />
+              <BackButton/>
             </div>
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{departmentName}</h1>
@@ -130,7 +130,7 @@ export default function DepartmentPage() {
               <h2 className="mt-2 text-2xl font-semibold text-white">{departmentName}</h2>
             </div>
             <div className="console-chip rounded-full px-4 py-2 text-sm font-medium">
-              <CountValue value={patients.length} /> patients
+              <CountValue value={patients.length}/> patients
             </div>
           </div>
 
@@ -142,8 +142,10 @@ export default function DepartmentPage() {
             </div>
             <div className="monitor-panel rounded-2xl p-4">
               <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Last Successful Run</p>
-              <p className="mt-2 text-lg font-semibold text-white">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleTimeString() : "--"}</p>
-              <p className="mt-2 text-sm text-[#b6bec9]">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleDateString() : "No successful batch run yet"}</p>
+              <p
+                className="mt-2 text-lg font-semibold text-white">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleTimeString() : "--"}</p>
+              <p
+                className="mt-2 text-sm text-[#b6bec9]">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleDateString() : "No successful batch run yet"}</p>
             </div>
             <div className="monitor-panel rounded-2xl p-4">
               <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Avg HR</p>
@@ -158,7 +160,7 @@ export default function DepartmentPage() {
             <div className="monitor-panel rounded-2xl p-4">
               <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Avg O2</p>
               <p className="mt-2 text-lg font-semibold text-white">{stats.length ? averageOxygen.toFixed(1) : "--"}</p>
-              <p className="mt-2 text-sm text-[#b6bec9]"><CountValue value={aggregateAlerts} /> aggregated alerts in this department.</p>
+              <p className="mt-2 text-sm text-[#b6bec9]"><CountValue value={aggregateAlerts}/> aggregated alerts in this department.</p>
             </div>
           </div>
 
@@ -194,7 +196,7 @@ export default function DepartmentPage() {
                 type: "select",
                 defaultValue: "all",
                 options: SEVERITY_FILTERS,
-                matches: ({ alertSummary }, value) => {
+                matches: ({alertSummary}, value) => {
                   if (value === "all") {
                     return true
                   }
@@ -217,19 +219,19 @@ export default function DepartmentPage() {
                 defaultValue: "all",
                 disabled: availableConditions.length === 0,
                 options: [
-                  { value: "all", label: availableConditions.length === 0 ? "Condition not available" : "All conditions" },
+                  {value: "all", label: availableConditions.length === 0 ? "Condition not available" : "All conditions"},
                   ...availableConditions.map((condition) => ({
                     value: condition,
                     label: condition,
                   })),
                 ],
-                matches: ({ patient }, value) => value === "all" || patient.condition === value,
+                matches: ({patient}, value) => value === "all" || patient.condition === value,
               },
             ]}
             getItemKey={(row) => row.patient.id}
             shellClassName="space-y-3"
             bodyClassName="space-y-3"
-            renderRow={({ patient, stat, alertSummary }) => {
+            renderRow={({patient, stat, alertSummary}) => {
               const strongestSeverity = alertSummary.severities.has("critical")
                 ? "critical"
                 : alertSummary.severities.has("high")
@@ -249,7 +251,8 @@ export default function DepartmentPage() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {strongestSeverity && (
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${strongestSeverity === "critical" ? "console-chip-danger" : strongestSeverity === "high" ? "console-chip-warm" : "console-chip-success"}`}>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${strongestSeverity === "critical" ? "console-chip-danger" : strongestSeverity === "high" ? "console-chip-warm" : "console-chip-success"}`}>
                           {strongestSeverity} alert presence
                         </span>
                       )}
@@ -260,7 +263,7 @@ export default function DepartmentPage() {
                       )}
                       {stat ? (
                         <span className="console-chip-danger rounded-full px-3 py-1 text-xs font-semibold">
-                          <CountValue value={stat.alerts_count} /> batch alerts
+                          <CountValue value={stat.alerts_count}/> batch alerts
                         </span>
                       ) : (
                         <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">

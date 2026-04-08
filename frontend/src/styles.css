@@ -19,10 +19,9 @@ a,
 button,
 input,
 select {
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease;
+  transition: background-color 0.18s ease,
+  border-color 0.18s ease,
+  color 0.18s ease;
 }
 
 .app-shell {
@@ -264,8 +263,13 @@ select {
 }
 
 .login-layout {
-  display: grid;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.auth-divider {
+  display: none;
 }
 
 .login-aside {
@@ -339,6 +343,18 @@ select {
 .register-grid {
   display: grid;
   gap: 18px;
+}
+
+.register-sections {
+  display: grid;
+  gap: 18px;
+}
+
+.register-section-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: 100%;
 }
 
 .login-field {
@@ -475,13 +491,27 @@ select {
 
 @media (min-width: 900px) {
   .login-layout {
-    grid-template-columns: 1.05fr 1fr;
+    flex-direction: row;
+    align-items: stretch;
   }
 
   .login-aside {
     border-bottom: 0;
-    border-right: 1px solid #3b424b;
     padding: 40px;
+  }
+
+  .auth-divider {
+    display: block;
+    width: 1px;
+    height: 100%;
+    align-self: stretch;
+    background: #3b424b;
+    flex: 0 0 1px;
+  }
+
+  .login-aside,
+  .login-panel {
+    flex: 1 1 0;
   }
 
   .login-panel {
@@ -497,15 +527,17 @@ select {
   }
 
   .register-page .login-layout {
-    grid-template-columns: 0.96fr 1.04fr;
+    flex-direction: row;
   }
 
   .register-page .login-aside {
     padding: 36px;
+    flex: 0.96 1 0;
   }
 
   .register-page .login-panel {
     padding: 40px 40px 44px;
+    flex: 1.04 1 0;
   }
 
   .register-page .login-header {
@@ -516,12 +548,13 @@ select {
     gap: 22px;
   }
 
-  .register-page .auth-section {
-    padding: 20px;
+  .register-page .register-sections {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
   }
 
-  .register-page .auth-section + .auth-section {
-    margin-top: 2px;
+  .register-page .auth-section {
+    padding: 20px;
   }
 
   .register-page .auth-section-header {
@@ -560,6 +593,23 @@ select {
   color: #ffe3b8;
   background: #3a2d19;
   border-color: #b97a1c;
+}
+
+.console-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(15, 20, 26, 0.78);
+}
+
+.console-modal {
+  width: 100%;
+  max-width: 640px;
+  border: 1px solid #3b424b;
 }
 
 .alert-critical {

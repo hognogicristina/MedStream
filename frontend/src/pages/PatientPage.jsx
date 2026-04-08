@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react"
+import {useEffect, useRef, useState} from "react"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
-import { Link, useParams } from "react-router-dom"
-import { api } from "../services/api"
-import { createWebSocket } from "../services/ws"
+import {Link, useParams} from "react-router-dom"
+import {api} from "../services/api"
+import {createWebSocket} from "../services/ws"
 
 export default function PatientPage() {
-  const { id } = useParams()
+  const {id} = useParams()
   const pageSize = 5
   const [vitals, setVitals] = useState([])
   const [vitalsHistory, setVitalsHistory] = useState([])
@@ -94,7 +94,8 @@ export default function PatientPage() {
       if (msg.type === "alert") {
         setAlerts((prev) => [msg.data, ...prev.slice(0, 10)])
         alertAudioRef.current.currentTime = 0
-        alertAudioRef.current.play().catch(() => {})
+        alertAudioRef.current.play().catch(() => {
+        })
       }
     })
 
@@ -231,7 +232,7 @@ export default function PatientPage() {
                     Home
                   </Link>
                 </div>
-                <BackButton />
+                <BackButton/>
               </div>
               <div>
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Patient Details: {id}</h1>
@@ -285,7 +286,8 @@ export default function PatientPage() {
           </div>
           <div className="monitor-card rounded-[24px] p-5">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">O2 Saturation</p>
-            <p className="mt-3 text-3xl font-semibold text-[#9dccff]">{latestDisplayedVital ? latestDisplayedVital.oxygen_saturation : "--"}</p>
+            <p
+              className="mt-3 text-3xl font-semibold text-[#9dccff]">{latestDisplayedVital ? latestDisplayedVital.oxygen_saturation : "--"}</p>
           </div>
           <div className="monitor-card rounded-[24px] p-5">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Temperature</p>
@@ -299,7 +301,7 @@ export default function PatientPage() {
           </div>
           <div className="monitor-card rounded-[24px] p-5">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">History</p>
-            <p className="mt-3 text-3xl font-semibold text-[#9dccff]"><CountValue value={vitalsHistory.length} /></p>
+            <p className="mt-3 text-3xl font-semibold text-[#9dccff]"><CountValue value={vitalsHistory.length}/></p>
           </div>
         </section>
 
@@ -307,7 +309,7 @@ export default function PatientPage() {
           <div className="monitor-card rounded-[28px] p-6">
             <div className="mb-5 flex items-center justify-between">
               <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">
                   {isReplaying ? "Replay Mode" : "Live Feed"}
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Vitals Timeline</h2>
@@ -381,7 +383,8 @@ export default function PatientPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Escalations</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Patient Alerts</h2>
                 </div>
-                <span className="console-chip-danger rounded-full px-3 py-1 text-xs font-semibold"><CountValue value={alerts.length} /></span>
+                <span className="console-chip-danger rounded-full px-3 py-1 text-xs font-semibold"><CountValue
+                  value={alerts.length}/></span>
               </div>
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
@@ -421,7 +424,7 @@ export default function PatientPage() {
 
             <div className="monitor-card rounded-[28px] p-6">
               <div className="mb-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Medication</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Medication</p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Administer Medication</h2>
               </div>
               <form className="space-y-4" onSubmit={handleMedicationSubmit}>
@@ -460,7 +463,8 @@ export default function PatientPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Event Feed</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Patient Events</h2>
                 </div>
-                <span className="console-chip-success rounded-full px-3 py-1 text-xs font-semibold"><CountValue value={events.length} /></span>
+                <span className="console-chip-success rounded-full px-3 py-1 text-xs font-semibold"><CountValue
+                  value={events.length}/></span>
               </div>
               <ul className="space-y-3">
                 {events.length === 0 && (

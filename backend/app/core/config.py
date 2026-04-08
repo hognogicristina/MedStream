@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     kafka_alerts_topic: str = "alerts-events"
     kafka_events_topic: str = "hospital-events"
     batch_interval_seconds: int = 30
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_pass: str = ""
 
     heart_rate_alert_threshold: int = 120
     oxygen_alert_threshold: int = 92

@@ -1,13 +1,13 @@
-import { Link } from "react-router-dom"
-import { useState } from "react"
-import { useLocation, useNavigate } from "react-router-dom"
-import { useAuth } from "../auth/AuthContext"
-import { api } from "../services/api"
+import {Link} from "react-router-dom"
+import {useState} from "react"
+import {useLocation, useNavigate} from "react-router-dom"
+import {useAuth} from "../auth/AuthContext"
+import {api} from "../services/api"
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { login } = useAuth()
+  const {login} = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [feedback, setFeedback] = useState(location.state?.message || "")
@@ -48,7 +48,8 @@ export default function LoginPage() {
               </Link>
             </div>
             <h1 className="login-title">Doctor Access</h1>
-            <p className="login-subtitle">Authenticate into the operations console to monitor vitals, review alerts, and manage patient workflows.</p>
+            <p className="login-subtitle">Authenticate into the operations console to monitor vitals, review alerts, and manage patient
+              workflows.</p>
             <div className="auth-metrics">
               <div className="auth-metric">
                 <p className="auth-metric-label">Workspace</p>
@@ -62,6 +63,8 @@ export default function LoginPage() {
               </div>
             </div>
           </aside>
+
+          <div className="auth-divider" aria-hidden="true"/>
 
           <div className="login-panel">
             <div className="login-header">
@@ -97,6 +100,15 @@ export default function LoginPage() {
                   className="login-input"
                   required
                 />
+              </div>
+
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <Link className="auth-link" to="/forgot-password">
+                  Forgot password?
+                </Link>
+                <Link className="auth-link" to="/recover-account">
+                  Recover account
+                </Link>
               </div>
 
               {feedback && (

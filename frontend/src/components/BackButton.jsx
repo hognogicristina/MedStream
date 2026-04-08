@@ -1,6 +1,6 @@
-import { useNavigate } from "react-router-dom"
+import {useNavigate} from "react-router-dom"
 
-export default function BackButton({ fallbackTo = "/dashboard", label = "Back" }) {
+export default function BackButton({fallbackTo = "/dashboard", label = "Back"}) {
   const navigate = useNavigate()
 
   const handleClick = () => {

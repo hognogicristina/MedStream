@@ -1,8 +1,8 @@
-import { Link } from "react-router-dom"
-import { useAuth } from "../auth/AuthContext"
+import {Link} from "react-router-dom"
+import {useAuth} from "../auth/AuthContext"
 
 export default function HomePage() {
-  const { isAuthenticated } = useAuth()
+  const {isAuthenticated} = useAuth()
 
   return (
     <div className="app-shell flex min-h-screen items-center justify-center px-4 py-8 text-slate-100">
@@ -12,7 +12,8 @@ export default function HomePage() {
             <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.32em]">Operations Console</p>
             <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white sm:text-5xl">MedStream Console</h1>
             <p className="mt-4 max-w-2xl text-base text-[#b6bec9] sm:text-lg">
-              Hospital monitoring presented as a structured operations workspace with live vitals, alerts, admissions, and patient movement in one console.
+              Hospital monitoring presented as a structured operations workspace with live vitals, alerts, admissions, and patient movement
+              in one console.
             </p>
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
               <div className="monitor-panel rounded-[18px] p-4">
@@ -45,7 +46,8 @@ export default function HomePage() {
             </div>
             <h2 className="mt-3 text-3xl font-semibold text-white">Choose an entry point</h2>
             <p className="mt-3 text-sm leading-7 text-[#b6bec9]">
-              Access the operations dashboard, authenticate as a doctor, and move into live monitoring without leaving the MedStream workflow.
+              Access the operations dashboard, authenticate as a doctor, and move into live monitoring without leaving the MedStream
+              workflow.
             </p>
             <div className="mt-8 flex flex-col gap-4">
               <Link

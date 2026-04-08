@@ -4,9 +4,7 @@ from datetime import datetime
 from app.core.config import settings
 from app.kafka.producer import send_message
 
-
 PATIENT_ID = 1
-
 
 PHASES = [
     {

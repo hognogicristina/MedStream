@@ -32,7 +32,7 @@ function normalizeEvent(event) {
     ...event,
     timestamp,
     time: new Date(timestamp).toLocaleTimeString(),
-    id: event.id || createEventId({ ...event, timestamp }),
+    id: event.id || createEventId({...event, timestamp}),
   }
 }
 
@@ -68,7 +68,7 @@ function persistEvents(events) {
   }
 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(events))
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT, { detail: events }))
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT, {detail: events}))
 }
 
 export function readStoredEvents() {
@@ -104,7 +104,8 @@ export function pushStoredEvent(event) {
 
 export function subscribeToStoredEvents(listener) {
   if (typeof window === "undefined") {
-    return () => {}
+    return () => {
+    }
   }
 
   let lastEvents = readStoredEvents()

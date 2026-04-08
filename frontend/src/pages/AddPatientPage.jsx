@@ -1,7 +1,7 @@
-import { useState } from "react"
+import {useState} from "react"
 import BackButton from "../components/BackButton"
-import { Link, useNavigate } from "react-router-dom"
-import { api } from "../services/api"
+import {Link, useNavigate} from "react-router-dom"
+import {api} from "../services/api"
 
 export default function AddPatientPage() {
   const navigate = useNavigate()
@@ -18,7 +18,7 @@ export default function AddPatientPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleChange = (event) => {
-    const { name, value } = event.target
+    const {name, value} = event.target
     setForm((prev) => ({
       ...prev,
       [name]: value,
@@ -49,7 +49,7 @@ export default function AddPatientPage() {
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-4">
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Patient Intake</p>
-              <BackButton />
+              <BackButton/>
             </div>
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Add Patient</h1>

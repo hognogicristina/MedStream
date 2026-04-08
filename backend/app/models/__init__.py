@@ -1,3 +1,5 @@
+from app.models.doctor_patient import doctor_patients
+from app.models.doctor_password_reset import DoctorPasswordReset
 from app.models.patient import Patient
 from app.models.doctor import Doctor
 from app.models.encounter import Encounter

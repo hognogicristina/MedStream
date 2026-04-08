@@ -1,7 +1,8 @@
 from sqlalchemy import Date, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.doctor_patient import doctor_patients
 
 
 class Patient(Base):
@@ -14,3 +15,4 @@ class Patient(Base):
     cnp: Mapped[str] = mapped_column(String(13), unique=True)
     birth_date: Mapped[Date] = mapped_column(Date)
     gender: Mapped[str] = mapped_column(String(20))
+    doctors: Mapped[list["Doctor"]] = relationship("Doctor", secondary=doctor_patients, back_populates="patients")

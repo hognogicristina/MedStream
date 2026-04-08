@@ -26,13 +26,13 @@ function cleanupSocket() {
 }
 
 function broadcastMessage(payload) {
-  subscribers.forEach(({ onMessage }) => {
+  subscribers.forEach(({onMessage}) => {
     onMessage(payload)
   })
 }
 
 function broadcastError() {
-  subscribers.forEach(({ onError }) => {
+  subscribers.forEach(({onError}) => {
     onError?.()
   })
 }
@@ -93,7 +93,7 @@ export function createWebSocket(onMessage, onError) {
   clearCloseTimer()
 
   const id = `${Date.now()}-${subscriberId += 1}`
-  subscribers.set(id, { onMessage, onError })
+  subscribers.set(id, {onMessage, onError})
 
   if (socketState !== "open" && socketState !== "connecting") {
     connectSocket()
