@@ -1,49 +1,78 @@
 import {useEffect, useRef, useState} from "react"
-import {Link, useNavigate} from "react-router-dom"
-import { useAuth } from "../auth/AuthContext"
+import {Link} from "react-router-dom"
+import CountValue from "../components/CountValue"
 import {api} from "../services/api"
+import { pushStoredEvent, readStoredEvents, subscribeToStoredEvents } from "../services/eventsFeed"
 import {createWebSocket} from "../services/ws"
 import VitalsChart from "../components/VitalsChart"
+import { DEPARTMENTS, departmentHref } from "../constants/departments"
 
 export default function Dashboard() {
-    const navigate = useNavigate()
-    const { logout } = useAuth()
-    const pageSize = 5
     const livePageSize = 5
     const [vitals, setVitals] = useState([])
-    const [alerts, setAlerts] = useState([])
-    const [events, setEvents] = useState([])
+    const [visibleAlerts, setVisibleAlerts] = useState([])
+    const [alertCount, setAlertCount] = useState(0)
+    const [events, setEvents] = useState(() => readStoredEvents())
+    const [visibleEvents, setVisibleEvents] = useState(() => readStoredEvents().slice(0, 2))
     const [stats, setStats] = useState([])
+    const [batchStatus, setBatchStatus] = useState(null)
     const [patients, setPatients] = useState([])
+    const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
+    const [dashboardMessage, setDashboardMessage] = useState("")
+    const [dashboardMessageIsError, setDashboardMessageIsError] = useState(false)
+    const [newAlertIds, setNewAlertIds] = useState([])
     const alertAudioRef = useRef(null)
-    const [page, setPage] = useState(1)
-    const [alertsPage, setAlertsPage] = useState(1)
-    const [patientForm, setPatientForm] = useState({
-        first_name: "",
-        last_name: "",
-        cnp: "",
-        birth_date: "",
-        gender: "",
-        department: "ER",
-    })
-    const [isCreatingPatient, setIsCreatingPatient] = useState(false)
-    const [patientMessage, setPatientMessage] = useState("")
-    const [patientMessageIsError, setPatientMessageIsError] = useState(false)
+    const alertBufferRef = useRef([])
+    const eventBufferRef = useRef(readStoredEvents())
+    const alertHighlightTimeoutsRef = useRef([])
 
     if (!alertAudioRef.current) {
         alertAudioRef.current = new Audio("/alert.mp3")
     }
 
-    const loadDashboardData = async (nextPage = page) => {
-        const patientsRes = await api.get(`/patients?page=${nextPage}&limit=${pageSize}`)
-        const statsRes = await api.get("/stats")
-        setPatients(patientsRes.data)
-        setStats(statsRes.data)
+    const loadDashboardData = async () => {
+        setDashboardMessage("")
+        setDashboardMessageIsError(false)
+
+        try {
+            const [patientsRes, statsRes, batchStatusRes] = await Promise.all([
+                api.get("/patients?page=1&limit=100"),
+                api.get("/stats"),
+                api.get("/stats/batch-status"),
+            ])
+            setPatients(patientsRes.data)
+            setStats(statsRes.data)
+            setBatchStatus(batchStatusRes.data)
+        } catch {
+            setDashboardMessageIsError(true)
+            setDashboardMessage("Unable to load one or more dashboard data sources.")
+        } finally {
+            setIsLoadingDashboard(false)
+        }
     }
 
     useEffect(() => {
-        loadDashboardData(page)
-    }, [page])
+        loadDashboardData()
+    }, [])
+
+    useEffect(() => {
+        return subscribeToStoredEvents((nextEvents) => {
+            setEvents(nextEvents)
+            eventBufferRef.current = nextEvents
+        })
+    }, [])
+
+    useEffect(() => {
+        const intervalId = window.setInterval(async () => {
+            try {
+                const response = await api.get("/stats/batch-status")
+                setBatchStatus(response.data)
+            } catch {
+            }
+        }, 10000)
+
+        return () => window.clearInterval(intervalId)
+    }, [])
 
     useEffect(() => {
         const socket = createWebSocket((msg) => {
@@ -58,435 +87,377 @@ export default function Dashboard() {
             }
 
             if (msg.type === "alert") {
-                setAlerts((prev) => [msg.data, ...prev.slice(0, 10)])
+                alertBufferRef.current = [msg.data, ...alertBufferRef.current.filter((alert) => alert.id !== msg.data.id)].slice(0, 50)
+                setAlertCount(alertBufferRef.current.length)
                 alertAudioRef.current.currentTime = 0
                 alertAudioRef.current.play().catch(() => {})
             }
 
             if (msg.type === "event") {
-                setEvents((prev) => [
-                    {
-                        ...msg.data,
-                        time: new Date().toLocaleTimeString(),
-                    },
-                    ...prev.slice(0, 9),
-                ])
+                const nextEvents = pushStoredEvent(msg.data)
+                eventBufferRef.current = nextEvents
             }
         })
 
-        return () => socket.close()
+        const intervalId = window.setInterval(() => {
+            const nextVisibleAlerts = alertBufferRef.current.slice(0, 3)
+            const nextVisibleEvents = eventBufferRef.current.slice(0, 2)
+
+            setVisibleAlerts((prev) => {
+                const nextIds = new Set(nextVisibleAlerts.map((alert) => alert.id))
+                const previousIds = new Set(prev.map((alert) => alert.id))
+                const incomingIds = nextVisibleAlerts
+                    .filter((alert) => !previousIds.has(alert.id))
+                    .map((alert) => alert.id)
+
+                if (incomingIds.length > 0) {
+                    setNewAlertIds((current) => [...incomingIds, ...current.filter((id) => !incomingIds.includes(id))].slice(0, 5))
+
+                    incomingIds.forEach((id) => {
+                        const timeoutId = window.setTimeout(() => {
+                            setNewAlertIds((current) => current.filter((currentId) => currentId !== id))
+                        }, 1400)
+
+                        alertHighlightTimeoutsRef.current.push(timeoutId)
+                    })
+                }
+
+                return nextVisibleAlerts.filter((alert) => nextIds.has(alert.id))
+            })
+
+            setVisibleEvents(nextVisibleEvents)
+        }, 2500)
+
+        return () => {
+            socket.close()
+            window.clearInterval(intervalId)
+            alertHighlightTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
+            alertHighlightTimeoutsRef.current = []
+        }
     }, [])
 
-    const patientMap = Object.fromEntries(patients.map((patient) => [patient.id, patient]))
-    const departments = ["ER", "ICU", "Ward"]
-    const visibleStats = stats.filter((stat) => patientMap[stat.patient_id])
-    const groupedStats = visibleStats.reduce((groups, stat) => {
-        const patient = patientMap[stat.patient_id]
-        const department = patient?.department || "Ward"
-
-        if (!groups[department]) {
-            groups[department] = []
-        }
-
-        groups[department].push(stat)
-        return groups
-    }, Object.fromEntries(departments.map((department) => [department, []])))
-
     const latestVital = vitals[0]
-    const paginatedAlerts = alerts.slice((alertsPage - 1) * livePageSize, alertsPage * livePageSize)
-    const maxAlertsPage = Math.max(1, Math.ceil(alerts.length / livePageSize))
-
-    useEffect(() => {
-        if (alertsPage > maxAlertsPage) {
-            setAlertsPage(maxAlertsPage)
+    const previewAlerts = visibleAlerts.slice(0, 3)
+    const previewEvents = visibleEvents.slice(0, 2)
+    const recentVitals = vitals.slice(0, 5)
+    const latestBatchRun = stats.reduce((latest, stat) => {
+        if (!stat.computed_at) {
+            return latest
         }
-    }, [alertsPage, maxAlertsPage])
 
-    const handleLogout = () => {
-        logout()
-        navigate("/")
-    }
-
-    const handlePatientFormChange = (event) => {
-        const { name, value } = event.target
-        setPatientForm((prev) => ({
-            ...prev,
-            [name]: value,
-        }))
-    }
-
-    const handleCreatePatient = async (event) => {
-        event.preventDefault()
-        setPatientMessage("")
-        setPatientMessageIsError(false)
-        setIsCreatingPatient(true)
-
-        try {
-            await api.post("/patients", patientForm)
-            setPatientForm({
-                first_name: "",
-                last_name: "",
-                cnp: "",
-                birth_date: "",
-                gender: "",
-                department: "ER",
-            })
-            setPatientMessage("Patient created")
-
-            if (page !== 1) {
-                setPage(1)
-            } else {
-                await loadDashboardData(1)
-            }
-        } catch (error) {
-            setPatientMessageIsError(true)
-            setPatientMessage(error.response?.data?.detail || "Unable to create patient")
-        } finally {
-            setIsCreatingPatient(false)
+        if (!latest) {
+            return stat.computed_at
         }
-    }
+
+        return new Date(stat.computed_at) > new Date(latest) ? stat.computed_at : latest
+    }, "")
+    const patientsWithStats = stats.length
+    const averageHeartRate = stats.length
+        ? stats.reduce((sum, stat) => sum + stat.avg_heart_rate, 0) / stats.length
+        : 0
+    const averageTemperature = stats.length
+        ? stats.reduce((sum, stat) => sum + stat.avg_temperature, 0) / stats.length
+        : 0
+    const averageOxygen = stats.length
+        ? stats.reduce((sum, stat) => sum + stat.avg_oxygen, 0) / stats.length
+        : 0
+    const aggregateAlerts = stats.reduce((sum, stat) => sum + stat.alerts_count, 0)
+    const batchStatusLabel = batchStatus?.last_run_status
+        ? batchStatus.last_run_status.charAt(0).toUpperCase() + batchStatus.last_run_status.slice(1)
+        : "Unknown"
+    const lastSuccessfulBatchRun = batchStatus?.last_successful_run_at || latestBatchRun
+
+    const currentPatientState = (() => {
+        if (!latestVital) {
+            return "Waiting for live telemetry"
+        }
+
+        if (latestVital.oxygen_saturation <= 90 || latestVital.heart_rate >= 125 || latestVital.temperature >= 39) {
+            return "Critical live instability"
+        }
+
+        if (latestVital.oxygen_saturation <= 93 || latestVital.heart_rate >= 105 || latestVital.temperature >= 38) {
+            return "Elevated live monitoring"
+        }
+
+        return "Stable live monitoring"
+    })()
+
+    const recentHeartRateAverage = recentVitals.length
+        ? recentVitals.reduce((sum, vital) => sum + vital.heart_rate, 0) / recentVitals.length
+        : 0
+    const recentOxygenAverage = recentVitals.length
+        ? recentVitals.reduce((sum, vital) => sum + vital.oxygen_saturation, 0) / recentVitals.length
+        : 0
+    const recentTemperatureAverage = recentVitals.length
+        ? recentVitals.reduce((sum, vital) => sum + vital.temperature, 0) / recentVitals.length
+        : 0
+    const heartRateDelta = recentVitals.length >= 2 ? recentVitals[0].heart_rate - recentVitals[recentVitals.length - 1].heart_rate : 0
+    const oxygenDelta = recentVitals.length >= 2 ? recentVitals[0].oxygen_saturation - recentVitals[recentVitals.length - 1].oxygen_saturation : 0
+    const temperatureDelta = recentVitals.length >= 2 ? recentVitals[0].temperature - recentVitals[recentVitals.length - 1].temperature : 0
+    const formatDelta = (value) => value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1)
 
     return (
-        <div className="min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+        <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
             <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-                <header className="monitor-card rounded-[28px] p-6 sm:p-8">
+                <header className="console-topbar rounded-[24px] p-6 sm:p-8">
                     <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                         <div className="space-y-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-cyan-300">MedStream Command Center</p>
+                            <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">MedStream Console</p>
                             <div>
                                 <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Hospital Monitoring Dashboard</h1>
-                                <p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">
-                                    Live patient monitoring, alert escalation, and operational flow in a single view.
+                                <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">
+                                    Operational overview for live clinical telemetry, admissions, department load, and alert escalation.
                                 </p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                            <button
-                                className="rounded-2xl border border-slate-700 bg-slate-900/80 p-4 text-left transition hover:border-slate-500 hover:bg-slate-800"
-                                onClick={handleLogout}
-                            >
-                                <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Session</p>
-                                <p className="mt-3 text-lg font-semibold text-white">Logout</p>
-                            </button>
                             <div className="monitor-panel rounded-2xl p-4">
-                                <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Live Patients</p>
-                                <p className="mt-3 text-3xl font-semibold text-white">{patients.length}</p>
+                                <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Patients</p>
+                                <p className="mt-3 text-3xl font-semibold text-white"><CountValue value={patients.length} /></p>
                             </div>
                             <div className="monitor-panel rounded-2xl p-4">
-                                <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Alerts</p>
-                                <p className="mt-3 text-3xl font-semibold text-rose-300">{alerts.length}</p>
+                                <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Alerts</p>
+                                <p className="mt-3 text-3xl font-semibold text-[#ffb3bc]"><CountValue value={alertCount} /></p>
                             </div>
                             <div className="monitor-panel rounded-2xl p-4">
-                                <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Events</p>
-                                <p className="mt-3 text-3xl font-semibold text-cyan-200">{events.length}</p>
+                                <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Events</p>
+                                <p className="mt-3 text-3xl font-semibold text-[#9dccff]"><CountValue value={events.length} /></p>
                             </div>
                             <div className="monitor-panel rounded-2xl p-4 sm:col-span-2 lg:col-span-1">
-                                <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Latest HR</p>
-                                <p className="mt-3 text-3xl font-semibold text-emerald-300">{latestVital ? latestVital.heart_rate : "--"}</p>
+                                <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Latest HR</p>
+                                <p className="mt-3 text-3xl font-semibold text-[#ffb84d]">{latestVital ? latestVital.heart_rate : "--"}</p>
                             </div>
                         </div>
                     </div>
                 </header>
 
+                {dashboardMessage && (
+                    <div className={dashboardMessageIsError ? "login-error" : "login-success"}>
+                        {dashboardMessage}
+                    </div>
+                )}
+
                 <section className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
-                    <div className="monitor-card rounded-[28px] p-6">
-                        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="monitor-card rounded-[28px] border border-[#ff9900]/30 p-6">
+                        <div className="mb-6 flex flex-col gap-4">
                             <div>
-                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Real-Time Monitoring</p>
+                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Live Monitoring</p>
                                 <h2 className="mt-2 text-2xl font-semibold text-white">Live Vitals Stream</h2>
                             </div>
-                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                <div className="rounded-2xl bg-cyan-950/40 px-4 py-3">
-                                    <p className="text-xs uppercase tracking-[0.25em] text-cyan-200/70">Heart Rate</p>
-                                    <p className="mt-2 text-xl font-semibold text-cyan-50">{latestVital ? latestVital.heart_rate : "--"}</p>
+                            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                                <div className="monitor-panel rounded-2xl px-4 py-3">
+                                    <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Heart Rate</p>
+                                    <p className="mt-2 text-xl font-semibold text-[#ffb84d]">{latestVital ? latestVital.heart_rate : "--"}</p>
                                 </div>
-                                <div className="rounded-2xl bg-emerald-950/40 px-4 py-3">
-                                    <p className="text-xs uppercase tracking-[0.25em] text-emerald-200/70">O2 Sat</p>
-                                    <p className="mt-2 text-xl font-semibold text-emerald-50">{latestVital ? latestVital.oxygen_saturation : "--"}</p>
+                                <div className="monitor-panel rounded-2xl px-4 py-3">
+                                    <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">O2 Sat</p>
+                                    <p className="mt-2 text-xl font-semibold text-[#9dccff]">{latestVital ? latestVital.oxygen_saturation : "--"}</p>
                                 </div>
-                                <div className="rounded-2xl bg-amber-950/40 px-4 py-3">
-                                    <p className="text-xs uppercase tracking-[0.25em] text-amber-200/70">Temp</p>
-                                    <p className="mt-2 text-xl font-semibold text-amber-50">{latestVital ? latestVital.temperature : "--"}</p>
+                                <div className="monitor-panel rounded-2xl px-4 py-3">
+                                    <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Temp</p>
+                                    <p className="mt-2 text-xl font-semibold text-[#ffd699]">{latestVital ? latestVital.temperature : "--"}</p>
                                 </div>
-                                <div className="rounded-2xl bg-slate-800/70 px-4 py-3">
-                                    <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Readings</p>
-                                    <p className="mt-2 text-xl font-semibold text-white">{vitals.length}</p>
+                                <div className="monitor-panel rounded-2xl px-4 py-3">
+                                    <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Readings</p>
+                                    <p className="mt-2 text-xl font-semibold text-white"><CountValue value={vitals.length} /></p>
                                 </div>
                             </div>
                         </div>
 
-                        <VitalsChart data={[...vitals].reverse()}/>
+                        <div className="mb-6 grid gap-3 md:grid-cols-3">
+                            <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Current Patient State</p>
+                                <p className="mt-2 text-base font-semibold text-white">{currentPatientState}</p>
+                            </div>
+                            <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Active Alerts</p>
+                                <p className="mt-2 text-base font-semibold text-white"><CountValue value={alertCount} /></p>
+                            </div>
+                            <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Stream Status</p>
+                                <p className="mt-2 text-base font-semibold text-white">{latestVital ? "Connected" : "Waiting for feed"}</p>
+                            </div>
+                        </div>
+
+                        {isLoadingDashboard ? (
+                            <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-10 text-center text-sm text-[#b6bec9]">
+                                Loading real-time dashboard data...
+                            </div>
+                        ) : vitals.length === 0 ? (
+                            <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-10 text-center text-sm text-[#b6bec9]">
+                                Waiting for streaming vitals. Keep the live backend running and telemetry will appear here.
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <VitalsChart data={[...vitals].reverse()}/>
+                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                    <div className="monitor-panel rounded-2xl px-4 py-4">
+                                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">HR Trend</p>
+                                        <p className="mt-2 text-xl font-semibold text-white">{recentVitals.length ? recentHeartRateAverage.toFixed(1) : "--"}</p>
+                                        <p className="mt-2 text-sm text-[#b6bec9]">{recentVitals.length ? `${formatDelta(heartRateDelta)} over last ${recentVitals.length} samples` : "Waiting for samples"}</p>
+                                    </div>
+                                    <div className="monitor-panel rounded-2xl px-4 py-4">
+                                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">O2 Trend</p>
+                                        <p className="mt-2 text-xl font-semibold text-white">{recentVitals.length ? recentOxygenAverage.toFixed(1) : "--"}</p>
+                                        <p className="mt-2 text-sm text-[#b6bec9]">{recentVitals.length ? `${formatDelta(oxygenDelta)} over last ${recentVitals.length} samples` : "Waiting for samples"}</p>
+                                    </div>
+                                    <div className="monitor-panel rounded-2xl px-4 py-4">
+                                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Temp Trend</p>
+                                        <p className="mt-2 text-xl font-semibold text-white">{recentVitals.length ? recentTemperatureAverage.toFixed(1) : "--"}</p>
+                                        <p className="mt-2 text-sm text-[#b6bec9]">{recentVitals.length ? `${formatDelta(temperatureDelta)} over last ${recentVitals.length} samples` : "Waiting for samples"}</p>
+                                    </div>
+                                    <div className="monitor-panel rounded-2xl px-4 py-4">
+                                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Latest BP</p>
+                                        <p className="mt-2 text-xl font-semibold text-white">{latestVital ? `${latestVital.systolic_bp}/${latestVital.diastolic_bp}` : "--"}</p>
+                                        <p className="mt-2 text-sm text-[#b6bec9]">{latestVital ? `Recorded at ${latestVital.time}` : "Waiting for samples"}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid gap-6">
                         <div className="monitor-card rounded-[28px] p-6">
-                            <div className="mb-5">
-                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">Admissions</p>
-                                <h2 className="mt-2 text-2xl font-semibold text-white">Add Patient</h2>
-                            </div>
-                            <form className="space-y-4" onSubmit={handleCreatePatient}>
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                    <input
-                                        type="text"
-                                        name="first_name"
-                                        value={patientForm.first_name}
-                                        onChange={handlePatientFormChange}
-                                        placeholder="First name"
-                                        className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
-                                        required
-                                    />
-                                    <input
-                                        type="text"
-                                        name="last_name"
-                                        value={patientForm.last_name}
-                                        onChange={handlePatientFormChange}
-                                        placeholder="Last name"
-                                        className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
-                                        required
-                                    />
-                                </div>
-                                <input
-                                    type="text"
-                                    name="cnp"
-                                    value={patientForm.cnp}
-                                    onChange={handlePatientFormChange}
-                                    placeholder="CNP"
-                                    className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
-                                    required
-                                />
-                                <div className="grid gap-4 sm:grid-cols-3">
-                                    <input
-                                        type="date"
-                                        name="birth_date"
-                                        value={patientForm.birth_date}
-                                        onChange={handlePatientFormChange}
-                                        className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
-                                        required
-                                    />
-                                    <select
-                                        name="gender"
-                                        value={patientForm.gender}
-                                        onChange={handlePatientFormChange}
-                                        className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
-                                        required
-                                    >
-                                        <option value="">Gender</option>
-                                        <option value="male">Male</option>
-                                        <option value="female">Female</option>
-                                    </select>
-                                    <select
-                                        name="department"
-                                        value={patientForm.department}
-                                        onChange={handlePatientFormChange}
-                                        className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
-                                        required
-                                    >
-                                        <option value="ER">ER</option>
-                                        <option value="ICU">ICU</option>
-                                        <option value="Ward">Ward</option>
-                                    </select>
-                                </div>
-                                {patientMessage && (
-                                    <p className={patientMessageIsError ? "login-error" : "login-success"}>
-                                        {patientMessage}
-                                    </p>
-                                )}
-                                <button
-                                    type="submit"
-                                    disabled={isCreatingPatient}
-                                    className="w-full rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
-                                >
-                                    {isCreatingPatient ? "Creating patient..." : "Create Patient"}
-                                </button>
-                            </form>
-                        </div>
-
-                        <div className="monitor-card rounded-[28px] p-6">
                             <div className="mb-5 flex items-center justify-between">
                                 <div>
-                                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-300">Escalations</p>
-                                    <h2 className="mt-2 text-2xl font-semibold text-white">Alerts</h2>
-                                </div>
-                                <span className="rounded-full bg-rose-500/15 px-3 py-1 text-xs font-semibold text-rose-200">{alerts.length} recent</span>
-                            </div>
-                            <div className="mb-4 flex items-center justify-between gap-3">
-                                <div className="rounded-full bg-slate-900/80 px-3 py-1 text-xs font-medium text-slate-300">
-                                    Page {alertsPage}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-500"
-                                        onClick={() => setAlertsPage((prev) => Math.max(1, prev - 1))}
-                                        disabled={alertsPage === 1}
-                                    >
-                                        Previous
-                                    </button>
-                                    <button
-                                        className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-500"
-                                        onClick={() => setAlertsPage((prev) => prev + 1)}
-                                        disabled={alertsPage >= maxAlertsPage}
-                                    >
-                                        Next
-                                    </button>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Alerts</p>
+                                    <h2 className="mt-2 text-2xl font-semibold text-white">Live Alert Preview</h2>
                                 </div>
                             </div>
-                            <ul className="space-y-3">
-                                {alerts.length === 0 && (
-                                    <li className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-5 text-sm text-slate-400">
-                                        No active alerts in the current stream.
-                                    </li>
-                                )}
-                                {paginatedAlerts.map((a, i) => (
-                                    <li
-                                        key={i}
-                                        className={`alert-item alert-${a.severity}`}
-                                    >
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div>
-                                                <p className="text-xs uppercase tracking-[0.28em] text-white/70">{a.severity} severity</p>
-                                                <p className="mt-2 text-sm font-medium text-inherit">Patient {a.patient_id} - {a.message}</p>
-                                            </div>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-
-                        <div className="monitor-card rounded-[28px] p-6">
-                            <div className="mb-5 flex items-center justify-between">
-                                <div>
-                                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">Scenario Feed</p>
-                                    <h2 className="mt-2 text-2xl font-semibold text-white">Hospital Events</h2>
+                            <div className="alert-widget-shell rounded-[24px] p-4">
+                                <div className="mb-4 flex items-center justify-between gap-3">
+                                    <span className="console-chip-danger rounded-full px-3 py-1 text-xs font-semibold"><CountValue value={alertCount} /></span>
                                 </div>
-                                <span className="rounded-full bg-cyan-500/15 px-3 py-1 text-xs font-semibold text-cyan-200">{events.length} recent</span>
-                            </div>
-                            <ul className="space-y-3">
-                                {events.length === 0 && (
-                                    <li className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-5 text-sm text-slate-400">
-                                        Waiting for ambulance and transfer events.
-                                    </li>
-                                )}
-                                {events.map((event, i) => (
-                                    <li key={i} className="rounded-2xl border border-cyan-500/10 bg-cyan-950/20 px-4 py-4">
-                                        <p className="text-xs uppercase tracking-[0.25em] text-cyan-200/70">{event.time}</p>
-                                        <p className="mt-2 text-sm font-medium text-white">
-                                            {event.patient_id ? `Patient ${event.patient_id} | ` : ""}{event.message || event.event_type || "Hospital event"}
-                                        </p>
-                                        {event.event_type && (
-                                            <p className="mt-2 text-xs uppercase tracking-[0.22em] text-slate-400">{event.event_type.replaceAll("_", " ")}</p>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    </div>
-                </section>
-
-                <section className="monitor-card rounded-[28px] p-6">
-                    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                        <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Department Operations</p>
-                            <h2 className="mt-2 text-2xl font-semibold text-white">Batch Analytics by Department</h2>
-                        </div>
-                        <p className="max-w-2xl text-sm text-slate-400">
-                            Historical patient averages grouped by unit while live monitoring continues above.
-                        </p>
-                    </div>
-
-                    <div className="mb-6 flex items-center justify-between gap-3">
-                        <div className="rounded-full bg-slate-900/80 px-4 py-2 text-sm font-medium text-slate-300">
-                            Page {page}
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <button
-                                className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-500"
-                                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                                disabled={page === 1}
-                            >
-                                Previous
-                            </button>
-                            <button
-                                className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900 disabled:text-slate-500"
-                                onClick={() => setPage((prev) => prev + 1)}
-                                disabled={patients.length < pageSize}
-                            >
-                                Next
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="grid gap-5 lg:grid-cols-3">
-                        {departments.map((department) => (
-                            <div key={department} className="monitor-panel rounded-[24px] p-5">
-                                <div className="mb-4 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Department</p>
-                                        <h3 className="mt-2 text-xl font-semibold text-white">{department}</h3>
-                                    </div>
-                                    <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300">
-                                        {groupedStats[department].length} patients
-                                    </span>
-                                </div>
-
                                 <ul className="space-y-3">
-                                    {groupedStats[department].length === 0 && (
-                                        <li className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-5 text-sm text-slate-500">
-                                            No patient stats available.
+                                    {alertCount === 0 && (
+                                        <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                                            No active alerts in the current stream. This panel updates only from live vital events.
                                         </li>
                                     )}
-                                    {groupedStats[department].map((s, i) => (
-                                        <li key={i} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                                    {previewAlerts.map((a, i) => (
+                                        <li
+                                            key={a.id}
+                                            className={`alert-item alert-${a.severity} ${newAlertIds.includes(a.id) ? "alert-new" : ""}`}
+                                        >
                                             <div className="flex items-start justify-between gap-3">
                                                 <div>
-                                                    <Link className="text-base font-semibold text-cyan-300 transition hover:text-cyan-200" to={`/patient/${s.patient_id}`}>
-                                                        Patient {s.patient_id}
-                                                    </Link>
-                                                    <p className="mt-1 text-sm text-slate-400">
-                                                        {patientMap[s.patient_id]?.first_name} {patientMap[s.patient_id]?.last_name}
-                                                    </p>
+                                                    <p className="text-xs uppercase tracking-[0.28em] text-white/70">{a.severity} severity</p>
+                                                    <p className="mt-2 text-sm font-medium text-inherit">Patient {a.patient_id} - {a.message}</p>
                                                 </div>
-                                                <span className="rounded-full bg-rose-500/12 px-3 py-1 text-xs font-semibold text-rose-200">
-                                                    {s.alerts_count} alerts
+                                                <span className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                                                    Live
                                                 </span>
-                                            </div>
-                                            <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                                                <div className="rounded-2xl bg-slate-900/80 px-3 py-3">
-                                                    <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Avg HR</p>
-                                                    <p className="mt-2 font-semibold text-white">{s.avg_heart_rate.toFixed(1)}</p>
-                                                </div>
-                                                <div className="rounded-2xl bg-slate-900/80 px-3 py-3">
-                                                    <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Avg Temp</p>
-                                                    <p className="mt-2 font-semibold text-white">{s.avg_temperature.toFixed(1)}</p>
-                                                </div>
-                                                <div className="rounded-2xl bg-slate-900/80 px-3 py-3">
-                                                    <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Avg O2</p>
-                                                    <p className="mt-2 font-semibold text-white">{s.avg_oxygen.toFixed(1)}</p>
-                                                </div>
                                             </div>
                                         </li>
                                     ))}
                                 </ul>
+                                {alertCount > 3 && (
+                                    <div className="mt-4">
+                                        <Link className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold" to="/alerts">
+                                            Show more
+                                        </Link>
+                                    </div>
+                                )}
                             </div>
-                        ))}
+                        </div>
+
+                        <div className="monitor-card rounded-[28px] p-6">
+                            <div className="mb-5 flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Events</p>
+                                    <h2 className="mt-2 text-2xl font-semibold text-white">Hospital Events</h2>
+                                </div>
+                                <span className="console-chip-success rounded-full px-3 py-1 text-xs font-semibold"><CountValue value={events.length} /></span>
+                            </div>
+                            <div className="alert-widget-shell rounded-[24px] p-4">
+                                <div className="mb-4 flex items-center justify-between gap-3">
+                                    <span className="console-chip-success rounded-full px-3 py-1 text-xs font-semibold"><CountValue value={events.length} /></span>
+                                </div>
+                                <ul className="space-y-3">
+                                    {events.length === 0 && (
+                                        <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                                            Waiting for live hospital events such as admissions, transfers, and treatment updates.
+                                        </li>
+                                    )}
+                                    {previewEvents.map((event) => (
+                                        <li key={event.id} className="rounded-2xl border border-[#3b424b] bg-[#1b2430] px-4 py-4">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <p className="text-xs uppercase tracking-[0.25em] text-[#9dccff]">{new Date(event.timestamp).toLocaleTimeString()}</p>
+                                                    <p className="mt-2 text-sm font-medium text-white">
+                                                        {event.patient_id ? `Patient ${event.patient_id} | ` : ""}{event.message || event.event_type || "Hospital event"}
+                                                    </p>
+                                                    {event.event_type && (
+                                                        <p className="mt-2 text-xs uppercase tracking-[0.22em] text-[#879196]">{event.event_type.replaceAll("_", " ")}</p>
+                                                    )}
+                                                </div>
+                                                <span className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                                                    Live
+                                                </span>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                                {events.length > 2 && (
+                                    <div className="mt-4">
+                                        <Link className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold" to="/events">
+                                            Show more
+                                        </Link>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </section>
 
-                <section className="grid gap-6 lg:grid-cols-2">
-                    <div className="monitor-card rounded-[28px] p-6">
-                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">Streaming</p>
-                        <h2 className="mt-2 text-2xl font-semibold text-white">Instant Clinical Signal</h2>
-                        <p className="mt-4 text-sm leading-7 text-slate-300">
-                            Streaming surfaces vital changes and alerts as they happen, helping operators react during arrivals, deterioration, and treatment.
-                        </p>
+                <section id="departments" className="monitor-card rounded-[28px] border border-[#9dccff]/25 p-6">
+                    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#9dccff]">Department Analytics</p>
+                            <h2 className="mt-2 text-2xl font-semibold text-white">Batch Analytics</h2>
+                        </div>
                     </div>
-                    <div className="monitor-card rounded-[28px] p-6">
-                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">Batch</p>
-                        <h2 className="mt-2 text-2xl font-semibold text-white">Historical Department Context</h2>
-                        <p className="mt-4 text-sm leading-7 text-slate-300">
-                            Batch analytics summarize longer patient trends and department performance to support retrospective review and planning.
-                        </p>
+
+                    <div className="mb-6 grid gap-3 lg:grid-cols-6">
+                        <div className="monitor-panel rounded-2xl p-4">
+                            <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Current Status</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{batchStatusLabel}</p>
+                        </div>
+                        <div className="monitor-panel rounded-2xl p-4">
+                            <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Last Successful Run</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleTimeString() : "--"}</p>
+                            <p className="mt-2 text-sm text-[#b6bec9]">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleDateString() : "No successful batch run yet"}</p>
+                        </div>
+                        <div className="monitor-panel rounded-2xl p-4">
+                            <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Avg HR</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{patientsWithStats ? averageHeartRate.toFixed(1) : "--"}</p>
+                        </div>
+                        <div className="monitor-panel rounded-2xl p-4">
+                            <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Avg Temp</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{patientsWithStats ? averageTemperature.toFixed(1) : "--"}</p>
+                        </div>
+                            <div className="monitor-panel rounded-2xl p-4">
+                                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Aggregated Alerts</p>
+                                <p className="mt-2 text-lg font-semibold text-white"><CountValue value={aggregateAlerts} /></p>
+                            </div>
                     </div>
+
+                    {!isLoadingDashboard && stats.length === 0 ? (
+                        <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                            Batch analytics will appear after the scheduler completes at least one successful run.
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 lg:grid-cols-3">
+                            {DEPARTMENTS.map((department) => (
+                                <Link key={department} className="monitor-panel rounded-[24px] p-5" to={departmentHref(department)}>
+                                    <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Department</p>
+                                    <h3 className="mt-2 text-xl font-semibold text-white">{department}</h3>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
                 </section>
             </div>
         </div>

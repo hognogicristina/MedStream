@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
-import { useAuth } from "../auth/AuthContext"
+import BackButton from "../components/BackButton"
+import CountValue from "../components/CountValue"
+import { Link, useParams } from "react-router-dom"
 import { api } from "../services/api"
 import { createWebSocket } from "../services/ws"
 
 export default function PatientPage() {
   const { id } = useParams()
-  const navigate = useNavigate()
-  const { logout } = useAuth()
   const pageSize = 5
   const [vitals, setVitals] = useState([])
   const [vitalsHistory, setVitalsHistory] = useState([])
@@ -18,11 +17,13 @@ export default function PatientPage() {
   const [department, setDepartment] = useState("")
   const [isUpdatingDepartment, setIsUpdatingDepartment] = useState(false)
   const [departmentMessage, setDepartmentMessage] = useState("")
+  const [departmentMessageIsError, setDepartmentMessageIsError] = useState(false)
   const [isLoadingPatient, setIsLoadingPatient] = useState(true)
   const [medicationName, setMedicationName] = useState("")
   const [dosage, setDosage] = useState("")
   const [isSubmittingMedication, setIsSubmittingMedication] = useState(false)
   const [medicationMessage, setMedicationMessage] = useState("")
+  const [medicationMessageIsError, setMedicationMessageIsError] = useState(false)
   const [vitalsPage, setVitalsPage] = useState(1)
   const [alertsPage, setAlertsPage] = useState(1)
   const alertAudioRef = useRef(null)
@@ -33,8 +34,30 @@ export default function PatientPage() {
   }
 
   useEffect(() => {
+    setVitals([])
+    setVitalsHistory([])
+    setReplayVitals([])
+    setAlerts([])
+    setEvents([])
+    setIsReplaying(false)
+    setDepartment("")
+    setDepartmentMessage("")
+    setDepartmentMessageIsError(false)
+    setMedicationMessage("")
+    setMedicationMessageIsError(false)
+    setVitalsPage(1)
+    setAlertsPage(1)
+
+    if (replayIntervalRef.current) {
+      clearInterval(replayIntervalRef.current)
+      replayIntervalRef.current = null
+    }
+  }, [id])
+
+  useEffect(() => {
     const loadPatient = async () => {
       setDepartmentMessage("")
+      setDepartmentMessageIsError(false)
       setIsLoadingPatient(true)
 
       try {
@@ -42,6 +65,7 @@ export default function PatientPage() {
         setDepartment(response.data.department)
       } catch {
         setDepartment("")
+        setDepartmentMessageIsError(true)
         setDepartmentMessage("Unable to load patient department")
       } finally {
         setIsLoadingPatient(false)
@@ -71,16 +95,6 @@ export default function PatientPage() {
         setAlerts((prev) => [msg.data, ...prev.slice(0, 10)])
         alertAudioRef.current.currentTime = 0
         alertAudioRef.current.play().catch(() => {})
-      }
-
-      if (msg.type === "event") {
-        setEvents((prev) => [
-          {
-            ...msg.data,
-            time: new Date().toLocaleTimeString(),
-          },
-          ...prev.slice(0, 9),
-        ])
       }
     })
 
@@ -125,10 +139,8 @@ export default function PatientPage() {
 
   const handleDepartmentChange = async (event) => {
     const nextDepartment = event.target.value
-    const previousDepartment = department
-
-    setDepartment(nextDepartment)
     setDepartmentMessage("")
+    setDepartmentMessageIsError(false)
     setIsUpdatingDepartment(true)
 
     try {
@@ -138,8 +150,17 @@ export default function PatientPage() {
 
       setDepartment(response.data.department)
       setDepartmentMessage("Department updated")
+      setDepartmentMessageIsError(false)
+      setEvents((prev) => [
+        {
+          event_type: "department_updated",
+          message: `Moved to ${response.data.department}`,
+          timestamp: new Date().toLocaleTimeString(),
+        },
+        ...prev.slice(0, 9),
+      ])
     } catch {
-      setDepartment(previousDepartment)
+      setDepartmentMessageIsError(true)
       setDepartmentMessage("Unable to update department")
     } finally {
       setIsUpdatingDepartment(false)
@@ -149,10 +170,11 @@ export default function PatientPage() {
   const handleMedicationSubmit = async (event) => {
     event.preventDefault()
     setMedicationMessage("")
+    setMedicationMessageIsError(false)
     setIsSubmittingMedication(true)
 
     try {
-      await api.post(`/patients/${id}/medication`, {
+      const response = await api.post(`/patients/${id}/medication`, {
         medication_name: medicationName,
         dosage,
       })
@@ -160,7 +182,17 @@ export default function PatientPage() {
       setMedicationName("")
       setDosage("")
       setMedicationMessage("Medication administered")
+      setMedicationMessageIsError(false)
+      setEvents((prev) => [
+        {
+          event_type: "medication_administered",
+          message: `Medication administered: ${response.data.medication_name} (${response.data.dosage})`,
+          timestamp: response.data.timestamp,
+        },
+        ...prev.slice(0, 9),
+      ])
     } catch {
+      setMedicationMessageIsError(true)
       setMedicationMessage("Unable to administer medication")
     } finally {
       setIsSubmittingMedication(false)
@@ -186,38 +218,32 @@ export default function PatientPage() {
     }
   }, [alertsPage, maxAlertsPage])
 
-  const handleLogout = () => {
-    logout()
-    navigate("/")
-  }
-
   return (
-    <div className="min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <header className="monitor-card rounded-[28px] p-6 sm:p-8">
+        <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-3">
-              <Link className="inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/15" to="/dashboard">
-                Back to dashboard
-              </Link>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Patient Monitoring</p>
+                  <Link className="console-link text-sm font-semibold" to="/">
+                    Home
+                  </Link>
+                </div>
+                <BackButton />
+              </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-cyan-300">Patient Monitoring</p>
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Patient Details: {id}</h1>
-                <p className="mt-2 max-w-2xl text-sm text-slate-300">
-                  Live single-patient stream with alerting and replay for timeline review.
+                <p className="mt-2 max-w-2xl text-sm text-[#b6bec9]">
+                  Single-patient operational view for vitals, alerts, medication activity, and department assignment.
                 </p>
               </div>
             </div>
 
             <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <button
-                className="rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:bg-slate-800"
-                onClick={handleLogout}
-              >
-                Logout
-              </button>
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400" htmlFor="department">
+                <label className="text-xs font-semibold uppercase tracking-[0.25em] text-[#879196]" htmlFor="department">
                   Department
                 </label>
                 <select
@@ -225,21 +251,24 @@ export default function PatientPage() {
                   value={department}
                   onChange={handleDepartmentChange}
                   disabled={isUpdatingDepartment || isLoadingPatient}
-                  className="rounded-full border border-slate-700 bg-slate-950/80 px-4 py-2 text-sm font-medium text-white outline-none transition focus:border-cyan-400 disabled:cursor-not-allowed disabled:text-slate-500"
+                  className="console-input rounded-full px-4 py-2 text-sm font-medium outline-none disabled:cursor-not-allowed disabled:text-[#6b7280]"
                 >
                   <option value="ER">ER</option>
                   <option value="ICU">ICU</option>
+                  <option value="Cardiology">Cardiology</option>
+                  <option value="Internal Medicine">Internal Medicine</option>
+                  <option value="Neurology">Neurology</option>
                   <option value="Ward">Ward</option>
                 </select>
                 {departmentMessage && (
-                  <p className="text-xs text-slate-400">{departmentMessage}</p>
+                  <p className={departmentMessageIsError ? "login-error" : "login-success"}>{departmentMessage}</p>
                 )}
               </div>
-              <div className="rounded-full bg-slate-900/80 px-4 py-2 text-sm font-medium text-slate-300">
+              <div className="console-chip rounded-full px-4 py-2 text-sm font-medium">
                 {isReplaying ? "Replay running" : "Live stream active"}
               </div>
               <button
-                className="rounded-full bg-cyan-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                className="console-button-primary rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                 onClick={handleReplay}
                 disabled={vitalsHistory.length === 0 || isReplaying}
               >
@@ -251,26 +280,26 @@ export default function PatientPage() {
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <div className="monitor-card rounded-[24px] p-5">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Heart Rate</p>
-            <p className="mt-3 text-3xl font-semibold text-rose-300">{latestDisplayedVital ? latestDisplayedVital.heart_rate : "--"}</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Heart Rate</p>
+            <p className="mt-3 text-3xl font-semibold text-[#ffb84d]">{latestDisplayedVital ? latestDisplayedVital.heart_rate : "--"}</p>
           </div>
           <div className="monitor-card rounded-[24px] p-5">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">O2 Saturation</p>
-            <p className="mt-3 text-3xl font-semibold text-emerald-300">{latestDisplayedVital ? latestDisplayedVital.oxygen_saturation : "--"}</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">O2 Saturation</p>
+            <p className="mt-3 text-3xl font-semibold text-[#9dccff]">{latestDisplayedVital ? latestDisplayedVital.oxygen_saturation : "--"}</p>
           </div>
           <div className="monitor-card rounded-[24px] p-5">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Temperature</p>
-            <p className="mt-3 text-3xl font-semibold text-amber-300">{latestDisplayedVital ? latestDisplayedVital.temperature : "--"}</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Temperature</p>
+            <p className="mt-3 text-3xl font-semibold text-[#ffd699]">{latestDisplayedVital ? latestDisplayedVital.temperature : "--"}</p>
           </div>
           <div className="monitor-card rounded-[24px] p-5">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Blood Pressure</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Blood Pressure</p>
             <p className="mt-3 text-3xl font-semibold text-white">
               {latestDisplayedVital ? `${latestDisplayedVital.systolic_bp}/${latestDisplayedVital.diastolic_bp}` : "--"}
             </p>
           </div>
           <div className="monitor-card rounded-[24px] p-5">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">History</p>
-            <p className="mt-3 text-3xl font-semibold text-cyan-200">{vitalsHistory.length}</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">History</p>
+            <p className="mt-3 text-3xl font-semibold text-[#9dccff]"><CountValue value={vitalsHistory.length} /></p>
           </div>
         </section>
 
@@ -278,29 +307,29 @@ export default function PatientPage() {
           <div className="monitor-card rounded-[28px] p-6">
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">
                   {isReplaying ? "Replay Mode" : "Live Feed"}
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Vitals Timeline</h2>
               </div>
-              <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300">
+              <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
                 {displayedVitals.length} visible
               </span>
             </div>
             <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="rounded-full bg-slate-900/80 px-3 py-1 text-xs font-medium text-slate-300">
+              <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
                 Page {vitalsPage}
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-500"
+                  className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
                   onClick={() => setVitalsPage((prev) => Math.max(1, prev - 1))}
                   disabled={vitalsPage === 1}
                 >
                   Previous
                 </button>
                 <button
-                  className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-500"
+                  className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
                   onClick={() => setVitalsPage((prev) => prev + 1)}
                   disabled={vitalsPage >= maxVitalsPage}
                 >
@@ -310,32 +339,32 @@ export default function PatientPage() {
             </div>
             <ul className="space-y-3">
               {displayedVitals.length === 0 && (
-                <li className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-5 text-sm text-slate-400">
-                  Waiting for patient vitals.
+                <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                  {isLoadingPatient ? "Loading patient view..." : "Waiting for patient vitals. Live streaming data will appear here when available."}
                 </li>
               )}
               {paginatedVitals.map((v, i) => (
-                <li key={i} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                <li key={i} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.25em] text-slate-500">{v.time}</p>
+                      <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">{v.time}</p>
                       <p className="mt-2 text-base font-semibold text-white">Patient {id} vital snapshot</p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <div className="rounded-2xl bg-slate-900/80 px-3 py-3">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">HR</p>
-                        <p className="mt-2 font-semibold text-rose-300">{v.heart_rate}</p>
+                      <div className="monitor-panel rounded-2xl px-3 py-3">
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">HR</p>
+                        <p className="mt-2 font-semibold text-[#ffb84d]">{v.heart_rate}</p>
                       </div>
-                      <div className="rounded-2xl bg-slate-900/80 px-3 py-3">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">O2</p>
-                        <p className="mt-2 font-semibold text-emerald-300">{v.oxygen_saturation}</p>
+                      <div className="monitor-panel rounded-2xl px-3 py-3">
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">O2</p>
+                        <p className="mt-2 font-semibold text-[#9dccff]">{v.oxygen_saturation}</p>
                       </div>
-                      <div className="rounded-2xl bg-slate-900/80 px-3 py-3">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Temp</p>
-                        <p className="mt-2 font-semibold text-amber-300">{v.temperature}</p>
+                      <div className="monitor-panel rounded-2xl px-3 py-3">
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Temp</p>
+                        <p className="mt-2 font-semibold text-[#ffd699]">{v.temperature}</p>
                       </div>
-                      <div className="rounded-2xl bg-slate-900/80 px-3 py-3">
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">BP</p>
+                      <div className="monitor-panel rounded-2xl px-3 py-3">
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">BP</p>
                         <p className="mt-2 font-semibold text-white">{v.systolic_bp}/{v.diastolic_bp}</p>
                       </div>
                     </div>
@@ -349,25 +378,25 @@ export default function PatientPage() {
             <div className="monitor-card rounded-[28px] p-6">
               <div className="mb-5 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-300">Escalations</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Escalations</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Patient Alerts</h2>
                 </div>
-                <span className="rounded-full bg-rose-500/12 px-3 py-1 text-xs font-semibold text-rose-200">{alerts.length} recent</span>
+                <span className="console-chip-danger rounded-full px-3 py-1 text-xs font-semibold"><CountValue value={alerts.length} /></span>
               </div>
               <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="rounded-full bg-slate-900/80 px-3 py-1 text-xs font-medium text-slate-300">
+                <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
                   Page {alertsPage}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-500"
+                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
                     onClick={() => setAlertsPage((prev) => Math.max(1, prev - 1))}
                     disabled={alertsPage === 1}
                   >
                     Previous
                   </button>
                   <button
-                    className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-500"
+                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
                     onClick={() => setAlertsPage((prev) => prev + 1)}
                     disabled={alertsPage >= maxAlertsPage}
                   >
@@ -377,7 +406,7 @@ export default function PatientPage() {
               </div>
               <ul className="space-y-3">
                 {alerts.length === 0 && (
-                  <li className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-5 text-sm text-slate-400">
+                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
                     No alert activity for this patient yet.
                   </li>
                 )}
@@ -392,7 +421,7 @@ export default function PatientPage() {
 
             <div className="monitor-card rounded-[28px] p-6">
               <div className="mb-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">Medication</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Medication</p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Administer Medication</h2>
               </div>
               <form className="space-y-4" onSubmit={handleMedicationSubmit}>
@@ -401,7 +430,7 @@ export default function PatientPage() {
                   value={medicationName}
                   onChange={(event) => setMedicationName(event.target.value)}
                   placeholder="Medication name"
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
+                  className="console-input w-full rounded-2xl px-4 py-3 outline-none"
                   required
                 />
                 <input
@@ -409,16 +438,16 @@ export default function PatientPage() {
                   value={dosage}
                   onChange={(event) => setDosage(event.target.value)}
                   placeholder="Dosage"
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
+                  className="console-input w-full rounded-2xl px-4 py-3 outline-none"
                   required
                 />
                 {medicationMessage && (
-                  <p className="text-sm text-slate-400">{medicationMessage}</p>
+                  <p className={medicationMessageIsError ? "login-error" : "login-success"}>{medicationMessage}</p>
                 )}
                 <button
                   type="submit"
                   disabled={isSubmittingMedication}
-                  className="w-full rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                  className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                 >
                   {isSubmittingMedication ? "Submitting..." : "Administer Medication"}
                 </button>
@@ -428,20 +457,20 @@ export default function PatientPage() {
             <div className="monitor-card rounded-[28px] p-6">
               <div className="mb-5 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">Event Feed</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Event Feed</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Patient Events</h2>
                 </div>
-                <span className="rounded-full bg-cyan-500/12 px-3 py-1 text-xs font-semibold text-cyan-200">{events.length} recent</span>
+                <span className="console-chip-success rounded-full px-3 py-1 text-xs font-semibold"><CountValue value={events.length} /></span>
               </div>
               <ul className="space-y-3">
                 {events.length === 0 && (
-                  <li className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-5 text-sm text-slate-400">
+                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
                     No patient events yet.
                   </li>
                 )}
                 {events.map((event, i) => (
-                  <li key={i} className="rounded-2xl border border-cyan-500/10 bg-cyan-950/20 px-4 py-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-cyan-200/70">{event.time || event.timestamp}</p>
+                  <li key={i} className="rounded-2xl border border-[#3b424b] bg-[#1b2430] px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-[#9dccff]">{event.time || event.timestamp}</p>
                     <p className="mt-2 text-sm font-medium text-white">{event.message || event.event_type || "Patient event"}</p>
                   </li>
                 ))}

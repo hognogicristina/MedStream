@@ -4,7 +4,7 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.kafka.producer import send_message
 from app.models.patient import Patient
-from app.simulator.patient_profiles import generate_vitals, pick_profile
+from app.simulator.patient_profiles import build_patient_state, generate_vitals
 
 
 def load_patients():
@@ -17,30 +17,39 @@ def run():
         try:
             patients = load_patients()
 
-            patient_profiles = {
-                p.id: pick_profile() for p in patients
+            patient_states = {
+                p.id: build_patient_state(p) for p in patients
             }
 
             print("Assigned profiles:")
-            for pid, profile in patient_profiles.items():
-                print(f"Patient {pid}: {profile['name']}")
+            for pid, state in patient_states.items():
+                print(f"Patient {pid}: {state['profile']['name']}")
 
             while True:
                 try:
                     refreshed_patients = load_patients()
 
-                    if len(refreshed_patients) != len(patients):
-                        patients = refreshed_patients
-                        for patient in patients:
-                            if patient.id not in patient_profiles:
-                                patient_profiles[patient.id] = pick_profile()
-                    else:
-                        patients = refreshed_patients
+                    patients = refreshed_patients
+                    current_patient_ids = {patient.id for patient in patients}
+
+                    patient_states = {
+                        patient_id: state
+                        for patient_id, state in patient_states.items()
+                        if patient_id in current_patient_ids
+                    }
 
                     for patient in patients:
-                        profile = patient_profiles[patient.id]
+                        if patient.id not in patient_states:
+                            patient_states[patient.id] = build_patient_state(patient)
+                            continue
 
-                        vitals = generate_vitals(profile)
+                        if patient_states[patient.id]["department"] != patient.department:
+                            patient_states[patient.id] = build_patient_state(patient)
+
+                    for patient in patients:
+                        state = patient_states[patient.id]
+
+                        vitals = generate_vitals(state, patient.id)
 
                         payload = {
                             "patient_id": patient.id,
@@ -49,7 +58,7 @@ def run():
 
                         send_message(settings.kafka_vitals_topic, payload)
 
-                        print(f"P{patient.id} ({profile['name']}):", payload)
+                        print(f"P{patient.id} ({state['profile']['name']}):", payload)
 
                     time.sleep(2)
                 except Exception as e:

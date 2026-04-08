@@ -74,6 +74,29 @@ KAFKA_EVENTS_TOPIC=hospital-events
 
 ## Install
 
+### Quick start
+
+From the project root:
+
+```bash
+./start-dev.sh
+```
+
+This starts Docker services, the FastAPI backend, and the Vite frontend from one place.
+
+Expected local URLs:
+
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8000`
+- Kafka UI: `http://localhost:8080`
+- pgAdmin: `http://localhost:5050`
+
+Prerequisites for the one-command flow:
+
+- Docker and Docker Compose running
+- frontend dependencies already installed with `npm install --prefix frontend`
+- backend dependencies already installed, either in `.venv` or in your active Python environment
+
 ### 1. Start infrastructure
 
 From the project root:
@@ -156,6 +179,12 @@ Recommended order:
 4. Seed doctors
 5. Start frontend
 
+If you want one local development entrypoint after dependencies are installed, use:
+
+```bash
+./start-dev.sh
+```
+
 ## Seed Data
 
 ### Seed patients
@@ -166,7 +195,7 @@ From the project root:
 python3 -m backend.app.simulator.seed
 ```
 
-This creates test patients with departments in `ER`, `ICU`, or `Ward`.
+This creates realistic demo patients across `ER`, `ICU`, `Cardiology`, `Internal Medicine`, `Neurology`, and `Ward`.
 
 ### Seed doctors
 
@@ -176,7 +205,17 @@ From the project root:
 python3 -m backend.app.simulator.seed_doctors
 ```
 
-This creates at least 3 doctors and skips existing ones if you run it again.
+This creates the demo doctor roster and updates existing matching records if you run it again.
+
+### Seed all demo data
+
+From the project root:
+
+```bash
+python3 -m backend.app.simulator.seed_all
+```
+
+This initializes the schema if needed, then runs the doctor and patient seeders in sequence. It is safe to rerun for local demo setup because doctors are matched by email and patients are matched by CNP.
 
 Example login:
 

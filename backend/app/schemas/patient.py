@@ -6,7 +6,7 @@ from pydantic import BaseModel
 class PatientCreate(BaseModel):
     first_name: str
     last_name: str
-    department: Literal["ER", "ICU", "Ward"]
+    department: Literal["ER", "ICU", "Cardiology", "Internal Medicine", "Neurology", "Ward"]
     cnp: str
     birth_date: date
     gender: str
@@ -19,4 +19,4 @@ class PatientRead(PatientCreate):
 
 
 class PatientDepartmentUpdate(BaseModel):
-    department: Literal["ER", "ICU", "Ward"]
+    department: Literal["ER", "ICU", "Cardiology", "Internal Medicine", "Neurology", "Ward"]

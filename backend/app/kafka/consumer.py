@@ -134,6 +134,7 @@ def run():
                         )
 
                         for alert in alerts:
+                            db.refresh(alert)
                             print("Created alert:", alert.alert_type, alert.message)
 
                             asyncio.run(
@@ -141,10 +142,13 @@ def run():
                                     {
                                         "type": "alert",
                                         "data": {
+                                            "id": alert.id,
                                             "patient_id": alert.patient_id,
-                                            "type": alert.alert_type,
+                                            "vital_id": alert.vital_id,
+                                            "alert_type": alert.alert_type,
                                             "message": alert.message,
                                             "severity": alert.severity,
+                                            "created_at": alert.created_at.isoformat(),
                                         },
                                     }
                                 )

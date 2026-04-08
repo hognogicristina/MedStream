@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
         setToken(nextToken)
       },
       logout() {
+        localStorage.removeItem(AUTH_STORAGE_KEY)
         setToken(null)
       },
     }),
