@@ -14,66 +14,26 @@ from app.models.patient import Patient
 from app.models.patient_stats import PatientStats
 from app.models.vital import Vital
 from app.simulator.patient_profiles import DEPARTMENT_PROFILE_MAP, build_patient_state, generate_vitals
+from faker import Faker
+
+
+def get_fake(rng):
+    Faker.seed(rng.randint(1, 999999))
+    return Faker("ro_RO")
+
 
 SEED = 20260411
 PATIENT_COUNT = 150
 DEPARTMENTS = ["ER", "ICU", "Cardiology", "Internal Medicine", "Neurology", "Ward"]
-ROMANIA_COUNTIES = [
-    {"name": "Bucuresti", "cities": ["Bucuresti"]},
-    {"name": "Cluj", "cities": ["Cluj-Napoca", "Turda"]},
-    {"name": "Iasi", "cities": ["Iasi", "Pascani"]},
-    {"name": "Timis", "cities": ["Timisoara", "Lugoj"]},
-    {"name": "Constanta", "cities": ["Constanta", "Mangalia"]},
-    {"name": "Brasov", "cities": ["Brasov", "Fagaras"]},
-]
-MALE_FIRST_NAMES = [
-    "Andrei", "Mihai", "Victor", "Radu", "Alexandru", "Ionut", "Paul", "Sorin", "Dorin", "Florin", "Tudor", "Bogdan"
-]
-FEMALE_FIRST_NAMES = [
-    "Ioana", "Elena", "Ana", "Maria", "Bianca", "Raluca", "Gabriela", "Cristina", "Monica", "Oana", "Irina", "Larisa"
-]
-LAST_NAMES = [
-    "Popescu", "Ionescu", "Dumitrescu", "Stan", "Stoica", "Marin", "Rusu", "Toma", "Barbu", "Neagu", "Matei", "Luca",
-    "Sandu", "Pavel", "Avram", "Toader", "Florea", "Voicu", "Preda", "Enache", "Munteanu", "Ciobanu", "Apostol", "Dragan"
-]
-STREET_NAMES = [
-    "Liberty", "Union", "Oak", "River", "Central", "Garden", "Maple", "Victory", "Elm", "Station", "Hill", "Clinic"
-]
-PROFILE_COMPLAINTS = {
-    "healthy": [
-        "Short observation after minor incident",
-        "Routine monitoring after intake",
-        "Stability check during supervised admission",
-    ],
-    "cardiac risk": [
-        "Chest pressure with telemetry observation",
-        "Palpitations and blood pressure instability",
-        "Rhythm irregularity requiring monitoring",
-    ],
-    "infection/fever": [
-        "Persistent fever and suspected infection",
-        "Productive cough with elevated temperature",
-        "Fatigue and inflammatory signs under review",
-    ],
-    "respiratory distress": [
-        "Shortness of breath with oxygen support",
-        "Acute respiratory compromise during intake",
-        "Hypoxemia requiring continuous monitoring",
-    ],
-    "recovering patient": [
-        "Post-treatment stabilization under observation",
-        "Recovery monitoring after acute intervention",
-        "Step-down supervision after clinical improvement",
-    ],
-}
-MEDICATIONS = [
-    ("Paracetamol", "500 mg"),
-    ("Aspirin", "75 mg"),
-    ("Furosemide", "20 mg"),
-    ("Metoprolol", "50 mg"),
-    ("Ceftriaxone", "1 g"),
-    ("Salbutamol", "2.5 mg"),
-]
+
+
+def generate_name(rng):
+    Faker.seed(rng.randint(1, 999999))
+
+    first_name = fake.first_name()
+    last_name = fake.last_name()
+
+    return first_name, last_name
 
 
 def build_rng(seed_suffix: str):
@@ -81,57 +41,66 @@ def build_rng(seed_suffix: str):
 
 
 def generate_phone_number(index: int):
-    prefix = f"07{40 + ((index - 1) % 10)}"
-    return f"{prefix}{index:06d}"
+    prefixes = ["072", "073", "074", "075", "076", "077"]
+    prefix = prefixes[index % len(prefixes)]
+    return f"{prefix}{(1000000 + index):07d}"[:10]
 
 
-def generate_address(index: int):
-    county = ROMANIA_COUNTIES[(index - 1) % len(ROMANIA_COUNTIES)]
+def generate_address(rng):
+    fake = Faker("ro_RO")
+    fake.seed_instance(rng.randint(1, 999999))
+
     return {
-        "street": f"Strada {STREET_NAMES[(index - 1) % len(STREET_NAMES)]}",
-        "number": str(10 + index),
-        "apartment": str((index % 18) + 1),
-        "city": county["cities"][(index - 1) % len(county["cities"])],
-        "county": county["name"],
-        "postal_code": f"{100000 + index}",
+        "street": fake.street_name(),
+        "number": str(fake.building_number()),
+        "apartment": str(rng.randint(1, 50)) if rng.random() > 0.3 else "",
+        "city": fake.city(),
+        "county": fake.state(),
+        "postal_code": fake.postcode(),
     }
 
 
 def generate_birth_date(index: int):
-    rng = build_rng(f"birth-date:{index}")
-    year = rng.randint(1942, 2004)
+    rng = build_rng(f"birth:{index}")
+    year = rng.randint(1945, 2005)
     month = rng.randint(1, 12)
     day = rng.randint(1, 28)
     return date(year, month, day)
 
 
-def generate_cnp(birth_date: date, gender: str, serial: int):
+def generate_cnp(birth_date: date, gender: str, index: int):
     if birth_date.year >= 2000:
-        first_digit = "5" if gender == "male" else "6"
+        s = "5" if gender == "male" else "6"
     else:
-        first_digit = "1" if gender == "male" else "2"
+        s = "1" if gender == "male" else "2"
 
-    county_code = f"{(serial % 52) + 1:02d}"
-    unique_serial = f"{serial % 999 + 1:03d}"
-    partial = f"{first_digit}{birth_date:%y%m%d}{county_code}{unique_serial}"
+    yy = birth_date.strftime("%y")
+    mm = birth_date.strftime("%m")
+    dd = birth_date.strftime("%d")
+
+    county_code = f"{(index % 41) + 1:02d}"
+    unique_serial = f"{(index * 7 % 999) + 1:03d}"
+    partial = f"{s}{yy}{mm}{dd}{county_code}{unique_serial}"
     control_key = "279146358279"
-    checksum = sum(int(digit) * int(weight) for digit, weight in zip(partial, control_key)) % 11
-    checksum_digit = "1" if checksum == 10 else str(checksum)
-    return f"{partial}{checksum_digit}"
+    checksum = sum(int(d) * int(w) for d, w in zip(partial, control_key)) % 11
+    checksum = 1 if checksum == 10 else checksum
+
+    return f"{partial}{checksum}"
 
 
 def generate_patient_payload(index: int):
     department = DEPARTMENTS[(index - 1) % len(DEPARTMENTS)]
     profile_name = DEPARTMENT_PROFILE_MAP[department][(index - 1) % len(DEPARTMENT_PROFILE_MAP[department])]
+    rng = build_rng(f"patient:{index}")
     gender = "female" if index % 2 == 0 else "male"
-    first_name_pool = FEMALE_FIRST_NAMES if gender == "female" else MALE_FIRST_NAMES
-    first_name = first_name_pool[(index - 1) % len(first_name_pool)]
-    last_name = LAST_NAMES[((index - 1) * 3) % len(LAST_NAMES)]
+    fake = get_fake(rng)
+    first_name = fake.first_name()
+    last_name = fake.last_name()
     birth_date = generate_birth_date(index)
     cnp = generate_cnp(birth_date, gender, index)
     phone_number = generate_phone_number(index)
-    address = generate_address(index)
-    chief_complaint = PROFILE_COMPLAINTS[profile_name][(index - 1) % len(PROFILE_COMPLAINTS[profile_name])]
+    address = generate_address(rng)
+    chief_complaint = fake.sentence(nb_words=6)
     encounter_type = {
         "ER": "emergency",
         "ICU": "critical_care",
@@ -232,7 +201,12 @@ def seed_medication_history(db, patient: Patient):
     medication_count = build_rng(f"medications:{patient.id}").randint(1, 5)
 
     for index in range(medication_count):
-        medication_name, dosage = MEDICATIONS[(patient.id + index) % len(MEDICATIONS)]
+        medication_name, dosage = random.choice([
+            ("Aspirin", "100 mg"),
+            ("Lisinopril", "10 mg"),
+            ("Metformin", "500 mg"),
+            ("Atorvastatin", "20 mg"),
+        ])
         db.add(
             MedicationAdministration(
                 patient_id=patient.id,

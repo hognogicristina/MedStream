@@ -3,10 +3,11 @@ import BackButton from "../components/BackButton"
 import {useNotifications} from "../components/NotificationProvider"
 import {Link, useNavigate} from "react-router-dom"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseData} from "../services/apiMessages"
 import {DEPARTMENTS, formatDepartmentLabel} from "../constants/departments"
-import {buildPatientPhoneNumber, isValidPatientPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone"
+import {buildPatientPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone"
 import {getCityOptions, getCountyOptions} from "../utils/addressOptions"
-import {buildEmptyPatientAddress, isValidPatientAddress, normalizePatientAddress} from "../utils/patientAddress"
+import {buildEmptyPatientAddress, normalizePatientAddress} from "../utils/patientAddress"
 
 const TOTAL_STEPS = 2
 
@@ -31,13 +32,19 @@ export default function AddPatientPage() {
   const isStepOneValid = Boolean(
     form.first_name.trim()
     && form.last_name.trim()
-    && /^\d{13}$/.test(form.cnp.trim())
+    && form.cnp.trim()
     && form.birth_date
     && form.gender.trim()
     && form.department.trim()
-    && isValidPatientPhoneNumber(normalizedPhoneNumber),
+    && normalizedPhoneNumber.trim(),
   )
-  const isStepTwoValid = isValidPatientAddress(address)
+  const isStepTwoValid = Boolean(
+    address.street.trim()
+    && address.number.trim()
+    && address.city.trim()
+    && address.county.trim()
+    && address.postal_code.trim(),
+  )
 
   const handleChange = (event) => {
     const {name, value} = event.target
@@ -78,9 +85,9 @@ export default function AddPatientPage() {
         phone_number: normalizedPhoneNumber,
         address: normalizePatientAddress(address),
       })
-      navigate(`/patient/${response.data.id}`)
+      navigate(`/patient/${getResponseData(response).id}`)
     } catch (error) {
-      notifyError(error.response?.data?.detail || "Unable to create patient")
+      notifyError(getErrorMessage(error))
     } finally {
       setIsSubmitting(false)
     }

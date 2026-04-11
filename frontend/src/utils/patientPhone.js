@@ -14,13 +14,8 @@ export function normalizeRomanianPhoneNumber(value) {
   return digits
 }
 
-export function isValidPatientPhoneNumber(phoneNumber) {
-  return /^07\d{8}$/.test(normalizeRomanianPhoneNumber(phoneNumber))
-}
-
 export function buildPatientPhoneNumber(value) {
-  const normalized = normalizeRomanianPhoneNumber(value)
-  return isValidPatientPhoneNumber(normalized) ? normalized : normalized
+  return normalizeRomanianPhoneNumber(value)
 }
 
 export function formatPatientPhoneWithCode(phoneNumber) {

@@ -4,6 +4,7 @@ import {useLocation, useNavigate} from "react-router-dom"
 import {useAuth} from "../auth/AuthContext"
 import {useNotifications} from "../components/NotificationProvider"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseData} from "../services/apiMessages"
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -41,11 +42,11 @@ export default function LoginPage() {
         password,
       })
 
-      login(response.data.token)
+      login(getResponseData(response).token)
       navigate("/dashboard")
-    } catch {
+    } catch (error) {
       setFeedbackIsError(true)
-      setFeedback("Invalid email or password")
+      setFeedback(getErrorMessage(error))
     } finally {
       setIsSubmitting(false)
     }

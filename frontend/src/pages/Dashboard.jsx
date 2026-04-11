@@ -3,6 +3,7 @@ import {Link} from "react-router-dom"
 import CountValue from "../components/CountValue"
 import {useNotifications} from "../components/NotificationProvider"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseData} from "../services/apiMessages"
 import {pushStoredEvent, readStoredEvents, subscribeToStoredEvents} from "../services/eventsFeed"
 import {createWebSocket} from "../services/ws"
 import VitalsChart from "../components/VitalsChart"
@@ -39,11 +40,11 @@ export default function Dashboard() {
         api.get("/stats"),
         api.get("/stats/batch-status"),
       ])
-      setPatients(patientsRes.data)
-      setStats(statsRes.data)
-      setBatchStatus(batchStatusRes.data)
-    } catch {
-      notifyError("Unable to load one or more dashboard data sources.")
+      setPatients(getResponseData(patientsRes))
+      setStats(getResponseData(statsRes))
+      setBatchStatus(getResponseData(batchStatusRes))
+    } catch (error) {
+      notifyError(getErrorMessage(error))
     } finally {
       setIsLoadingDashboard(false)
     }
@@ -64,7 +65,7 @@ export default function Dashboard() {
     const intervalId = window.setInterval(async () => {
       try {
         const response = await api.get("/stats/batch-status")
-        setBatchStatus(response.data)
+        setBatchStatus(getResponseData(response))
       } catch {
         // Keep the previous batch status when polling fails.
       }

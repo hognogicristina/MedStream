@@ -4,7 +4,7 @@ from app.db.base import Base
 from app.db.session import engine
 from app.models import Alert, Doctor, DoctorPasswordReset, Encounter, MedicationAdministration, Patient, Vital, doctor_patients
 from app.db.session import SessionLocal
-from app.schemas.validators import ROMANIA_COUNTRY, normalize_romanian_phone_number
+from app.schemas.validators import ROMANIA_COUNTRY, normalize_phone_number
 
 
 def ensure_doctor_columns():
@@ -92,7 +92,7 @@ def normalize_patient_phone_numbers():
 
         for patient in patients:
             try:
-                normalized_phone_number = normalize_romanian_phone_number(patient.phone_number)
+                normalized_phone_number = normalize_phone_number(patient.phone_number)
             except ValueError:
                 normalized_phone_number = None
 
@@ -128,7 +128,7 @@ def normalize_patient_phone_numbers():
 
         for doctor in doctors:
             try:
-                normalized_phone_number = normalize_romanian_phone_number(doctor.phone_number)
+                normalized_phone_number = normalize_phone_number(doctor.phone_number)
             except ValueError:
                 normalized_phone_number = None
 

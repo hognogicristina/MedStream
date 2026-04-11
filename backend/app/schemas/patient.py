@@ -1,8 +1,14 @@
 from datetime import date
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.schemas.validators import ROMANIA_COUNTRY, normalize_romanian_phone_number
+from app.schemas.validators import (
+    ROMANIA_COUNTRY,
+    normalize_phone_number,
+    require_non_empty,
+    validate_cnp,
+    validate_department,
+)
 
 
 class PatientAddressBase(BaseModel):
@@ -16,19 +22,12 @@ class PatientAddressBase(BaseModel):
     @field_validator("street", "number", "city", "county", "postal_code", mode="before")
     @classmethod
     def strip_required_strings(cls, value):
-        return str(value or "").strip()
+        return require_non_empty(value, "Address field")
 
     @field_validator("postal_code", mode="before")
     @classmethod
     def normalize_postal_code(cls, value):
         return "".join(char for char in str(value or "").strip() if char.isdigit())
-
-    @field_validator("street", "number", "city", "county", "postal_code")
-    @classmethod
-    def ensure_required_strings(cls, value):
-        if not value:
-            raise ValueError("Address fields must not be empty.")
-        return value
 
     @field_validator("postal_code")
     @classmethod
@@ -71,8 +70,7 @@ class PatientAddressUpdate(BaseModel):
     def strip_required_strings(cls, value):
         if value is None:
             return value
-        trimmed = str(value).strip()
-        return trimmed or None
+        return require_non_empty(value, "Address field")
 
     @field_validator("postal_code", mode="before")
     @classmethod
@@ -97,6 +95,21 @@ class PatientAddressUpdate(BaseModel):
         trimmed = str(value).strip()
         return trimmed or None
 
+    @model_validator(mode="after")
+    def validate_completeness(self):
+        values = {
+            "street": self.street,
+            "number": self.number,
+            "city": self.city,
+            "county": self.county,
+            "postal_code": self.postal_code,
+        }
+
+        if any(value is not None for value in values.values()) and not all(values.values()):
+            raise ValueError("Address fields must be complete.")
+
+        return self
+
 
 class PatientBase(BaseModel):
     first_name: str
@@ -108,10 +121,25 @@ class PatientBase(BaseModel):
     gender: str
     address: PatientAddressCreate
 
+    @field_validator("first_name", "last_name", "gender", mode="before")
+    @classmethod
+    def validate_required_text(cls, value, info):
+        return require_non_empty(value, info.field_name.replace("_", " ").title())
+
+    @field_validator("department", mode="before")
+    @classmethod
+    def validate_department_name(cls, value):
+        return validate_department(value)
+
+    @field_validator("cnp", mode="before")
+    @classmethod
+    def validate_patient_cnp(cls, value):
+        return validate_cnp(value)
+
     @field_validator("phone_number", mode="before")
     @classmethod
     def format_phone_number(cls, value):
-        return normalize_romanian_phone_number(value)
+        return normalize_phone_number(value)
 
 
 class PatientCreate(PatientBase):
@@ -123,15 +151,36 @@ class PatientUpdate(BaseModel):
     last_name: str | None = None
     department: str | None = None
     cnp: str | None = None
-    phone_number: str | None
+    phone_number: str | None = None
     birth_date: date | None = None
     gender: str | None = None
     address: PatientAddressUpdate | None = None
 
+    @field_validator("first_name", "last_name", "gender", mode="before")
+    @classmethod
+    def validate_optional_text(cls, value, info):
+        if value is None:
+            return value
+        return require_non_empty(value, info.field_name.replace("_", " ").title())
+
+    @field_validator("department", mode="before")
+    @classmethod
+    def validate_optional_department(cls, value):
+        if value is None:
+            return value
+        return validate_department(value)
+
+    @field_validator("cnp", mode="before")
+    @classmethod
+    def validate_optional_cnp(cls, value):
+        if value is None:
+            return value
+        return validate_cnp(value)
+
     @field_validator("phone_number", mode="before")
     @classmethod
     def format_phone_number(cls, value):
-        return normalize_romanian_phone_number(value)
+        return normalize_phone_number(value)
 
 
 class PatientRead(PatientBase):
@@ -144,4 +193,14 @@ class PatientRead(PatientBase):
 
 class PatientDepartmentUpdate(BaseModel):
     department: str
-    reason: str = Field(min_length=3, max_length=300)
+    reason: str = Field(min_length=1, max_length=300)
+
+    @field_validator("department", mode="before")
+    @classmethod
+    def validate_department_name(cls, value):
+        return validate_department(value)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def validate_reason(cls, value):
+        return require_non_empty(value, "Reason")

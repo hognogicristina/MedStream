@@ -29,7 +29,7 @@ export default function DepartmentTransferDialog({
   }
 
   const trimmedReason = reason.trim()
-  const canSubmit = nextDepartment && nextDepartment !== currentDepartment && trimmedReason.length >= 3 && !isSubmitting
+  const canSubmit = nextDepartment && nextDepartment !== currentDepartment && trimmedReason.length > 0 && !isSubmitting
 
   const handleSubmit = (event) => {
     event.preventDefault()

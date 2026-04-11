@@ -5,6 +5,7 @@ import {useNotifications} from "../components/NotificationProvider"
 import {Link, useParams} from "react-router-dom"
 import DataTable from "../components/DataTable"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseData} from "../services/apiMessages"
 import {DEPARTMENTS, departmentHref} from "../constants/departments"
 import {formatPatientFullName} from "../utils/patients"
 
@@ -39,17 +40,17 @@ export default function DepartmentPage() {
           api.get("/stats/batch-status"),
         ])
 
-        const filteredPatients = patientsRes.data.filter((patient) => patient.department === departmentName)
+        const filteredPatients = getResponseData(patientsRes).filter((patient) => patient.department === departmentName)
         const patientIds = new Set(filteredPatients.map((patient) => patient.id))
-        const filteredStats = statsRes.data.filter((stat) => patientIds.has(stat.patient_id))
-        const filteredAlerts = alertsRes.data.filter((alert) => patientIds.has(alert.patient_id))
+        const filteredStats = getResponseData(statsRes).filter((stat) => patientIds.has(stat.patient_id))
+        const filteredAlerts = getResponseData(alertsRes).filter((alert) => patientIds.has(alert.patient_id))
 
         setPatients(filteredPatients)
         setStats(filteredStats)
         setAlerts(filteredAlerts)
-        setBatchStatus(batchStatusRes.data)
-      } catch {
-        notifyError("Unable to load department analytics.")
+        setBatchStatus(getResponseData(batchStatusRes))
+      } catch (error) {
+        notifyError(getErrorMessage(error))
       } finally {
         setIsLoading(false)
       }

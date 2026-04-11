@@ -1,6 +1,7 @@
 import {useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate()
@@ -26,11 +27,11 @@ export default function ForgotPasswordPage() {
         identifier,
       })
 
-      setMessage("Password reset requested successfully. Use the generated token below to continue.")
-      setResetToken(response.data.reset_token)
+      setMessage(getResponseMessage(response))
+      setResetToken(getResponseData(response).reset_token)
     } catch (error) {
       setIsError(true)
-      setMessage(error.response?.data?.detail || ("Unable to request password reset."))
+      setMessage(getErrorMessage(error))
     } finally {
       setIsSubmitting(false)
     }
@@ -51,15 +52,14 @@ export default function ForgotPasswordPage() {
             <p className="login-subtitle">{"Request a reset token using your doctor email or phone number, then continue to reset the account password."}</p>
             <div className="auth-metrics">
               <div className="auth-metric">
-                <p className="auth-metric-label">Identifier</p>
-                <p className="auth-metric-value">Email or phone</p>
-                <p className="auth-metric-copy">Use the doctor account identity that was registered in MedStream.</p>
+                <p className="auth-metric-label">Live</p>
+                <p className="auth-metric-value">Continuous Tracking</p>
+                <p className="auth-metric-copy">Every patient interaction is logged and displayed in real time.</p>
               </div>
               <div className="auth-metric">
-                <p className="auth-metric-label">Outcome</p>
-                <p className="auth-metric-value">Reset token issued</p>
-                <p className="auth-metric-copy">The backend simulates email and SMS delivery while also returning the token for local
-                  development.</p>
+                <p className="auth-metric-label">Scalable</p>
+                <p className="auth-metric-value">Built to Grow</p>
+                <p className="auth-metric-copy">The system is designed to handle increasing numbers of patients and data streams effortlessly.</p>
               </div>
             </div>
           </aside>

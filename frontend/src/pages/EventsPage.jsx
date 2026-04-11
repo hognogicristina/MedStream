@@ -3,6 +3,7 @@ import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
 import DataTable from "../components/DataTable"
 import {api} from "../services/api"
+import {getResponseData} from "../services/apiMessages"
 import {createWebSocket} from "../services/ws"
 import {pushStoredEvent, readStoredEvents, subscribeToStoredEvents} from "../services/eventsFeed"
 import {formatPatientFullName} from "../utils/patients"
@@ -18,7 +19,7 @@ export default function EventsPage() {
 
       try {
         const response = await api.get("/patients?page=1&limit=100")
-        setPatients(response.data)
+        setPatients(getResponseData(response))
       } catch {
         // Keep the event feed visible even if patient labels fail to load.
       } finally {

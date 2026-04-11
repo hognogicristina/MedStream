@@ -1,19 +1,40 @@
 import hashlib
 import secrets
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Header, HTTPException
-from sqlalchemy import or_, select
-from sqlalchemy.orm import selectinload
 from passlib.context import CryptContext
+from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
+from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
 from app.models.doctor import Doctor
 from app.models.doctor_password_reset import DoctorPasswordReset
 from app.models.patient import Patient
-from app.schemas.doctor import AccountRecoveryRequestResponse, DoctorCreate, DoctorDeactivateRequest, DoctorEmailUpdate, DoctorRead, DoctorUpdate, LoginRequest, LoginResponse, PasswordResetConfirm, PasswordResetConfirmResponse, PasswordResetRequest, PasswordResetRequestResponse
+from app.schemas.doctor import (
+    AccountRecoveryRequestResponse,
+    DoctorCreate,
+    DoctorDeactivateRequest,
+    DoctorEmailUpdate,
+    DoctorRead,
+    DoctorUpdate,
+    LoginRequest,
+    LoginResponse,
+    PasswordResetConfirm,
+    PasswordResetConfirmResponse,
+    PasswordResetRequest,
+    PasswordResetRequestResponse,
+)
 from app.schemas.patient import PatientRead
-from app.services.notifications import send_account_recovery_notifications, send_email_change_confirmation, send_password_reset_notifications, send_registration_notifications
+from app.schemas.validators import normalize_phone_lookup
+from app.services.notifications import (
+    send_account_recovery_notifications,
+    send_email_change_confirmation,
+    send_password_reset_notifications,
+    send_registration_notifications,
+)
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 auth_router = APIRouter(tags=["auth"])
@@ -21,40 +42,46 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 password_reset_ttl = timedelta(minutes=30)
 
 
-def normalize_phone_lookup(value: str | None):
-    return "".join(char for char in str(value or "") if char.isdigit())
+def serialize(model, schema):
+    return schema.model_validate(model).model_dump(mode="json")
+
+
+def serialize_many(models, schema):
+    return [serialize(model, schema) for model in models]
 
 
 def doctor_matches_identifier(doctor: Doctor, identifier: str):
     normalized_identifier = normalize_phone_lookup(identifier)
     normalized_phone = normalize_phone_lookup(doctor.phone_number)
+    normalized_email = doctor.email.strip().lower()
 
-    if doctor.email == identifier:
+    if normalized_email == identifier.strip().lower():
         return True
 
     if not normalized_identifier or not normalized_phone:
         return False
 
-    return normalized_phone == normalized_identifier or normalized_phone.endswith(normalized_identifier)
+    return normalized_phone == normalized_identifier
 
 
-@router.get("", response_model=list[DoctorRead])
+@router.get("", response_model=ApiResponse[list[DoctorRead]])
 def list_doctors():
     with SessionLocal() as db:
-        return db.execute(select(Doctor)).scalars().all()
+        doctors = db.execute(select(Doctor)).scalars().all()
+        return success_response("Doctors retrieved successfully.", serialize_many(doctors, DoctorRead))
 
 
 def get_current_doctor(authorization: str | None):
     if not authorization:
-        raise HTTPException(status_code=401, detail="Missing authorization header")
+        raise HTTPException(status_code=401, detail="Missing authorization header.")
 
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token:
-        raise HTTPException(status_code=401, detail="Invalid authorization header")
+        raise HTTPException(status_code=401, detail="Invalid authorization header.")
 
     parts = token.split("-", 2)
     if len(parts) < 3 or parts[0] != "doctor" or not parts[1].isdigit():
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token.")
 
     doctor_id = int(parts[1])
 
@@ -62,10 +89,10 @@ def get_current_doctor(authorization: str | None):
         doctor = db.get(Doctor, doctor_id)
 
         if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found")
+            raise HTTPException(status_code=404, detail="Doctor not found.")
 
         if not doctor.is_active:
-            raise HTTPException(status_code=403, detail="Doctor account is inactive")
+            raise HTTPException(status_code=403, detail="Doctor account is inactive.")
 
         return doctor
 
@@ -98,12 +125,36 @@ def create_doctor_reset_token(db, doctor: Doctor):
     return raw_token, reset
 
 
-@router.get("/me", response_model=DoctorRead)
+def ensure_doctor_uniqueness(db, *, email: str | None = None, phone_number: str | None = None, license_number: str | None = None, doctor_id: int | None = None):
+    if email:
+        email_query = select(Doctor).where(or_(Doctor.email == email, Doctor.pending_email == email))
+        if doctor_id is not None:
+            email_query = email_query.where(Doctor.id != doctor_id)
+        if db.execute(email_query).scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Email already registered.")
+
+    if phone_number:
+        phone_query = select(Doctor).where(Doctor.phone_number == phone_number)
+        if doctor_id is not None:
+            phone_query = phone_query.where(Doctor.id != doctor_id)
+        if db.execute(phone_query).scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Phone number already registered.")
+
+    if license_number:
+        license_query = select(Doctor).where(Doctor.license_number == license_number)
+        if doctor_id is not None:
+            license_query = license_query.where(Doctor.id != doctor_id)
+        if db.execute(license_query).scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="License number already registered.")
+
+
+@router.get("/me", response_model=ApiResponse[DoctorRead])
 def read_current_doctor(authorization: str | None = Header(default=None)):
-    return get_current_doctor(authorization)
+    doctor = get_current_doctor(authorization)
+    return success_response("Doctor profile retrieved successfully.", serialize(doctor, DoctorRead))
 
 
-@router.patch("/me", response_model=DoctorRead)
+@router.patch("/me", response_model=ApiResponse[DoctorRead])
 def update_current_doctor(payload: DoctorUpdate, authorization: str | None = Header(default=None)):
     current_doctor = get_current_doctor(authorization)
 
@@ -111,30 +162,30 @@ def update_current_doctor(payload: DoctorUpdate, authorization: str | None = Hea
         doctor = db.get(Doctor, current_doctor.id)
 
         if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found")
+            raise HTTPException(status_code=404, detail="Doctor not found.")
 
         updates = payload.model_dump(exclude_unset=True)
-
-        if "phone_number" in updates:
-            duplicate_phone = db.execute(
-                select(Doctor).where(
-                    Doctor.phone_number == updates["phone_number"],
-                    Doctor.id != doctor.id,
-                )
-            ).scalar_one_or_none()
-
-            if duplicate_phone:
-                raise HTTPException(status_code=400, detail="Phone number already registered")
+        ensure_doctor_uniqueness(
+            db,
+            phone_number=updates.get("phone_number"),
+            license_number=updates.get("license_number"),
+            doctor_id=doctor.id,
+        )
 
         for field, value in updates.items():
             setattr(doctor, field, value)
 
-        db.commit()
-        db.refresh(doctor)
-        return doctor
+        try:
+            db.commit()
+            db.refresh(doctor)
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Doctor profile contains duplicate unique fields.")
+
+        return success_response("Doctor profile updated successfully.", serialize(doctor, DoctorRead))
 
 
-@router.patch("/me/email", response_model=DoctorRead)
+@router.patch("/me/email", response_model=ApiResponse[DoctorRead])
 def update_current_doctor_email(payload: DoctorEmailUpdate, authorization: str | None = Header(default=None)):
     current_doctor = get_current_doctor(authorization)
 
@@ -142,66 +193,66 @@ def update_current_doctor_email(payload: DoctorEmailUpdate, authorization: str |
         doctor = db.get(Doctor, current_doctor.id)
 
         if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found")
+            raise HTTPException(status_code=404, detail="Doctor not found.")
 
-        duplicate_email = db.execute(
-            select(Doctor).where(
-                or_(Doctor.email == payload.email, Doctor.pending_email == payload.email),
-                Doctor.id != doctor.id,
-            )
-        ).scalar_one_or_none()
-
-        if duplicate_email:
-            raise HTTPException(status_code=400, detail="Email already registered")
+        ensure_doctor_uniqueness(db, email=payload.email, doctor_id=doctor.id)
 
         if payload.email == doctor.email and not doctor.pending_email:
-            return doctor
+            return success_response("Doctor email is already up to date.", serialize(doctor, DoctorRead))
 
         doctor.pending_email = payload.email
         doctor.email_confirmed = False
         db.commit()
         db.refresh(doctor)
         send_email_change_confirmation(payload.email, doctor.first_name)
-        return doctor
+        return success_response("Doctor email update requested successfully.", serialize(doctor, DoctorRead))
 
 
-@router.post("/password-reset/request", response_model=PasswordResetRequestResponse)
+@router.post("/password-reset/request", response_model=ApiResponse[PasswordResetRequestResponse])
 def request_password_reset(payload: PasswordResetRequest):
     with SessionLocal() as db:
         doctors = db.execute(select(Doctor)).scalars().all()
         doctor = next((item for item in doctors if doctor_matches_identifier(item, payload.identifier)), None)
 
         if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found")
+            raise HTTPException(status_code=404, detail="Doctor not found.")
 
         raw_token, reset = create_doctor_reset_token(db, doctor)
         send_password_reset_notifications(doctor.email, doctor.phone_number, raw_token)
-        return PasswordResetRequestResponse(
-            message="Password reset token generated",
+        response = PasswordResetRequestResponse(
+            message="Password reset token generated successfully.",
             reset_token=raw_token,
             expires_at=reset.expires_at,
         )
+        return success_response(response.message, response.model_dump(mode="json"))
 
 
-@router.post("/account-recovery/request", response_model=AccountRecoveryRequestResponse)
+@router.post("/account-recovery/request", response_model=ApiResponse[AccountRecoveryRequestResponse])
 def request_account_recovery(payload: PasswordResetRequest):
     with SessionLocal() as db:
         doctors = db.execute(select(Doctor)).scalars().all()
         doctor = next((item for item in doctors if doctor_matches_identifier(item, payload.identifier)), None)
 
+        message = "If the account exists, recovery instructions were sent successfully."
         if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found")
+            response = AccountRecoveryRequestResponse(
+                message=message,
+                recovery_token="",
+                expires_at=datetime.now(UTC).replace(tzinfo=None),
+            )
+            return success_response(response.message, response.model_dump(mode="json"))
 
         raw_token, reset = create_doctor_reset_token(db, doctor)
         send_account_recovery_notifications(doctor.email, doctor.phone_number, raw_token)
-        return AccountRecoveryRequestResponse(
-            message="Account recovery token generated",
+        response = AccountRecoveryRequestResponse(
+            message=message,
             recovery_token=raw_token,
             expires_at=reset.expires_at,
         )
+        return success_response(response.message, response.model_dump(mode="json"))
 
 
-@router.post("/password-reset/confirm", response_model=PasswordResetConfirmResponse)
+@router.post("/password-reset/confirm", response_model=ApiResponse[PasswordResetConfirmResponse])
 def confirm_password_reset(payload: PasswordResetConfirm):
     with SessionLocal() as db:
         now = datetime.now(UTC).replace(tzinfo=None)
@@ -213,20 +264,21 @@ def confirm_password_reset(payload: PasswordResetConfirm):
         ).scalar_one_or_none()
 
         if reset is None or reset.expires_at < now:
-            raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+            raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
 
         doctor = db.get(Doctor, reset.doctor_id)
 
         if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found")
+            raise HTTPException(status_code=404, detail="Doctor not found.")
 
         doctor.password_hash = pwd_context.hash(payload.new_password)
         reset.used_at = now
         db.commit()
-        return PasswordResetConfirmResponse(message="Password reset successful")
+        response = PasswordResetConfirmResponse(message="Password reset successful.")
+        return success_response(response.message, response.model_dump(mode="json"))
 
 
-@router.get("/{doctor_id}/patients", response_model=list[PatientRead])
+@router.get("/{doctor_id}/patients", response_model=ApiResponse[list[PatientRead]])
 def get_doctor_patients(doctor_id: int):
     with SessionLocal() as db:
         doctor = db.execute(
@@ -234,12 +286,13 @@ def get_doctor_patients(doctor_id: int):
         ).scalar_one_or_none()
 
         if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found")
+            raise HTTPException(status_code=404, detail="Doctor not found.")
 
-        return sorted(doctor.patients, key=lambda patient: patient.id, reverse=True)
+        patients = sorted(doctor.patients, key=lambda patient: patient.id, reverse=True)
+        return success_response("Doctor patients retrieved successfully.", serialize_many(patients, PatientRead))
 
 
-@router.delete("/{doctor_id}", response_model=DoctorRead)
+@router.delete("/{doctor_id}", response_model=ApiResponse[DoctorRead])
 def delete_doctor(doctor_id: int, payload: DoctorDeactivateRequest):
     with SessionLocal() as db:
         doctor = db.execute(
@@ -247,7 +300,7 @@ def delete_doctor(doctor_id: int, payload: DoctorDeactivateRequest):
         ).scalar_one_or_none()
 
         if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found")
+            raise HTTPException(status_code=404, detail="Doctor not found.")
 
         if payload.remove_patient_assignments:
             doctor.patients.clear()
@@ -259,10 +312,10 @@ def delete_doctor(doctor_id: int, payload: DoctorDeactivateRequest):
 
         db.commit()
         db.refresh(doctor)
-        return doctor
+        return success_response("Doctor account deactivated successfully.", serialize(doctor, DoctorRead))
 
 
-@router.post("/{doctor_id}/patients/{patient_id}", response_model=list[PatientRead])
+@router.post("/{doctor_id}/patients/{patient_id}", response_model=ApiResponse[list[PatientRead]])
 def assign_patient_to_doctor(doctor_id: int, patient_id: int):
     with SessionLocal() as db:
         doctor = db.execute(
@@ -271,20 +324,21 @@ def assign_patient_to_doctor(doctor_id: int, patient_id: int):
         patient = db.get(Patient, patient_id)
 
         if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found")
+            raise HTTPException(status_code=404, detail="Doctor not found.")
 
         if patient is None:
-            raise HTTPException(status_code=404, detail="Patient not found")
+            raise HTTPException(status_code=404, detail="Patient not found.")
 
         if not any(existing_patient.id == patient.id for existing_patient in doctor.patients):
             doctor.patients.append(patient)
             db.commit()
             db.refresh(doctor)
 
-        return sorted(doctor.patients, key=lambda assigned_patient: assigned_patient.id, reverse=True)
+        patients = sorted(doctor.patients, key=lambda assigned_patient: assigned_patient.id, reverse=True)
+        return success_response("Patient assigned to doctor successfully.", serialize_many(patients, PatientRead))
 
 
-@router.delete("/{doctor_id}/patients/{patient_id}", response_model=list[PatientRead])
+@router.delete("/{doctor_id}/patients/{patient_id}", response_model=ApiResponse[list[PatientRead]])
 def remove_patient_from_doctor(doctor_id: int, patient_id: int):
     with SessionLocal() as db:
         doctor = db.execute(
@@ -292,43 +346,44 @@ def remove_patient_from_doctor(doctor_id: int, patient_id: int):
         ).scalar_one_or_none()
 
         if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found")
+            raise HTTPException(status_code=404, detail="Doctor not found.")
 
         next_patients = [patient for patient in doctor.patients if patient.id == patient_id]
 
-        if not next_patients:
-            return sorted(doctor.patients, key=lambda patient: patient.id, reverse=True)
+        if next_patients:
+            doctor.patients.remove(next_patients[0])
+            db.commit()
+            db.refresh(doctor)
 
-        doctor.patients.remove(next_patients[0])
-        db.commit()
-        db.refresh(doctor)
-        return sorted(doctor.patients, key=lambda patient: patient.id, reverse=True)
+        patients = sorted(doctor.patients, key=lambda patient: patient.id, reverse=True)
+        message = "Patient removed from doctor successfully." if next_patients else "Doctor patients retrieved successfully."
+        return success_response(message, serialize_many(patients, PatientRead))
 
 
 def register_doctor(payload: DoctorCreate):
     with SessionLocal() as db:
-        duplicate_filters = [Doctor.email == payload.email]
-
+        duplicate_filters = [Doctor.email == payload.email, Doctor.license_number == payload.license_number]
         if payload.phone_number:
             duplicate_filters.append(Doctor.phone_number == payload.phone_number)
 
         matching_doctors = db.execute(select(Doctor).where(or_(*duplicate_filters))).scalars().all()
+
         email_match = next((doctor for doctor in matching_doctors if doctor.email == payload.email), None)
-        phone_match = next((doctor for doctor in matching_doctors if doctor.phone_number == payload.phone_number and payload.phone_number), None)
+        phone_match = next(
+            (doctor for doctor in matching_doctors if payload.phone_number and doctor.phone_number == payload.phone_number),
+            None,
+        )
+        license_match = next((doctor for doctor in matching_doctors if doctor.license_number == payload.license_number), None)
 
-        if email_match and email_match.is_active:
-            raise HTTPException(status_code=400, detail="Email already registered")
+        for match, message in (
+            (email_match, "Email already registered."),
+            (phone_match, "Phone number already registered."),
+            (license_match, "License number already registered."),
+        ):
+            if match and match.is_active:
+                raise HTTPException(status_code=400, detail=message)
 
-        if phone_match and phone_match.is_active and (email_match is None or phone_match.id != email_match.id):
-            raise HTTPException(status_code=400, detail="Phone number already registered")
-
-        restore_candidate = email_match or phone_match
-
-        if email_match and phone_match and email_match.id != phone_match.id:
-            if not email_match.is_active and not phone_match.is_active:
-                raise HTTPException(status_code=400, detail="Email already registered")
-
-            raise HTTPException(status_code=400, detail="Phone number already registered")
+        restore_candidate = next((doctor for doctor in (email_match, phone_match, license_match) if doctor is not None), None)
 
         if restore_candidate and not restore_candidate.is_active:
             restore_candidate.first_name = payload.first_name
@@ -345,7 +400,11 @@ def register_doctor(payload: DoctorCreate):
             restore_candidate.deleted_at = None
             db.commit()
             db.refresh(restore_candidate)
-            send_registration_notifications(restore_candidate.email, restore_candidate.phone_number, restore_candidate.first_name)
+            send_registration_notifications(
+                restore_candidate.email,
+                restore_candidate.phone_number,
+                restore_candidate.first_name,
+            )
             return restore_candidate
 
         doctor = Doctor(
@@ -361,15 +420,21 @@ def register_doctor(payload: DoctorCreate):
             license_number=payload.license_number,
         )
         db.add(doctor)
-        db.commit()
-        db.refresh(doctor)
+        try:
+            db.commit()
+            db.refresh(doctor)
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Doctor identity fields must be unique.")
+
         send_registration_notifications(doctor.email, doctor.phone_number, doctor.first_name)
         return doctor
 
 
-@router.post("", response_model=DoctorRead)
+@router.post("", response_model=ApiResponse[DoctorRead])
 def create_doctor(payload: DoctorCreate):
-    return register_doctor(payload)
+    doctor = register_doctor(payload)
+    return success_response("Doctor account created successfully.", serialize(doctor, DoctorRead), status_code=201)
 
 
 def login_doctor(payload: LoginRequest):
@@ -378,21 +443,24 @@ def login_doctor(payload: LoginRequest):
         doctor = next((item for item in doctors if doctor_matches_identifier(item, payload.identifier)), None)
 
         if not doctor or not doctor.is_active or not pwd_context.verify(payload.password, doctor.password_hash):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(status_code=401, detail="Invalid credentials.")
 
         return LoginResponse(token=f"doctor-{doctor.id}-{secrets.token_hex(16)}")
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=ApiResponse[LoginResponse])
 def login(payload: LoginRequest):
-    return login_doctor(payload)
+    response = login_doctor(payload)
+    return success_response("Login successful.", response.model_dump(mode="json"))
 
 
-@auth_router.post("/login", response_model=LoginResponse)
+@auth_router.post("/login", response_model=ApiResponse[LoginResponse])
 def root_login(payload: LoginRequest):
-    return login_doctor(payload)
+    response = login_doctor(payload)
+    return success_response("Login successful.", response.model_dump(mode="json"))
 
 
-@auth_router.post("/register", response_model=DoctorRead)
+@auth_router.post("/register", response_model=ApiResponse[DoctorRead])
 def register(payload: DoctorCreate):
-    return register_doctor(payload)
+    doctor = register_doctor(payload)
+    return success_response("Doctor account created successfully.", serialize(doctor, DoctorRead), status_code=201)

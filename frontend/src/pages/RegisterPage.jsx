@@ -1,9 +1,9 @@
 import {useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseMessage} from "../services/apiMessages"
 import {
   buildPatientPhoneNumber,
-  isValidPatientPhoneNumber,
   ROMANIA_PHONE_PLACEHOLDER,
 } from "../utils/patientPhone"
 
@@ -31,8 +31,8 @@ export default function RegisterPage() {
   const isStepOneValid = Boolean(
     form.first_name.trim()
     && form.last_name.trim()
-    && /\S+@\S+\.\S+/.test(form.email.trim())
-    && isValidPatientPhoneNumber(normalizedPhoneNumber),
+    && form.email.trim()
+    && normalizedPhoneNumber.trim(),
   )
 
   const isStepTwoValid = Boolean(
@@ -44,7 +44,6 @@ export default function RegisterPage() {
   const isStepThreeValid = Boolean(
     form.password.trim()
     && form.confirm_password.trim()
-    && form.password === form.confirm_password,
   )
 
   const handleChange = (event) => {
@@ -63,18 +62,10 @@ export default function RegisterPage() {
 
   const handleNextStep = () => {
     if (step === 1 && !isStepOneValid) {
-      setIsError(true)
-      setMessage(
-        "Complete all account details before continuing.",
-      )
       return
     }
 
     if (step === 2 && !isStepTwoValid) {
-      setIsError(true)
-      setMessage(
-        "Complete all professional details before continuing.",
-      )
       return
     }
 
@@ -101,7 +92,7 @@ export default function RegisterPage() {
     setIsSubmitting(true)
 
     try {
-      await api.post("/register", {
+      const response = await api.post("/register", {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         birth_date: form.birth_date,
@@ -110,19 +101,17 @@ export default function RegisterPage() {
         specialization: form.specialization.trim(),
         license_number: form.license_number.trim(),
         password: form.password,
+        confirm_password: form.confirm_password,
       })
 
       navigate("/login", {
         state: {
-          message: "Account created. Sign in to open the MedStream dashboard.",
+          message: getResponseMessage(response),
         },
       })
     } catch (error) {
       setIsError(true)
-      setMessage(
-        error.response?.data?.detail
-        || ("Unable to create account"),
-      )
+      setMessage(getErrorMessage(error))
     } finally {
       setIsSubmitting(false)
     }
@@ -147,6 +136,18 @@ export default function RegisterPage() {
             <p className="login-subtitle">
               {"Provision a clinician account for access to monitoring, alerts, and patient operations."}
             </p>
+            <div className="auth-metrics">
+              <div className="auth-metric">
+                <p className="auth-metric-label">Monitoring</p>
+                <p className="auth-metric-value">Live Patient Insights</p>
+                <p className="auth-metric-copy">Patient vitals update instantly through WebSocket streaming.</p>
+              </div>
+              <div className="auth-metric">
+                <p className="auth-metric-label">Alerting</p>
+                <p className="auth-metric-value">Instant Risk Detection</p>
+                <p className="auth-metric-copy">Critical conditions trigger alerts the moment thresholds are exceeded.</p>
+              </div>
+            </div>
           </aside>
 
           <div className="auth-divider" aria-hidden="true"/>

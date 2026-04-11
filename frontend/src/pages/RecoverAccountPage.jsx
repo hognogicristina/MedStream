@@ -1,6 +1,7 @@
 import {useState} from "react"
 import {Link} from "react-router-dom"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseMessage} from "../services/apiMessages"
 
 export default function RecoverAccountPage() {
   const [identifier, setIdentifier] = useState("")
@@ -19,13 +20,15 @@ export default function RecoverAccountPage() {
     setIsSubmitting(true)
 
     try {
-      await api.post("/doctors/account-recovery/request", {
+      const response = await api.post("/doctors/account-recovery/request", {
         identifier,
       })
-    } catch {
-      // Return the same message whether or not the account exists.
+      setMessage(getResponseMessage(response))
+      setIsError(false)
+    } catch (error) {
+      setMessage(getErrorMessage(error))
+      setIsError(true)
     } finally {
-      setMessage("If an account exists, a recovery link was sent")
       setIsSubmitting(false)
     }
   }
@@ -45,14 +48,14 @@ export default function RecoverAccountPage() {
             <p className="login-subtitle">{"Request an account recovery link using the doctor email or phone number associated with MedStream."}</p>
             <div className="auth-metrics">
               <div className="auth-metric">
-                <p className="auth-metric-label">Identifier</p>
-                <p className="auth-metric-value">Email or phone</p>
-                <p className="auth-metric-copy">Use the doctor account identity already registered in MedStream.</p>
+                <p className="auth-metric-label">Access</p>
+                <p className="auth-metric-value">Protected Data Flow</p>
+                <p className="auth-metric-copy">Authentication ensures only authorized clinicians access sensitive records.</p>
               </div>
               <div className="auth-metric">
-                <p className="auth-metric-label">Outcome</p>
-                <p className="auth-metric-value">Recovery link sent</p>
-                <p className="auth-metric-copy">The request follows the same single-step flow as password recovery.</p>
+                <p className="auth-metric-label">Intake</p>
+                <p className="auth-metric-value">Quick Registration</p>
+                <p className="auth-metric-copy">New patients can be added in seconds with structured input forms.</p>
               </div>
             </div>
           </aside>

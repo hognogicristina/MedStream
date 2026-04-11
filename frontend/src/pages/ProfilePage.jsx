@@ -5,6 +5,7 @@ import CountValue from "../components/CountValue"
 import {useNotifications} from "../components/NotificationProvider"
 import {useAuth} from "../auth/AuthContext"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
 import {formatPatientFullName} from "../utils/patients"
 import {buildPatientPhoneNumber, normalizeRomanianPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone"
 
@@ -50,7 +51,6 @@ export default function ProfilePage() {
   useEffect(() => {
     const loadWorkspace = async () => {
       if (!token) {
-        notifyError("No authenticated doctor session is available.")
         setIsLoading(false)
         return
       }
@@ -61,15 +61,15 @@ export default function ProfilePage() {
         const doctorResponse = await api.get("/doctors/me", {
           headers: authHeaders,
         })
-        const currentDoctor = doctorResponse.data
+        const currentDoctor = getResponseData(doctorResponse)
         const [assignedPatientsResponse, patientsResponse] = await Promise.all([
           api.get(`/doctors/${currentDoctor.id}/patients`),
           api.get("/patients?page=1&limit=100"),
         ])
 
         setDoctor(currentDoctor)
-        setAssignedPatients(assignedPatientsResponse.data)
-        setPatients(patientsResponse.data)
+        setAssignedPatients(getResponseData(assignedPatientsResponse))
+        setPatients(getResponseData(patientsResponse))
         setForm(buildDoctorProfileForm(currentDoctor))
         setPhoneNumber(normalizeRomanianPhoneNumber(currentDoctor.phone_number))
         setEmailInput(currentDoctor.pending_email || currentDoctor.email || "")
@@ -77,7 +77,7 @@ export default function ProfilePage() {
         setDoctor(null)
         setAssignedPatients([])
         setPatients([])
-        notifyError(error.response?.data?.detail || "Unable to load doctor workspace.")
+        notifyError(getErrorMessage(error))
       } finally {
         setIsLoading(false)
       }
@@ -155,12 +155,13 @@ export default function ProfilePage() {
         headers: authHeaders,
       })
 
-      setDoctor(response.data)
-      setForm(buildDoctorProfileForm(response.data))
-      setPhoneNumber(normalizeRomanianPhoneNumber(response.data.phone_number))
-      notifySuccess("Doctor profile updated.")
+      const doctorData = getResponseData(response)
+      setDoctor(doctorData)
+      setForm(buildDoctorProfileForm(doctorData))
+      setPhoneNumber(normalizeRomanianPhoneNumber(doctorData.phone_number))
+      notifySuccess(getResponseMessage(response))
     } catch (error) {
-      notifyError(error.response?.data?.detail || "Unable to update doctor profile.")
+      notifyError(getErrorMessage(error))
     } finally {
       setIsSavingProfile(false)
     }
@@ -178,11 +179,12 @@ export default function ProfilePage() {
       const response = await api.patch("/doctors/me/email", {email: emailInput.trim()}, {
         headers: authHeaders,
       })
-      setDoctor(response.data)
-      setEmailInput(response.data.pending_email || response.data.email || "")
-      notifySuccess("Confirmation email sent to the new address.")
+      const doctorData = getResponseData(response)
+      setDoctor(doctorData)
+      setEmailInput(doctorData.pending_email || doctorData.email || "")
+      notifySuccess(getResponseMessage(response))
     } catch (error) {
-      notifyError(error.response?.data?.detail || "Unable to update doctor email.")
+      notifyError(getErrorMessage(error))
     } finally {
       setIsSavingEmail(false)
     }
@@ -198,11 +200,11 @@ export default function ProfilePage() {
 
     try {
       const response = await api.post(`/doctors/${doctor.id}/patients/${selectedPatient.id}`)
-      setAssignedPatients(response.data)
+      setAssignedPatients(getResponseData(response))
       setAssignmentQuery("")
-      notifySuccess("Patient assigned to doctor.")
+      notifySuccess(getResponseMessage(response))
     } catch (error) {
-      notifyError(error.response?.data?.detail || "Unable to assign patient.")
+      notifyError(getErrorMessage(error))
     } finally {
       setIsAssigningPatient(false)
     }
@@ -217,11 +219,11 @@ export default function ProfilePage() {
 
     try {
       const response = await api.delete(`/doctors/${doctor.id}/patients/${patientId}`)
-      setAssignedPatients(response.data)
+      setAssignedPatients(getResponseData(response))
       setPatientPendingRemoval(null)
-      notifySuccess("Patient removed from doctor.")
+      notifySuccess(getResponseMessage(response))
     } catch (error) {
-      notifyError(error.response?.data?.detail || "Unable to remove patient.")
+      notifyError(getErrorMessage(error))
     } finally {
       setRemovingPatientId(null)
     }
@@ -240,16 +242,16 @@ export default function ProfilePage() {
           remove_patient_assignments: removePatientAssignmentsOnDelete,
         },
       })
-      setDoctor(response.data)
+      setDoctor(getResponseData(response))
       if (removePatientAssignmentsOnDelete) {
         setAssignedPatients([])
       }
-      notifySuccess("Doctor account deactivated.")
+      notifySuccess(getResponseMessage(response))
       setShowDeleteModal(false)
       logout()
       navigate("/")
     } catch (error) {
-      notifyError(error.response?.data?.detail || "Unable to deactivate doctor account.")
+      notifyError(getErrorMessage(error))
       setIsDeletingAccount(false)
     }
   }

@@ -6,6 +6,7 @@ import EditPatientDialog from "../components/EditPatientDialog"
 import {useNotifications} from "../components/NotificationProvider"
 import {useParams, Link} from "react-router-dom"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
 import {createWebSocket} from "../services/ws"
 import {formatPatientPhoneWithCode} from "../utils/patientPhone"
 
@@ -53,12 +54,13 @@ export default function PatientPage() {
 
       try {
         const response = await api.get(`/patients/${id}`)
-        setPatient(response.data)
-        setDepartment(response.data.department)
-      } catch {
+        const patientData = getResponseData(response)
+        setPatient(patientData)
+        setDepartment(patientData.department)
+      } catch (error) {
         setPatient(null)
         setDepartment("")
-        notifyError("Unable to load patient department")
+        notifyError(getErrorMessage(error))
       } finally {
         setIsLoadingPatient(false)
       }
@@ -109,12 +111,13 @@ export default function PatientPage() {
         reason,
       })
 
-      setDepartment(response.data.department)
-      setPatient((current) => current ? {...current, department: response.data.department} : current)
-      notifySuccess("Department transfer recorded")
+      const patientData = getResponseData(response)
+      setDepartment(patientData.department)
+      setPatient((current) => current ? {...current, department: patientData.department} : current)
+      notifySuccess(getResponseMessage(response))
       setIsTransferDialogOpen(false)
-    } catch {
-      notifyError("Unable to update department")
+    } catch (error) {
+      notifyError(getErrorMessage(error))
     } finally {
       setIsUpdatingDepartment(false)
     }
@@ -125,12 +128,13 @@ export default function PatientPage() {
 
     try {
       const response = await api.patch(`/patients/${id}`, payload)
-      setPatient(response.data)
-      setDepartment(response.data.department)
-      notifySuccess("Patient details updated")
+      const patientData = getResponseData(response)
+      setPatient(patientData)
+      setDepartment(patientData.department)
+      notifySuccess(getResponseMessage(response))
       setIsEditDialogOpen(false)
     } catch (error) {
-      notifyError(error.response?.data?.detail || "Unable to update patient details")
+      notifyError(getErrorMessage(error))
     } finally {
       setIsSavingPatient(false)
     }
@@ -146,16 +150,16 @@ export default function PatientPage() {
     setIsSubmittingMedication(true)
 
     try {
-      await api.post(`/patients/${id}/medication`, {
+      const response = await api.post(`/patients/${id}/medication`, {
         medication_name: medicationName,
         dosage,
       })
 
       setMedicationName("")
       setDosage("")
-      notifySuccess("Medication administered")
-    } catch {
-      notifyError("Unable to administer medication")
+      notifySuccess(getResponseMessage(response))
+    } catch (error) {
+      notifyError(getErrorMessage(error))
     } finally {
       setIsSubmittingMedication(false)
     }

@@ -5,6 +5,7 @@ import CountValue from "../components/CountValue"
 import DataTable from "../components/DataTable"
 import {useNotifications} from "../components/NotificationProvider"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseData} from "../services/apiMessages"
 import {createWebSocket} from "../services/ws"
 import {formatPatientFullName} from "../utils/patients"
 
@@ -33,10 +34,10 @@ export default function AlertsPage() {
           api.get("/alerts"),
           api.get("/patients?page=1&limit=100"),
         ])
-        setAlerts(alertsResponse.data)
-        setPatients(patientsResponse.data)
-      } catch {
-        notifyError("Unable to load alerts.")
+        setAlerts(getResponseData(alertsResponse))
+        setPatients(getResponseData(patientsResponse))
+      } catch (error) {
+        notifyError(getErrorMessage(error))
       } finally {
         setIsLoadingAlerts(false)
       }

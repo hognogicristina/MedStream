@@ -1,4 +1,5 @@
 from datetime import date
+import random
 
 from sqlalchemy import delete
 
@@ -7,28 +8,45 @@ from app.db.session import SessionLocal
 from app.models.doctor import Doctor
 from app.models.doctor_password_reset import DoctorPasswordReset
 from app.models.doctor_patient import doctor_patients
+from faker import Faker
+
+def get_fake(rng):
+    Faker.seed(rng.randint(1, 999999))
+    return Faker("ro_RO")
 
 SEED = 20260411
 DOCTOR_COUNT = 12
 PASSWORD = "password123"
-FIRST_NAMES = [
-    "Elena", "Mihnea", "Maria", "Victor", "Andrei", "Cristina",
-    "Ioana", "Razvan", "Radu", "Ana", "Silvia", "Paul",
-]
-LAST_NAMES = [
-    "Popescu", "Ionescu", "Georgescu", "Neacsu", "Petrescu", "Marin",
-    "Dumitrescu", "Tudor", "Matei", "Stanciu", "Dobre", "Enescu",
-]
+
 SPECIALIZATIONS = [
-    "Medicina de urgenta", "Medicina de urgenta", "Terapie intensiva", "Terapie intensiva",
-    "Cardiologie", "Cardiologie", "Medicina interna", "Medicina interna",
-    "Neurologie", "Neurologie", "Medicina generala", "Medicina spitaliceasca",
+    "Cardiology",
+    "Dermatology",
+    "Endocrinology",
+    "Gastroenterology",
+    "Neurology",
+    "Oncology",
+    "Pediatrics",
+    "Psychiatry",
+    "Radiology",
 ]
+def generate_name(rng):
+    Faker.seed(rng.randint(1, 999999))
+
+    first_name = fake.first_name()
+    last_name = fake.last_name()
+
+    return first_name, last_name
+
+
+def build_rng(seed_suffix: str):
+    return random.Random(f"{SEED}:{seed_suffix}")
 
 
 def generate_doctor_payload(index: int):
-    first_name = FIRST_NAMES[(index - 1) % len(FIRST_NAMES)]
-    last_name = LAST_NAMES[(index - 1) % len(LAST_NAMES)]
+    rng = build_rng(f"patient:{index}")
+    fake = get_fake(rng)
+    first_name = fake.first_name()
+    last_name = fake.last_name()
     slug = f"{first_name}.{last_name}".lower()
     return {
         "first_name": first_name,

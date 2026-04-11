@@ -33,22 +33,16 @@ export function normalizePatientAddress(address) {
   }
 }
 
-export function isValidPatientAddress(address) {
-  const normalizedAddress = normalizePatientAddress(address)
-
-  return Boolean(
-    normalizedAddress.street
-    && normalizedAddress.number
-    && normalizedAddress.city
-    && normalizedAddress.county
-    && /^\d{6}$/.test(normalizedAddress.postal_code),
-  )
-}
-
 export function formatPatientAddress(address) {
   const normalizedAddress = normalizePatientAddress(address)
 
-  if (!isValidPatientAddress(normalizedAddress)) {
+  if (
+    !normalizedAddress.street
+    || !normalizedAddress.number
+    || !normalizedAddress.city
+    || !normalizedAddress.county
+    || !normalizedAddress.postal_code
+  ) {
     return ""
   }
 

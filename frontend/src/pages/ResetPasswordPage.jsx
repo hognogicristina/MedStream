@@ -1,6 +1,7 @@
 import {useState} from "react"
 import {Link, useLocation, useNavigate} from "react-router-dom"
 import {api} from "../services/api"
+import {getErrorMessage, getResponseMessage} from "../services/apiMessages"
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
@@ -22,19 +23,19 @@ export default function ResetPasswordPage() {
     setIsSubmitting(true)
 
     try {
-      await api.post("/doctors/password-reset/confirm", {
+      const response = await api.post("/doctors/password-reset/confirm", {
         token,
         new_password: newPassword,
       })
 
       navigate("/login", {
         state: {
-          message: "Password reset successfully. Sign in with your new password.",
+          message: getResponseMessage(response),
         },
       })
     } catch (error) {
       setIsError(true)
-      setMessage(error.response?.data?.detail || ("Unable to reset password."))
+      setMessage(getErrorMessage(error))
     } finally {
       setIsSubmitting(false)
     }

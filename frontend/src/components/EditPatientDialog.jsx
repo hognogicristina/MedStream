@@ -1,12 +1,11 @@
 import {useEffect, useState} from "react"
 import {
   buildPatientPhoneNumber,
-  isValidPatientPhoneNumber,
   normalizeRomanianPhoneNumber,
   ROMANIA_PHONE_PLACEHOLDER,
 } from "../utils/patientPhone"
 import {getCityOptions, getCountyOptions} from "../utils/addressOptions"
-import {buildPatientAddressForm, isValidPatientAddress, normalizePatientAddress} from "../utils/patientAddress"
+import {buildPatientAddressForm, normalizePatientAddress} from "../utils/patientAddress"
 
 const TOTAL_STEPS = 2
 
@@ -79,10 +78,16 @@ export default function EditPatientDialog({
     && normalizedCurrentValues.last_name
     && normalizedCurrentValues.gender
     && normalizedCurrentValues.birth_date
-    && /^\d{13}$/.test(normalizedCurrentValues.cnp)
-    && isValidPatientPhoneNumber(normalizedCurrentValues.phone_number),
+    && normalizedCurrentValues.cnp
+    && normalizedCurrentValues.phone_number,
   )
-  const isStepTwoValid = isValidPatientAddress(normalizedCurrentValues.address)
+  const isStepTwoValid = Boolean(
+    normalizedCurrentValues.address.street
+    && normalizedCurrentValues.address.number
+    && normalizedCurrentValues.address.city
+    && normalizedCurrentValues.address.county
+    && normalizedCurrentValues.address.postal_code,
+  )
   const canSubmit = isDirty && !isSubmitting
 
   const handleChange = (event) => {
@@ -107,16 +112,6 @@ export default function EditPatientDialog({
     }
 
     setStep(2)
-  }
-
-  const handleSubmit = (event) => {
-    event.preventDefault()
-
-    if (!canSubmit || !isStepTwoValid) {
-      return
-    }
-
-    onSubmit(normalizedCurrentValues)
   }
 
   const countyOptions = getCountyOptions()
