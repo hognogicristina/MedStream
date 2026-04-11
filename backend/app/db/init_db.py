@@ -55,6 +55,20 @@ def ensure_patient_columns():
         if "phone_number" not in columns:
             connection.exec_driver_sql("ALTER TABLE patients ADD COLUMN phone_number VARCHAR(50)")
 
+        address_columns = {
+            "address_street": "VARCHAR(120)",
+            "address_number": "VARCHAR(30)",
+            "address_apartment": "VARCHAR(30)",
+            "address_city": "VARCHAR(100)",
+            "address_state": "VARCHAR(100)",
+            "address_postal_code": "VARCHAR(20)",
+            "address_country": "VARCHAR(100)",
+        }
+
+        for column_name, column_type in address_columns.items():
+            if column_name not in columns:
+                connection.exec_driver_sql(f"ALTER TABLE patients ADD COLUMN {column_name} {column_type}")
+
         if "ix_patients_phone_number" not in indexes:
             connection.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS ix_patients_phone_number ON patients (phone_number)")
 

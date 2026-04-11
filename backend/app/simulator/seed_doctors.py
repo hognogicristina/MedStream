@@ -1,124 +1,67 @@
-from sqlalchemy import select
+from sqlalchemy import delete
 
 from app.api.doctors import pwd_context
 from app.db.session import SessionLocal
 from app.models.doctor import Doctor
+from app.models.doctor_password_reset import DoctorPasswordReset
+from app.models.doctor_patient import doctor_patients
 
-DOCTORS = [
-    {
-        "first_name": "Elena",
-        "last_name": "Popescu",
-        "email": "elena.popescu@medstream.local",
-        "specialization": "Emergency Medicine",
-        "license_number": "DOC-1001",
-    },
-    {
-        "first_name": "Mihnea",
-        "last_name": "Ionescu",
-        "email": "mihnea.ionescu@medstream.local",
-        "specialization": "Emergency Medicine",
-        "license_number": "DOC-1002",
-    },
-    {
-        "first_name": "Maria",
-        "last_name": "Georgescu",
-        "email": "maria.georgescu@medstream.local",
-        "specialization": "Intensive Care",
-        "license_number": "DOC-1003",
-    },
-    {
-        "first_name": "Victor",
-        "last_name": "Neacsu",
-        "email": "victor.neacsu@medstream.local",
-        "specialization": "Intensive Care",
-        "license_number": "DOC-1004",
-    },
-    {
-        "first_name": "Andrei",
-        "last_name": "Petrescu",
-        "email": "andrei.petrescu@medstream.local",
-        "specialization": "Cardiology",
-        "license_number": "DOC-1005",
-    },
-    {
-        "first_name": "Cristina",
-        "last_name": "Marin",
-        "email": "cristina.marin@medstream.local",
-        "specialization": "Cardiology",
-        "license_number": "DOC-1006",
-    },
-    {
-        "first_name": "Ioana",
-        "last_name": "Dumitrescu",
-        "email": "ioana.dumitrescu@medstream.local",
-        "specialization": "Internal Medicine",
-        "license_number": "DOC-1007",
-    },
-    {
-        "first_name": "Razvan",
-        "last_name": "Tudor",
-        "email": "razvan.tudor@medstream.local",
-        "specialization": "Internal Medicine",
-        "license_number": "DOC-1008",
-    },
-    {
-        "first_name": "Radu",
-        "last_name": "Matei",
-        "email": "radu.matei@medstream.local",
-        "specialization": "Neurology",
-        "license_number": "DOC-1009",
-    },
-    {
-        "first_name": "Ana",
-        "last_name": "Stanciu",
-        "email": "ana.stanciu@medstream.local",
-        "specialization": "Neurology",
-        "license_number": "DOC-1010",
-    },
-    {
-        "first_name": "Silvia",
-        "last_name": "Dobre",
-        "email": "silvia.dobre@medstream.local",
-        "specialization": "General Medicine",
-        "license_number": "DOC-1011",
-    },
-    {
-        "first_name": "Paul",
-        "last_name": "Enescu",
-        "email": "paul.enescu@medstream.local",
-        "specialization": "Hospital Medicine",
-        "license_number": "DOC-1012",
-    },
+SEED = 20260411
+DOCTOR_COUNT = 12
+PASSWORD = "password123"
+FIRST_NAMES = [
+    "Elena", "Mihnea", "Maria", "Victor", "Andrei", "Cristina",
+    "Ioana", "Razvan", "Radu", "Ana", "Silvia", "Paul",
+]
+LAST_NAMES = [
+    "Popescu", "Ionescu", "Georgescu", "Neacsu", "Petrescu", "Marin",
+    "Dumitrescu", "Tudor", "Matei", "Stanciu", "Dobre", "Enescu",
+]
+SPECIALIZATIONS = [
+    "Emergency Medicine", "Emergency Medicine", "Intensive Care", "Intensive Care",
+    "Cardiology", "Cardiology", "Internal Medicine", "Internal Medicine",
+    "Neurology", "Neurology", "General Medicine", "Hospital Medicine",
 ]
 
-PASSWORD = "password123"
+
+def generate_doctor_payload(index: int):
+    first_name = FIRST_NAMES[(index - 1) % len(FIRST_NAMES)]
+    last_name = LAST_NAMES[(index - 1) % len(LAST_NAMES)]
+    slug = f"{first_name}.{last_name}".lower()
+    return {
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": f"{slug}.{index}@medstream.local",
+        "specialization": SPECIALIZATIONS[(index - 1) % len(SPECIALIZATIONS)],
+        "license_number": f"DOC-{1000 + index}",
+        "phone_number": f"+40 750{index:06d}",
+    }
 
 
 def run():
-    with SessionLocal() as db:
-        for payload in DOCTORS:
-            existing_doctor = db.execute(select(Doctor).where(Doctor.email == payload["email"])).scalar_one_or_none()
+    generated_doctors = [generate_doctor_payload(index) for index in range(1, DOCTOR_COUNT + 1)]
 
-            if existing_doctor is None:
-                doctor = Doctor(
+    with SessionLocal() as db:
+        db.execute(delete(doctor_patients))
+        db.execute(delete(DoctorPasswordReset))
+        db.execute(delete(Doctor))
+
+        for payload in generated_doctors:
+            db.add(
+                Doctor(
                     first_name=payload["first_name"],
                     last_name=payload["last_name"],
                     email=payload["email"],
+                    phone_number=payload["phone_number"],
                     password_hash=pwd_context.hash(PASSWORD),
                     specialization=payload["specialization"],
                     license_number=payload["license_number"],
                 )
-                db.add(doctor)
-                continue
-
-            existing_doctor.first_name = payload["first_name"]
-            existing_doctor.last_name = payload["last_name"]
-            existing_doctor.specialization = payload["specialization"]
-            existing_doctor.license_number = payload["license_number"]
+            )
 
         db.commit()
 
-    print("Seeded doctors")
+    print(f"Generated {DOCTOR_COUNT} doctors")
 
 
 if __name__ == "__main__":

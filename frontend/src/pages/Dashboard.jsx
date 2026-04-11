@@ -346,43 +346,41 @@ export default function Dashboard() {
                   <h2 className="mt-2 text-2xl font-semibold text-white">Alert Preview</h2>
                 </div>
               </div>
-              <div className="alert-widget-shell rounded-[24px] p-4">
-                <ul className="space-y-3">
-                  {alertCount === 0 && (
-                    <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                      No active alerts at the moment. This panel updates from incoming vital events.
-                    </li>
-                  )}
-                  {previewAlerts.map((a, i) => (
-                    <li
-                      key={a.id}
-                      className={`alert-item alert-${a.severity} ${newAlertIds.includes(a.id) ? "alert-new" : ""}`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.28em] text-white/70">{a.severity} severity</p>
-                          <p className="mt-2 text-sm font-medium text-inherit">
-                            {(patientNameById[a.patient_id] || "Unknown patient")} - {a.message}
-                          </p>
-                        </div>
-                        <span
-                          className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                          Current
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                {alertCount > 3 && (
-                  <div className="mt-4">
-                    <Link
-                      className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
-                      to="/alerts">
-                      Show more
-                    </Link>
-                  </div>
+              <ul className="space-y-3">
+                {alertCount === 0 && (
+                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                    No active alerts at the moment. This panel updates from incoming vital events.
+                  </li>
                 )}
-              </div>
+                {previewAlerts.map((a, i) => (
+                  <li
+                    key={a.id}
+                    className={`alert-item alert-${a.severity} ${newAlertIds.includes(a.id) ? "alert-new" : ""}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.28em] text-white/70">{a.severity} severity</p>
+                        <p className="mt-2 text-sm font-medium text-inherit">
+                          {(patientNameById[a.patient_id] || "Unknown patient")} - {a.message}
+                        </p>
+                      </div>
+                      <span
+                        className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                        Current
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {alertCount > 3 && (
+                <div className="mt-4">
+                  <Link
+                    className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
+                    to="/alerts">
+                    Show more
+                  </Link>
+                </div>
+              )}
             </div>
 
             <div className="monitor-card rounded-[28px] p-6">
@@ -392,45 +390,43 @@ export default function Dashboard() {
                   <h2 className="mt-2 text-2xl font-semibold text-white">Hospital Events</h2>
                 </div>
               </div>
-              <div className="alert-widget-shell rounded-[24px] p-4">
-                <ul className="space-y-3">
-                  {events.length === 0 && (
-                    <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                      Waiting for hospital events such as admissions, transfers, and treatment updates.
-                    </li>
-                  )}
-                  {previewEvents.map((event) => (
-                    <li key={event.id} className="rounded-2xl border border-[#3b424b] bg-[#1b2430] px-4 py-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p
-                            className="text-xs uppercase tracking-[0.25em] text-[#9dccff]">{new Date(event.timestamp).toLocaleTimeString()}</p>
-                          <p className="mt-2 text-sm font-medium text-white">
-                            {event.patient_id && patientNameById[event.patient_id] ? `${patientNameById[event.patient_id]} | ` : ""}{event.message || event.event_type || "Hospital event"}
-                          </p>
-                          {event.event_type && (
-                            <p
-                              className="mt-2 text-xs uppercase tracking-[0.22em] text-[#879196]">{event.event_type.replaceAll("_", " ")}</p>
-                          )}
-                        </div>
-                        <span
-                          className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                          Current
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                {events.length > 2 && (
-                  <div className="mt-4">
-                    <Link
-                      className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
-                      to="/events">
-                      Show more
-                    </Link>
-                  </div>
+              <ul className="space-y-3">
+                {events.length === 0 && (
+                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                    Waiting for hospital events such as admissions, transfers, and treatment updates.
+                  </li>
                 )}
-              </div>
+                {previewEvents.map((event) => (
+                  <li key={event.id} className="rounded-2xl border border-[#3b424b] bg-[#1b2430] px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p
+                          className="text-xs uppercase tracking-[0.25em] text-[#9dccff]">{new Date(event.timestamp).toLocaleTimeString()}</p>
+                        <p className="mt-2 text-sm font-medium text-white">
+                          {event.patient_id && patientNameById[event.patient_id] ? `${patientNameById[event.patient_id]} | ` : ""}{event.message || event.event_type || "Hospital event"}
+                        </p>
+                        {event.event_type && (
+                          <p
+                            className="mt-2 text-xs uppercase tracking-[0.22em] text-[#879196]">{event.event_type.replaceAll("_", " ")}</p>
+                        )}
+                      </div>
+                      <span
+                        className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                        Current
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {events.length > 2 && (
+                <div className="mt-4">
+                  <Link
+                    className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
+                    to="/events">
+                    Show more
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </section>

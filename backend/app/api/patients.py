@@ -19,6 +19,19 @@ from app.websocket.manager import manager
 router = APIRouter(prefix="/patients", tags=["patients"])
 
 
+def flatten_patient_address(address_payload: dict | None):
+    address = address_payload or {}
+    return {
+        "address_street": address.get("street"),
+        "address_number": address.get("number"),
+        "address_apartment": address.get("apartment"),
+        "address_city": address.get("city"),
+        "address_state": address.get("state"),
+        "address_postal_code": address.get("postal_code"),
+        "address_country": address.get("country"),
+    }
+
+
 def ensure_patient_identity_uniqueness(db, *, cnp: str | None = None, phone_number: str | None = None, patient_id: int | None = None):
     if cnp:
         cnp_query = select(Patient).where(Patient.cnp == cnp)
@@ -86,7 +99,9 @@ def get_patient_doctors(id: int):
 def create_patient(payload: PatientCreate):
     with SessionLocal() as db:
         ensure_patient_identity_uniqueness(db, cnp=payload.cnp, phone_number=payload.phone_number)
-        patient = Patient(**payload.model_dump())
+        payload_data = payload.model_dump()
+        address_data = flatten_patient_address(payload_data.pop("address"))
+        patient = Patient(**payload_data, **address_data)
         db.add(patient)
         try:
             db.commit()
@@ -115,7 +130,12 @@ def update_patient(id: int, payload: PatientUpdate):
                 patient_id=patient.id,
             )
 
+        address_updates = flatten_patient_address(updates.pop("address")) if "address" in updates else {}
+
         for field, value in updates.items():
+            setattr(patient, field, value)
+
+        for field, value in address_updates.items():
             setattr(patient, field, value)
 
         try:

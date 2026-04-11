@@ -1,10 +1,10 @@
 export const PATIENT_PHONE_COUNTRIES = [
-  {code: "+40", label: "Romania (+40)", minLength: 9, maxLength: 9},
-  {code: "+44", label: "United Kingdom (+44)", minLength: 10, maxLength: 10},
-  {code: "+1", label: "United States (+1)", minLength: 10, maxLength: 10},
-  {code: "+49", label: "Germany (+49)", minLength: 10, maxLength: 11},
-  {code: "+33", label: "France (+33)", minLength: 9, maxLength: 9},
-  {code: "+39", label: "Italy (+39)", minLength: 9, maxLength: 10},
+  {code: "+40", name: "Romania", flag: "🇷🇴", minLength: 9, maxLength: 9},
+  {code: "+44", name: "United Kingdom", flag: "🇬🇧", minLength: 10, maxLength: 10},
+  {code: "+1", name: "United States", flag: "🇺🇸", minLength: 10, maxLength: 10},
+  {code: "+49", name: "Germany", flag: "🇩🇪", minLength: 10, maxLength: 11},
+  {code: "+33", name: "France", flag: "🇫🇷", minLength: 9, maxLength: 9},
+  {code: "+39", name: "Italy", flag: "🇮🇹", minLength: 9, maxLength: 10},
 ]
 
 const COUNTRY_CODE_MAP = Object.fromEntries(PATIENT_PHONE_COUNTRIES.map((country) => [country.code, country]))
@@ -97,4 +97,8 @@ export function parsePatientPhoneNumber(value) {
 
 export function formatPatientPhoneNumber(value) {
   return normalizePatientPhoneNumber(value) || String(value || "").trim()
+}
+
+export function getPatientPhoneCountryOptionLabel(country) {
+  return `${country.flag} ${country.name} ${country.code}`
 }

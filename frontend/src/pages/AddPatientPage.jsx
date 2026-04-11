@@ -3,7 +3,13 @@ import BackButton from "../components/BackButton"
 import {useNotifications} from "../components/NotificationProvider"
 import {Link, useNavigate} from "react-router-dom"
 import {api} from "../services/api"
-import {buildPatientPhoneNumber, isValidPatientPhoneNumber, PATIENT_PHONE_COUNTRIES} from "../utils/patientPhone"
+import {
+  buildPatientPhoneNumber,
+  getPatientPhoneCountryOptionLabel,
+  isValidPatientPhoneNumber,
+  PATIENT_PHONE_COUNTRIES,
+} from "../utils/patientPhone"
+import {buildEmptyPatientAddress, isValidPatientAddress, normalizePatientAddress} from "../utils/patientAddress"
 
 export default function AddPatientPage() {
   const navigate = useNavigate()
@@ -12,11 +18,11 @@ export default function AddPatientPage() {
     first_name: "",
     last_name: "",
     cnp: "",
-    phone_number: "",
     birth_date: "",
     gender: "",
     department: "ER",
   })
+  const [address, setAddress] = useState(buildEmptyPatientAddress())
   const [phoneCountryCode, setPhoneCountryCode] = useState(PATIENT_PHONE_COUNTRIES[0].code)
   const [phoneLocalNumber, setPhoneLocalNumber] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -28,11 +34,20 @@ export default function AddPatientPage() {
     && form.birth_date
     && form.gender.trim()
     && form.department.trim()
+    && isValidPatientAddress(address)
 
   const handleChange = (event) => {
     const {name, value} = event.target
     setForm((prev) => ({
       ...prev,
+      [name]: value,
+    }))
+  }
+
+  const handleAddressChange = (event) => {
+    const {name, value} = event.target
+    setAddress((current) => ({
+      ...current,
       [name]: value,
     }))
   }
@@ -48,6 +63,7 @@ export default function AddPatientPage() {
       const response = await api.post("/patients", {
         ...form,
         phone_number: normalizedPhoneNumber,
+        address: normalizePatientAddress(address),
       })
       navigate(`/patient/${response.data.id}`)
     } catch (error) {
@@ -121,7 +137,7 @@ export default function AddPatientPage() {
               >
                 {PATIENT_PHONE_COUNTRIES.map((country) => (
                   <option key={country.code} value={country.code}>
-                    {country.label}
+                    {getPatientPhoneCountryOptionLabel(country)}
                   </option>
                 ))}
               </select>
@@ -135,6 +151,7 @@ export default function AddPatientPage() {
                 required
               />
             </div>
+            <p className="text-xs text-[#879196]">Stored as {normalizedPhoneNumber || `${phoneCountryCode} ...`}</p>
 
             <div className="grid gap-4 sm:grid-cols-3">
               <input
@@ -170,6 +187,74 @@ export default function AddPatientPage() {
                 <option value="Neurology">Neurology</option>
                 <option value="Ward">Ward</option>
               </select>
+            </div>
+
+            <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">Address</p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <input
+                  type="text"
+                  name="street"
+                  value={address.street}
+                  onChange={handleAddressChange}
+                  placeholder="Street"
+                  className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                  required
+                />
+                <input
+                  type="text"
+                  name="number"
+                  value={address.number}
+                  onChange={handleAddressChange}
+                  placeholder="Number"
+                  className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                  required
+                />
+                <input
+                  type="text"
+                  name="apartment"
+                  value={address.apartment}
+                  onChange={handleAddressChange}
+                  placeholder="Apartment (optional)"
+                  className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                />
+                <input
+                  type="text"
+                  name="city"
+                  value={address.city}
+                  onChange={handleAddressChange}
+                  placeholder="City"
+                  className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                  required
+                />
+                <input
+                  type="text"
+                  name="state"
+                  value={address.state}
+                  onChange={handleAddressChange}
+                  placeholder="County / State"
+                  className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                  required
+                />
+                <input
+                  type="text"
+                  name="postal_code"
+                  value={address.postal_code}
+                  onChange={handleAddressChange}
+                  placeholder="Postal code"
+                  className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                  required
+                />
+                <input
+                  type="text"
+                  name="country"
+                  value={address.country}
+                  onChange={handleAddressChange}
+                  placeholder="Country"
+                  className="console-input w-full rounded-2xl px-4 py-3 outline-none sm:col-span-2"
+                  required
+                />
+              </div>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <button

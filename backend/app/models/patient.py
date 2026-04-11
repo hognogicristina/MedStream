@@ -16,4 +16,23 @@ class Patient(Base):
     phone_number: Mapped[str | None] = mapped_column(String(50), unique=True, nullable=True)
     birth_date: Mapped[Date] = mapped_column(Date)
     gender: Mapped[str] = mapped_column(String(20))
+    address_street: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    address_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    address_apartment: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    address_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    address_state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    address_postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    address_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
     doctors: Mapped[list["Doctor"]] = relationship("Doctor", secondary=doctor_patients, back_populates="patients")
+
+    @property
+    def address(self):
+        return {
+            "street": self.address_street,
+            "number": self.address_number,
+            "apartment": self.address_apartment,
+            "city": self.address_city,
+            "state": self.address_state,
+            "postal_code": self.address_postal_code,
+            "country": self.address_country,
+        }

@@ -8,6 +8,7 @@ import {useParams, Link} from "react-router-dom"
 import {api} from "../services/api"
 import {createWebSocket} from "../services/ws"
 import {formatPatientPhoneNumber} from "../utils/patientPhone"
+import {formatPatientAddress} from "../utils/patientAddress"
 
 export default function PatientPage() {
   const {notifyError, notifySuccess} = useNotifications()
@@ -193,6 +194,7 @@ export default function PatientPage() {
     {label: "Gender", value: patient?.gender || "--"},
     {label: "Phone Number", value: patient?.phone_number ? formatPatientPhoneNumber(patient.phone_number) : "--"},
   ]
+  const patientAddress = patient?.address ? formatPatientAddress(patient.address) : ""
 
   useEffect(() => {
     if (vitalsPage > maxVitalsPage) {
@@ -237,6 +239,10 @@ export default function PatientPage() {
                         <p className="mt-1 text-base font-semibold text-white">{item.value}</p>
                     </div>
                   ))}
+                  </div>
+                  <div className="mt-4 border-t border-[#2b3139] pt-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#879196]">Address</p>
+                    <p className="mt-1 text-base font-semibold text-white">{patientAddress || "--"}</p>
                   </div>
                 </div>
               </div>
@@ -352,37 +358,35 @@ export default function PatientPage() {
                   <h2 className="mt-2 text-2xl font-semibold text-white">Patient Alerts</h2>
                 </div>
               </div>
-              <div className="alert-widget-shell rounded-[24px] p-4">
-                <ul className="space-y-3">
-                  {alerts.length === 0 && (
-                    <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                      No alert activity for this patient yet.
-                    </li>
-                  )}
-                  {previewAlerts.map((alert) => (
-                    <li key={alert.id} className={`alert-item alert-${alert.severity}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.28em] text-white/70">{alert.severity} severity</p>
-                          <p className="mt-2 text-sm font-medium text-inherit">{alert.message}</p>
-                        </div>
-                        <span className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                          {new Date(alert.created_at || Date.now()).toLocaleTimeString()}
-                        </span>
+              <ul className="space-y-3">
+                {alerts.length === 0 && (
+                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                    No alert activity for this patient yet.
+                  </li>
+                )}
+                {previewAlerts.map((alert) => (
+                  <li key={alert.id} className={`alert-item alert-${alert.severity}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.28em] text-white/70">{alert.severity} severity</p>
+                        <p className="mt-2 text-sm font-medium text-inherit">{alert.message}</p>
                       </div>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-4">
-                  <Link
-                    className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
-                    to={patient?.cnp
-                      ? `/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`
-                      : "/alerts"}
-                  >
-                    More
-                  </Link>
-                </div>
+                      <span className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                        {new Date(alert.created_at || Date.now()).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4">
+                <Link
+                  className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
+                  to={patient?.cnp
+                    ? `/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`
+                    : "/alerts"}
+                >
+                  More
+                </Link>
               </div>
             </div>
 

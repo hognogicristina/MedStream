@@ -1,191 +1,281 @@
-from datetime import date
+from datetime import date, datetime, timedelta
+import random
 
-from sqlalchemy import select
+from sqlalchemy import delete
 
+from app.batch.patient_stats_job import run as run_batch_stats
+from app.core.config import settings
 from app.db.session import SessionLocal
+from app.models.alert import Alert
 from app.models.encounter import Encounter
+from app.models.doctor_patient import doctor_patients
+from app.models.medication_administration import MedicationAdministration
 from app.models.patient import Patient
+from app.models.patient_stats import PatientStats
+from app.models.vital import Vital
+from app.simulator.patient_profiles import DEPARTMENT_PROFILE_MAP, build_patient_state, generate_vitals
 
-
-PHONE_COUNTRIES = [
-    {"code": "+40", "prefix": "740", "length": 9},
-    {"code": "+44", "prefix": "7911", "length": 10},
-    {"code": "+1", "prefix": "202", "length": 10},
-    {"code": "+49", "prefix": "1512", "length": 11},
-    {"code": "+33", "prefix": "612", "length": 9},
-    {"code": "+39", "prefix": "312", "length": 10},
+SEED = 20260411
+PATIENT_COUNT = 36
+DEPARTMENTS = ["ER", "ICU", "Cardiology", "Internal Medicine", "Neurology", "Ward"]
+COUNTRY_CONFIGS = [
+    {"code": "+40", "prefix": "740", "length": 9, "country": "Romania", "state": "Bucharest"},
+    {"code": "+44", "prefix": "7911", "length": 10, "country": "United Kingdom", "state": "Greater London"},
+    {"code": "+1", "prefix": "202", "length": 10, "country": "United States", "state": "Illinois"},
+    {"code": "+49", "prefix": "1512", "length": 11, "country": "Germany", "state": "Berlin"},
+    {"code": "+33", "prefix": "612", "length": 9, "country": "France", "state": "Ile-de-France"},
+    {"code": "+39", "prefix": "312", "length": 10, "country": "Italy", "state": "Lazio"},
+]
+MALE_FIRST_NAMES = [
+    "Andrei", "Mihai", "Victor", "Radu", "Alexandru", "Ionut", "Paul", "Sorin", "Dorin", "Florin", "Tudor", "Bogdan"
+]
+FEMALE_FIRST_NAMES = [
+    "Ioana", "Elena", "Ana", "Maria", "Bianca", "Raluca", "Gabriela", "Cristina", "Monica", "Oana", "Irina", "Larisa"
+]
+LAST_NAMES = [
+    "Popescu", "Ionescu", "Dumitrescu", "Stan", "Stoica", "Marin", "Rusu", "Toma", "Barbu", "Neagu", "Matei", "Luca",
+    "Sandu", "Pavel", "Avram", "Toader", "Florea", "Voicu", "Preda", "Enache", "Munteanu", "Ciobanu", "Apostol", "Dragan"
+]
+STREET_NAMES = [
+    "Liberty", "Union", "Oak", "River", "Central", "Garden", "Maple", "Victory", "Elm", "Station", "Hill", "Clinic"
+]
+CITY_NAMES = [
+    "Bucharest", "Cluj-Napoca", "Iasi", "Timisoara", "Constanta", "Craiova", "London", "Manchester", "Birmingham",
+    "Chicago", "Berlin", "Paris"
+]
+PROFILE_COMPLAINTS = {
+    "healthy": [
+        "Short observation after minor incident",
+        "Routine monitoring after intake",
+        "Stability check during supervised admission",
+    ],
+    "cardiac risk": [
+        "Chest pressure with telemetry observation",
+        "Palpitations and blood pressure instability",
+        "Rhythm irregularity requiring monitoring",
+    ],
+    "infection/fever": [
+        "Persistent fever and suspected infection",
+        "Productive cough with elevated temperature",
+        "Fatigue and inflammatory signs under review",
+    ],
+    "respiratory distress": [
+        "Shortness of breath with oxygen support",
+        "Acute respiratory compromise during intake",
+        "Hypoxemia requiring continuous monitoring",
+    ],
+    "recovering patient": [
+        "Post-treatment stabilization under observation",
+        "Recovery monitoring after acute intervention",
+        "Step-down supervision after clinical improvement",
+    ],
+}
+MEDICATIONS = [
+    ("Paracetamol", "500 mg"),
+    ("Aspirin", "75 mg"),
+    ("Furosemide", "20 mg"),
+    ("Metoprolol", "50 mg"),
+    ("Ceftriaxone", "1 g"),
+    ("Salbutamol", "2.5 mg"),
 ]
 
 
-def make_phone_number(index: int) -> str:
-    country = PHONE_COUNTRIES[(index - 1) % len(PHONE_COUNTRIES)]
-    serial_length = country["length"] - len(country["prefix"])
+def build_rng(seed_suffix: str):
+    return random.Random(f"{SEED}:{seed_suffix}")
+
+
+def generate_phone_number(index: int):
+    config = COUNTRY_CONFIGS[(index - 1) % len(COUNTRY_CONFIGS)]
+    serial_length = config["length"] - len(config["prefix"])
     serial = str(index).zfill(serial_length)
-    return f'{country["code"]} {country["prefix"]}{serial}'
+    return f'{config["code"]} {config["prefix"]}{serial}', config
 
 
-SEED_PATIENTS = [
-    {"first_name": "Ion", "last_name": "Marinescu", "department": "ER", "cnp": "6010101123451", "phone_number": make_phone_number(1), "birth_date": date(1960, 1, 1),
-     "gender": "male", "condition": "cardiac risk", "encounter_type": "emergency", "chief_complaint": "Acute chest pain and diaphoresis"},
-    {"first_name": "Ana", "last_name": "Dobre", "department": "ER", "cnp": "6940305223452", "phone_number": make_phone_number(2), "birth_date": date(1994, 3, 5),
-     "gender": "female", "condition": "fever/infection", "encounter_type": "emergency",
-     "chief_complaint": "High fever with productive cough"},
-    {"first_name": "Mihai", "last_name": "Stoica", "department": "ER", "cnp": "5850729143453", "phone_number": make_phone_number(3), "birth_date": date(1985, 7, 29),
-     "gender": "male", "condition": "respiratory distress", "encounter_type": "emergency",
-     "chief_complaint": "Shortness of breath and wheezing"},
-    {"first_name": "Elena", "last_name": "Barbu", "department": "ER", "cnp": "7021112183454", "phone_number": make_phone_number(4), "birth_date": date(2002, 11, 12),
-     "gender": "female", "condition": "healthy monitoring", "encounter_type": "observation",
-     "chief_complaint": "Post-fall observation with stable vitals"},
-    {"first_name": "Vasile", "last_name": "Toma", "department": "ER", "cnp": "5780415263455", "phone_number": make_phone_number(5), "birth_date": date(1978, 4, 15),
-     "gender": "male", "condition": "cardiac risk", "encounter_type": "emergency",
-     "chief_complaint": "Palpitations and uncontrolled hypertension"},
-    {"first_name": "Ioana", "last_name": "Rusu", "department": "ER", "cnp": "6990921333456", "phone_number": make_phone_number(6), "birth_date": date(1999, 9, 21),
-     "gender": "female", "condition": "fever/infection", "encounter_type": "emergency",
-     "chief_complaint": "Persistent fever and flank pain"},
-    {"first_name": "Sorin", "last_name": "Dima", "department": "ICU", "cnp": "5710219073457", "phone_number": make_phone_number(7), "birth_date": date(1971, 2, 19),
-     "gender": "male", "condition": "respiratory distress", "encounter_type": "critical_care",
-     "chief_complaint": "Acute hypoxemic respiratory failure"},
-    {"first_name": "Gabriela", "last_name": "Ilie", "department": "ICU", "cnp": "6630616143458", "phone_number": make_phone_number(8), "birth_date": date(1963, 6, 16),
-     "gender": "female", "condition": "post-treatment stabilization", "encounter_type": "critical_care",
-     "chief_complaint": "Hemodynamic monitoring after sepsis treatment"},
-    {"first_name": "Petru", "last_name": "Nistor", "department": "ICU", "cnp": "5541220053459", "phone_number": make_phone_number(9), "birth_date": date(1954, 12, 20),
-     "gender": "male", "condition": "cardiac risk", "encounter_type": "critical_care",
-     "chief_complaint": "Post-infarction monitoring with arrhythmia risk"},
-    {"first_name": "Cristina", "last_name": "Enache", "department": "ICU", "cnp": "6880811273460", "phone_number": make_phone_number(10), "birth_date": date(1988, 8, 11),
-     "gender": "female", "condition": "post-treatment stabilization", "encounter_type": "critical_care",
-     "chief_complaint": "Post-operative stabilization after abdominal surgery"},
-    {"first_name": "Nicolae", "last_name": "Stan", "department": "ICU", "cnp": "5490310323461", "phone_number": make_phone_number(11), "birth_date": date(1949, 3, 10),
-     "gender": "male", "condition": "respiratory distress", "encounter_type": "critical_care",
-     "chief_complaint": "COPD exacerbation requiring high-flow oxygen"},
-    {"first_name": "Raluca", "last_name": "Munteanu", "department": "ICU", "cnp": "6911019443462", "phone_number": make_phone_number(12), "birth_date": date(1991, 10, 19),
-     "gender": "female", "condition": "fever/infection", "encounter_type": "critical_care",
-     "chief_complaint": "Complicated pneumonia with oxygen support"},
-    {"first_name": "Andrei", "last_name": "Gheorghe", "department": "Cardiology", "cnp": "5760506083463", "phone_number": make_phone_number(13), "birth_date": date(1976, 5, 6),
-     "gender": "male", "condition": "cardiac risk", "encounter_type": "specialty_admission",
-     "chief_complaint": "Telemetry admission for unstable angina"},
-    {"first_name": "Monica", "last_name": "Preda", "department": "Cardiology", "cnp": "6681217153464", "phone_number": make_phone_number(14), "birth_date": date(1968, 12, 17),
-     "gender": "female", "condition": "post-treatment stabilization", "encounter_type": "specialty_admission",
-     "chief_complaint": "Recovery after coronary intervention"},
-    {"first_name": "Florin", "last_name": "Luca", "department": "Cardiology", "cnp": "5580704213465", "phone_number": make_phone_number(15), "birth_date": date(1958, 7, 4),
-     "gender": "male", "condition": "cardiac risk", "encounter_type": "specialty_admission",
-     "chief_complaint": "Heart failure optimization and telemetry"},
-    {"first_name": "Daniela", "last_name": "Sandu", "department": "Cardiology", "cnp": "6970222283466", "phone_number": make_phone_number(16), "birth_date": date(1997, 2, 22),
-     "gender": "female", "condition": "healthy monitoring", "encounter_type": "observation",
-     "chief_complaint": "Palpitation workup with stable observation"},
-    {"first_name": "Tudor", "last_name": "Voicu", "department": "Cardiology", "cnp": "5620918393467", "phone_number": make_phone_number(17), "birth_date": date(1962, 9, 18),
-     "gender": "male", "condition": "cardiac risk", "encounter_type": "specialty_admission",
-     "chief_complaint": "Atrial fibrillation rate control monitoring"},
-    {"first_name": "Bianca", "last_name": "Cojocaru", "department": "Cardiology", "cnp": "6840411463468", "phone_number": make_phone_number(18), "birth_date": date(1984, 4, 11),
-     "gender": "female", "condition": "post-treatment stabilization", "encounter_type": "specialty_admission",
-     "chief_complaint": "Observation after syncope evaluation"},
-    {"first_name": "Victor", "last_name": "Pavel", "department": "Internal Medicine", "cnp": "5700109533469", "phone_number": make_phone_number(19),
-     "birth_date": date(1970, 1, 9), "gender": "male", "condition": "fever/infection", "encounter_type": "medical_admission",
-     "chief_complaint": "Pyelonephritis with dehydration"},
-    {"first_name": "Adina", "last_name": "Petrescu", "department": "Internal Medicine", "cnp": "6750823603470", "phone_number": make_phone_number(20),
-     "birth_date": date(1975, 8, 23), "gender": "female", "condition": "healthy monitoring", "encounter_type": "medical_admission",
-     "chief_complaint": "Electrolyte monitoring after medication adjustment"},
-    {"first_name": "Marius", "last_name": "Dragan", "department": "Internal Medicine", "cnp": "5601117713471", "phone_number": make_phone_number(21),
-     "birth_date": date(1960, 11, 17), "gender": "male", "condition": "post-treatment stabilization", "encounter_type": "medical_admission",
-     "chief_complaint": "Recovery after treated gastrointestinal bleed"},
-    {"first_name": "Simona", "last_name": "Lazarescu", "department": "Internal Medicine", "cnp": "6930610823472", "phone_number": make_phone_number(22),
-     "birth_date": date(1993, 6, 10), "gender": "female", "condition": "fever/infection", "encounter_type": "medical_admission",
-     "chief_complaint": "Cellulitis requiring IV antibiotics"},
-    {"first_name": "Cornel", "last_name": "Neagu", "department": "Internal Medicine", "cnp": "5511224933473", "phone_number": make_phone_number(23),
-     "birth_date": date(1951, 12, 24), "gender": "male", "condition": "cardiac risk", "encounter_type": "medical_admission",
-     "chief_complaint": "Blood pressure instability with renal disease"},
-    {"first_name": "Larisa", "last_name": "Stefan", "department": "Internal Medicine", "cnp": "6860311043474", "phone_number": make_phone_number(24),
-     "birth_date": date(1986, 3, 11), "gender": "female", "condition": "healthy monitoring", "encounter_type": "observation",
-     "chief_complaint": "Observation for anemia workup and hydration"},
-    {"first_name": "Bogdan", "last_name": "Avram", "department": "Neurology", "cnp": "5590717153475", "phone_number": make_phone_number(25), "birth_date": date(1959, 7, 17),
-     "gender": "male", "condition": "post-treatment stabilization", "encounter_type": "specialty_admission",
-     "chief_complaint": "Post-stroke neuro checks after thrombolysis"},
-    {"first_name": "Oana", "last_name": "Manole", "department": "Neurology", "cnp": "6920213263476", "phone_number": make_phone_number(26), "birth_date": date(1992, 2, 13),
-     "gender": "female", "condition": "healthy monitoring", "encounter_type": "observation",
-     "chief_complaint": "Migraine observation with stable examination"},
-    {"first_name": "Dorin", "last_name": "Apostol", "department": "Neurology", "cnp": "5641002373477", "phone_number": make_phone_number(27), "birth_date": date(1964, 10, 2),
-     "gender": "male", "condition": "cardiac risk", "encounter_type": "specialty_admission",
-     "chief_complaint": "TIA observation with secondary prevention workup"},
-    {"first_name": "Camelia", "last_name": "Florea", "department": "Neurology", "cnp": "6810408483478", "phone_number": make_phone_number(28), "birth_date": date(1981, 4, 8),
-     "gender": "female", "condition": "fever/infection", "encounter_type": "specialty_admission",
-     "chief_complaint": "Meningeal symptoms under infectious evaluation"},
-    {"first_name": "Ilie", "last_name": "Serban", "department": "Neurology", "cnp": "5530915593479", "phone_number": make_phone_number(29), "birth_date": date(1953, 9, 15),
-     "gender": "male", "condition": "post-treatment stabilization", "encounter_type": "specialty_admission",
-     "chief_complaint": "Seizure monitoring after medication loading"},
-    {"first_name": "Teodora", "last_name": "Mateescu", "department": "Neurology", "cnp": "6961227703480", "phone_number": make_phone_number(30), "birth_date": date(1996, 12, 27),
-     "gender": "female", "condition": "healthy monitoring", "encounter_type": "observation",
-     "chief_complaint": "Concussion observation with serial neuro exams"},
-    {"first_name": "Gheorghe", "last_name": "Iacob", "department": "Ward", "cnp": "5480511813481", "phone_number": make_phone_number(31), "birth_date": date(1948, 5, 11),
-     "gender": "male", "condition": "post-treatment stabilization", "encounter_type": "inpatient",
-     "chief_complaint": "Step-down recovery after pneumonia treatment"},
-    {"first_name": "Alina", "last_name": "Mocanu", "department": "Ward", "cnp": "6900818923482", "phone_number": make_phone_number(32), "birth_date": date(1990, 8, 18),
-     "gender": "female", "condition": "healthy monitoring", "encounter_type": "inpatient",
-     "chief_complaint": "Routine postpartum monitoring"},
-    {"first_name": "George", "last_name": "Pop", "department": "Ward", "cnp": "5570222033483", "phone_number": make_phone_number(33), "birth_date": date(1957, 2, 22),
-     "gender": "male", "condition": "cardiac risk", "encounter_type": "inpatient",
-     "chief_complaint": "Step-down telemetry after hypertensive urgency"},
-    {"first_name": "Madalina", "last_name": "Balan", "department": "Ward", "cnp": "6850615143484", "phone_number": make_phone_number(34), "birth_date": date(1985, 6, 15),
-     "gender": "female", "condition": "fever/infection", "encounter_type": "inpatient",
-     "chief_complaint": "Observation after treated urinary infection"},
-    {"first_name": "Paul", "last_name": "Ciobanu", "department": "Ward", "cnp": "5611119253485", "phone_number": make_phone_number(35), "birth_date": date(1961, 11, 19),
-     "gender": "male", "condition": "post-treatment stabilization", "encounter_type": "inpatient",
-     "chief_complaint": "Recovery after abdominal infection control"},
-    {"first_name": "Irina", "last_name": "Toader", "department": "Ward", "cnp": "6980320363486", "phone_number": make_phone_number(36), "birth_date": date(1998, 3, 20),
-     "gender": "female", "condition": "healthy monitoring", "encounter_type": "observation",
-     "chief_complaint": "Hydration and reassessment after resolved gastroenteritis"},
-]
-
-
-def upsert_patient(db, payload):
-    patient = db.execute(select(Patient).where(Patient.cnp == payload["cnp"])).scalar_one_or_none()
-    patient_fields = {
-        "first_name": payload["first_name"],
-        "last_name": payload["last_name"],
-        "department": payload["department"],
-        "cnp": payload["cnp"],
-        "phone_number": payload["phone_number"],
-        "birth_date": payload["birth_date"],
-        "gender": payload["gender"],
+def generate_address(index: int, country_config: dict):
+    return {
+        "street": f"{STREET_NAMES[(index - 1) % len(STREET_NAMES)]} Street",
+        "number": str(10 + index),
+        "apartment": str((index % 9) + 1) if index % 3 == 0 else None,
+        "city": CITY_NAMES[(index - 1) % len(CITY_NAMES)],
+        "state": country_config["state"],
+        "postal_code": f"{100000 + index}",
+        "country": country_config["country"],
     }
 
-    if patient is None:
-        patient = Patient(**patient_fields)
-        db.add(patient)
-        db.flush()
+
+def generate_birth_date(index: int):
+    rng = build_rng(f"birth-date:{index}")
+    year = rng.randint(1942, 2004)
+    month = rng.randint(1, 12)
+    day = rng.randint(1, 28)
+    return date(year, month, day)
+
+
+def generate_cnp(birth_date: date, gender: str, serial: int):
+    if birth_date.year >= 2000:
+        first_digit = "5" if gender == "male" else "6"
     else:
-        for field, value in patient_fields.items():
-            setattr(patient, field, value)
+        first_digit = "1" if gender == "male" else "2"
 
-    return patient
+    county_code = f"{(serial % 52) + 1:02d}"
+    unique_serial = f"{serial % 999 + 1:03d}"
+    partial = f"{first_digit}{birth_date:%y%m%d}{county_code}{unique_serial}"
+    control_key = "279146358279"
+    checksum = sum(int(digit) * int(weight) for digit, weight in zip(partial, control_key)) % 11
+    checksum_digit = "1" if checksum == 10 else str(checksum)
+    return f"{partial}{checksum_digit}"
 
 
-def upsert_encounter(db, patient, payload):
-    encounter = db.execute(select(Encounter).where(Encounter.patient_id == patient.id)).scalar_one_or_none()
+def generate_patient_payload(index: int):
+    department = DEPARTMENTS[(index - 1) % len(DEPARTMENTS)]
+    profile_name = DEPARTMENT_PROFILE_MAP[department][(index - 1) % len(DEPARTMENT_PROFILE_MAP[department])]
+    gender = "female" if index % 2 == 0 else "male"
+    first_name_pool = FEMALE_FIRST_NAMES if gender == "female" else MALE_FIRST_NAMES
+    first_name = first_name_pool[(index - 1) % len(first_name_pool)]
+    last_name = LAST_NAMES[((index - 1) * 3) % len(LAST_NAMES)]
+    birth_date = generate_birth_date(index)
+    cnp = generate_cnp(birth_date, gender, index)
+    phone_number, country_config = generate_phone_number(index)
+    address = generate_address(index, country_config)
+    chief_complaint = PROFILE_COMPLAINTS[profile_name][(index - 1) % len(PROFILE_COMPLAINTS[profile_name])]
+    encounter_type = {
+        "ER": "emergency",
+        "ICU": "critical_care",
+        "Cardiology": "specialty_admission",
+        "Internal Medicine": "medical_admission",
+        "Neurology": "specialty_admission",
+        "Ward": "inpatient",
+    }[department]
 
-    if encounter is None:
-        encounter = Encounter(
+    return {
+        "first_name": first_name,
+        "last_name": last_name,
+        "department": department,
+        "cnp": cnp,
+        "phone_number": phone_number,
+        "birth_date": birth_date,
+        "gender": gender,
+        "profile_name": profile_name,
+        "encounter_type": encounter_type,
+        "chief_complaint": chief_complaint,
+        "address": address,
+    }
+
+
+def build_alerts_for_vital(vital: Vital):
+    alerts = []
+
+    if vital.heart_rate > settings.heart_rate_alert_threshold:
+        alerts.append(("heart_rate", f"High heart rate detected: {vital.heart_rate} bpm", "high"))
+
+    if vital.oxygen_saturation < settings.oxygen_alert_threshold:
+        alerts.append(("oxygen_saturation", f"Low oxygen saturation detected: {vital.oxygen_saturation}%", "critical"))
+
+    if vital.temperature > settings.temperature_alert_threshold:
+        alerts.append(("temperature", f"High temperature detected: {vital.temperature} C", "high"))
+
+    return alerts
+
+
+def reset_seed_tables(db):
+    db.execute(delete(doctor_patients))
+
+    for model in (Alert, MedicationAdministration, Vital, Encounter, PatientStats, Patient):
+        db.execute(delete(model))
+    db.commit()
+
+
+def create_encounter(db, patient: Patient, payload: dict):
+    encounter = Encounter(
+        patient_id=patient.id,
+        doctor_id=None,
+        encounter_type=payload["encounter_type"],
+        chief_complaint=payload["chief_complaint"],
+        status="open",
+    )
+    db.add(encounter)
+
+
+def seed_vitals_and_alerts(db, patient: Patient):
+    state = build_patient_state(patient)
+    base_time = datetime.utcnow() - timedelta(hours=6)
+
+    for sample_index in range(12):
+        vitals = generate_vitals(state, patient.id)
+        vital = Vital(
             patient_id=patient.id,
-            doctor_id=None,
-            encounter_type=payload["encounter_type"],
-            chief_complaint=f'{payload["condition"].title()}: {payload["chief_complaint"]}',
-            status="open",
+            heart_rate=vitals["heart_rate"],
+            oxygen_saturation=vitals["oxygen_saturation"],
+            temperature=vitals["temperature"],
+            systolic_bp=vitals["systolic_bp"],
+            diastolic_bp=vitals["diastolic_bp"],
+            recorded_at=base_time + timedelta(minutes=sample_index * 30),
         )
-        db.add(encounter)
-        return
+        db.add(vital)
+        db.flush()
 
-    encounter.encounter_type = payload["encounter_type"]
-    encounter.chief_complaint = f'{payload["condition"].title()}: {payload["chief_complaint"]}'
-    encounter.status = "open"
+        for alert_type, message, severity in build_alerts_for_vital(vital):
+            db.add(
+                Alert(
+                    patient_id=patient.id,
+                    vital_id=vital.id,
+                    alert_type=alert_type,
+                    message=message,
+                    severity=severity,
+                    created_at=vital.recorded_at,
+                )
+            )
+
+
+def seed_medication_history(db, patient: Patient):
+    medication_count = build_rng(f"medications:{patient.id}").randint(0, 2)
+
+    for index in range(medication_count):
+        medication_name, dosage = MEDICATIONS[(patient.id + index) % len(MEDICATIONS)]
+        db.add(
+            MedicationAdministration(
+                patient_id=patient.id,
+                medication_name=medication_name,
+                dosage=dosage,
+                timestamp=datetime.utcnow() - timedelta(hours=index + 1),
+            )
+        )
 
 
 def run():
+    generated_patients = [generate_patient_payload(index) for index in range(1, PATIENT_COUNT + 1)]
+
     with SessionLocal() as db:
-        for payload in SEED_PATIENTS:
-            patient = upsert_patient(db, payload)
-            upsert_encounter(db, patient, payload)
+        reset_seed_tables(db)
+
+        for payload in generated_patients:
+            patient = Patient(
+                first_name=payload["first_name"],
+                last_name=payload["last_name"],
+                department=payload["department"],
+                cnp=payload["cnp"],
+                phone_number=payload["phone_number"],
+                birth_date=payload["birth_date"],
+                gender=payload["gender"],
+                address_street=payload["address"]["street"],
+                address_number=payload["address"]["number"],
+                address_apartment=payload["address"]["apartment"],
+                address_city=payload["address"]["city"],
+                address_state=payload["address"]["state"],
+                address_postal_code=payload["address"]["postal_code"],
+                address_country=payload["address"]["country"],
+            )
+            db.add(patient)
+            db.flush()
+
+            create_encounter(db, patient, payload)
+            seed_vitals_and_alerts(db, patient)
+            seed_medication_history(db, patient)
 
         db.commit()
 
-    print(f"Seeded {len(SEED_PATIENTS)} patients")
+    run_batch_stats()
+    print(f"Generated {PATIENT_COUNT} patients with encounters, vitals, alerts, medications, and analytics snapshots")
 
 
 if __name__ == "__main__":
