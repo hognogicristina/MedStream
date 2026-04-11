@@ -2,11 +2,22 @@ import {useEffect, useMemo, useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
+import {useNotifications} from "../components/NotificationProvider"
 import {useAuth} from "../auth/AuthContext"
 import {api} from "../services/api"
+import {formatPatientFullName} from "../utils/patients"
+
+const buildDoctorProfileForm = (doctor) => ({
+  first_name: doctor?.first_name || "",
+  last_name: doctor?.last_name || "",
+  specialization: doctor?.specialization || "",
+  license_number: doctor?.license_number || "",
+  phone_number: doctor?.phone_number || "",
+})
 
 export default function ProfilePage() {
   const navigate = useNavigate()
+  const {notifyError, notifySuccess} = useNotifications()
   const {token, logout} = useAuth()
   const [doctor, setDoctor] = useState(null)
   const [patients, setPatients] = useState([])
@@ -26,8 +37,6 @@ export default function ProfilePage() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [removePatientAssignmentsOnDelete, setRemovePatientAssignmentsOnDelete] = useState(false)
-  const [message, setMessage] = useState("")
-  const [messageIsError, setMessageIsError] = useState(false)
 
   const authHeaders = useMemo(() => ({
     Authorization: `Bearer ${token}`,
@@ -36,14 +45,11 @@ export default function ProfilePage() {
   useEffect(() => {
     const loadWorkspace = async () => {
       if (!token) {
-        setMessage("No authenticated doctor session is available.")
-        setMessageIsError(true)
+        notifyError("No authenticated doctor session is available.")
         setIsLoading(false)
         return
       }
 
-      setMessage("")
-      setMessageIsError(false)
       setIsLoading(true)
 
       try {
@@ -59,30 +65,31 @@ export default function ProfilePage() {
         setDoctor(currentDoctor)
         setAssignedPatients(assignedPatientsResponse.data)
         setPatients(patientsResponse.data)
-        setForm({
-          first_name: currentDoctor.first_name || "",
-          last_name: currentDoctor.last_name || "",
-          specialization: currentDoctor.specialization || "",
-          license_number: currentDoctor.license_number || "",
-          phone_number: currentDoctor.phone_number || "",
-        })
+        setForm(buildDoctorProfileForm(currentDoctor))
       } catch (error) {
         setDoctor(null)
         setAssignedPatients([])
         setPatients([])
-        setMessage(error.response?.data?.detail || "Unable to load doctor workspace.")
-        setMessageIsError(true)
+        notifyError(error.response?.data?.detail || "Unable to load doctor workspace.")
       } finally {
         setIsLoading(false)
       }
     }
 
     loadWorkspace()
-  }, [authHeaders, token])
+  }, [authHeaders, notifyError, token])
 
   const availablePatients = patients.filter(
     (patient) => !assignedPatients.some((assignedPatient) => assignedPatient.id === patient.id),
   )
+  const isProfileFormValid = Boolean(
+    form.first_name.trim()
+    && form.last_name.trim()
+    && form.specialization.trim()
+    && form.license_number.trim(),
+  )
+  const initialProfileForm = buildDoctorProfileForm(doctor)
+  const isProfileDirty = Object.keys(initialProfileForm).some((key) => form[key] !== initialProfileForm[key])
 
   const handleFormChange = (event) => {
     const {name, value} = event.target
@@ -94,12 +101,10 @@ export default function ProfilePage() {
 
   const handleProfileUpdate = async (event) => {
     event.preventDefault()
-    if (!doctor) {
+    if (!doctor || !isProfileFormValid || !isProfileDirty || isSavingProfile) {
       return
     }
 
-    setMessage("")
-    setMessageIsError(false)
     setIsSavingProfile(true)
 
     try {
@@ -116,17 +121,10 @@ export default function ProfilePage() {
       })
 
       setDoctor(response.data)
-      setForm({
-        first_name: response.data.first_name || "",
-        last_name: response.data.last_name || "",
-        specialization: response.data.specialization || "",
-        license_number: response.data.license_number || "",
-        phone_number: response.data.phone_number || "",
-      })
-      setMessage("Doctor profile updated.")
+      setForm(buildDoctorProfileForm(response.data))
+      notifySuccess("Doctor profile updated.")
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Unable to update doctor profile.")
-      setMessageIsError(true)
+      notifyError(error.response?.data?.detail || "Unable to update doctor profile.")
     } finally {
       setIsSavingProfile(false)
     }
@@ -138,18 +136,15 @@ export default function ProfilePage() {
       return
     }
 
-    setMessage("")
-    setMessageIsError(false)
     setIsAssigningPatient(true)
 
     try {
       const response = await api.post(`/doctors/${doctor.id}/patients/${selectedPatientId}`)
       setAssignedPatients(response.data)
       setSelectedPatientId("")
-      setMessage("Patient assigned to doctor.")
+      notifySuccess("Patient assigned to doctor.")
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Unable to assign patient.")
-      setMessageIsError(true)
+      notifyError(error.response?.data?.detail || "Unable to assign patient.")
     } finally {
       setIsAssigningPatient(false)
     }
@@ -160,17 +155,14 @@ export default function ProfilePage() {
       return
     }
 
-    setMessage("")
-    setMessageIsError(false)
     setRemovingPatientId(patientId)
 
     try {
       const response = await api.delete(`/doctors/${doctor.id}/patients/${patientId}`)
       setAssignedPatients(response.data)
-      setMessage("Patient removed from doctor.")
+      notifySuccess("Patient removed from doctor.")
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Unable to remove patient.")
-      setMessageIsError(true)
+      notifyError(error.response?.data?.detail || "Unable to remove patient.")
     } finally {
       setRemovingPatientId(null)
     }
@@ -181,8 +173,6 @@ export default function ProfilePage() {
       return
     }
 
-    setMessage("")
-    setMessageIsError(false)
     setIsDeletingAccount(true)
 
     try {
@@ -195,13 +185,12 @@ export default function ProfilePage() {
       if (removePatientAssignmentsOnDelete) {
         setAssignedPatients([])
       }
-      setMessage("Doctor account deactivated.")
+      notifySuccess("Doctor account deactivated.")
       setShowDeleteModal(false)
       logout()
       navigate("/")
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Unable to deactivate doctor account.")
-      setMessageIsError(true)
+      notifyError(error.response?.data?.detail || "Unable to deactivate doctor account.")
       setIsDeletingAccount(false)
     }
   }
@@ -238,12 +227,6 @@ export default function ProfilePage() {
             </div>
           </div>
         </header>
-
-        {message && (
-          <div className={messageIsError ? "login-error" : "login-success"}>
-            {message}
-          </div>
-        )}
 
         {isLoading ? (
           <section className="monitor-card rounded-[28px] p-6">
@@ -306,7 +289,7 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="flex justify-end">
-                    <button type="submit" disabled={isSavingProfile}
+                    <button type="submit" disabled={!isProfileFormValid || !isProfileDirty || isSavingProfile}
                             className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]">
                       {isSavingProfile ? "Updating..." : "Update Profile"}
                     </button>
@@ -336,9 +319,8 @@ export default function ProfilePage() {
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
                           <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}`}>
-                            Patient {patient.id}
+                            {formatPatientFullName(patient)}
                           </Link>
-                          <p className="mt-1 text-sm text-white">{patient.first_name} {patient.last_name}</p>
                           <p className="mt-2 text-xs uppercase tracking-[0.22em] text-[#879196]">{patient.department}</p>
                         </div>
                         <button
@@ -371,7 +353,7 @@ export default function ProfilePage() {
                       <option value="">Select patient</option>
                       {availablePatients.map((patient) => (
                         <option key={patient.id} value={patient.id}>
-                          Patient {patient.id} | {patient.first_name} {patient.last_name} | {patient.department}
+                          {formatPatientFullName(patient)} | {patient.department}
                         </option>
                       ))}
                     </select>

@@ -1,79 +1,71 @@
 import {useEffect, useRef, useState} from "react"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
-import {Link, useParams} from "react-router-dom"
+import DepartmentTransferDialog from "../components/DepartmentTransferDialog"
+import EditPatientDialog from "../components/EditPatientDialog"
+import {useNotifications} from "../components/NotificationProvider"
+import {useParams, Link} from "react-router-dom"
 import {api} from "../services/api"
 import {createWebSocket} from "../services/ws"
+import {formatPatientPhoneNumber} from "../utils/patientPhone"
 
 export default function PatientPage() {
+  const {notifyError, notifySuccess} = useNotifications()
   const {id} = useParams()
   const pageSize = 5
+  const [patient, setPatient] = useState(null)
   const [vitals, setVitals] = useState([])
   const [vitalsHistory, setVitalsHistory] = useState([])
-  const [replayVitals, setReplayVitals] = useState([])
   const [alerts, setAlerts] = useState([])
   const [events, setEvents] = useState([])
-  const [isReplaying, setIsReplaying] = useState(false)
   const [department, setDepartment] = useState("")
   const [isUpdatingDepartment, setIsUpdatingDepartment] = useState(false)
-  const [departmentMessage, setDepartmentMessage] = useState("")
-  const [departmentMessageIsError, setDepartmentMessageIsError] = useState(false)
   const [isLoadingPatient, setIsLoadingPatient] = useState(true)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isSavingPatient, setIsSavingPatient] = useState(false)
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
   const [medicationName, setMedicationName] = useState("")
   const [dosage, setDosage] = useState("")
   const [isSubmittingMedication, setIsSubmittingMedication] = useState(false)
-  const [medicationMessage, setMedicationMessage] = useState("")
-  const [medicationMessageIsError, setMedicationMessageIsError] = useState(false)
   const [vitalsPage, setVitalsPage] = useState(1)
-  const [alertsPage, setAlertsPage] = useState(1)
   const alertAudioRef = useRef(null)
-  const replayIntervalRef = useRef(null)
+  const canSubmitMedication = medicationName.trim().length > 0 && dosage.trim().length > 0
 
   if (!alertAudioRef.current) {
     alertAudioRef.current = new Audio("/alert.mp3")
   }
 
   useEffect(() => {
+    setPatient(null)
     setVitals([])
     setVitalsHistory([])
-    setReplayVitals([])
     setAlerts([])
     setEvents([])
-    setIsReplaying(false)
     setDepartment("")
-    setDepartmentMessage("")
-    setDepartmentMessageIsError(false)
-    setMedicationMessage("")
-    setMedicationMessageIsError(false)
     setVitalsPage(1)
-    setAlertsPage(1)
-
-    if (replayIntervalRef.current) {
-      clearInterval(replayIntervalRef.current)
-      replayIntervalRef.current = null
-    }
+    setIsEditDialogOpen(false)
+    setIsTransferDialogOpen(false)
   }, [id])
 
   useEffect(() => {
     const loadPatient = async () => {
-      setDepartmentMessage("")
-      setDepartmentMessageIsError(false)
       setIsLoadingPatient(true)
 
       try {
         const response = await api.get(`/patients/${id}`)
+        setPatient(response.data)
         setDepartment(response.data.department)
       } catch {
+        setPatient(null)
         setDepartment("")
-        setDepartmentMessageIsError(true)
-        setDepartmentMessage("Unable to load patient department")
+        notifyError("Unable to load patient department")
       } finally {
         setIsLoadingPatient(false)
       }
     }
 
     loadPatient()
-  }, [id])
+  }, [id, notifyError])
 
   useEffect(() => {
     const socket = createWebSocket((msg) => {
@@ -97,81 +89,58 @@ export default function PatientPage() {
         alertAudioRef.current.play().catch(() => {
         })
       }
+
+      if (msg.type === "event") {
+        setEvents((prev) => [msg.data, ...prev.slice(0, 9)])
+      }
     })
 
     return () => {
       socket.close()
-
-      if (replayIntervalRef.current) {
-        clearInterval(replayIntervalRef.current)
-      }
     }
   }, [id])
 
-  const handleReplay = () => {
-    if (replayIntervalRef.current) {
-      clearInterval(replayIntervalRef.current)
-    }
-
-    if (vitalsHistory.length === 0) {
-      return
-    }
-
-    setIsReplaying(true)
-    setReplayVitals([])
-
-    let index = 0
-
-    replayIntervalRef.current = setInterval(() => {
-      const vital = vitalsHistory[index]
-
-      if (!vital) {
-        clearInterval(replayIntervalRef.current)
-        replayIntervalRef.current = null
-        setIsReplaying(false)
-        setReplayVitals([])
-        return
-      }
-
-      setReplayVitals((prev) => [vital, ...prev])
-      index += 1
-    }, 800)
-  }
-
-  const handleDepartmentChange = async (event) => {
-    const nextDepartment = event.target.value
-    setDepartmentMessage("")
-    setDepartmentMessageIsError(false)
+  const handleDepartmentTransfer = async ({department: nextDepartment, reason}) => {
     setIsUpdatingDepartment(true)
 
     try {
       const response = await api.patch(`/patients/${id}/department`, {
         department: nextDepartment,
+        reason,
       })
 
       setDepartment(response.data.department)
-      setDepartmentMessage("Department updated")
-      setDepartmentMessageIsError(false)
-      setEvents((prev) => [
-        {
-          event_type: "department_updated",
-          message: `Moved to ${response.data.department}`,
-          timestamp: new Date().toLocaleTimeString(),
-        },
-        ...prev.slice(0, 9),
-      ])
+      setPatient((current) => current ? {...current, department: response.data.department} : current)
+      notifySuccess("Department transfer recorded")
+      setIsTransferDialogOpen(false)
     } catch {
-      setDepartmentMessageIsError(true)
-      setDepartmentMessage("Unable to update department")
+      notifyError("Unable to update department")
     } finally {
       setIsUpdatingDepartment(false)
     }
   }
 
+  const handlePatientUpdate = async (payload) => {
+    setIsSavingPatient(true)
+
+    try {
+      const response = await api.patch(`/patients/${id}`, payload)
+      setPatient(response.data)
+      setDepartment(response.data.department)
+      notifySuccess("Patient details updated")
+      setIsEditDialogOpen(false)
+    } catch (error) {
+      notifyError(error.response?.data?.detail || "Unable to update patient details")
+    } finally {
+      setIsSavingPatient(false)
+    }
+  }
+
   const handleMedicationSubmit = async (event) => {
     event.preventDefault()
-    setMedicationMessage("")
-    setMedicationMessageIsError(false)
+    if (!canSubmitMedication || isSubmittingMedication) {
+      return
+    }
     setIsSubmittingMedication(true)
 
     try {
@@ -182,30 +151,48 @@ export default function PatientPage() {
 
       setMedicationName("")
       setDosage("")
-      setMedicationMessage("Medication administered")
-      setMedicationMessageIsError(false)
-      setEvents((prev) => [
-        {
-          event_type: "medication_administered",
-          message: `Medication administered: ${response.data.medication_name} (${response.data.dosage})`,
-          timestamp: response.data.timestamp,
-        },
-        ...prev.slice(0, 9),
-      ])
+      notifySuccess("Medication administered")
     } catch {
-      setMedicationMessageIsError(true)
-      setMedicationMessage("Unable to administer medication")
+      notifyError("Unable to administer medication")
     } finally {
       setIsSubmittingMedication(false)
     }
   }
 
-  const displayedVitals = isReplaying ? replayVitals : vitals
-  const latestDisplayedVital = displayedVitals[0]
-  const paginatedVitals = displayedVitals.slice((vitalsPage - 1) * pageSize, vitalsPage * pageSize)
-  const paginatedAlerts = alerts.slice((alertsPage - 1) * pageSize, alertsPage * pageSize)
-  const maxVitalsPage = Math.max(1, Math.ceil(displayedVitals.length / pageSize))
-  const maxAlertsPage = Math.max(1, Math.ceil(alerts.length / pageSize))
+  const latestDisplayedVital = vitals[0]
+  const paginatedVitals = vitals.slice((vitalsPage - 1) * pageSize, vitalsPage * pageSize)
+  const maxVitalsPage = Math.max(1, Math.ceil(vitals.length / pageSize))
+  const previewAlerts = alerts.slice(0, 3)
+  const patientFullName = patient ? `${patient.last_name} ${patient.first_name}`.trim() : ""
+  const pageTitle = patientFullName || (isLoadingPatient ? "Loading patient..." : "Patient")
+  const patientBirthDate = patient?.birth_date
+    ? new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(patient.birth_date))
+    : "--"
+  const patientAge = patient?.birth_date
+    ? (() => {
+      const today = new Date()
+      const birthDate = new Date(patient.birth_date)
+      let age = today.getFullYear() - birthDate.getFullYear()
+      const monthDelta = today.getMonth() - birthDate.getMonth()
+
+      if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < birthDate.getDate())) {
+        age -= 1
+      }
+
+      return `${age} yrs`
+    })()
+    : "--"
+  const patientMetadata = [
+    {label: "CNP", value: patient?.cnp || "--"},
+    {label: "Birth Date", value: patientBirthDate},
+    {label: "Age", value: patientAge},
+    {label: "Gender", value: patient?.gender || "--"},
+    {label: "Phone Number", value: patient?.phone_number ? formatPatientPhoneNumber(patient.phone_number) : "--"},
+  ]
 
   useEffect(() => {
     if (vitalsPage > maxVitalsPage) {
@@ -213,68 +200,50 @@ export default function PatientPage() {
     }
   }, [vitalsPage, maxVitalsPage])
 
-  useEffect(() => {
-    if (alertsPage > maxAlertsPage) {
-      setAlertsPage(maxAlertsPage)
-    }
-  }, [alertsPage, maxAlertsPage])
-
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-3">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Patient Monitoring</p>
-                  <Link className="console-link text-sm font-semibold" to="/">
-                    Home
-                  </Link>
-                </div>
-                <BackButton/>
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Patient Monitoring</p>
               </div>
               <div>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Patient Details: {id}</h1>
-                <p className="mt-2 max-w-2xl text-sm text-[#b6bec9]">
-                  Single-patient operational view for vitals, alerts, medication activity, and department assignment.
-                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">{pageTitle}</h1>
+                  <button
+                    type="button"
+                    onClick={() => setIsTransferDialogOpen(true)}
+                    className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d5dbdb] transition hover:border-[#ff9900] hover:text-white"
+                  >
+                    {department || "--"}
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditDialogOpen(true)}
+                    className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:text-white"
+                  >
+                    Edit patient
+                  </button>
+                </div>
+                <div className="mt-4 border-t border-[#2b3139] pt-4">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                  {patientMetadata.map((item) => (
+                    <div key={item.label} className="flex min-w-[96px] flex-col justify-center">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#879196]">{item.label}</p>
+                        <p className="mt-1 text-base font-semibold text-white">{item.value}</p>
+                    </div>
+                  ))}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.25em] text-[#879196]" htmlFor="department">
-                  Department
-                </label>
-                <select
-                  id="department"
-                  value={department}
-                  onChange={handleDepartmentChange}
-                  disabled={isUpdatingDepartment || isLoadingPatient}
-                  className="console-input rounded-full px-4 py-2 text-sm font-medium outline-none disabled:cursor-not-allowed disabled:text-[#6b7280]"
-                >
-                  <option value="ER">ER</option>
-                  <option value="ICU">ICU</option>
-                  <option value="Cardiology">Cardiology</option>
-                  <option value="Internal Medicine">Internal Medicine</option>
-                  <option value="Neurology">Neurology</option>
-                  <option value="Ward">Ward</option>
-                </select>
-                {departmentMessage && (
-                  <p className={departmentMessageIsError ? "login-error" : "login-success"}>{departmentMessage}</p>
-                )}
-              </div>
-              <div className="console-chip rounded-full px-4 py-2 text-sm font-medium">
-                {isReplaying ? "Replay running" : "Live stream active"}
-              </div>
-              <button
-                className="console-button-primary rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
-                onClick={handleReplay}
-                disabled={vitalsHistory.length === 0 || isReplaying}
-              >
-                {isReplaying ? "Replaying..." : "Replay"}
-              </button>
+            <div className="flex justify-start lg:justify-end lg:pt-1">
+              <BackButton/>
             </div>
           </div>
         </header>
@@ -309,13 +278,11 @@ export default function PatientPage() {
           <div className="monitor-card rounded-[28px] p-6">
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">
-                  {isReplaying ? "Replay Mode" : "Live Feed"}
-                </p>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Vitals</p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Vitals Timeline</h2>
               </div>
               <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
-                {displayedVitals.length} visible
+                {vitals.length} visible
               </span>
             </div>
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -340,19 +307,20 @@ export default function PatientPage() {
               </div>
             </div>
             <ul className="space-y-3">
-              {displayedVitals.length === 0 && (
+              {vitals.length === 0 && (
                 <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                  {isLoadingPatient ? "Loading patient view..." : "Waiting for patient vitals. Live streaming data will appear here when available."}
+                  {isLoadingPatient ? "Loading patient view..." : "Waiting for patient vitals. Data will appear here when available."}
                 </li>
               )}
               {paginatedVitals.map((v, i) => (
                 <li key={i} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">{v.time}</p>
-                      <p className="mt-2 text-base font-semibold text-white">Patient {id} vital snapshot</p>
+                      <p className="rounded-full border border-[#31363f] bg-[#10151c] px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-[#879196]">
+                        {v.time}
+                      </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
                       <div className="monitor-panel rounded-2xl px-3 py-3">
                         <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">HR</p>
                         <p className="mt-2 font-semibold text-[#ffb84d]">{v.heart_rate}</p>
@@ -383,43 +351,39 @@ export default function PatientPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Escalations</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Patient Alerts</h2>
                 </div>
-                <span className="console-chip-danger rounded-full px-3 py-1 text-xs font-semibold"><CountValue
-                  value={alerts.length}/></span>
               </div>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
-                  Page {alertsPage}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
-                    onClick={() => setAlertsPage((prev) => Math.max(1, prev - 1))}
-                    disabled={alertsPage === 1}
+              <div className="alert-widget-shell rounded-[24px] p-4">
+                <ul className="space-y-3">
+                  {alerts.length === 0 && (
+                    <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                      No alert activity for this patient yet.
+                    </li>
+                  )}
+                  {previewAlerts.map((alert) => (
+                    <li key={alert.id} className={`alert-item alert-${alert.severity}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.28em] text-white/70">{alert.severity} severity</p>
+                          <p className="mt-2 text-sm font-medium text-inherit">{alert.message}</p>
+                        </div>
+                        <span className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                          {new Date(alert.created_at || Date.now()).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4">
+                  <Link
+                    className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
+                    to={patient?.cnp
+                      ? `/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`
+                      : "/alerts"}
                   >
-                    Previous
-                  </button>
-                  <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
-                    onClick={() => setAlertsPage((prev) => prev + 1)}
-                    disabled={alertsPage >= maxAlertsPage}
-                  >
-                    Next
-                  </button>
+                    More
+                  </Link>
                 </div>
               </div>
-              <ul className="space-y-3">
-                {alerts.length === 0 && (
-                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                    No alert activity for this patient yet.
-                  </li>
-                )}
-                {paginatedAlerts.map((a, i) => (
-                  <li key={i} className={`alert-item alert-${a.severity}`}>
-                    <p className="text-xs uppercase tracking-[0.25em] text-white/70">{a.severity} severity</p>
-                    <p className="mt-2 text-sm font-medium text-inherit">{a.message}</p>
-                  </li>
-                ))}
-              </ul>
             </div>
 
             <div className="monitor-card rounded-[28px] p-6">
@@ -444,12 +408,9 @@ export default function PatientPage() {
                   className="console-input w-full rounded-2xl px-4 py-3 outline-none"
                   required
                 />
-                {medicationMessage && (
-                  <p className={medicationMessageIsError ? "login-error" : "login-success"}>{medicationMessage}</p>
-                )}
                 <button
                   type="submit"
-                  disabled={isSubmittingMedication}
+                  disabled={!canSubmitMedication || isSubmittingMedication}
                   className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                 >
                   {isSubmittingMedication ? "Submitting..." : "Administer Medication"}
@@ -463,8 +424,6 @@ export default function PatientPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Event Feed</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Patient Events</h2>
                 </div>
-                <span className="console-chip-success rounded-full px-3 py-1 text-xs font-semibold"><CountValue
-                  value={events.length}/></span>
               </div>
               <ul className="space-y-3">
                 {events.length === 0 && (
@@ -483,6 +442,20 @@ export default function PatientPage() {
           </div>
         </section>
       </div>
+      <EditPatientDialog
+        isOpen={isEditDialogOpen}
+        isSubmitting={isSavingPatient}
+        patient={patient}
+        onClose={() => setIsEditDialogOpen(false)}
+        onSubmit={handlePatientUpdate}
+      />
+      <DepartmentTransferDialog
+        currentDepartment={department}
+        isOpen={isTransferDialogOpen}
+        isSubmitting={isUpdatingDepartment}
+        onClose={() => setIsTransferDialogOpen(false)}
+        onSubmit={handleDepartmentTransfer}
+      />
     </div>
   )
 }

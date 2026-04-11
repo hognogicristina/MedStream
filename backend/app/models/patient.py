@@ -13,6 +13,7 @@ class Patient(Base):
     last_name: Mapped[str] = mapped_column(String(100))
     department: Mapped[str] = mapped_column(String(50))
     cnp: Mapped[str] = mapped_column(String(13), unique=True)
+    phone_number: Mapped[str | None] = mapped_column(String(50), unique=True, nullable=True)
     birth_date: Mapped[Date] = mapped_column(Date)
     gender: Mapped[str] = mapped_column(String(20))
     doctors: Mapped[list["Doctor"]] = relationship("Doctor", secondary=doctor_patients, back_populates="patients")

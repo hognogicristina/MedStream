@@ -1,10 +1,12 @@
 import {useEffect, useState} from "react"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
+import {useNotifications} from "../components/NotificationProvider"
 import {Link, useParams} from "react-router-dom"
 import DataTable from "../components/DataTable"
 import {api} from "../services/api"
 import {DEPARTMENTS, departmentHref} from "../constants/departments"
+import {formatPatientFullName} from "../utils/patients"
 
 const SEVERITY_FILTERS = [
   {value: "all", label: "All patients"},
@@ -16,6 +18,7 @@ const SEVERITY_FILTERS = [
 ]
 
 export default function DepartmentPage() {
+  const {notifyError} = useNotifications()
   const {name} = useParams()
   const departmentName = decodeURIComponent(name || "")
   const [patients, setPatients] = useState([])
@@ -23,11 +26,9 @@ export default function DepartmentPage() {
   const [alerts, setAlerts] = useState([])
   const [batchStatus, setBatchStatus] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [message, setMessage] = useState("")
 
   useEffect(() => {
     const loadDepartmentData = async () => {
-      setMessage("")
       setIsLoading(true)
 
       try {
@@ -48,14 +49,14 @@ export default function DepartmentPage() {
         setAlerts(filteredAlerts)
         setBatchStatus(batchStatusRes.data)
       } catch {
-        setMessage("Unable to load department analytics.")
+        notifyError("Unable to load department analytics.")
       } finally {
         setIsLoading(false)
       }
     }
 
     loadDepartmentData()
-  }, [departmentName])
+  }, [departmentName, notifyError])
 
   const statsMap = Object.fromEntries(stats.map((stat) => [stat.patient_id, stat]))
   const alertSummaryMap = alerts.reduce((accumulator, alert) => {
@@ -103,7 +104,7 @@ export default function DepartmentPage() {
             </div>
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{departmentName}</h1>
-              <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">Department patients and batch analytics.</p>
+              <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">Department patients and analytics.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {DEPARTMENTS.map((department) => (
@@ -118,11 +119,6 @@ export default function DepartmentPage() {
             </div>
           </div>
         </header>
-
-        {message && (
-          <div className="login-error">{message}</div>
-        )}
-
         <section className="monitor-card rounded-[28px] border border-[#9dccff]/25 p-6">
           <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -138,14 +134,14 @@ export default function DepartmentPage() {
             <div className="monitor-panel rounded-2xl p-4">
               <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Current Status</p>
               <p className="mt-2 text-lg font-semibold text-white">{batchStatusLabel}</p>
-              <p className="mt-2 text-sm text-[#b6bec9]">Shared batch scheduler for department analytics.</p>
+              <p className="mt-2 text-sm text-[#b6bec9]">Shared analytics status for this department.</p>
             </div>
             <div className="monitor-panel rounded-2xl p-4">
               <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Last Successful Run</p>
               <p
                 className="mt-2 text-lg font-semibold text-white">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleTimeString() : "--"}</p>
               <p
-                className="mt-2 text-sm text-[#b6bec9]">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleDateString() : "No successful batch run yet"}</p>
+                className="mt-2 text-sm text-[#b6bec9]">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleDateString() : "No successful run yet"}</p>
             </div>
             <div className="monitor-panel rounded-2xl p-4">
               <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Avg HR</p>
@@ -167,16 +163,16 @@ export default function DepartmentPage() {
           <DataTable
             items={rows}
             loading={isLoading}
-            loadingMessage="Loading department batch analytics..."
+            loadingMessage="Loading department analytics..."
             emptyMessage={patients.length === 0 ? `No patients are currently assigned to ${departmentName}.` : "No department patients match the current filters."}
             pageSize={10}
-            defaultSort="patient_id"
+            defaultSort="patient_name"
             controlsLayoutClassName="mb-6 grid gap-4 rounded-[24px] border border-[#3b424b] bg-[#151b22] p-4 lg:grid-cols-[1fr_1fr_1fr_auto]"
             sortOptions={[
               {
-                value: "patient_id",
-                label: "By patient id",
-                compare: (left, right) => left.patient.id - right.patient.id,
+                value: "patient_name",
+                label: "By patient name",
+                compare: (left, right) => formatPatientFullName(left.patient).localeCompare(formatPatientFullName(right.patient)),
               },
               {
                 value: "avg_heart_rate",
@@ -245,9 +241,8 @@ export default function DepartmentPage() {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}`}>
-                        Patient {patient.id}
+                        {formatPatientFullName(patient)}
                       </Link>
-                      <p className="mt-1 text-sm text-[#b6bec9]">{patient.first_name} {patient.last_name}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {strongestSeverity && (
@@ -263,7 +258,7 @@ export default function DepartmentPage() {
                       )}
                       {stat ? (
                         <span className="console-chip-danger rounded-full px-3 py-1 text-xs font-semibold">
-                          <CountValue value={stat.alerts_count}/> batch alerts
+                          <CountValue value={stat.alerts_count}/> alerts
                         </span>
                       ) : (
                         <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
@@ -275,7 +270,7 @@ export default function DepartmentPage() {
                   {stat ? (
                     <div className="mt-4">
                       <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">
-                        Batch snapshot from {new Date(stat.computed_at).toLocaleTimeString()}
+                        Snapshot from {new Date(stat.computed_at).toLocaleTimeString()}
                       </p>
                       <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
                         <div className="monitor-panel rounded-2xl px-3 py-3">
@@ -294,7 +289,7 @@ export default function DepartmentPage() {
                     </div>
                   ) : (
                     <p className="mt-4 text-sm text-[#b6bec9]">
-                      Stats will appear after the batch scheduler processes vitals for this patient.
+                      Stats will appear after the system processes vitals for this patient.
                     </p>
                   )}
                 </div>

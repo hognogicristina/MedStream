@@ -20,6 +20,18 @@ export default function RegisterPage() {
   const [message, setMessage] = useState("")
   const [isError, setIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isStepOneValid = Boolean(
+    form.first_name.trim()
+    && form.last_name.trim()
+    && /\S+@\S+\.\S+/.test(form.email.trim())
+    && form.phone_number.trim(),
+  )
+  const isStepTwoValid = Boolean(form.specialization.trim() && form.license_number.trim())
+  const isStepThreeValid = Boolean(
+    form.password.trim()
+    && form.confirm_password.trim()
+    && form.password === form.confirm_password,
+  )
 
   const handleChange = (event) => {
     const {name, value} = event.target
@@ -44,13 +56,13 @@ export default function RegisterPage() {
   }
 
   const handleNextStep = () => {
-    if (step === 1 && (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim() || !form.phone_number.trim())) {
+    if (step === 1 && !isStepOneValid) {
       setIsError(true)
       setMessage("Complete all account details before continuing.")
       return
     }
 
-    if (step === 2 && (!form.specialization.trim() || !form.license_number.trim())) {
+    if (step === 2 && !isStepTwoValid) {
       setIsError(true)
       setMessage("Complete all professional details before continuing.")
       return
@@ -69,20 +81,11 @@ export default function RegisterPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (!isStepThreeValid || isSubmitting) {
+      return
+    }
     setMessage("")
     setIsError(false)
-
-    if (!form.password.trim() || !form.confirm_password.trim()) {
-      setIsError(true)
-      setMessage("Complete password setup before creating the account.")
-      return
-    }
-
-    if (form.password !== form.confirm_password) {
-      setIsError(true)
-      setMessage("Password and confirm password must match.")
-      return
-    }
 
     setIsSubmitting(true)
 
@@ -321,6 +324,7 @@ export default function RegisterPage() {
                       <button
                         type="button"
                         onClick={handlePreviousStep}
+                        disabled={isSubmitting}
                         className="console-button-secondary w-full rounded-2xl px-4 py-3 font-semibold"
                       >
                         Back
@@ -329,6 +333,7 @@ export default function RegisterPage() {
                     <button
                       type="button"
                       onClick={handleNextStep}
+                      disabled={isSubmitting || (step === 1 ? !isStepOneValid : !isStepTwoValid)}
                       className="login-button"
                     >
                       Next
@@ -339,13 +344,14 @@ export default function RegisterPage() {
                     <button
                       type="button"
                       onClick={handlePreviousStep}
+                      disabled={isSubmitting}
                       className="console-button-secondary w-full rounded-2xl px-4 py-3 font-semibold"
                     >
                       Back
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={!isStepThreeValid || isSubmitting}
                       className="login-button"
                     >
                       {isSubmitting ? "Creating account..." : "Create Account"}

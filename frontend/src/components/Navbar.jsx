@@ -5,7 +5,7 @@ import {DEPARTMENTS, departmentHref} from "../constants/departments"
 
 function DepartmentsIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
       <path
         d="M10 16.2 4.8 11.4a3.5 3.5 0 0 1 0-5 3.35 3.35 0 0 1 4.85.06L10 6.9l.35-.44a3.35 3.35 0 0 1 4.85-.06 3.5 3.5 0 0 1 0 5L10 16.2Z"
         stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -17,7 +17,7 @@ function DepartmentsIcon() {
 
 function AlertIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
       <path d="M10 4.5v6.5M10 14.5h.01M10 2.5l7 13H3l7-13Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
             strokeLinejoin="round"/>
     </svg>
@@ -26,7 +26,7 @@ function AlertIcon() {
 
 function CalendarIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
       <path d="M5 3.5v2M15 3.5v2M3.5 7h13M4.5 5.5h11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z"
             stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
@@ -35,7 +35,7 @@ function CalendarIcon() {
 
 function UserPlusIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
       <path d="M14.5 7V3.5M12.75 5.25h3.5M5.5 15.5c0-2.1 1.9-3.5 4.5-3.5s4.5 1.4 4.5 3.5M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
             stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
@@ -44,7 +44,7 @@ function UserPlusIcon() {
 
 function UserIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
       <path d="M5.5 15.5c0-2.1 1.9-3.5 4.5-3.5s4.5 1.4 4.5 3.5M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" strokeWidth="1.7"
             strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
@@ -77,7 +77,7 @@ export default function Navbar() {
   }
 
   const navLinkClassName = ({isActive}) =>
-    `inline-flex h-10 w-10 items-center justify-center rounded-md ${isActive ? "console-button-primary" : "console-button-secondary"}`
+    `inline-flex h-11 w-11 items-center justify-center rounded-md ${isActive ? "console-button-primary" : "console-button-secondary"}`
   const departmentsActive = location.pathname.startsWith("/departments")
   const profileActive = location.pathname.startsWith("/profile")
 
@@ -114,7 +114,7 @@ export default function Navbar() {
               <button
                 type="button"
                 aria-label="Departments"
-                className={`inline-flex h-10 w-10 items-center justify-center rounded-md ${openMenu === "departments" || departmentsActive ? "console-button-primary" : "console-button-secondary"}`}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${openMenu === "departments" || departmentsActive ? "console-button-primary" : "console-button-secondary"}`}
                 onClick={() => setOpenMenu((current) => current === "departments" ? "" : "departments")}
               >
                 <DepartmentsIcon/>
@@ -164,7 +164,7 @@ export default function Navbar() {
               <button
                 type="button"
                 aria-label="Doctor Profile"
-                className={`inline-flex h-10 w-10 items-center justify-center rounded-md ${openMenu === "profile" || profileActive ? "console-button-primary" : "console-button-secondary"}`}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${openMenu === "profile" || profileActive ? "console-button-primary" : "console-button-secondary"}`}
                 onClick={() => setOpenMenu((current) => current === "profile" ? "" : "profile")}
               >
                 <UserIcon/>

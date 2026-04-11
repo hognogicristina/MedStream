@@ -1,13 +1,16 @@
 import {useEffect, useRef, useState} from "react"
 import {Link} from "react-router-dom"
 import CountValue from "../components/CountValue"
+import {useNotifications} from "../components/NotificationProvider"
 import {api} from "../services/api"
 import {pushStoredEvent, readStoredEvents, subscribeToStoredEvents} from "../services/eventsFeed"
 import {createWebSocket} from "../services/ws"
 import VitalsChart from "../components/VitalsChart"
 import {DEPARTMENTS, departmentHref} from "../constants/departments"
+import {formatPatientFullName} from "../utils/patients"
 
 export default function Dashboard() {
+  const {notifyError} = useNotifications()
   const livePageSize = 5
   const [vitals, setVitals] = useState([])
   const [visibleAlerts, setVisibleAlerts] = useState([])
@@ -18,8 +21,6 @@ export default function Dashboard() {
   const [batchStatus, setBatchStatus] = useState(null)
   const [patients, setPatients] = useState([])
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
-  const [dashboardMessage, setDashboardMessage] = useState("")
-  const [dashboardMessageIsError, setDashboardMessageIsError] = useState(false)
   const [newAlertIds, setNewAlertIds] = useState([])
   const alertAudioRef = useRef(null)
   const alertBufferRef = useRef([])
@@ -33,9 +34,6 @@ export default function Dashboard() {
   }
 
   const loadDashboardData = async () => {
-    setDashboardMessage("")
-    setDashboardMessageIsError(false)
-
     try {
       const [patientsRes, statsRes, batchStatusRes] = await Promise.all([
         api.get("/patients?page=1&limit=100"),
@@ -46,8 +44,7 @@ export default function Dashboard() {
       setStats(statsRes.data)
       setBatchStatus(batchStatusRes.data)
     } catch {
-      setDashboardMessageIsError(true)
-      setDashboardMessage("Unable to load one or more dashboard data sources.")
+      notifyError("Unable to load one or more dashboard data sources.")
     } finally {
       setIsLoadingDashboard(false)
     }
@@ -55,7 +52,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboardData()
-  }, [])
+  }, [notifyError])
 
   useEffect(() => {
     return subscribeToStoredEvents((nextEvents) => {
@@ -181,6 +178,9 @@ export default function Dashboard() {
     ? stats.reduce((sum, stat) => sum + stat.avg_oxygen, 0) / stats.length
     : 0
   const aggregateAlerts = stats.reduce((sum, stat) => sum + stat.alerts_count, 0)
+  const anomalyDetectionRate = patientsWithStats
+    ? (stats.filter((stat) => stat.alerts_count > 0).length / patientsWithStats) * 100
+    : 0
   const batchStatusLabel = batchStatus?.last_run_status
     ? batchStatus.last_run_status.charAt(0).toUpperCase() + batchStatus.last_run_status.slice(1)
     : "Unknown"
@@ -215,6 +215,7 @@ export default function Dashboard() {
   const oxygenDelta = recentVitals.length >= 2 ? recentVitals[0].oxygen_saturation - recentVitals[recentVitals.length - 1].oxygen_saturation : 0
   const temperatureDelta = recentVitals.length >= 2 ? recentVitals[0].temperature - recentVitals[recentVitals.length - 1].temperature : 0
   const formatDelta = (value) => value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1)
+  const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -227,7 +228,7 @@ export default function Dashboard() {
                 <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Hospital Monitoring
                   Dashboard</h1>
                 <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">
-                  Operational overview for live clinical telemetry, admissions, department load, and alert escalation.
+                  Operational overview for clinical telemetry, admissions, department load, and alert escalation.
                 </p>
               </div>
             </div>
@@ -252,19 +253,12 @@ export default function Dashboard() {
             </div>
           </div>
         </header>
-
-        {dashboardMessage && (
-          <div className={dashboardMessageIsError ? "login-error" : "login-success"}>
-            {dashboardMessage}
-          </div>
-        )}
-
         <section className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
           <div className="monitor-card rounded-[28px] border border-[#ff9900]/30 p-6">
             <div className="mb-6 flex flex-col gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Live Monitoring</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Live Vitals Stream</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Vitals Monitoring</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Vitals Overview</h2>
               </div>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <div className="monitor-panel rounded-2xl px-4 py-3">
@@ -296,18 +290,18 @@ export default function Dashboard() {
                 <p className="mt-2 text-base font-semibold text-white"><CountValue value={alertCount}/></p>
               </div>
               <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Stream Status</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Feed Status</p>
                 <p className="mt-2 text-base font-semibold text-white">{latestVital ? "Connected" : "Waiting for feed"}</p>
               </div>
             </div>
 
             {isLoadingDashboard ? (
               <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-10 text-center text-sm text-[#b6bec9]">
-                Loading real-time dashboard data...
+                Loading dashboard data...
               </div>
             ) : vitals.length === 0 ? (
               <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-10 text-center text-sm text-[#b6bec9]">
-                Waiting for streaming vitals. Keep the live backend running and telemetry will appear here.
+                Waiting for vitals. Keep the backend running and telemetry will appear here.
               </div>
             ) : (
               <div className="space-y-4">
@@ -349,18 +343,14 @@ export default function Dashboard() {
               <div className="mb-5 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Alerts</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Live Alert Preview</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Alert Preview</h2>
                 </div>
               </div>
               <div className="alert-widget-shell rounded-[24px] p-4">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                                    <span className="console-chip-danger rounded-full px-3 py-1 text-xs font-semibold"><CountValue
-                                      value={alertCount}/></span>
-                </div>
                 <ul className="space-y-3">
                   {alertCount === 0 && (
                     <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                      No active alerts in the current stream. This panel updates only from live vital events.
+                      No active alerts at the moment. This panel updates from incoming vital events.
                     </li>
                   )}
                   {previewAlerts.map((a, i) => (
@@ -371,12 +361,14 @@ export default function Dashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-xs uppercase tracking-[0.28em] text-white/70">{a.severity} severity</p>
-                          <p className="mt-2 text-sm font-medium text-inherit">Patient {a.patient_id} - {a.message}</p>
+                          <p className="mt-2 text-sm font-medium text-inherit">
+                            {(patientNameById[a.patient_id] || "Unknown patient")} - {a.message}
+                          </p>
                         </div>
                         <span
                           className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                                                    Live
-                                                </span>
+                          Current
+                        </span>
                       </div>
                     </li>
                   ))}
@@ -399,18 +391,12 @@ export default function Dashboard() {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Events</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Hospital Events</h2>
                 </div>
-                <span className="console-chip-success rounded-full px-3 py-1 text-xs font-semibold"><CountValue
-                  value={events.length}/></span>
               </div>
               <div className="alert-widget-shell rounded-[24px] p-4">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                                    <span className="console-chip-success rounded-full px-3 py-1 text-xs font-semibold"><CountValue
-                                      value={events.length}/></span>
-                </div>
                 <ul className="space-y-3">
                   {events.length === 0 && (
                     <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                      Waiting for live hospital events such as admissions, transfers, and treatment updates.
+                      Waiting for hospital events such as admissions, transfers, and treatment updates.
                     </li>
                   )}
                   {previewEvents.map((event) => (
@@ -420,7 +406,7 @@ export default function Dashboard() {
                           <p
                             className="text-xs uppercase tracking-[0.25em] text-[#9dccff]">{new Date(event.timestamp).toLocaleTimeString()}</p>
                           <p className="mt-2 text-sm font-medium text-white">
-                            {event.patient_id ? `Patient ${event.patient_id} | ` : ""}{event.message || event.event_type || "Hospital event"}
+                            {event.patient_id && patientNameById[event.patient_id] ? `${patientNameById[event.patient_id]} | ` : ""}{event.message || event.event_type || "Hospital event"}
                           </p>
                           {event.event_type && (
                             <p
@@ -429,8 +415,8 @@ export default function Dashboard() {
                         </div>
                         <span
                           className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                                                    Live
-                                                </span>
+                          Current
+                        </span>
                       </div>
                     </li>
                   ))}
@@ -453,7 +439,7 @@ export default function Dashboard() {
           <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#9dccff]">Department Analytics</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Batch Analytics</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Department Analytics</h2>
             </div>
           </div>
 
@@ -467,7 +453,7 @@ export default function Dashboard() {
               <p
                 className="mt-2 text-lg font-semibold text-white">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleTimeString() : "--"}</p>
               <p
-                className="mt-2 text-sm text-[#b6bec9]">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleDateString() : "No successful batch run yet"}</p>
+                className="mt-2 text-sm text-[#b6bec9]">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleDateString() : "No successful run yet"}</p>
             </div>
             <div className="monitor-panel rounded-2xl p-4">
               <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Avg HR</p>
@@ -481,11 +467,16 @@ export default function Dashboard() {
               <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Aggregated Alerts</p>
               <p className="mt-2 text-lg font-semibold text-white"><CountValue value={aggregateAlerts}/></p>
             </div>
+            <div className="monitor-panel rounded-2xl p-4">
+              <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Anomaly Detection Rate</p>
+              <p className="mt-2 text-lg font-semibold text-white">{patientsWithStats ? `${anomalyDetectionRate.toFixed(0)}%` : "--"}</p>
+              <p className="mt-2 text-sm text-[#b6bec9]">Patients with abnormal findings</p>
+            </div>
           </div>
 
           {!isLoadingDashboard && stats.length === 0 ? (
             <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-              Batch analytics will appear after the scheduler completes at least one successful run.
+              Department analytics will appear after the system completes at least one successful run.
             </div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-3">

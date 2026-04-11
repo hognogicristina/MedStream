@@ -1,9 +1,12 @@
 import {useEffect, useRef, useState} from "react"
+import {Link, useSearchParams} from "react-router-dom"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
 import DataTable from "../components/DataTable"
+import {useNotifications} from "../components/NotificationProvider"
 import {api} from "../services/api"
 import {createWebSocket} from "../services/ws"
+import {formatPatientFullName} from "../utils/patients"
 
 const SEVERITY_ORDER = {
   critical: 0,
@@ -12,9 +15,11 @@ const SEVERITY_ORDER = {
 }
 
 export default function AlertsPage() {
+  const {notifyError} = useNotifications()
+  const [searchParams] = useSearchParams()
   const [alerts, setAlerts] = useState([])
+  const [patients, setPatients] = useState([])
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(true)
-  const [message, setMessage] = useState("")
   const alertAudioRef = useRef(null)
 
   if (!alertAudioRef.current) {
@@ -23,20 +28,22 @@ export default function AlertsPage() {
 
   useEffect(() => {
     const loadAlerts = async () => {
-      setMessage("")
-
       try {
-        const response = await api.get("/alerts")
-        setAlerts(response.data)
+        const [alertsResponse, patientsResponse] = await Promise.all([
+          api.get("/alerts"),
+          api.get("/patients?page=1&limit=100"),
+        ])
+        setAlerts(alertsResponse.data)
+        setPatients(patientsResponse.data)
       } catch {
-        setMessage("Unable to load alerts.")
+        notifyError("Unable to load alerts.")
       } finally {
         setIsLoadingAlerts(false)
       }
     }
 
     loadAlerts()
-  }, [])
+  }, [notifyError, searchParams])
 
   useEffect(() => {
     const socket = createWebSocket((msg) => {
@@ -53,10 +60,19 @@ export default function AlertsPage() {
     return () => socket.close()
   }, [])
 
+  const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
+  const patientCnpById = Object.fromEntries(patients.map((patient) => [patient.id, patient.cnp]))
+  const patientByCnp = Object.fromEntries(patients.map((patient) => [patient.cnp, patient]))
+  const scopedCnp = searchParams.get("cnp") || ""
+  const scopedPatientName = searchParams.get("patient") || ""
+  const scopedPatient = scopedCnp ? patientByCnp[scopedCnp] : null
+  const visibleAlerts = scopedCnp
+    ? alerts.filter((alert) => patientCnpById[alert.patient_id] === scopedCnp)
+    : alerts
   const severityCounts = {
-    critical: alerts.filter((alert) => alert.severity === "critical").length,
-    high: alerts.filter((alert) => alert.severity === "high").length,
-    normal: alerts.filter((alert) => alert.severity === "normal").length,
+    critical: visibleAlerts.filter((alert) => alert.severity === "critical").length,
+    high: visibleAlerts.filter((alert) => alert.severity === "high").length,
+    normal: visibleAlerts.filter((alert) => alert.severity === "normal").length,
   }
 
   return (
@@ -71,19 +87,24 @@ export default function AlertsPage() {
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Alerts</h1>
               <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">Live alert queue with filters, sort order, and paging.</p>
+              {scopedCnp && (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
+                    Patient: {scopedPatientName || (scopedPatient ? formatPatientFullName(scopedPatient) : "Unknown patient")}
+                  </span>
+                  <Link className="console-link text-sm font-semibold" to="/alerts">
+                    Clear filter
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </header>
-
-        {message && (
-          <div className="login-error">{message}</div>
-        )}
-
         <section className="monitor-card rounded-[28px] p-6">
           <div className="mb-6 grid gap-3 lg:grid-cols-4">
             <div className="monitor-panel rounded-2xl p-4">
               <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Total Alerts</p>
-              <p className="mt-2 text-2xl font-semibold text-white"><CountValue value={alerts.length}/></p>
+              <p className="mt-2 text-2xl font-semibold text-white"><CountValue value={visibleAlerts.length}/></p>
               <p className="mt-2 text-sm text-[#b6bec9]">Full live dataset currently in memory.</p>
             </div>
             <div className="monitor-panel rounded-2xl p-4">
@@ -104,7 +125,8 @@ export default function AlertsPage() {
           </div>
 
           <DataTable
-            items={alerts}
+            key={`alerts-${scopedCnp || "all"}`}
+            items={visibleAlerts}
             loading={isLoadingAlerts}
             loadingMessage="Loading alert queue..."
             emptyMessage="No alerts match the current filters."
@@ -153,25 +175,35 @@ export default function AlertsPage() {
                 },
               },
               {
-                id: "patientIdFilter",
-                label: "Patient ID",
+                id: "patientCnpFilter",
+                label: "Patient CNP",
                 type: "text",
-                placeholder: "Filter by patient id",
-                matches: (alert, value) => value.trim() === "" || String(alert.patient_id).includes(value.trim()),
+                placeholder: "Filter by CNP",
+                defaultValue: scopedCnp,
+                disabled: Boolean(scopedCnp),
+                matches: (alert, value) => {
+                  const query = value.trim()
+
+                  if (query === "") {
+                    return true
+                  }
+
+                  return String(patientCnpById[alert.patient_id] || "").includes(query)
+                },
               },
             ]}
             getItemKey={(alert) => alert.id}
             renderHeader={() => (
               <div
-                className="grid grid-cols-[0.9fr_0.8fr_1fr_2.2fr_1.1fr] gap-3 border-b border-[#3b424b] bg-[#1b2430] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">
+                className="grid grid-cols-[0.9fr_1.2fr_1fr_2.2fr_1.1fr] gap-3 border-b border-[#3b424b] bg-[#1b2430] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">
                 <div>Severity</div>
+                <div>CNP</div>
                 <div>Patient</div>
-                <div>Type</div>
                 <div>Message</div>
                 <div>Created</div>
               </div>
             )}
-            rowClassName={(alert) => `grid grid-cols-[0.9fr_0.8fr_1fr_2.2fr_1.1fr] gap-3 px-4 py-4 ${alert.severity === "critical" ? "bg-[rgba(93,22,31,0.24)]" : alert.severity === "high" ? "bg-[rgba(86,52,12,0.2)]" : "bg-[#151b22]"}`}
+            rowClassName={(alert) => `grid grid-cols-[0.9fr_1.2fr_1fr_2.2fr_1.1fr] gap-3 px-4 py-4 ${alert.severity === "critical" ? "bg-[rgba(93,22,31,0.24)]" : alert.severity === "high" ? "bg-[rgba(86,52,12,0.2)]" : "bg-[#151b22]"}`}
             renderRow={(alert) => (
               <>
                 <div>
@@ -180,8 +212,8 @@ export default function AlertsPage() {
                     {alert.severity}
                   </span>
                 </div>
-                <div className="text-sm font-semibold text-white">{alert.patient_id}</div>
-                <div className="text-sm text-[#b6bec9]">{alert.alert_type.replaceAll("_", " ")}</div>
+                <div className="text-sm font-semibold text-white">{patientCnpById[alert.patient_id] || "--"}</div>
+                <div className="text-sm text-[#b6bec9]">{patientNameById[alert.patient_id] || "Unknown patient"}</div>
                 <div className="text-sm text-white">{alert.message}</div>
                 <div className="text-sm text-[#b6bec9]">{new Date(alert.created_at).toLocaleString()}</div>
               </>

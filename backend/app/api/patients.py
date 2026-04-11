@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from fastapi import Query
 from sqlalchemy import desc, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from app.db.session import SessionLocal
@@ -12,10 +13,34 @@ from app.models.medication_administration import MedicationAdministration
 from app.models.patient import Patient
 from app.schemas.doctor import DoctorRead
 from app.schemas.medication import MedicationAdministrationCreate, MedicationAdministrationRead
-from app.schemas.patient import PatientCreate, PatientDepartmentUpdate, PatientRead
+from app.schemas.patient import PatientCreate, PatientDepartmentUpdate, PatientRead, PatientUpdate
 from app.websocket.manager import manager
 
 router = APIRouter(prefix="/patients", tags=["patients"])
+
+
+def ensure_patient_identity_uniqueness(db, *, cnp: str | None = None, phone_number: str | None = None, patient_id: int | None = None):
+    if cnp:
+        cnp_query = select(Patient).where(Patient.cnp == cnp)
+
+        if patient_id is not None:
+            cnp_query = cnp_query.where(Patient.id != patient_id)
+
+        duplicate_cnp = db.execute(cnp_query).scalar_one_or_none()
+
+        if duplicate_cnp:
+            raise HTTPException(status_code=400, detail="CNP already registered")
+
+    if phone_number:
+        phone_query = select(Patient).where(Patient.phone_number == phone_number)
+
+        if patient_id is not None:
+            phone_query = phone_query.where(Patient.id != patient_id)
+
+        duplicate_phone = db.execute(phone_query).scalar_one_or_none()
+
+        if duplicate_phone:
+            raise HTTPException(status_code=400, detail="Phone number already registered")
 
 
 @router.get("", response_model=list[PatientRead])
@@ -60,11 +85,46 @@ def get_patient_doctors(id: int):
 @router.post("", response_model=PatientRead)
 def create_patient(payload: PatientCreate):
     with SessionLocal() as db:
+        ensure_patient_identity_uniqueness(db, cnp=payload.cnp, phone_number=payload.phone_number)
         patient = Patient(**payload.model_dump())
         db.add(patient)
-        db.commit()
-        db.refresh(patient)
-        return patient
+        try:
+            db.commit()
+            db.refresh(patient)
+            return patient
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Patient identity fields must be unique")
+
+
+@router.patch("/{id}", response_model=PatientRead)
+def update_patient(id: int, payload: PatientUpdate):
+    with SessionLocal() as db:
+        patient = db.get(Patient, id)
+
+        if patient is None:
+            raise HTTPException(status_code=404, detail="Patient not found")
+
+        updates = payload.model_dump(exclude_unset=True)
+
+        if "cnp" in updates or "phone_number" in updates:
+            ensure_patient_identity_uniqueness(
+                db,
+                cnp=updates.get("cnp"),
+                phone_number=updates.get("phone_number"),
+                patient_id=patient.id,
+            )
+
+        for field, value in updates.items():
+            setattr(patient, field, value)
+
+        try:
+            db.commit()
+            db.refresh(patient)
+            return patient
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Patient identity fields must be unique")
 
 
 @router.patch("/{id}/department", response_model=PatientRead)
@@ -78,6 +138,21 @@ def update_patient_department(id: int, payload: PatientDepartmentUpdate):
         patient.department = payload.department
         db.commit()
         db.refresh(patient)
+
+        asyncio.run(
+            manager.broadcast(
+                {
+                    "type": "event",
+                    "data": {
+                        "patient_id": patient.id,
+                        "event_type": "department_updated",
+                        "message": f"Transferred to {patient.department}. Reason: {payload.reason}",
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                }
+            )
+        )
+
         return patient
 
 

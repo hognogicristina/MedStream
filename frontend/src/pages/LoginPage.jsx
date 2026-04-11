@@ -13,9 +13,13 @@ export default function LoginPage() {
   const [feedback, setFeedback] = useState(location.state?.message || "")
   const [feedbackIsError, setFeedbackIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isLoginValid = /\S+@\S+\.\S+/.test(email.trim()) && password.trim()
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (!isLoginValid || isSubmitting) {
+      return
+    }
     setFeedback("")
     setFeedbackIsError(false)
     setIsSubmitting(true)
@@ -121,7 +125,7 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={!isLoginValid || isSubmitting}
                 className="login-button"
               >
                 {isSubmitting ? "Signing in..." : "Login"}

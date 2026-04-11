@@ -9,9 +9,13 @@ export default function ForgotPasswordPage() {
   const [isError, setIsError] = useState(false)
   const [resetToken, setResetToken] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const canRequestReset = identifier.trim().length > 0
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (!canRequestReset || isSubmitting) {
+      return
+    }
     setMessage("")
     setIsError(false)
     setResetToken("")
@@ -111,7 +115,7 @@ export default function ForgotPasswordPage() {
               <div className="auth-actions">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={!canRequestReset || isSubmitting}
                   className="login-button"
                 >
                   {isSubmitting ? "Requesting..." : "Request Password Reset"}

@@ -10,9 +10,13 @@ export default function ResetPasswordPage() {
   const [message, setMessage] = useState("")
   const [isError, setIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const canResetPassword = token.trim().length > 0 && newPassword.trim().length > 0
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (!canResetPassword || isSubmitting) {
+      return
+    }
     setMessage("")
     setIsError(false)
     setIsSubmitting(true)
@@ -111,7 +115,7 @@ export default function ResetPasswordPage() {
               <div className="auth-actions">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={!canResetPassword || isSubmitting}
                   className="login-button"
                 >
                   {isSubmitting ? "Resetting..." : "Reset Password"}

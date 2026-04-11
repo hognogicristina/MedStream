@@ -7,9 +7,13 @@ export default function RecoverAccountPage() {
   const [message, setMessage] = useState("")
   const [isError, setIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const canRecoverAccount = identifier.trim().length > 0
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (!canRecoverAccount || isSubmitting) {
+      return
+    }
     setMessage("")
     setIsError(false)
     setIsSubmitting(true)
@@ -87,7 +91,7 @@ export default function RecoverAccountPage() {
               <div className="auth-actions">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={!canRecoverAccount || isSubmitting}
                   className="login-button"
                 >
                   {isSubmitting ? "Requesting..." : "Recover Account"}

@@ -1,21 +1,33 @@
 import {useState} from "react"
 import BackButton from "../components/BackButton"
+import {useNotifications} from "../components/NotificationProvider"
 import {Link, useNavigate} from "react-router-dom"
 import {api} from "../services/api"
+import {buildPatientPhoneNumber, isValidPatientPhoneNumber, PATIENT_PHONE_COUNTRIES} from "../utils/patientPhone"
 
 export default function AddPatientPage() {
   const navigate = useNavigate()
+  const {notifyError} = useNotifications()
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
     cnp: "",
+    phone_number: "",
     birth_date: "",
     gender: "",
     department: "ER",
   })
-  const [message, setMessage] = useState("")
-  const [messageIsError, setMessageIsError] = useState(false)
+  const [phoneCountryCode, setPhoneCountryCode] = useState(PATIENT_PHONE_COUNTRIES[0].code)
+  const [phoneLocalNumber, setPhoneLocalNumber] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const normalizedPhoneNumber = buildPatientPhoneNumber(phoneCountryCode, phoneLocalNumber)
+  const isPatientFormValid = form.first_name.trim()
+    && form.last_name.trim()
+    && /^\d{13}$/.test(form.cnp.trim())
+    && isValidPatientPhoneNumber(normalizedPhoneNumber)
+    && form.birth_date
+    && form.gender.trim()
+    && form.department.trim()
 
   const handleChange = (event) => {
     const {name, value} = event.target
@@ -27,16 +39,19 @@ export default function AddPatientPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    setMessage("")
-    setMessageIsError(false)
+    if (!isPatientFormValid || isSubmitting) {
+      return
+    }
     setIsSubmitting(true)
 
     try {
-      const response = await api.post("/patients", form)
+      const response = await api.post("/patients", {
+        ...form,
+        phone_number: normalizedPhoneNumber,
+      })
       navigate(`/patient/${response.data.id}`)
     } catch (error) {
-      setMessageIsError(true)
-      setMessage(error.response?.data?.detail || "Unable to create patient")
+      notifyError(error.response?.data?.detail || "Unable to create patient")
     } finally {
       setIsSubmitting(false)
     }
@@ -96,6 +111,31 @@ export default function AddPatientPage() {
               required
             />
 
+            <div className="grid gap-3 sm:grid-cols-[220px_minmax(0,1fr)]">
+              <select
+                value={phoneCountryCode}
+                onChange={(event) => setPhoneCountryCode(event.target.value)}
+                className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                aria-label="Phone country code"
+                required
+              >
+                {PATIENT_PHONE_COUNTRIES.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="tel"
+                name="phone_number"
+                value={phoneLocalNumber}
+                onChange={(event) => setPhoneLocalNumber(event.target.value.replace(/\D/g, ""))}
+                placeholder="Phone number"
+                className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                required
+              />
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-3">
               <input
                 type="date"
@@ -131,17 +171,10 @@ export default function AddPatientPage() {
                 <option value="Ward">Ward</option>
               </select>
             </div>
-
-            {message && (
-              <p className={messageIsError ? "login-error" : "login-success"}>
-                {message}
-              </p>
-            )}
-
             <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={!isPatientFormValid || isSubmitting}
                 className="console-button-primary flex-1 rounded-2xl px-4 py-3 disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
               >
                 {isSubmitting ? "Creating patient..." : "Create Patient"}

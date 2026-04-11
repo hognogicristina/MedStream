@@ -2,16 +2,30 @@ import {useEffect, useState} from "react"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
 import DataTable from "../components/DataTable"
+import {api} from "../services/api"
 import {createWebSocket} from "../services/ws"
 import {pushStoredEvent, readStoredEvents, subscribeToStoredEvents} from "../services/eventsFeed"
+import {formatPatientFullName} from "../utils/patients"
 
 export default function EventsPage() {
   const [events, setEvents] = useState(() => readStoredEvents())
+  const [patients, setPatients] = useState([])
   const [isLoadingEvents, setIsLoadingEvents] = useState(true)
 
   useEffect(() => {
-    setEvents(readStoredEvents())
-    setIsLoadingEvents(false)
+    const loadPageData = async () => {
+      setEvents(readStoredEvents())
+
+      try {
+        const response = await api.get("/patients?page=1&limit=100")
+        setPatients(response.data)
+      } catch {
+      } finally {
+        setIsLoadingEvents(false)
+      }
+    }
+
+    loadPageData()
 
     return subscribeToStoredEvents(setEvents)
   }, [])
@@ -31,6 +45,7 @@ export default function EventsPage() {
   const uniqueEventTypes = [...new Set(events.map((event) => event.event_type).filter(Boolean))].sort()
   const uniquePatients = new Set(events.map((event) => event.patient_id).filter((patientId) => patientId !== null && patientId !== undefined)).size
   const latestEventTime = events[0]?.timestamp
+  const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -130,7 +145,7 @@ export default function EventsPage() {
                     {(event.event_type || "hospital_event").replaceAll("_", " ")}
                   </span>
                 </div>
-                <div className="text-sm font-semibold text-white">{event.patient_id ?? "--"}</div>
+                <div className="text-sm font-semibold text-white">{event.patient_id ? (patientNameById[event.patient_id] || "Unknown patient") : "--"}</div>
                 <div className="text-sm text-white">{event.message || "Hospital event"}</div>
                 <div className="text-sm text-[#b6bec9]">{new Date(event.timestamp).toLocaleString()}</div>
               </>
