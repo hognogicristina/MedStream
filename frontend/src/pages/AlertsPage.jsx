@@ -16,7 +16,7 @@ const SEVERITY_ORDER = {
 
 export default function AlertsPage() {
   const {notifyError} = useNotifications()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [alerts, setAlerts] = useState([])
   const [patients, setPatients] = useState([])
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(true)
@@ -181,6 +181,11 @@ export default function AlertsPage() {
                 placeholder: "Filter by CNP",
                 defaultValue: scopedCnp,
                 disabled: Boolean(scopedCnp),
+                onChange: (value) => {
+                  if (value.trim().length === 13 && /^\d{13}$/.test(value.trim())) {
+                    setSearchParams({cnp: value.trim()})
+                  }
+                },
                 matches: (alert, value) => {
                   const query = value.trim()
 

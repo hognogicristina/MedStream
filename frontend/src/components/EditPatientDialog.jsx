@@ -1,16 +1,14 @@
 import {useEffect, useState} from "react"
-import {DEPARTMENTS} from "../constants/departments"
 import {
   buildPatientPhoneNumber,
-  formatPatientPhoneNumber,
-  getPatientPhoneCountryOptionLabel,
   isValidPatientPhoneNumber,
-  parsePatientPhoneNumber,
-  PATIENT_PHONE_COUNTRIES,
+  normalizeRomanianPhoneNumber,
+  ROMANIA_PHONE_PLACEHOLDER,
 } from "../utils/patientPhone"
-import {buildPatientAddressForm, formatPatientAddress, isValidPatientAddress, normalizePatientAddress} from "../utils/patientAddress"
+import {getCityOptions, getCountyOptions} from "../utils/addressOptions"
+import {buildPatientAddressForm, isValidPatientAddress, normalizePatientAddress} from "../utils/patientAddress"
 
-const TOTAL_STEPS = 3
+const TOTAL_STEPS = 2
 
 function buildPatientEditForm(patient) {
   return {
@@ -19,123 +17,118 @@ function buildPatientEditForm(patient) {
     gender: patient?.gender || "",
     birth_date: patient?.birth_date || "",
     cnp: patient?.cnp || "",
-    department: patient?.department || DEPARTMENTS[0],
   }
 }
 
 export default function EditPatientDialog({
-  isOpen,
-  isSubmitting,
-  patient,
-  onClose,
-  onSubmit,
-}) {
+                                            isOpen,
+                                            isSubmitting,
+                                            patient,
+                                            onClose,
+                                            onSubmit,
+                                          }) {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState(buildPatientEditForm())
   const [address, setAddress] = useState(buildPatientAddressForm())
-  const [phoneCountryCode, setPhoneCountryCode] = useState(PATIENT_PHONE_COUNTRIES[0].code)
-  const [phoneLocalNumber, setPhoneLocalNumber] = useState("")
+  const [phoneNumber, setPhoneNumber] = useState("")
 
   useEffect(() => {
     if (!isOpen || !patient) {
       return
     }
 
-    const parsedPhoneNumber = parsePatientPhoneNumber(patient.phone_number)
-    setStep(1)
-    setForm(buildPatientEditForm(patient))
-    setAddress(buildPatientAddressForm(patient.address))
-    setPhoneCountryCode(parsedPhoneNumber.countryCode)
-    setPhoneLocalNumber(parsedPhoneNumber.localNumber)
+    const resetTimer = window.setTimeout(() => {
+      setStep(1)
+      setForm(buildPatientEditForm(patient))
+      setAddress(buildPatientAddressForm(patient.address))
+      setPhoneNumber(normalizeRomanianPhoneNumber(patient.phone_number))
+    }, 0)
+
+    return () => window.clearTimeout(resetTimer)
   }, [isOpen, patient])
 
   if (!isOpen || !patient) {
     return null
   }
 
-  const normalizedPhoneNumber = buildPatientPhoneNumber(phoneCountryCode, phoneLocalNumber)
-  const normalizedInitialValues = {
-    ...buildPatientEditForm(patient),
-    first_name: (patient.first_name || "").trim(),
-    last_name: (patient.last_name || "").trim(),
-    cnp: (patient.cnp || "").trim(),
-    phone_number: formatPatientPhoneNumber(patient.phone_number),
-    address: normalizePatientAddress(patient.address),
-  }
+  const normalizedPhoneNumber = buildPatientPhoneNumber(phoneNumber)
   const normalizedCurrentValues = {
     first_name: form.first_name.trim(),
     last_name: form.last_name.trim(),
     gender: form.gender.trim(),
     birth_date: form.birth_date,
     cnp: form.cnp.trim(),
-    department: form.department,
     phone_number: normalizedPhoneNumber,
     address: normalizePatientAddress(address),
   }
+  const normalizedInitialValues = {
+    first_name: (patient.first_name || "").trim(),
+    last_name: (patient.last_name || "").trim(),
+    gender: (patient.gender || "").trim(),
+    birth_date: patient.birth_date || "",
+    cnp: (patient.cnp || "").trim(),
+    phone_number: normalizeRomanianPhoneNumber(patient.phone_number),
+    address: normalizePatientAddress(patient.address),
+  }
+
   const isDirty = Object.keys(normalizedInitialValues).some(
     (key) => JSON.stringify(normalizedInitialValues[key]) !== JSON.stringify(normalizedCurrentValues[key]),
   )
-
   const isStepOneValid = Boolean(
     normalizedCurrentValues.first_name
     && normalizedCurrentValues.last_name
     && normalizedCurrentValues.gender
     && normalizedCurrentValues.birth_date
-    && /^\d{13}$/.test(normalizedCurrentValues.cnp),
+    && /^\d{13}$/.test(normalizedCurrentValues.cnp)
+    && isValidPatientPhoneNumber(normalizedCurrentValues.phone_number),
   )
-  const isStepTwoValid = Boolean(
-    isValidPatientPhoneNumber(normalizedCurrentValues.phone_number)
-    && isValidPatientAddress(normalizedCurrentValues.address),
-  )
-  const isStepThreeValid = Boolean(normalizedCurrentValues.department)
-  const canGoNext = (step === 1 && isStepOneValid) || (step === 2 && isStepTwoValid)
-  const canSubmit = isStepOneValid && isStepTwoValid && isStepThreeValid && isDirty && !isSubmitting
+  const isStepTwoValid = isValidPatientAddress(normalizedCurrentValues.address)
+  const canSubmit = isDirty && !isSubmitting
 
   const handleChange = (event) => {
     const {name, value} = event.target
-    setForm((current) => ({
-      ...current,
-      [name]: value,
-    }))
+    setForm((current) => ({...current, [name]: value}))
   }
 
   const handleAddressChange = (event) => {
     const {name, value} = event.target
-    setAddress((current) => ({
-      ...current,
-      [name]: value,
-    }))
+    setAddress((current) => {
+      if (name === "county") {
+        return {...current, county: value, city: ""}
+      }
+
+      return {...current, [name]: value}
+    })
   }
 
   const handleNext = () => {
-    if (!canGoNext) {
+    if (!isStepOneValid) {
       return
     }
 
-    setStep((current) => Math.min(TOTAL_STEPS, current + 1))
-  }
-
-  const handlePrevious = () => {
-    setStep((current) => Math.max(1, current - 1))
+    setStep(2)
   }
 
   const handleSubmit = (event) => {
     event.preventDefault()
 
-    if (!canSubmit) {
+    if (!canSubmit || !isStepTwoValid) {
       return
     }
 
     onSubmit(normalizedCurrentValues)
   }
 
+  const countyOptions = getCountyOptions()
+  const cityOptions = getCityOptions(address.county)
+
   return (
     <div className="console-modal-overlay">
       <div className="console-modal monitor-card rounded-[28px] p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patient Record</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Edit Patient Details</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">{"Patient Record"}</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">{"Edit Patient Details"}</h2>
           </div>
           <button
             type="button"
@@ -143,92 +136,68 @@ export default function EditPatientDialog({
             disabled={isSubmitting}
             className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Cancel
+            {"Cancel"}
           </button>
         </div>
 
         <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">Current Patient</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">{"Current Patient"}</p>
               <p className="mt-2 text-lg font-semibold text-white">{patient.last_name} {patient.first_name}</p>
               <p className="mt-1 text-sm text-[#879196]">CNP: {patient.cnp}</p>
-              <p className="mt-1 text-sm text-[#879196]">{formatPatientAddress(patient.address) || "Address not available"}</p>
             </div>
-            <div className="rounded-full border border-[#3b424b] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">
-              Step {step} / {TOTAL_STEPS}
+            <div
+              className="rounded-full border border-[#3b424b] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">
+              {"Step"} {step} / {TOTAL_STEPS}
             </div>
           </div>
         </div>
 
-        <form className="mt-5 space-y-5" onSubmit={handleSubmit}>
+        <div className="mt-5 space-y-5">
           {step === 1 && (
             <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">Basic Info</p>
-              </div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">{"Basic Info"}</p>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="login-field">
-                  <label className="login-label" htmlFor="edit-first-name">First Name</label>
-                  <input
-                    id="edit-first-name"
-                    name="first_name"
-                    type="text"
-                    value={form.first_name}
-                    onChange={handleChange}
-                    className="login-input"
-                    required
-                  />
+                  <label className="login-label" htmlFor="edit-first-name">{"First Name"}</label>
+                  <input id="edit-first-name" name="first_name" type="text" value={form.first_name} onChange={handleChange}
+                         className="login-input" placeholder={"Example: Andrei"} required/>
                 </div>
                 <div className="login-field">
-                  <label className="login-label" htmlFor="edit-last-name">Last Name</label>
-                  <input
-                    id="edit-last-name"
-                    name="last_name"
-                    type="text"
-                    value={form.last_name}
-                    onChange={handleChange}
-                    className="login-input"
-                    required
-                  />
+                  <label className="login-label" htmlFor="edit-last-name">{"Last Name"}</label>
+                  <input id="edit-last-name" name="last_name" type="text" value={form.last_name} onChange={handleChange}
+                         className="login-input" placeholder={"Example: Popescu"} required/>
                 </div>
                 <div className="login-field">
-                  <label className="login-label" htmlFor="edit-gender">Gender</label>
-                  <select
-                    id="edit-gender"
-                    name="gender"
-                    value={form.gender}
-                    onChange={handleChange}
-                    className="login-input"
-                    required
-                  >
-                    <option value="">Select gender</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
+                  <label className="login-label" htmlFor="edit-gender">{"Gender"}</label>
+                  <select id="edit-gender" name="gender" value={form.gender} onChange={handleChange} className="login-input" required>
+                    <option value="">{"Gender"}</option>
+                    <option value="male">{"Male"}</option>
+                    <option value="female">{"Female"}</option>
+                    <option value="other">{"Other"}</option>
                   </select>
                 </div>
                 <div className="login-field">
-                  <label className="login-label" htmlFor="edit-birth-date">Birth Date</label>
-                  <input
-                    id="edit-birth-date"
-                    name="birth_date"
-                    type="date"
-                    value={form.birth_date}
-                    onChange={handleChange}
-                    className="login-input"
-                    required
-                  />
+                  <label className="login-label" htmlFor="edit-birth-date">{"Birth Date"}</label>
+                  <input id="edit-birth-date" name="birth_date" type="date" value={form.birth_date} onChange={handleChange}
+                         className="login-input" required/>
                 </div>
-                <div className="login-field sm:col-span-2">
+                <div className="login-field">
                   <label className="login-label" htmlFor="edit-cnp">CNP</label>
+                  <input id="edit-cnp" name="cnp" type="text" value={form.cnp} onChange={handleChange} className="login-input"
+                         placeholder={"Example: 6010101123451"} required/>
+                </div>
+                <div className="login-field">
+                  <label className="login-label" htmlFor="edit-phone-number">{"Phone Number"}</label>
                   <input
-                    id="edit-cnp"
-                    name="cnp"
-                    type="text"
-                    value={form.cnp}
-                    onChange={handleChange}
+                    id="edit-phone-number"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, ""))}
+                    placeholder={ROMANIA_PHONE_PLACEHOLDER}
                     className="login-input"
-                    placeholder="13-digit CNP"
                     required
                   />
                 </div>
@@ -238,106 +207,108 @@ export default function EditPatientDialog({
 
           {step === 2 && (
             <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">Contact</p>
-              </div>
-              <div className="login-field">
-                <label className="login-label" htmlFor="edit-phone-number">Phone Number</label>
-                <div className="grid gap-3 sm:grid-cols-[220px_minmax(0,1fr)]">
-                  <select
-                    value={phoneCountryCode}
-                    onChange={(event) => setPhoneCountryCode(event.target.value)}
-                    className="login-input"
-                    aria-label="Phone country code"
-                  >
-                    {PATIENT_PHONE_COUNTRIES.map((country) => (
-                      <option key={country.code} value={country.code}>
-                        {getPatientPhoneCountryOptionLabel(country)}
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">{"Address"}</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="login-field">
+                  <label className="login-label" htmlFor="edit-street">{"Street"}</label>
+                  <input id="edit-street" type="text" name="street" value={address.street} onChange={handleAddressChange}
+                         className="login-input" placeholder={"Example: Liberty Street"} required/>
+                </div>
+                <div className="login-field">
+                  <label className="login-label" htmlFor="edit-number">{"Number"}</label>
+                  <input id="edit-number" type="text" name="number" value={address.number} onChange={handleAddressChange}
+                         className="login-input" placeholder={"Example: 12A"} required/>
+                </div>
+                <div className="login-field">
+                  <label className="login-label" htmlFor="edit-apartment">{"Apartment"}</label>
+                  <input id="edit-apartment" type="text" name="apartment" value={address.apartment} onChange={handleAddressChange}
+                         className="login-input" placeholder={"Example: 24"}/>
+                </div>
+                <div className="login-field">
+                  <label className="login-label" htmlFor="edit-city">{"City"}</label>
+                  <select id="edit-city" name="city" value={address.city} onChange={handleAddressChange} className="login-input" required
+                          disabled={cityOptions.length === 0}>
+                    <option value="">{cityOptions.length === 0 ? ("Select county first") : ("Select city")}</option>
+                    {cityOptions.map((city) => (
+                      <option key={city} value={city}>
+                        {city}
                       </option>
                     ))}
                   </select>
-                  <input
-                    id="edit-phone-number"
-                    type="tel"
-                    value={phoneLocalNumber}
-                    onChange={(event) => setPhoneLocalNumber(event.target.value.replace(/\D/g, ""))}
-                    placeholder="Phone number"
-                    className="login-input"
-                    required
-                  />
                 </div>
-                <p className="mt-2 text-xs text-[#879196]">Stored as {normalizedPhoneNumber || `${phoneCountryCode} ...`}</p>
-              </div>
-
-              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">Address</p>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <input type="text" name="street" value={address.street} onChange={handleAddressChange} placeholder="Street" className="login-input" required />
-                  <input type="text" name="number" value={address.number} onChange={handleAddressChange} placeholder="Number" className="login-input" required />
-                  <input type="text" name="apartment" value={address.apartment} onChange={handleAddressChange} placeholder="Apartment (optional)" className="login-input" />
-                  <input type="text" name="city" value={address.city} onChange={handleAddressChange} placeholder="City" className="login-input" required />
-                  <input type="text" name="state" value={address.state} onChange={handleAddressChange} placeholder="County / State" className="login-input" required />
-                  <input type="text" name="postal_code" value={address.postal_code} onChange={handleAddressChange} placeholder="Postal code" className="login-input" required />
-                  <input type="text" name="country" value={address.country} onChange={handleAddressChange} placeholder="Country" className="login-input sm:col-span-2" required />
+                <div className="login-field">
+                  <label className="login-label" htmlFor="edit-county">{"County"}</label>
+                  <select id="edit-county" name="county" value={address.county} onChange={handleAddressChange} className="login-input"
+                          required>
+                    <option value="">{"Select county"}</option>
+                    {countyOptions.map((county) => (
+                      <option key={county.name} value={county.name}>
+                        {county.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="login-field">
+                  <label className="login-label" htmlFor="edit-postal-code">{"Postal Code"}</label>
+                  <input id="edit-postal-code" type="text" name="postal_code" value={address.postal_code}
+                         onChange={(event) => handleAddressChange({
+                           target: {
+                             name: "postal_code",
+                             value: event.target.value.replace(/\D/g, "")
+                           }
+                         })} className="login-input" placeholder="010101" required/>
+                </div>
+                <div className="login-field sm:col-span-2">
+                  <label className="login-label" htmlFor="edit-country">{"Country"}</label>
+                  <input id="edit-country" type="text" value={"Romania"} className="login-input" disabled/>
                 </div>
               </div>
             </div>
           )}
 
-          {step === 3 && (
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">Other</p>
-              </div>
-              <div className="login-field">
-                <label className="login-label" htmlFor="edit-department">Department</label>
-                <select
-                  id="edit-department"
-                  name="department"
-                  value={form.department}
-                  onChange={handleChange}
-                  className="login-input"
-                  required
+          <div className="form-action-block">
+            <div className="flex justify-end gap-3">
+              {step > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  disabled={isSubmitting}
+                  className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {DEPARTMENTS.map((department) => (
-                    <option key={department} value={department}>
-                      {department}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
+                  {"Previous"}
+                </button>
+              )}
 
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={step === 1 ? onClose : handlePrevious}
-              disabled={isSubmitting}
-              className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {step === 1 ? "Cancel" : "Previous"}
-            </button>
-            {step < TOTAL_STEPS ? (
-              <button
-                type="button"
-                onClick={handleNext}
-                disabled={!canGoNext || isSubmitting}
-                className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
-              >
-                {isSubmitting ? "Saving..." : "Save Changes"}
-              </button>
-            )}
+              {step < TOTAL_STEPS ? (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={!isStepOneValid}
+                  className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                >
+                  {"Next"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!canSubmit || !isStepTwoValid) return
+                    onSubmit(normalizedCurrentValues)
+                  }}
+                  disabled={!canSubmit || !isStepTwoValid}
+                  className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                >
+                  {isSubmitting ? "Saving..." : "Save Changes"}
+                </button>
+              )}
+            </div>
+            <p className="form-action-message">
+              {step === 1
+                ? ("Next opens the address page.")
+                : ("Back returns to basic info.")}
+            </p>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   )

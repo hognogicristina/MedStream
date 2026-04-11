@@ -1,6 +1,9 @@
+/* eslint-disable react-refresh/only-export-components */
 import {createContext, useCallback, useContext, useEffect, useMemo, useRef, useState} from "react"
 
 const NotificationContext = createContext(null)
+const DEFAULT_NOTIFICATION_DURATION = 4000
+const MAX_NOTIFICATIONS = 4
 
 export function NotificationProvider({children}) {
   const [notifications, setNotifications] = useState([])
@@ -23,20 +26,21 @@ export function NotificationProvider({children}) {
     setNotifications((current) => current.filter((notification) => notification.id !== id))
   }, [])
 
-  const showNotification = useCallback(({message, type = "success", duration = 3600}) => {
+  const showNotification = useCallback(({message, type = "success", duration = DEFAULT_NOTIFICATION_DURATION}) => {
     if (!message) {
       return
     }
 
-    const id = `notification-${nextIdRef.current += 1}`
+    const notificationId = `notification-${nextIdRef.current += 1}`
+    setNotifications((current) => [...current, {id: notificationId, message, type}].slice(-MAX_NOTIFICATIONS))
 
-    setNotifications((current) => [...current, {id, message, type}])
+    if (duration > 0) {
+      const timeoutId = window.setTimeout(() => {
+        dismissNotification(notificationId)
+      }, duration)
 
-    const timeoutId = window.setTimeout(() => {
-      dismissNotification(id)
-    }, duration)
-
-    timeoutIdsRef.current.set(id, timeoutId)
+      timeoutIdsRef.current.set(notificationId, timeoutId)
+    }
   }, [dismissNotification])
 
   const contextValue = useMemo(() => ({
@@ -70,7 +74,7 @@ export function NotificationProvider({children}) {
               className="notification-toast-dismiss"
               aria-label="Dismiss notification"
             >
-              Close
+              ×
             </button>
           </div>
         ))}

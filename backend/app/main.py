@@ -19,6 +19,8 @@ from app.kafka.consumer import run as run_consumer
 from app.kafka.topics import ensure_topics
 from app.batch.patient_stats_job import run as run_batch
 from app.kafka.vitals_simulator import run as run_simulator
+from fastapi import Request
+from fastapi.responses import Response
 
 background_threads_started = False
 background_threads_lock = threading.Lock()
@@ -72,7 +74,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MedStream API", lifespan=lifespan)
+app = FastAPI(title="MedStream", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -89,6 +91,10 @@ app.include_router(vitals_router)
 app.include_router(alerts_router)
 app.include_router(ws_router)
 app.include_router(stats_router)
+
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(request: Request):
+    return Response(status_code=200)
 
 
 @app.get("/health")

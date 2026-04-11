@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy import delete
 
 from app.api.doctors import pwd_context
@@ -18,9 +20,9 @@ LAST_NAMES = [
     "Dumitrescu", "Tudor", "Matei", "Stanciu", "Dobre", "Enescu",
 ]
 SPECIALIZATIONS = [
-    "Emergency Medicine", "Emergency Medicine", "Intensive Care", "Intensive Care",
-    "Cardiology", "Cardiology", "Internal Medicine", "Internal Medicine",
-    "Neurology", "Neurology", "General Medicine", "Hospital Medicine",
+    "Medicina de urgenta", "Medicina de urgenta", "Terapie intensiva", "Terapie intensiva",
+    "Cardiologie", "Cardiologie", "Medicina interna", "Medicina interna",
+    "Neurologie", "Neurologie", "Medicina generala", "Medicina spitaliceasca",
 ]
 
 
@@ -34,7 +36,8 @@ def generate_doctor_payload(index: int):
         "email": f"{slug}.{index}@medstream.local",
         "specialization": SPECIALIZATIONS[(index - 1) % len(SPECIALIZATIONS)],
         "license_number": f"DOC-{1000 + index}",
-        "phone_number": f"+40 750{index:06d}",
+        "phone_number": f"07{50 + ((index - 1) % 10)}{index:06d}",
+        "birth_date": date(1975 + (index % 18), ((index - 1) % 12) + 1, ((index - 1) % 28) + 1),
     }
 
 
@@ -52,7 +55,10 @@ def run():
                     first_name=payload["first_name"],
                     last_name=payload["last_name"],
                     email=payload["email"],
+                    pending_email=None,
+                    email_confirmed=True,
                     phone_number=payload["phone_number"],
+                    birth_date=payload["birth_date"],
                     password_hash=pwd_context.hash(PASSWORD),
                     specialization=payload["specialization"],
                     license_number=payload["license_number"],

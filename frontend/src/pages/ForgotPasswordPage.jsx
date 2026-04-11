@@ -30,7 +30,7 @@ export default function ForgotPasswordPage() {
       setResetToken(response.data.reset_token)
     } catch (error) {
       setIsError(true)
-      setMessage(error.response?.data?.detail || "Unable to request password reset.")
+      setMessage(error.response?.data?.detail || ("Unable to request password reset."))
     } finally {
       setIsSubmitting(false)
     }
@@ -44,12 +44,11 @@ export default function ForgotPasswordPage() {
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
               <Link className="auth-link" to="/">
-                Back home
+                {"Back home"}
               </Link>
             </div>
-            <h1 className="login-title">Password Recovery</h1>
-            <p className="login-subtitle">Request a reset token using your doctor email or phone number, then continue to reset the account
-              password.</p>
+            <h1 className="login-title">{"Password Recovery"}</h1>
+            <p className="login-subtitle">{"Request a reset token using your doctor email or phone number, then continue to reset the account password."}</p>
             <div className="auth-metrics">
               <div className="auth-metric">
                 <p className="auth-metric-label">Identifier</p>
@@ -70,22 +69,20 @@ export default function ForgotPasswordPage() {
 
           <div className="login-panel">
             <div className="login-header">
-              <p className="login-brand">Recovery</p>
-              <h1 className="login-title">Forgot Password</h1>
-              <p className="login-subtitle">Request a password reset token to regain access.</p>
+              <p className="login-brand">{"Recovery"}</p>
+              <h1 className="login-title">{"Forgot Password"}</h1>
+              <p className="login-subtitle">{"Request a password reset token to regain access."}</p>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
               <div className="login-field">
-                <label className="login-label" htmlFor="identifier">
-                  Email or Phone
-                </label>
                 <input
                   id="identifier"
                   type="text"
                   value={identifier}
                   onChange={(event) => setIdentifier(event.target.value)}
                   className="login-input"
+                  placeholder={"Email address or phone number"}
                   required
                 />
               </div>
@@ -99,7 +96,7 @@ export default function ForgotPasswordPage() {
               {resetToken && (
                 <div className="auth-section">
                   <div className="auth-section-header">
-                    <p className="auth-section-label">Reset Token</p>
+                    <p className="auth-section-label">{"Reset Token"}</p>
                     <p className="auth-section-copy break-all">{resetToken}</p>
                   </div>
                   <button
@@ -107,7 +104,7 @@ export default function ForgotPasswordPage() {
                     className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold"
                     onClick={() => navigate("/reset-password", {state: {token: resetToken}})}
                   >
-                    Continue to Reset Password
+                    {"Continue to Reset Password"}
                   </button>
                 </div>
               )}
@@ -118,15 +115,15 @@ export default function ForgotPasswordPage() {
                   disabled={!canRequestReset || isSubmitting}
                   className="login-button"
                 >
-                  {isSubmitting ? "Requesting..." : "Request Password Reset"}
+                  {isSubmitting ? ("Requesting...") : ("Request Password Reset")}
                 </button>
 
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <Link className="auth-link" to="/login">
-                    Back to login
+                    {"Back to login"}
                   </Link>
                   <Link className="auth-link" to="/recover-account">
-                    Recover account
+                    {"Recover account"}
                   </Link>
                 </div>
               </div>

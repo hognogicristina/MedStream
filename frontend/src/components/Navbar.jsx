@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from "react"
 import {NavLink, useLocation, useNavigate} from "react-router-dom"
 import {useAuth} from "../auth/AuthContext"
-import {DEPARTMENTS, departmentHref} from "../constants/departments"
+import {DEPARTMENTS, departmentHref, formatDepartmentLabel} from "../constants/departments"
 
 function DepartmentsIcon() {
   return (
@@ -99,7 +99,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-30 border-b border-[#3b424b] bg-[#16191f]">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-4">
-          <NavTooltip label="Dashboard">
+          <NavTooltip label={"Dashboard"}>
             <NavLink
               className={`text-xs font-semibold uppercase tracking-[0.35em] ${location.pathname === "/dashboard" ? "console-eyebrow" : "text-[#b6bec9]"}`}
               to="/dashboard">
@@ -109,16 +109,17 @@ export default function Navbar() {
         </div>
 
         <nav ref={navRef} className="flex flex-wrap items-center gap-2">
+
           <div className="relative flex items-center">
-            <NavTooltip label="Departments">
+            <NavTooltip label={"Departments"}>
               <button
                 type="button"
-                aria-label="Departments"
-                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${openMenu === "departments" || departmentsActive ? "console-button-primary" : "console-button-secondary"}`}
+                aria-label={"Departments"}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${openMenu === "departments" ? "console-button-active" : departmentsActive ? "console-button-primary" : "console-button-secondary"}`}
                 onClick={() => setOpenMenu((current) => current === "departments" ? "" : "departments")}
               >
                 <DepartmentsIcon/>
-                <span className="sr-only">Departments</span>
+                <span className="sr-only">{"Departments"}</span>
               </button>
             </NavTooltip>
             <div
@@ -131,44 +132,44 @@ export default function Navbar() {
                     to={departmentHref(department)}
                     onClick={() => setOpenMenu("")}
                   >
-                    {department}
+                    {formatDepartmentLabel(department)}
                   </NavLink>
                 ))}
               </div>
             </div>
           </div>
 
-          <NavTooltip label="Alerts">
-            <NavLink aria-label="Alerts" className={navLinkClassName} to="/alerts">
+          <NavTooltip label={"Alerts"}>
+            <NavLink aria-label={"Alerts"} className={navLinkClassName} to="/alerts">
               <AlertIcon/>
-              <span className="sr-only">Alerts</span>
+              <span className="sr-only">{"Alerts"}</span>
             </NavLink>
           </NavTooltip>
 
-          <NavTooltip label="Events">
-            <NavLink aria-label="Events" className={navLinkClassName} to="/events">
+          <NavTooltip label={"Events"}>
+            <NavLink aria-label={"Events"} className={navLinkClassName} to="/events">
               <CalendarIcon/>
-              <span className="sr-only">Events</span>
+              <span className="sr-only">{"Events"}</span>
             </NavLink>
           </NavTooltip>
 
-          <NavTooltip label="Add Patient">
-            <NavLink aria-label="Add Patient" className={navLinkClassName} to="/patients/new">
+          <NavTooltip label={"Add Patient"}>
+            <NavLink aria-label={"Add Patient"} className={navLinkClassName} to="/patients/new">
               <UserPlusIcon/>
-              <span className="sr-only">Add Patient</span>
+              <span className="sr-only">{"Add Patient"}</span>
             </NavLink>
           </NavTooltip>
 
           <div className="relative flex items-center">
-            <NavTooltip label="Doctor Profile">
+            <NavTooltip label={"Doctor Profile"}>
               <button
                 type="button"
-                aria-label="Doctor Profile"
-                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${openMenu === "profile" || profileActive ? "console-button-primary" : "console-button-secondary"}`}
+                aria-label={"Doctor Profile"}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${openMenu === "profile" ? "console-button-active" : profileActive ? "console-button-primary" : "console-button-secondary"}`}
                 onClick={() => setOpenMenu((current) => current === "profile" ? "" : "profile")}
               >
                 <UserIcon/>
-                <span className="sr-only">Doctor Profile</span>
+                <span className="sr-only">{"Doctor Profile"}</span>
               </button>
             </NavTooltip>
             <div
@@ -179,13 +180,13 @@ export default function Navbar() {
                   to="/profile"
                   onClick={() => setOpenMenu("")}
                 >
-                  Profile
+                  {"Profile"}
                 </NavLink>
                 <button
                   className="block w-full rounded-xl px-4 py-2 text-left text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
                   onClick={handleLogout}
                 >
-                  Logout
+                  {"Logout"}
                 </button>
               </div>
             </div>

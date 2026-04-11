@@ -26,9 +26,9 @@ def flatten_patient_address(address_payload: dict | None):
         "address_number": address.get("number"),
         "address_apartment": address.get("apartment"),
         "address_city": address.get("city"),
-        "address_state": address.get("state"),
+        "address_state": address.get("county"),
         "address_postal_code": address.get("postal_code"),
-        "address_country": address.get("country"),
+        "address_country": "Romania",
     }
 
 
@@ -56,7 +56,7 @@ def ensure_patient_identity_uniqueness(db, *, cnp: str | None = None, phone_numb
             raise HTTPException(status_code=400, detail="Phone number already registered")
 
 
-@router.get("", response_model=list[PatientRead])
+@router.get("")
 def list_patients(
         page: int = Query(1, ge=1),
         limit: int = Query(10, le=100)

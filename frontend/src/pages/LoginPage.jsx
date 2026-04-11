@@ -1,19 +1,30 @@
 import {Link} from "react-router-dom"
-import {useState} from "react"
+import {useEffect, useState} from "react"
 import {useLocation, useNavigate} from "react-router-dom"
 import {useAuth} from "../auth/AuthContext"
+import {useNotifications} from "../components/NotificationProvider"
 import {api} from "../services/api"
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const {login} = useAuth()
-  const [email, setEmail] = useState("")
+  const {notifySuccess} = useNotifications()
+  const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
-  const [feedback, setFeedback] = useState(location.state?.message || "")
+  const [feedback, setFeedback] = useState("")
   const [feedbackIsError, setFeedbackIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const isLoginValid = /\S+@\S+\.\S+/.test(email.trim()) && password.trim()
+  const isLoginValid = identifier.trim().length > 0 && password.trim().length > 0
+
+  useEffect(() => {
+    if (!location.state?.message) {
+      return
+    }
+
+    notifySuccess(location.state.message)
+    navigate(location.pathname, {replace: true, state: {}})
+  }, [location.pathname, location.state, navigate, notifySuccess])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -26,7 +37,7 @@ export default function LoginPage() {
 
     try {
       const response = await api.post("/doctors/login", {
-        email,
+        identifier,
         password,
       })
 
@@ -48,12 +59,11 @@ export default function LoginPage() {
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
               <Link className="auth-link" to="/">
-                Back home
+                {"Back home"}
               </Link>
             </div>
-            <h1 className="login-title">Doctor Access</h1>
-            <p className="login-subtitle">Authenticate into the operations console to monitor vitals, review alerts, and manage patient
-              workflows.</p>
+            <h1 className="login-title">{"Doctor Access"}</h1>
+            <p className="login-subtitle">{"Authenticate into the operations console to monitor vitals, review alerts, and manage patient workflows."}</p>
             <div className="auth-metrics">
               <div className="auth-metric">
                 <p className="auth-metric-label">Workspace</p>
@@ -73,30 +83,31 @@ export default function LoginPage() {
 
           <div className="login-panel">
             <div className="login-header">
-              <p className="login-brand">Sign In</p>
-              <h1 className="login-title">Doctor Login</h1>
-              <p className="login-subtitle">Secure access to the hospital monitoring console.</p>
+              <p className="login-brand">{"Sign In"}</p>
+              <h1 className="login-title">{"Doctor Login"}</h1>
+              <p className="login-subtitle">{"Secure access to the hospital monitoring console."}</p>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
 
               <div className="login-field">
-                <label className="login-label" htmlFor="email">
-                  Email
+                <label className="login-label" htmlFor="identifier">
+                  {"Email or Phone Number"}
                 </label>
                 <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  id="identifier"
+                  type="text"
+                  value={identifier}
+                  onChange={(event) => setIdentifier(event.target.value)}
                   className="login-input"
+                  placeholder={"Enter your email or phone number"}
                   required
                 />
               </div>
 
               <div className="login-field">
                 <label className="login-label" htmlFor="password">
-                  Password
+                  {"Password"}
                 </label>
                 <input
                   id="password"
@@ -104,16 +115,17 @@ export default function LoginPage() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   className="login-input"
+                  placeholder={"Enter your password"}
                   required
                 />
               </div>
 
               <div className="flex items-center justify-between gap-3 text-sm">
                 <Link className="auth-link" to="/forgot-password">
-                  Forgot password?
+                  {"Forgot password?"}
                 </Link>
                 <Link className="auth-link" to="/recover-account">
-                  Recover account
+                  {"Recover account"}
                 </Link>
               </div>
 
@@ -128,15 +140,15 @@ export default function LoginPage() {
                 disabled={!isLoginValid || isSubmitting}
                 className="login-button"
               >
-                {isSubmitting ? "Signing in..." : "Login"}
+                {isSubmitting ? ("Signing in...") : ("Login")}
               </button>
 
               <div className="flex items-center justify-between gap-3 text-sm">
                 <Link className="auth-link" to="/register">
-                  Need an account? Register
+                  {"Need an account? Register"}
                 </Link>
                 <Link className="auth-link" to="/">
-                  Return home
+                  {"Return home"}
                 </Link>
               </div>
             </form>

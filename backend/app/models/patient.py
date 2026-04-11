@@ -32,7 +32,7 @@ class Patient(Base):
             "number": self.address_number,
             "apartment": self.address_apartment,
             "city": self.address_city,
-            "state": self.address_state,
+            "county": self.address_state,
             "postal_code": self.address_postal_code,
-            "country": self.address_country,
+            "country": "Romania",
         }

@@ -104,3 +104,12 @@ def send_account_recovery_notifications(email: str, phone_number: str | None, to
             f"Recovery link: {recovery_link}"
         )
         send_sms(phone_number, sms_message)
+
+
+def send_email_change_confirmation(email: str, first_name: str):
+    confirmation_code = generate_verification_code()
+    email_message = (
+        f"Hello Dr. {first_name}, MedStream received a request to change your account email. "
+        f"Use confirmation code {confirmation_code} to confirm {email}."
+    )
+    send_email(email, "MedStream email change confirmation", email_message)

@@ -30,5 +30,3 @@ def run():
             db.add(stat)
 
         db.commit()
-
-    print("Batch job completed")

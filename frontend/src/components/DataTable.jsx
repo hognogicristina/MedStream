@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react"
+import {useCallback, useEffect, useState} from "react"
 
 export default function DataTable({
                                     items,
@@ -18,10 +18,10 @@ export default function DataTable({
                                     controlsLayoutClassName,
                                   }) {
   const pageSizeOptions = [5, 10, 15, 25]
-  const buildInitialFilterValues = () =>
+  const buildInitialFilterValues = useCallback(() =>
     Object.fromEntries(
       filters.map((filter) => [filter.id, filter.defaultValue ?? (filter.type === "text" ? "" : "all")]),
-    )
+    ), [filters])
   const filterSignature = filters.map((filter) => filter.id).join("|")
   const [currentPage, setCurrentPage] = useState(1)
   const [sortOrder, setSortOrder] = useState(defaultSort ?? sortOptions[0]?.value ?? "")
@@ -36,7 +36,7 @@ export default function DataTable({
       const isSame = Object.keys(nextValues).every((key) => nextValues[key] === current[key])
       return isSame ? current : nextValues
     })
-  }, [filterSignature])
+  }, [buildInitialFilterValues, filterSignature])
 
   useEffect(() => {
     if (!sortOptions.some((option) => option.value === sortOrder)) {
@@ -95,7 +95,10 @@ export default function DataTable({
                 id={filter.id}
                 type="text"
                 value={filterValues[filter.id] ?? ""}
-                onChange={(event) => setFilterValues((current) => ({...current, [filter.id]: event.target.value}))}
+                onChange={(event) => {
+                  setFilterValues((current) => ({...current, [filter.id]: event.target.value}))
+                  filter.onChange?.(event.target.value)
+                }}
                 placeholder={filter.placeholder}
                 disabled={filter.disabled}
                 className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[#6b7280]"

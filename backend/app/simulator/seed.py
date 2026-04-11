@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 import random
 
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 
 from app.batch.patient_stats_job import run as run_batch_stats
 from app.core.config import settings
@@ -16,15 +16,15 @@ from app.models.vital import Vital
 from app.simulator.patient_profiles import DEPARTMENT_PROFILE_MAP, build_patient_state, generate_vitals
 
 SEED = 20260411
-PATIENT_COUNT = 36
+PATIENT_COUNT = 150
 DEPARTMENTS = ["ER", "ICU", "Cardiology", "Internal Medicine", "Neurology", "Ward"]
-COUNTRY_CONFIGS = [
-    {"code": "+40", "prefix": "740", "length": 9, "country": "Romania", "state": "Bucharest"},
-    {"code": "+44", "prefix": "7911", "length": 10, "country": "United Kingdom", "state": "Greater London"},
-    {"code": "+1", "prefix": "202", "length": 10, "country": "United States", "state": "Illinois"},
-    {"code": "+49", "prefix": "1512", "length": 11, "country": "Germany", "state": "Berlin"},
-    {"code": "+33", "prefix": "612", "length": 9, "country": "France", "state": "Ile-de-France"},
-    {"code": "+39", "prefix": "312", "length": 10, "country": "Italy", "state": "Lazio"},
+ROMANIA_COUNTIES = [
+    {"name": "Bucuresti", "cities": ["Bucuresti"]},
+    {"name": "Cluj", "cities": ["Cluj-Napoca", "Turda"]},
+    {"name": "Iasi", "cities": ["Iasi", "Pascani"]},
+    {"name": "Timis", "cities": ["Timisoara", "Lugoj"]},
+    {"name": "Constanta", "cities": ["Constanta", "Mangalia"]},
+    {"name": "Brasov", "cities": ["Brasov", "Fagaras"]},
 ]
 MALE_FIRST_NAMES = [
     "Andrei", "Mihai", "Victor", "Radu", "Alexandru", "Ionut", "Paul", "Sorin", "Dorin", "Florin", "Tudor", "Bogdan"
@@ -38,10 +38,6 @@ LAST_NAMES = [
 ]
 STREET_NAMES = [
     "Liberty", "Union", "Oak", "River", "Central", "Garden", "Maple", "Victory", "Elm", "Station", "Hill", "Clinic"
-]
-CITY_NAMES = [
-    "Bucharest", "Cluj-Napoca", "Iasi", "Timisoara", "Constanta", "Craiova", "London", "Manchester", "Birmingham",
-    "Chicago", "Berlin", "Paris"
 ]
 PROFILE_COMPLAINTS = {
     "healthy": [
@@ -85,21 +81,19 @@ def build_rng(seed_suffix: str):
 
 
 def generate_phone_number(index: int):
-    config = COUNTRY_CONFIGS[(index - 1) % len(COUNTRY_CONFIGS)]
-    serial_length = config["length"] - len(config["prefix"])
-    serial = str(index).zfill(serial_length)
-    return f'{config["code"]} {config["prefix"]}{serial}', config
+    prefix = f"07{40 + ((index - 1) % 10)}"
+    return f"{prefix}{index:06d}"
 
 
-def generate_address(index: int, country_config: dict):
+def generate_address(index: int):
+    county = ROMANIA_COUNTIES[(index - 1) % len(ROMANIA_COUNTIES)]
     return {
-        "street": f"{STREET_NAMES[(index - 1) % len(STREET_NAMES)]} Street",
+        "street": f"Strada {STREET_NAMES[(index - 1) % len(STREET_NAMES)]}",
         "number": str(10 + index),
-        "apartment": str((index % 9) + 1) if index % 3 == 0 else None,
-        "city": CITY_NAMES[(index - 1) % len(CITY_NAMES)],
-        "state": country_config["state"],
+        "apartment": str((index % 18) + 1),
+        "city": county["cities"][(index - 1) % len(county["cities"])],
+        "county": county["name"],
         "postal_code": f"{100000 + index}",
-        "country": country_config["country"],
     }
 
 
@@ -135,8 +129,8 @@ def generate_patient_payload(index: int):
     last_name = LAST_NAMES[((index - 1) * 3) % len(LAST_NAMES)]
     birth_date = generate_birth_date(index)
     cnp = generate_cnp(birth_date, gender, index)
-    phone_number, country_config = generate_phone_number(index)
-    address = generate_address(index, country_config)
+    phone_number = generate_phone_number(index)
+    address = generate_address(index)
     chief_complaint = PROFILE_COMPLAINTS[profile_name][(index - 1) % len(PROFILE_COMPLAINTS[profile_name])]
     encounter_type = {
         "ER": "emergency",
@@ -178,10 +172,17 @@ def build_alerts_for_vital(vital: Vital):
 
 
 def reset_seed_tables(db):
-    db.execute(delete(doctor_patients))
-
-    for model in (Alert, MedicationAdministration, Vital, Encounter, PatientStats, Patient):
-        db.execute(delete(model))
+    tables = [
+        "doctor_patients",
+        "alerts",
+        "medication_administrations",
+        "vitals",
+        "encounters",
+        "patient_stats",
+        "patients"
+    ]
+    for table in tables:
+        db.execute(text(f"TRUNCATE TABLE {table} CASCADE"))
     db.commit()
 
 
@@ -198,9 +199,9 @@ def create_encounter(db, patient: Patient, payload: dict):
 
 def seed_vitals_and_alerts(db, patient: Patient):
     state = build_patient_state(patient)
-    base_time = datetime.utcnow() - timedelta(hours=6)
+    base_time = datetime.utcnow() - timedelta(hours=24)
 
-    for sample_index in range(12):
+    for sample_index in range(48):
         vitals = generate_vitals(state, patient.id)
         vital = Vital(
             patient_id=patient.id,
@@ -228,7 +229,7 @@ def seed_vitals_and_alerts(db, patient: Patient):
 
 
 def seed_medication_history(db, patient: Patient):
-    medication_count = build_rng(f"medications:{patient.id}").randint(0, 2)
+    medication_count = build_rng(f"medications:{patient.id}").randint(1, 5)
 
     for index in range(medication_count):
         medication_name, dosage = MEDICATIONS[(patient.id + index) % len(MEDICATIONS)]
@@ -261,9 +262,9 @@ def run():
                 address_number=payload["address"]["number"],
                 address_apartment=payload["address"]["apartment"],
                 address_city=payload["address"]["city"],
-                address_state=payload["address"]["state"],
+                address_state=payload["address"]["county"],
                 address_postal_code=payload["address"]["postal_code"],
-                address_country=payload["address"]["country"],
+                address_country="Romania",
             )
             db.add(patient)
             db.flush()

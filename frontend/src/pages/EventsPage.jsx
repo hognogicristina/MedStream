@@ -20,6 +20,7 @@ export default function EventsPage() {
         const response = await api.get("/patients?page=1&limit=100")
         setPatients(response.data)
       } catch {
+        // Keep the event feed visible even if patient labels fail to load.
       } finally {
         setIsLoadingEvents(false)
       }

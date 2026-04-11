@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from "react"
+import {useCallback, useEffect, useRef, useState} from "react"
 import {Link} from "react-router-dom"
 import CountValue from "../components/CountValue"
 import {useNotifications} from "../components/NotificationProvider"
@@ -11,7 +11,6 @@ import {formatPatientFullName} from "../utils/patients"
 
 export default function Dashboard() {
   const {notifyError} = useNotifications()
-  const livePageSize = 5
   const [vitals, setVitals] = useState([])
   const [visibleAlerts, setVisibleAlerts] = useState([])
   const [alertCount, setAlertCount] = useState(0)
@@ -33,7 +32,7 @@ export default function Dashboard() {
     alertAudioRef.current = new Audio("/alert.mp3")
   }
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       const [patientsRes, statsRes, batchStatusRes] = await Promise.all([
         api.get("/patients?page=1&limit=100"),
@@ -48,11 +47,11 @@ export default function Dashboard() {
     } finally {
       setIsLoadingDashboard(false)
     }
-  }
+  }, [notifyError])
 
   useEffect(() => {
     loadDashboardData()
-  }, [notifyError])
+  }, [loadDashboardData])
 
   useEffect(() => {
     return subscribeToStoredEvents((nextEvents) => {
@@ -67,6 +66,7 @@ export default function Dashboard() {
         const response = await api.get("/stats/batch-status")
         setBatchStatus(response.data)
       } catch {
+        // Keep the previous batch status when polling fails.
       }
     }, 10000)
 
@@ -86,15 +86,15 @@ export default function Dashboard() {
           ...prev.slice(0, 20),
         ])
 
-        setChartData(prev => {
+        setChartData((prev) => {
           const updated = [
             ...prev,
             {
               time: new Date().toLocaleTimeString(),
               heart_rate: v.heart_rate,
               oxygen_saturation: v.oxygen_saturation,
-              temperature: v.temperature
-            }
+              temperature: v.temperature,
+            },
           ]
 
           return updated.slice(-20)
@@ -106,6 +106,7 @@ export default function Dashboard() {
         setAlertCount(alertBufferRef.current.length)
         alertAudioRef.current.currentTime = 0
         alertAudioRef.current.play().catch(() => {
+          // Audio autoplay can be blocked by the browser.
         })
       }
 
@@ -173,9 +174,6 @@ export default function Dashboard() {
     : 0
   const averageTemperature = stats.length
     ? stats.reduce((sum, stat) => sum + stat.avg_temperature, 0) / stats.length
-    : 0
-  const averageOxygen = stats.length
-    ? stats.reduce((sum, stat) => sum + stat.avg_oxygen, 0) / stats.length
     : 0
   const aggregateAlerts = stats.reduce((sum, stat) => sum + stat.alerts_count, 0)
   const anomalyDetectionRate = patientsWithStats
@@ -352,7 +350,7 @@ export default function Dashboard() {
                     No active alerts at the moment. This panel updates from incoming vital events.
                   </li>
                 )}
-                {previewAlerts.map((a, i) => (
+                {previewAlerts.map((a) => (
                   <li
                     key={a.id}
                     className={`alert-item alert-${a.severity} ${newAlertIds.includes(a.id) ? "alert-new" : ""}`}
@@ -364,9 +362,8 @@ export default function Dashboard() {
                           {(patientNameById[a.patient_id] || "Unknown patient")} - {a.message}
                         </p>
                       </div>
-                      <span
-                        className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                        Current
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                        {new Date(a.created_at || Date.now()).toLocaleTimeString()}
                       </span>
                     </div>
                   </li>
@@ -410,9 +407,8 @@ export default function Dashboard() {
                             className="mt-2 text-xs uppercase tracking-[0.22em] text-[#879196]">{event.event_type.replaceAll("_", " ")}</p>
                         )}
                       </div>
-                      <span
-                        className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                        Current
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                        {new Date(event.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
                   </li>

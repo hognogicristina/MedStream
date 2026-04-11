@@ -11,14 +11,31 @@ from app.db.session import SessionLocal
 from app.models.doctor import Doctor
 from app.models.doctor_password_reset import DoctorPasswordReset
 from app.models.patient import Patient
-from app.schemas.doctor import AccountRecoveryRequestResponse, DoctorCreate, DoctorDeactivateRequest, DoctorRead, DoctorUpdate, LoginRequest, LoginResponse, PasswordResetConfirm, PasswordResetConfirmResponse, PasswordResetRequest, PasswordResetRequestResponse
+from app.schemas.doctor import AccountRecoveryRequestResponse, DoctorCreate, DoctorDeactivateRequest, DoctorEmailUpdate, DoctorRead, DoctorUpdate, LoginRequest, LoginResponse, PasswordResetConfirm, PasswordResetConfirmResponse, PasswordResetRequest, PasswordResetRequestResponse
 from app.schemas.patient import PatientRead
-from app.services.notifications import send_account_recovery_notifications, send_password_reset_notifications, send_registration_notifications
+from app.services.notifications import send_account_recovery_notifications, send_email_change_confirmation, send_password_reset_notifications, send_registration_notifications
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 auth_router = APIRouter(tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 password_reset_ttl = timedelta(minutes=30)
+
+
+def normalize_phone_lookup(value: str | None):
+    return "".join(char for char in str(value or "") if char.isdigit())
+
+
+def doctor_matches_identifier(doctor: Doctor, identifier: str):
+    normalized_identifier = normalize_phone_lookup(identifier)
+    normalized_phone = normalize_phone_lookup(doctor.phone_number)
+
+    if doctor.email == identifier:
+        return True
+
+    if not normalized_identifier or not normalized_phone:
+        return False
+
+    return normalized_phone == normalized_identifier or normalized_phone.endswith(normalized_identifier)
 
 
 @router.get("", response_model=list[DoctorRead])
@@ -117,17 +134,42 @@ def update_current_doctor(payload: DoctorUpdate, authorization: str | None = Hea
         return doctor
 
 
+@router.patch("/me/email", response_model=DoctorRead)
+def update_current_doctor_email(payload: DoctorEmailUpdate, authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
+
+    with SessionLocal() as db:
+        doctor = db.get(Doctor, current_doctor.id)
+
+        if doctor is None:
+            raise HTTPException(status_code=404, detail="Doctor not found")
+
+        duplicate_email = db.execute(
+            select(Doctor).where(
+                or_(Doctor.email == payload.email, Doctor.pending_email == payload.email),
+                Doctor.id != doctor.id,
+            )
+        ).scalar_one_or_none()
+
+        if duplicate_email:
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        if payload.email == doctor.email and not doctor.pending_email:
+            return doctor
+
+        doctor.pending_email = payload.email
+        doctor.email_confirmed = False
+        db.commit()
+        db.refresh(doctor)
+        send_email_change_confirmation(payload.email, doctor.first_name)
+        return doctor
+
+
 @router.post("/password-reset/request", response_model=PasswordResetRequestResponse)
 def request_password_reset(payload: PasswordResetRequest):
     with SessionLocal() as db:
-        doctor = db.execute(
-            select(Doctor).where(
-                or_(
-                    Doctor.email == payload.identifier,
-                    Doctor.phone_number == payload.identifier,
-                )
-            )
-        ).scalar_one_or_none()
+        doctors = db.execute(select(Doctor)).scalars().all()
+        doctor = next((item for item in doctors if doctor_matches_identifier(item, payload.identifier)), None)
 
         if doctor is None:
             raise HTTPException(status_code=404, detail="Doctor not found")
@@ -144,14 +186,8 @@ def request_password_reset(payload: PasswordResetRequest):
 @router.post("/account-recovery/request", response_model=AccountRecoveryRequestResponse)
 def request_account_recovery(payload: PasswordResetRequest):
     with SessionLocal() as db:
-        doctor = db.execute(
-            select(Doctor).where(
-                or_(
-                    Doctor.email == payload.identifier,
-                    Doctor.phone_number == payload.identifier,
-                )
-            )
-        ).scalar_one_or_none()
+        doctors = db.execute(select(Doctor)).scalars().all()
+        doctor = next((item for item in doctors if doctor_matches_identifier(item, payload.identifier)), None)
 
         if doctor is None:
             raise HTTPException(status_code=404, detail="Doctor not found")
@@ -298,7 +334,10 @@ def register_doctor(payload: DoctorCreate):
             restore_candidate.first_name = payload.first_name
             restore_candidate.last_name = payload.last_name
             restore_candidate.email = payload.email
+            restore_candidate.pending_email = None
+            restore_candidate.email_confirmed = True
             restore_candidate.phone_number = payload.phone_number
+            restore_candidate.birth_date = payload.birth_date
             restore_candidate.password_hash = pwd_context.hash(payload.password)
             restore_candidate.specialization = payload.specialization
             restore_candidate.license_number = payload.license_number
@@ -313,7 +352,10 @@ def register_doctor(payload: DoctorCreate):
             first_name=payload.first_name,
             last_name=payload.last_name,
             email=payload.email,
+            pending_email=None,
+            email_confirmed=True,
             phone_number=payload.phone_number,
+            birth_date=payload.birth_date,
             password_hash=pwd_context.hash(payload.password),
             specialization=payload.specialization,
             license_number=payload.license_number,
@@ -332,7 +374,8 @@ def create_doctor(payload: DoctorCreate):
 
 def login_doctor(payload: LoginRequest):
     with SessionLocal() as db:
-        doctor = db.execute(select(Doctor).where(Doctor.email == payload.email)).scalar_one_or_none()
+        doctors = db.execute(select(Doctor)).scalars().all()
+        doctor = next((item for item in doctors if doctor_matches_identifier(item, payload.identifier)), None)
 
         if not doctor or not doctor.is_active or not pwd_context.verify(payload.password, doctor.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials")

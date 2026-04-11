@@ -101,7 +101,6 @@ def send_event(event_type, message):
     }
 
     send_message(settings.kafka_events_topic, payload)
-    print("Sent event:", payload)
 
 
 def send_vital(sample):
@@ -111,7 +110,6 @@ def send_vital(sample):
     }
 
     send_message(settings.kafka_vitals_topic, payload)
-    print("Sent vital:", payload)
 
 
 def should_transfer_to_icu(samples):
@@ -119,20 +117,15 @@ def should_transfer_to_icu(samples):
 
 
 def run():
-    print("Starting ambulance scenario simulation...")
-
     for phase in PHASES:
         if phase["name"] == "icu_transfer" and not should_transfer_to_icu(PHASES[2]["samples"]):
             continue
 
-        print(f"Phase: {phase['name']}")
         send_event(phase["event_type"], phase["message"])
 
         for sample in phase["samples"]:
             send_vital(sample)
             time.sleep(1)
-
-    print("Scenario completed")
 
 
 if __name__ == "__main__":

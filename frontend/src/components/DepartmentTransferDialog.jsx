@@ -16,8 +16,12 @@ export default function DepartmentTransferDialog({
       return
     }
 
-    setNextDepartment(currentDepartment || "")
-    setReason("")
+    const resetTimer = window.setTimeout(() => {
+      setNextDepartment(currentDepartment || "")
+      setReason("")
+    }, 0)
+
+    return () => window.clearTimeout(resetTimer)
   }, [currentDepartment, isOpen])
 
   if (!isOpen) {

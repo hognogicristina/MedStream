@@ -1,12 +1,13 @@
+export const ROMANIA_COUNTRY = "Romania"
+
 export function buildEmptyPatientAddress() {
   return {
     street: "",
     number: "",
     apartment: "",
     city: "",
-    state: "",
+    county: "",
     postal_code: "",
-    country: "",
   }
 }
 
@@ -16,9 +17,8 @@ export function buildPatientAddressForm(address) {
     number: address?.number || "",
     apartment: address?.apartment || "",
     city: address?.city || "",
-    state: address?.state || "",
+    county: address?.county || "",
     postal_code: address?.postal_code || "",
-    country: address?.country || "",
   }
 }
 
@@ -28,21 +28,20 @@ export function normalizePatientAddress(address) {
     number: String(address?.number || "").trim(),
     apartment: String(address?.apartment || "").trim(),
     city: String(address?.city || "").trim(),
-    state: String(address?.state || "").trim(),
-    postal_code: String(address?.postal_code || "").trim(),
-    country: String(address?.country || "").trim(),
+    county: String(address?.county || "").trim(),
+    postal_code: String(address?.postal_code || "").replace(/\D/g, ""),
   }
 }
 
 export function isValidPatientAddress(address) {
   const normalizedAddress = normalizePatientAddress(address)
+
   return Boolean(
     normalizedAddress.street
     && normalizedAddress.number
     && normalizedAddress.city
-    && normalizedAddress.state
-    && normalizedAddress.postal_code
-    && normalizedAddress.country,
+    && normalizedAddress.county
+    && /^\d{6}$/.test(normalizedAddress.postal_code),
   )
 }
 
@@ -53,14 +52,12 @@ export function formatPatientAddress(address) {
     return ""
   }
 
-  const lineOne = `${normalizedAddress.street} ${normalizedAddress.number}`.trim()
-  const apartment = normalizedAddress.apartment ? `Apt ${normalizedAddress.apartment}` : ""
-  const lineTwo = [
+  return [
+    `${normalizedAddress.street} ${normalizedAddress.number}`.trim(),
+    normalizedAddress.apartment ? `Ap. ${normalizedAddress.apartment}` : "",
     normalizedAddress.city,
-    normalizedAddress.state,
+    normalizedAddress.county,
     normalizedAddress.postal_code,
-    normalizedAddress.country,
+    ROMANIA_COUNTRY,
   ].filter(Boolean).join(", ")
-
-  return [lineOne, apartment, lineTwo].filter(Boolean).join(" | ")
 }

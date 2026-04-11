@@ -4,7 +4,7 @@ from app.db.base import Base
 from app.db.session import engine
 from app.models import Alert, Doctor, DoctorPasswordReset, Encounter, MedicationAdministration, Patient, Vital, doctor_patients
 from app.db.session import SessionLocal
-from app.schemas.patient import normalize_patient_phone_number
+from app.schemas.validators import ROMANIA_COUNTRY, normalize_romanian_phone_number
 
 
 def ensure_doctor_columns():
@@ -42,8 +42,20 @@ def ensure_doctor_columns():
             END $$;
             """)
 
+        if "pending_email" not in columns:
+            connection.exec_driver_sql("ALTER TABLE doctors ADD COLUMN pending_email VARCHAR(255)")
+
+        if "email_confirmed" not in columns:
+            connection.exec_driver_sql("ALTER TABLE doctors ADD COLUMN email_confirmed BOOLEAN NOT NULL DEFAULT true")
+
+        if "birth_date" not in columns:
+            connection.exec_driver_sql("ALTER TABLE doctors ADD COLUMN birth_date DATE")
+
         if "ix_doctors_phone_number" not in indexes:
             connection.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS ix_doctors_phone_number ON doctors (phone_number)")
+
+        if "ix_doctors_pending_email" not in indexes:
+            connection.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS ix_doctors_pending_email ON doctors (pending_email)")
 
 
 def ensure_patient_columns():
@@ -79,10 +91,67 @@ def normalize_patient_phone_numbers():
         did_change = False
 
         for patient in patients:
-            normalized_phone_number = normalize_patient_phone_number(patient.phone_number)
+            try:
+                normalized_phone_number = normalize_romanian_phone_number(patient.phone_number)
+            except ValueError:
+                normalized_phone_number = None
 
-            if normalized_phone_number and normalized_phone_number != patient.phone_number:
+            if normalized_phone_number != patient.phone_number:
                 patient.phone_number = normalized_phone_number
+                did_change = True
+
+            if not patient.address_street:
+                patient.address_street = "Unknown street"
+                did_change = True
+
+            if not patient.address_number:
+                patient.address_number = "N/A"
+                did_change = True
+
+            if not patient.address_city:
+                patient.address_city = "Unknown city"
+                did_change = True
+
+            if not patient.address_state:
+                patient.address_state = "Unknown county"
+                did_change = True
+
+            if not patient.address_postal_code:
+                patient.address_postal_code = "000000"
+                did_change = True
+
+            if patient.address_country != ROMANIA_COUNTRY:
+                patient.address_country = ROMANIA_COUNTRY
+                did_change = True
+
+        doctors = db.query(Doctor).all()
+
+        for doctor in doctors:
+            try:
+                normalized_phone_number = normalize_romanian_phone_number(doctor.phone_number)
+            except ValueError:
+                normalized_phone_number = None
+
+            if normalized_phone_number != doctor.phone_number:
+                doctor.phone_number = normalized_phone_number
+                did_change = True
+
+        if did_change:
+            db.commit()
+
+
+def normalize_doctor_defaults():
+    with SessionLocal() as db:
+        doctors = db.query(Doctor).all()
+        did_change = False
+
+        for doctor in doctors:
+            if doctor.email_confirmed is None:
+                doctor.email_confirmed = True
+                did_change = True
+
+            if doctor.pending_email == "":
+                doctor.pending_email = None
                 did_change = True
 
         if did_change:
@@ -93,4 +162,5 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     ensure_doctor_columns()
     ensure_patient_columns()
+    normalize_doctor_defaults()
     normalize_patient_phone_numbers()

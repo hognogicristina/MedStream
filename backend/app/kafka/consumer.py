@@ -93,8 +93,6 @@ def run():
                             "timestamp": payload.get("timestamp") or datetime.utcnow().isoformat(),
                         }
 
-                        print("Consumed event:", event_payload)
-
                         asyncio.run(
                             manager.broadcast(
                                 {
@@ -113,8 +111,6 @@ def run():
 
                         alerts = create_alerts(db, vital)
                         db.commit()
-
-                        print("Consumed vital:", payload)
 
                         asyncio.run(
                             manager.broadcast(
@@ -135,7 +131,6 @@ def run():
 
                         for alert in alerts:
                             db.refresh(alert)
-                            print("Created alert:", alert.alert_type, alert.message)
 
                             asyncio.run(
                                 manager.broadcast(

@@ -18,10 +18,11 @@ body {
 a,
 button,
 input,
-select {
+select,
+textarea {
   transition: background-color 0.18s ease,
-  border-color 0.18s ease,
-  color 0.18s ease;
+    border-color 0.18s ease,
+    color 0.18s ease;
 }
 
 .app-shell {
@@ -96,6 +97,17 @@ select {
 }
 
 .console-button-primary:hover {
+  background: #ff9900;
+}
+
+.console-button-active {
+  border: 1px solid #ff9900;
+  background: #ff9900;
+  color: #16191f;
+  font-weight: 700;
+}
+
+.console-button-active:hover {
   background: #ff9900;
 }
 
@@ -227,18 +239,6 @@ select {
   font-size: 0.85rem;
   font-weight: 700;
   color: #879196;
-}
-
-.console-input {
-  border: 1px solid #5b646e;
-  background: #161b22;
-  color: #f2f3f3;
-}
-
-.console-input:focus {
-  border-color: #ff9900;
-  outline: 2px solid rgba(255, 153, 0, 0.22);
-  outline-offset: 0;
 }
 
 .console-divider {
@@ -401,7 +401,8 @@ select {
   color: #d5dbdb;
 }
 
-.login-input {
+.login-input,
+.console-input {
   width: 100%;
   border: 1px solid #2a3441;
   border-radius: 8px;
@@ -412,20 +413,39 @@ select {
   outline: none;
 }
 
-.login-input:focus {
+.login-input:focus,
+.console-input:focus {
   border-color: #ff9900;
   outline: 2px solid rgba(255, 153, 0, 0.4);
   outline-offset: 0;
 }
 
-.phone-field-row {
-  display: grid;
-  grid-template-columns: 108px minmax(0, 1fr);
-  gap: 12px;
+.login-input::placeholder,
+.console-input::placeholder {
+  color: #879196;
 }
 
-.auth-phone-prefix {
+.login-input[type="date"],
+.console-input[type="date"] {
   appearance: none;
+  -webkit-appearance: none;
+  color-scheme: dark;
+  padding-right: 42px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff9900' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 18px;
+  position: relative;
+}
+
+.login-input[type="date"]::-webkit-calendar-picker-indicator,
+.console-input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .login-error {
@@ -505,6 +525,7 @@ select {
   padding: 14px 16px;
   backdrop-filter: blur(14px);
   pointer-events: auto;
+  animation: notification-enter 0.2s ease-out;
 }
 
 .notification-toast-success {
@@ -538,13 +559,28 @@ select {
   background: transparent;
   color: #b6bec9;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 1.2rem;
   font-weight: 700;
-  padding: 2px 0;
+  line-height: 1;
+  padding: 0;
 }
 
 .notification-toast-dismiss:hover {
   color: #ffffff;
+}
+
+.form-action-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.form-action-message {
+  margin: 0;
+  text-align: right;
+  font-size: 0.75rem;
+  color: #879196;
 }
 
 .auth-link:hover {
@@ -734,6 +770,18 @@ select {
 
 .alert-new {
   animation: alert-new-pulse 1.2s ease-out 1;
+}
+
+@keyframes notification-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes alert-new-pulse {

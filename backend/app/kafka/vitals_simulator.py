@@ -21,10 +21,6 @@ def run():
                 p.id: build_patient_state(p) for p in patients
             }
 
-            print("Assigned profiles:")
-            for pid, state in patient_states.items():
-                print(f"Patient {pid}: {state['profile']['name']}")
-
             while True:
                 try:
                     refreshed_patients = load_patients()
@@ -57,8 +53,6 @@ def run():
                         }
 
                         send_message(settings.kafka_vitals_topic, payload)
-
-                        print(f"P{patient.id} ({state['profile']['name']}):", payload)
 
                     time.sleep(2)
                 except Exception as e:

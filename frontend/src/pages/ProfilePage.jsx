@@ -6,13 +6,14 @@ import {useNotifications} from "../components/NotificationProvider"
 import {useAuth} from "../auth/AuthContext"
 import {api} from "../services/api"
 import {formatPatientFullName} from "../utils/patients"
+import {buildPatientPhoneNumber, normalizeRomanianPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone"
 
 const buildDoctorProfileForm = (doctor) => ({
   first_name: doctor?.first_name || "",
   last_name: doctor?.last_name || "",
   specialization: doctor?.specialization || "",
   license_number: doctor?.license_number || "",
-  phone_number: doctor?.phone_number || "",
+  birth_date: doctor?.birth_date || "",
 })
 
 export default function ProfilePage() {
@@ -27,13 +28,17 @@ export default function ProfilePage() {
     last_name: "",
     specialization: "",
     license_number: "",
-    phone_number: "",
+    birth_date: "",
   })
-  const [selectedPatientId, setSelectedPatientId] = useState("")
+  const [phoneNumber, setPhoneNumber] = useState("")
+  const [emailInput, setEmailInput] = useState("")
+  const [assignmentQuery, setAssignmentQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
+  const [isSavingEmail, setIsSavingEmail] = useState(false)
   const [isAssigningPatient, setIsAssigningPatient] = useState(false)
   const [removingPatientId, setRemovingPatientId] = useState(null)
+  const [patientPendingRemoval, setPatientPendingRemoval] = useState(null)
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [removePatientAssignmentsOnDelete, setRemovePatientAssignmentsOnDelete] = useState(false)
@@ -66,6 +71,8 @@ export default function ProfilePage() {
         setAssignedPatients(assignedPatientsResponse.data)
         setPatients(patientsResponse.data)
         setForm(buildDoctorProfileForm(currentDoctor))
+        setPhoneNumber(normalizeRomanianPhoneNumber(currentDoctor.phone_number))
+        setEmailInput(currentDoctor.pending_email || currentDoctor.email || "")
       } catch (error) {
         setDoctor(null)
         setAssignedPatients([])
@@ -86,10 +93,37 @@ export default function ProfilePage() {
     form.first_name.trim()
     && form.last_name.trim()
     && form.specialization.trim()
-    && form.license_number.trim(),
+    && form.license_number.trim()
+    && form.birth_date
   )
   const initialProfileForm = buildDoctorProfileForm(doctor)
-  const isProfileDirty = Object.keys(initialProfileForm).some((key) => form[key] !== initialProfileForm[key])
+  const normalizedPhoneNumber = buildPatientPhoneNumber(phoneNumber)
+  const initialPhoneNumber = normalizeRomanianPhoneNumber(doctor?.phone_number)
+  const isProfileDirty = Object.keys(initialProfileForm).some((key) => form[key] !== initialProfileForm[key]) || normalizedPhoneNumber !== initialPhoneNumber
+  const displayedEmail = doctor?.pending_email || doctor?.email || ""
+  const isPendingEmail = Boolean(doctor?.pending_email) || doctor?.email_confirmed === false
+  const isEmailDirty = emailInput.trim() && emailInput.trim() !== displayedEmail
+  const normalizedAssignmentQuery = assignmentQuery.trim().toLowerCase()
+  const assignmentSuggestions = availablePatients
+    .filter((patient) => {
+      if (!normalizedAssignmentQuery) {
+        return true
+      }
+
+      const patientName = formatPatientFullName(patient).toLowerCase()
+      return patient.cnp.toLowerCase().includes(normalizedAssignmentQuery) || patientName.includes(normalizedAssignmentQuery)
+    })
+    .slice(0, 8)
+  const selectedPatient = availablePatients.find((patient) => {
+    const patientName = formatPatientFullName(patient)
+    const normalizedPatientName = patientName.toLowerCase()
+    const optionLabel = `${patient.cnp} | ${patientName}`.toLowerCase()
+    return (
+      patient.cnp === assignmentQuery.trim()
+      || normalizedPatientName === normalizedAssignmentQuery
+      || optionLabel === normalizedAssignmentQuery
+    )
+  })
 
   const handleFormChange = (event) => {
     const {name, value} = event.target
@@ -113,7 +147,8 @@ export default function ProfilePage() {
         last_name: form.last_name,
         specialization: form.specialization,
         license_number: form.license_number,
-        phone_number: form.phone_number.trim() || null,
+        birth_date: form.birth_date || null,
+        phone_number: normalizedPhoneNumber || null,
       }
 
       const response = await api.patch("/doctors/me", payload, {
@@ -122,6 +157,7 @@ export default function ProfilePage() {
 
       setDoctor(response.data)
       setForm(buildDoctorProfileForm(response.data))
+      setPhoneNumber(normalizeRomanianPhoneNumber(response.data.phone_number))
       notifySuccess("Doctor profile updated.")
     } catch (error) {
       notifyError(error.response?.data?.detail || "Unable to update doctor profile.")
@@ -130,18 +166,40 @@ export default function ProfilePage() {
     }
   }
 
+  const handleEmailUpdate = async (event) => {
+    event.preventDefault()
+    if (!doctor || !isEmailDirty || isSavingEmail) {
+      return
+    }
+
+    setIsSavingEmail(true)
+
+    try {
+      const response = await api.patch("/doctors/me/email", {email: emailInput.trim()}, {
+        headers: authHeaders,
+      })
+      setDoctor(response.data)
+      setEmailInput(response.data.pending_email || response.data.email || "")
+      notifySuccess("Confirmation email sent to the new address.")
+    } catch (error) {
+      notifyError(error.response?.data?.detail || "Unable to update doctor email.")
+    } finally {
+      setIsSavingEmail(false)
+    }
+  }
+
   const handleAssignPatient = async (event) => {
     event.preventDefault()
-    if (!doctor || !selectedPatientId) {
+    if (!doctor || !selectedPatient) {
       return
     }
 
     setIsAssigningPatient(true)
 
     try {
-      const response = await api.post(`/doctors/${doctor.id}/patients/${selectedPatientId}`)
+      const response = await api.post(`/doctors/${doctor.id}/patients/${selectedPatient.id}`)
       setAssignedPatients(response.data)
-      setSelectedPatientId("")
+      setAssignmentQuery("")
       notifySuccess("Patient assigned to doctor.")
     } catch (error) {
       notifyError(error.response?.data?.detail || "Unable to assign patient.")
@@ -160,6 +218,7 @@ export default function ProfilePage() {
     try {
       const response = await api.delete(`/doctors/${doctor.id}/patients/${patientId}`)
       setAssignedPatients(response.data)
+      setPatientPendingRemoval(null)
       notifySuccess("Patient removed from doctor.")
     } catch (error) {
       notifyError(error.response?.data?.detail || "Unable to remove patient.")
@@ -206,9 +265,8 @@ export default function ProfilePage() {
             </div>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Doctor Control Panel</h1>
-                <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">Manage profile details, patient assignments, and account
-                  status from one workspace.</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{"Doctor Control Panel"}</h1>
+                <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">{"Manage profile details, patient assignments, and account status from one workspace."}</p>
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div className="monitor-panel rounded-2xl p-4">
@@ -254,12 +312,12 @@ export default function ProfilePage() {
                     <div className="login-field">
                       <label className="login-label" htmlFor="first_name">First Name</label>
                       <input id="first_name" name="first_name" type="text" value={form.first_name} onChange={handleFormChange}
-                             className="login-input" required/>
+                             className="login-input" placeholder="Example: Elena" required/>
                     </div>
                     <div className="login-field">
                       <label className="login-label" htmlFor="last_name">Last Name</label>
                       <input id="last_name" name="last_name" type="text" value={form.last_name} onChange={handleFormChange}
-                             className="login-input" required/>
+                             className="login-input" placeholder="Example: Popescu" required/>
                     </div>
                   </div>
 
@@ -267,24 +325,31 @@ export default function ProfilePage() {
                     <div className="login-field">
                       <label className="login-label" htmlFor="specialization">Specialization</label>
                       <input id="specialization" name="specialization" type="text" value={form.specialization} onChange={handleFormChange}
-                             className="login-input" required/>
+                             className="login-input" placeholder="Example: Cardiology" required/>
                     </div>
                     <div className="login-field">
                       <label className="login-label" htmlFor="license_number">License Number</label>
                       <input id="license_number" name="license_number" type="text" value={form.license_number} onChange={handleFormChange}
-                             className="login-input" required/>
+                             className="login-input" placeholder="Example: DOC-20458" required/>
                     </div>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="login-field">
-                      <label className="login-label" htmlFor="phone_number">Phone Number</label>
-                      <input id="phone_number" name="phone_number" type="text" value={form.phone_number} onChange={handleFormChange}
-                             className="login-input" placeholder="Optional phone number"/>
+                      <label className="login-label" htmlFor="doctor-birth-date">Birth Date</label>
+                      <input id="doctor-birth-date" name="birth_date" type="date" value={form.birth_date} onChange={handleFormChange}
+                             className="login-input" required/>
                     </div>
                     <div className="login-field">
-                      <label className="login-label" htmlFor="email">Email</label>
-                      <input id="email" type="email" value={doctor.email} className="login-input opacity-70" disabled/>
+                      <label className="login-label" htmlFor="doctor-phone-number">{"Phone Number"}</label>
+                      <input
+                        id="doctor-phone-number"
+                        type="tel"
+                        value={phoneNumber}
+                        onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, ""))}
+                        className="login-input"
+                        placeholder={ROMANIA_PHONE_PLACEHOLDER}
+                      />
                     </div>
                   </div>
 
@@ -322,10 +387,11 @@ export default function ProfilePage() {
                             {formatPatientFullName(patient)}
                           </Link>
                           <p className="mt-2 text-xs uppercase tracking-[0.22em] text-[#879196]">{patient.department}</p>
+                          <p className="mt-2 text-sm text-[#b6bec9]">{patient.cnp}</p>
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleRemovePatient(patient.id)}
+                          onClick={() => setPatientPendingRemoval(patient)}
                           disabled={removingPatientId === patient.id}
                           className="console-button-secondary rounded-2xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                         >
@@ -347,25 +413,72 @@ export default function ProfilePage() {
 
                 <form className="space-y-4" onSubmit={handleAssignPatient}>
                   <div className="login-field">
-                    <label className="login-label" htmlFor="assigned_patient">Available Patient</label>
-                    <select id="assigned_patient" value={selectedPatientId} onChange={(event) => setSelectedPatientId(event.target.value)}
-                            className="login-input" disabled={availablePatients.length === 0 || isAssigningPatient}>
-                      <option value="">Select patient</option>
-                      {availablePatients.map((patient) => (
-                        <option key={patient.id} value={patient.id}>
-                          {formatPatientFullName(patient)} | {patient.department}
-                        </option>
+                    <label className="login-label" htmlFor="assigned_patient">Patient CNP or Full Name</label>
+                    <input
+                      id="assigned_patient"
+                      type="text"
+                      value={assignmentQuery}
+                      onChange={(event) => setAssignmentQuery(event.target.value)}
+                      className="login-input"
+                      placeholder="Example: 6010101123451 or Popescu Andrei"
+                      list="available-patient-suggestions"
+                      disabled={availablePatients.length === 0 || isAssigningPatient}
+                    />
+                    <datalist id="available-patient-suggestions">
+                      {assignmentSuggestions.map((patient) => (
+                        <option key={patient.id} value={`${patient.cnp} | ${formatPatientFullName(patient)}`}/>
                       ))}
-                    </select>
+                    </datalist>
+                    <p className="mt-2 text-xs text-[#879196]">
+                      Start with CNP or full name. Suggestions show both identifiers together.
+                    </p>
                   </div>
 
                   <button
                     type="submit"
-                    disabled={!selectedPatientId || isAssigningPatient}
+                    disabled={!selectedPatient || isAssigningPatient}
                     className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                   >
                     {isAssigningPatient ? "Assigning..." : "Assign Patient"}
                   </button>
+                </form>
+              </section>
+
+              <section className="monitor-card rounded-[28px] p-6">
+                <div className="mb-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Email</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Account Email</h2>
+                </div>
+
+                <form className="space-y-4" onSubmit={handleEmailUpdate}>
+                  <div className="login-field">
+                    <label className="login-label" htmlFor="doctor-email">Email</label>
+                    <input
+                      id="doctor-email"
+                      type="email"
+                      value={emailInput}
+                      onChange={(event) => setEmailInput(event.target.value)}
+                      className={`login-input ${isPendingEmail ? "border-[#a33a45] text-[#ffd8dc]" : ""}`}
+                      placeholder="Example: doctor@medstream.local"
+                      required
+                    />
+                  </div>
+
+                  {isPendingEmail && (
+                    <p className="text-sm text-[#ffb3bc]">
+                      Email not confirmed yet. Current confirmed login email remains {doctor.email}.
+                    </p>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={!isEmailDirty || isSavingEmail}
+                      className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                    >
+                      {isSavingEmail ? "Sending confirmation..." : "Update Email"}
+                    </button>
+                  </div>
                 </form>
               </section>
 
@@ -480,6 +593,51 @@ export default function ProfilePage() {
                   className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                 >
                   {isDeletingAccount ? "Deactivating..." : "Confirm"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {patientPendingRemoval && (
+          <div className="console-modal-overlay">
+            <div className="console-modal monitor-card rounded-[28px] p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patient Assignment</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Remove Assigned Patient</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPatientPendingRemoval(null)}
+                  className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+                <p className="text-sm text-[#d5dbdb]">
+                  Remove {formatPatientFullName(patientPendingRemoval)} from this doctor&apos;s assigned patient list?
+                </p>
+                <p className="mt-2 text-sm text-[#879196]">CNP: {patientPendingRemoval.cnp}</p>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPatientPendingRemoval(null)}
+                  className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+                >
+                  Keep Patient
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRemovePatient(patientPendingRemoval.id)}
+                  disabled={removingPatientId === patientPendingRemoval.id}
+                  className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                >
+                  {removingPatientId === patientPendingRemoval.id ? "Removing..." : "Yes, Remove Patient"}
                 </button>
               </div>
             </div>

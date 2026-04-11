@@ -23,6 +23,7 @@ export default function RecoverAccountPage() {
         identifier,
       })
     } catch {
+      // Return the same message whether or not the account exists.
     } finally {
       setMessage("If an account exists, a recovery link was sent")
       setIsSubmitting(false)
@@ -37,12 +38,11 @@ export default function RecoverAccountPage() {
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
               <Link className="auth-link" to="/">
-                Back home
+                {"Back home"}
               </Link>
             </div>
-            <h1 className="login-title">Account Recovery</h1>
-            <p className="login-subtitle">Request an account recovery link using the doctor email or phone number associated with
-              MedStream.</p>
+            <h1 className="login-title">{"Account Recovery"}</h1>
+            <p className="login-subtitle">{"Request an account recovery link using the doctor email or phone number associated with MedStream."}</p>
             <div className="auth-metrics">
               <div className="auth-metric">
                 <p className="auth-metric-label">Identifier</p>
@@ -62,22 +62,20 @@ export default function RecoverAccountPage() {
 
           <div className="login-panel">
             <div className="login-header">
-              <p className="login-brand">Recovery</p>
-              <h1 className="login-title">Recover Account</h1>
-              <p className="login-subtitle">Enter email or phone to start account recovery.</p>
+              <p className="login-brand">{"Recovery"}</p>
+              <h1 className="login-title">{"Recover Account"}</h1>
+              <p className="login-subtitle">{"Enter email or phone to start account recovery."}</p>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
               <div className="login-field">
-                <label className="login-label" htmlFor="identifier">
-                  Email or Phone
-                </label>
                 <input
                   id="identifier"
                   type="text"
                   value={identifier}
                   onChange={(event) => setIdentifier(event.target.value)}
                   className="login-input"
+                  placeholder={"Email address or phone number"}
                   required
                 />
               </div>
@@ -94,15 +92,15 @@ export default function RecoverAccountPage() {
                   disabled={!canRecoverAccount || isSubmitting}
                   className="login-button"
                 >
-                  {isSubmitting ? "Requesting..." : "Recover Account"}
+                  {isSubmitting ? ("Requesting...") : ("Recover Account")}
                 </button>
 
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <Link className="auth-link" to="/login">
-                    Back to login
+                    {"Back to login"}
                   </Link>
                   <Link className="auth-link" to="/forgot-password">
-                    Forgot password?
+                    {"Forgot password?"}
                   </Link>
                 </div>
               </div>

@@ -7,8 +7,7 @@ import {useNotifications} from "../components/NotificationProvider"
 import {useParams, Link} from "react-router-dom"
 import {api} from "../services/api"
 import {createWebSocket} from "../services/ws"
-import {formatPatientPhoneNumber} from "../utils/patientPhone"
-import {formatPatientAddress} from "../utils/patientAddress"
+import {formatPatientPhoneWithCode} from "../utils/patientPhone"
 
 export default function PatientPage() {
   const {notifyError, notifySuccess} = useNotifications()
@@ -139,13 +138,15 @@ export default function PatientPage() {
 
   const handleMedicationSubmit = async (event) => {
     event.preventDefault()
+
     if (!canSubmitMedication || isSubmittingMedication) {
       return
     }
+
     setIsSubmittingMedication(true)
 
     try {
-      const response = await api.post(`/patients/${id}/medication`, {
+      await api.post(`/patients/${id}/medication`, {
         medication_name: medicationName,
         dosage,
       })
@@ -173,6 +174,7 @@ export default function PatientPage() {
       year: "numeric",
     }).format(new Date(patient.birth_date))
     : "--"
+
   const patientAge = patient?.birth_date
     ? (() => {
       const today = new Date()
@@ -187,14 +189,27 @@ export default function PatientPage() {
       return `${age} yrs`
     })()
     : "--"
+
+  const patientStreetAddress = patient?.address
+    ? [
+      `${patient.address.street || ""} ${patient.address.number || ""}`.trim(),
+      patient.address.apartment ? `Apt ${patient.address.apartment}` : "",
+      patient.address.city || "",
+    ].filter(Boolean).join(", ")
+    : ""
+  const patientCountry = patient?.address?.country || "--"
+  const patientCounty = patient?.address?.county || "--"
+
   const patientMetadata = [
     {label: "CNP", value: patient?.cnp || "--"},
     {label: "Birth Date", value: patientBirthDate},
     {label: "Age", value: patientAge},
     {label: "Gender", value: patient?.gender || "--"},
-    {label: "Phone Number", value: patient?.phone_number ? formatPatientPhoneNumber(patient.phone_number) : "--"},
+    {label: "Phone Number", value: patient?.phone_number ? formatPatientPhoneWithCode(patient.phone_number) : "--"},
+    {label: "Country", value: patientCountry},
+    {label: "County", value: patientCounty},
+    {label: "Address", value: patientStreetAddress || "--", isWide: true},
   ]
-  const patientAddress = patient?.address ? formatPatientAddress(patient.address) : ""
 
   useEffect(() => {
     if (vitalsPage > maxVitalsPage) {
@@ -211,17 +226,27 @@ export default function PatientPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Patient Monitoring</p>
               </div>
+
               <div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">{pageTitle}</h1>
-                  <button
-                    type="button"
-                    onClick={() => setIsTransferDialogOpen(true)}
-                    className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d5dbdb] transition hover:border-[#ff9900] hover:text-white"
-                  >
-                    {department || "--"}
-                  </button>
+
+                  <div className="group relative flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setIsTransferDialogOpen(true)}
+                      className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d5dbdb] transition hover:border-[#ff9900] hover:text-white"
+                    >
+                      {department || "--"}
+                    </button>
+
+                    <span
+                      className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs font-medium text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                      Move patient
+                    </span>
+                  </div>
                 </div>
+
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <button
                     type="button"
@@ -231,18 +256,24 @@ export default function PatientPage() {
                     Edit patient
                   </button>
                 </div>
+
                 <div className="mt-4 border-t border-[#2b3139] pt-4">
-                  <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                  {patientMetadata.map((item) => (
-                    <div key={item.label} className="flex min-w-[96px] flex-col justify-center">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#879196]">{item.label}</p>
-                        <p className="mt-1 text-base font-semibold text-white">{item.value}</p>
-                    </div>
-                  ))}
-                  </div>
-                  <div className="mt-4 border-t border-[#2b3139] pt-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#879196]">Address</p>
-                    <p className="mt-1 text-base font-semibold text-white">{patientAddress || "--"}</p>
+                  <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+                    {patientMetadata.map((item) => (
+                      <div
+                        key={item.label}
+                        className={item.isWide ? "xl:col-span-2" : ""}
+                      >
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#879196]">
+                          {item.label}
+                        </p>
+                        <p
+                          className={`mt-1 text-base font-semibold text-white ${item.isWide ? "break-words leading-relaxed whitespace-normal" : ""}`}
+                        >
+                          {item.value}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -259,21 +290,25 @@ export default function PatientPage() {
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Heart Rate</p>
             <p className="mt-3 text-3xl font-semibold text-[#ffb84d]">{latestDisplayedVital ? latestDisplayedVital.heart_rate : "--"}</p>
           </div>
+
           <div className="monitor-card rounded-[24px] p-5">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">O2 Saturation</p>
             <p
               className="mt-3 text-3xl font-semibold text-[#9dccff]">{latestDisplayedVital ? latestDisplayedVital.oxygen_saturation : "--"}</p>
           </div>
+
           <div className="monitor-card rounded-[24px] p-5">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Temperature</p>
             <p className="mt-3 text-3xl font-semibold text-[#ffd699]">{latestDisplayedVital ? latestDisplayedVital.temperature : "--"}</p>
           </div>
+
           <div className="monitor-card rounded-[24px] p-5">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Blood Pressure</p>
             <p className="mt-3 text-3xl font-semibold text-white">
               {latestDisplayedVital ? `${latestDisplayedVital.systolic_bp}/${latestDisplayedVital.diastolic_bp}` : "--"}
             </p>
           </div>
+
           <div className="monitor-card rounded-[24px] p-5">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">History</p>
             <p className="mt-3 text-3xl font-semibold text-[#9dccff]"><CountValue value={vitalsHistory.length}/></p>
@@ -291,10 +326,12 @@ export default function PatientPage() {
                 {vitals.length} visible
               </span>
             </div>
+
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
                 Page {vitalsPage}
               </div>
+
               <div className="flex items-center gap-2">
                 <button
                   className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
@@ -303,6 +340,7 @@ export default function PatientPage() {
                 >
                   Previous
                 </button>
+
                 <button
                   className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
                   onClick={() => setVitalsPage((prev) => prev + 1)}
@@ -312,33 +350,35 @@ export default function PatientPage() {
                 </button>
               </div>
             </div>
+
             <ul className="space-y-3">
               {vitals.length === 0 && (
                 <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
                   {isLoadingPatient ? "Loading patient view..." : "Waiting for patient vitals. Data will appear here when available."}
                 </li>
               )}
+
               {paginatedVitals.map((v, i) => (
                 <li key={i} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-                    <div>
-                      <p className="rounded-full border border-[#31363f] bg-[#10151c] px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-[#879196]">
-                        {v.time}
-                      </p>
-                    </div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#879196]">{v.time}</p>
+
                     <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
                       <div className="monitor-panel rounded-2xl px-3 py-3">
                         <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">HR</p>
                         <p className="mt-2 font-semibold text-[#ffb84d]">{v.heart_rate}</p>
                       </div>
+
                       <div className="monitor-panel rounded-2xl px-3 py-3">
                         <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">O2</p>
                         <p className="mt-2 font-semibold text-[#9dccff]">{v.oxygen_saturation}</p>
                       </div>
+
                       <div className="monitor-panel rounded-2xl px-3 py-3">
                         <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Temp</p>
                         <p className="mt-2 font-semibold text-[#ffd699]">{v.temperature}</p>
                       </div>
+
                       <div className="monitor-panel rounded-2xl px-3 py-3">
                         <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">BP</p>
                         <p className="mt-2 font-semibold text-white">{v.systolic_bp}/{v.diastolic_bp}</p>
@@ -358,12 +398,14 @@ export default function PatientPage() {
                   <h2 className="mt-2 text-2xl font-semibold text-white">Patient Alerts</h2>
                 </div>
               </div>
+
               <ul className="space-y-3">
                 {alerts.length === 0 && (
                   <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                    No alert activity for this patient yet.
+                    This patient has no alerts.
                   </li>
                 )}
+
                 {previewAlerts.map((alert) => (
                   <li key={alert.id} className={`alert-item alert-${alert.severity}`}>
                     <div className="flex items-start justify-between gap-3">
@@ -371,23 +413,27 @@ export default function PatientPage() {
                         <p className="text-xs uppercase tracking-[0.28em] text-white/70">{alert.severity} severity</p>
                         <p className="mt-2 text-sm font-medium text-inherit">{alert.message}</p>
                       </div>
-                      <span className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
+
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
                         {new Date(alert.created_at || Date.now()).toLocaleTimeString()}
                       </span>
                     </div>
                   </li>
                 ))}
               </ul>
-              <div className="mt-4">
-                <Link
-                  className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
-                  to={patient?.cnp
-                    ? `/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`
-                    : "/alerts"}
-                >
-                  More
-                </Link>
-              </div>
+
+              {alerts.length > 3 && (
+                <div className="mt-4">
+                  <Link
+                    className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
+                    to={patient?.cnp
+                      ? `/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`
+                      : "/alerts"}
+                  >
+                    More
+                  </Link>
+                </div>
+              )}
             </div>
 
             <div className="monitor-card rounded-[28px] p-6">
@@ -395,6 +441,7 @@ export default function PatientPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Medication</p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Administer Medication</h2>
               </div>
+
               <form className="space-y-4" onSubmit={handleMedicationSubmit}>
                 <input
                   type="text"
@@ -404,6 +451,7 @@ export default function PatientPage() {
                   className="console-input w-full rounded-2xl px-4 py-3 outline-none"
                   required
                 />
+
                 <input
                   type="text"
                   value={dosage}
@@ -412,6 +460,7 @@ export default function PatientPage() {
                   className="console-input w-full rounded-2xl px-4 py-3 outline-none"
                   required
                 />
+
                 <button
                   type="submit"
                   disabled={!canSubmitMedication || isSubmittingMedication}
@@ -429,12 +478,14 @@ export default function PatientPage() {
                   <h2 className="mt-2 text-2xl font-semibold text-white">Patient Events</h2>
                 </div>
               </div>
+
               <ul className="space-y-3">
                 {events.length === 0 && (
                   <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                    No patient events yet.
+                    This patient has no events yet.
                   </li>
                 )}
+
                 {events.map((event, i) => (
                   <li key={i} className="rounded-2xl border border-[#3b424b] bg-[#1b2430] px-4 py-4">
                     <p className="text-xs uppercase tracking-[0.25em] text-[#9dccff]">{event.time || event.timestamp}</p>
@@ -446,6 +497,7 @@ export default function PatientPage() {
           </div>
         </section>
       </div>
+
       <EditPatientDialog
         isOpen={isEditDialogOpen}
         isSubmitting={isSavingPatient}
@@ -453,6 +505,7 @@ export default function PatientPage() {
         onClose={() => setIsEditDialogOpen(false)}
         onSubmit={handlePatientUpdate}
       />
+
       <DepartmentTransferDialog
         currentDepartment={department}
         isOpen={isTransferDialogOpen}
