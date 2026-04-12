@@ -1,5 +1,5 @@
 import {Link} from "react-router-dom"
-import {useEffect, useState} from "react"
+import {useEffect, useRef, useState} from "react"
 import {useLocation, useNavigate} from "react-router-dom"
 import {useAuth} from "../auth/AuthContext"
 import {useNotifications} from "../components/NotificationProvider"
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [feedback, setFeedback] = useState("")
   const [feedbackIsError, setFeedbackIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const handledLocationKeyRef = useRef("")
   const isLoginValid = identifier.trim().length > 0 && password.trim().length > 0
 
   useEffect(() => {
@@ -23,9 +24,14 @@ export default function LoginPage() {
       return
     }
 
+    if (handledLocationKeyRef.current === location.key) {
+      return
+    }
+
+    handledLocationKeyRef.current = location.key
     notifySuccess(location.state.message)
     navigate(location.pathname, {replace: true, state: {}})
-  }, [location.pathname, location.state, navigate, notifySuccess])
+  }, [location.key, location.pathname, location.state, navigate, notifySuccess])
 
   const handleSubmit = async (event) => {
     event.preventDefault()

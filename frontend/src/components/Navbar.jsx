@@ -24,15 +24,6 @@ function AlertIcon() {
   )
 }
 
-function CalendarIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      <path d="M5 3.5v2M15 3.5v2M3.5 7h13M4.5 5.5h11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z"
-            stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-}
-
 function UserPlusIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
@@ -143,13 +134,6 @@ export default function Navbar() {
             <NavLink aria-label={"Alerts"} className={navLinkClassName} to="/alerts">
               <AlertIcon/>
               <span className="sr-only">{"Alerts"}</span>
-            </NavLink>
-          </NavTooltip>
-
-          <NavTooltip label={"Events"}>
-            <NavLink aria-label={"Events"} className={navLinkClassName} to="/events">
-              <CalendarIcon/>
-              <span className="sr-only">{"Events"}</span>
             </NavLink>
           </NavTooltip>
 

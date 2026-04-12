@@ -79,7 +79,6 @@ export default function DepartmentPage() {
     ? batchStatus.last_run_status.charAt(0).toUpperCase() + batchStatus.last_run_status.slice(1)
     : "Unknown"
   const lastSuccessfulBatchRun = batchStatus?.last_successful_run_at
-  const availableConditions = [...new Set(patients.map((patient) => patient.condition).filter(Boolean))].sort()
   const rows = patients.map((patient) => {
     const stat = statsMap[patient.id]
     const alertSummary = alertSummaryMap[patient.id] || {
@@ -208,22 +207,7 @@ export default function DepartmentPage() {
 
                   return alertSummary.severities.has(value)
                 },
-              },
-              {
-                id: "conditionFilter",
-                label: "Patient Condition",
-                type: "select",
-                defaultValue: "all",
-                disabled: availableConditions.length === 0,
-                options: [
-                  {value: "all", label: availableConditions.length === 0 ? "Condition not available" : "All conditions"},
-                  ...availableConditions.map((condition) => ({
-                    value: condition,
-                    label: condition,
-                  })),
-                ],
-                matches: ({patient}, value) => value === "all" || patient.condition === value,
-              },
+              }
             ]}
             getItemKey={(row) => row.patient.id}
             shellClassName="space-y-3"
@@ -250,20 +234,6 @@ export default function DepartmentPage() {
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${strongestSeverity === "critical" ? "console-chip-danger" : strongestSeverity === "high" ? "console-chip-warm" : "console-chip-success"}`}>
                           {strongestSeverity} alert presence
-                        </span>
-                      )}
-                      {patient.condition && (
-                        <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
-                          {patient.condition}
-                        </span>
-                      )}
-                      {stat ? (
-                        <span className="console-chip-danger rounded-full px-3 py-1 text-xs font-semibold">
-                          <CountValue value={stat.alerts_count}/> alerts
-                        </span>
-                      ) : (
-                        <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
-                          No stats yet
                         </span>
                       )}
                     </div>

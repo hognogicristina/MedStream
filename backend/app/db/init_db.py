@@ -2,7 +2,23 @@ from sqlalchemy import inspect
 
 from app.db.base import Base
 from app.db.session import engine
-from app.models import Alert, Doctor, DoctorPasswordReset, Encounter, MedicationAdministration, Patient, Vital, doctor_patients
+from app.models import (
+    Alert,
+    Doctor,
+    DoctorPasswordReset,
+    Encounter,
+    MedicationAdministration,
+    Patient,
+    PatientAdmissionHistory,
+    PatientAllergy,
+    PatientCondition,
+    PatientConditionAssignment,
+    PatientDiagnosis,
+    PatientMedicalHistory,
+    DoctorActivity,
+    Vital,
+    doctor_patients,
+)
 from app.db.session import SessionLocal
 from app.schemas.validators import ROMANIA_COUNTRY, normalize_phone_number
 
@@ -67,6 +83,18 @@ def ensure_patient_columns():
         if "phone_number" not in columns:
             connection.exec_driver_sql("ALTER TABLE patients ADD COLUMN phone_number VARCHAR(50)")
 
+        if "arrival_method" not in columns:
+            connection.exec_driver_sql("ALTER TABLE patients ADD COLUMN arrival_method VARCHAR(20) NOT NULL DEFAULT 'self'")
+
+        if "is_discharged" not in columns:
+            connection.exec_driver_sql("ALTER TABLE patients ADD COLUMN is_discharged BOOLEAN NOT NULL DEFAULT false")
+
+        if "discharge_reason" not in columns:
+            connection.exec_driver_sql("ALTER TABLE patients ADD COLUMN discharge_reason VARCHAR(500)")
+
+        if "discharge_date" not in columns:
+            connection.exec_driver_sql("ALTER TABLE patients ADD COLUMN discharge_date TIMESTAMP")
+
         address_columns = {
             "address_street": "VARCHAR(120)",
             "address_number": "VARCHAR(30)",
@@ -98,6 +126,14 @@ def normalize_patient_phone_numbers():
 
             if normalized_phone_number != patient.phone_number:
                 patient.phone_number = normalized_phone_number
+                did_change = True
+
+            if patient.arrival_method not in {"ambulance", "self"}:
+                patient.arrival_method = "self"
+                did_change = True
+
+            if patient.is_discharged is None:
+                patient.is_discharged = False
                 did_change = True
 
             if not patient.address_street:
@@ -158,9 +194,30 @@ def normalize_doctor_defaults():
             db.commit()
 
 
+def cleanup_legacy_event_table():
+    inspector = inspect(engine)
+
+    if not inspector.has_table("events"):
+        return
+
+    dependent_tables = []
+    for table_name in inspector.get_table_names():
+        for foreign_key in inspector.get_foreign_keys(table_name):
+            if foreign_key.get("referred_table") == "events":
+                dependent_tables.append(table_name)
+
+    if dependent_tables:
+        print(f"Skipping drop of legacy events table due to dependencies: {', '.join(sorted(set(dependent_tables)))}")
+        return
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql("DROP TABLE IF EXISTS events")
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     ensure_doctor_columns()
     ensure_patient_columns()
+    cleanup_legacy_event_table()
     normalize_doctor_defaults()
     normalize_patient_phone_numbers()

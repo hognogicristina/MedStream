@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
+from app.models.doctor_activity import DoctorActivity
 from app.models.doctor import Doctor
 from app.models.doctor_password_reset import DoctorPasswordReset
 from app.models.patient import Patient
@@ -27,6 +28,7 @@ from app.schemas.doctor import (
     PasswordResetRequest,
     PasswordResetRequestResponse,
 )
+from app.schemas.doctor_activity import DoctorActivityCreate, DoctorActivityRead
 from app.schemas.patient import PatientRead
 from app.schemas.validators import normalize_phone_lookup
 from app.services.notifications import (
@@ -152,6 +154,50 @@ def ensure_doctor_uniqueness(db, *, email: str | None = None, phone_number: str 
 def read_current_doctor(authorization: str | None = Header(default=None)):
     doctor = get_current_doctor(authorization)
     return success_response("Doctor profile retrieved successfully.", serialize(doctor, DoctorRead))
+
+
+@router.get("/{doctor_id}/activities", response_model=ApiResponse[list[DoctorActivityRead]])
+def get_doctor_activities(doctor_id: int):
+    with SessionLocal() as db:
+        doctor = db.get(Doctor, doctor_id)
+
+        if doctor is None:
+            raise HTTPException(status_code=404, detail="Doctor not found.")
+
+        activities = db.execute(
+            select(DoctorActivity)
+            .where(
+                DoctorActivity.doctor_id == doctor_id,
+                DoctorActivity.scheduled_at >= datetime.now(UTC).replace(tzinfo=None),
+            )
+            .order_by(DoctorActivity.scheduled_at.asc(), DoctorActivity.id.asc())
+        ).scalars().all()
+        return success_response("Doctor activities retrieved successfully.", serialize_many(activities, DoctorActivityRead))
+
+
+@router.post("/{doctor_id}/activities", response_model=ApiResponse[DoctorActivityRead])
+def create_doctor_activity(doctor_id: int, payload: DoctorActivityCreate):
+    with SessionLocal() as db:
+        doctor = db.get(Doctor, doctor_id)
+
+        if doctor is None:
+            raise HTTPException(status_code=404, detail="Doctor not found.")
+
+        activity = DoctorActivity(
+            doctor_id=doctor_id,
+            type=payload.type,
+            title=payload.title,
+            description=payload.description,
+            scheduled_at=payload.scheduled_at,
+        )
+        db.add(activity)
+        db.commit()
+        db.refresh(activity)
+        return success_response(
+            "Doctor activity added successfully.",
+            serialize(activity, DoctorActivityRead),
+            status_code=201,
+        )
 
 
 @router.patch("/me", response_model=ApiResponse[DoctorRead])

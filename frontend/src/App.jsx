@@ -6,11 +6,12 @@ import AddPatientPage from "./pages/AddPatientPage"
 import AlertsPage from "./pages/AlertsPage"
 import DepartmentPage from "./pages/DepartmentPage"
 import Dashboard from "./pages/Dashboard"
-import EventsPage from "./pages/EventsPage"
 import ForgotPasswordPage from "./pages/ForgotPasswordPage"
 import HomePage from "./pages/HomePage"
 import LoginPage from "./pages/LoginPage"
 import PatientPage from "./pages/PatientPage"
+import PatientDiagnosisPage from "./pages/PatientDiagnosisPage"
+import PatientAdmissionHistoryPage from "./pages/PatientAdmissionHistoryPage"
 import ProfilePage from "./pages/ProfilePage"
 import RecoverAccountPage from "./pages/RecoverAccountPage"
 import RegisterPage from "./pages/RegisterPage"
@@ -71,8 +72,9 @@ function App() {
           <Route path="/dashboard" element={<Dashboard/>}/>
           <Route path="/departments/:name" element={<DepartmentPage/>}/>
           <Route path="/patient/:id" element={<PatientPage/>}/>
+          <Route path="/patients/:id/diagnosis" element={<PatientDiagnosisPage/>}/>
+          <Route path="/patients/:id/admission-history" element={<PatientAdmissionHistoryPage/>}/>
           <Route path="/alerts" element={<AlertsPage/>}/>
-          <Route path="/events" element={<EventsPage/>}/>
           <Route path="/patients/new" element={<AddPatientPage/>}/>
           <Route path="/profile" element={<ProfilePage/>}/>
         </Route>

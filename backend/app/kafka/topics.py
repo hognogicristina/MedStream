@@ -10,7 +10,6 @@ def ensure_topics():
     required_topics = [
         settings.kafka_vitals_topic,
         settings.kafka_alerts_topic,
-        settings.kafka_events_topic,
     ]
     missing_topics = [
         NewTopic(topic, num_partitions=1, replication_factor=1)

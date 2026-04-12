@@ -107,7 +107,10 @@ export default function DataTable({
               <select
                 id={filter.id}
                 value={filterValues[filter.id] ?? filter.defaultValue ?? "all"}
-                onChange={(event) => setFilterValues((current) => ({...current, [filter.id]: event.target.value}))}
+                onChange={(event) => {
+                  setFilterValues((current) => ({...current, [filter.id]: event.target.value}))
+                  filter.onChange?.(event.target.value)
+                }}
                 disabled={filter.disabled}
                 className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[#6b7280]"
               >

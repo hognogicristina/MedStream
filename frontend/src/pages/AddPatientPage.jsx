@@ -22,6 +22,7 @@ export default function AddPatientPage() {
     birth_date: "",
     gender: "",
     department: "ER",
+    arrival_method: "self",
   })
   const [address, setAddress] = useState(buildEmptyPatientAddress())
   const [phoneNumber, setPhoneNumber] = useState("")
@@ -161,7 +162,7 @@ export default function AddPatientPage() {
                            onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, ""))}
                            placeholder={ROMANIA_PHONE_PLACEHOLDER} className="login-input" required/>
                   </div>
-                  <div className="login-field sm:col-span-2">
+                  <div className="login-field">
                     <label className="login-label" htmlFor="patient-department">{"Department"}</label>
                     <select id="patient-department" name="department" value={form.department} onChange={handleChange}
                             className="login-input" required>
@@ -170,6 +171,20 @@ export default function AddPatientPage() {
                           {formatDepartmentLabel(department)}
                         </option>
                       ))}
+                    </select>
+                  </div>
+                  <div className="login-field">
+                    <label className="login-label" htmlFor="patient-arrival-method">{"Arrival Method"}</label>
+                    <select
+                      id="patient-arrival-method"
+                      name="arrival_method"
+                      value={form.arrival_method}
+                      onChange={handleChange}
+                      className="login-input"
+                      required
+                    >
+                      <option value="self">{"Self"}</option>
+                      <option value="ambulance">{"Ambulance"}</option>
                     </select>
                   </div>
                 </div>

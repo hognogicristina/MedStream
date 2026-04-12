@@ -1,5 +1,6 @@
 import json
 import time
+import asyncio
 
 from confluent_kafka import Consumer
 
@@ -9,8 +10,6 @@ from app.models.alert import Alert
 from app.models.vital import Vital
 
 from app.websocket.manager import manager
-import asyncio
-from datetime import datetime
 
 
 def build_consumer():
@@ -71,7 +70,7 @@ def run():
         while True:
             try:
                 consumer = build_consumer()
-                consumer.subscribe([settings.kafka_vitals_topic, settings.kafka_events_topic])
+                consumer.subscribe([settings.kafka_vitals_topic])
 
                 while True:
                     message = consumer.poll(1.0)
@@ -84,24 +83,6 @@ def run():
                         raise RuntimeError(str(message.error()))
 
                     payload = json.loads(message.value().decode("utf-8"))
-
-                    if message.topic() == settings.kafka_events_topic:
-                        event_payload = {
-                            "patient_id": payload.get("patient_id"),
-                            "event_type": payload.get("event_type"),
-                            "message": payload.get("message"),
-                            "timestamp": payload.get("timestamp") or datetime.utcnow().isoformat(),
-                        }
-
-                        asyncio.run(
-                            manager.broadcast(
-                                {
-                                    "type": "event",
-                                    "data": event_payload,
-                                }
-                            )
-                        )
-                        continue
 
                     with SessionLocal() as db:
                         vital = Vital(**payload)

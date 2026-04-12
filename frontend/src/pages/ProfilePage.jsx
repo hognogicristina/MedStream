@@ -2,6 +2,7 @@ import {useEffect, useMemo, useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
+import DoctorActivityDialog from "../components/DoctorActivityDialog"
 import {useNotifications} from "../components/NotificationProvider"
 import {useAuth} from "../auth/AuthContext"
 import {api} from "../services/api"
@@ -17,6 +18,28 @@ const buildDoctorProfileForm = (doctor) => ({
   birth_date: doctor?.birth_date || "",
 })
 
+function formatDateTime(value) {
+  if (!value) {
+    return "--"
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value))
+}
+
+function formatActivityType(value) {
+  if (!value) {
+    return "--"
+  }
+
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate()
   const {notifyError, notifySuccess} = useNotifications()
@@ -24,6 +47,7 @@ export default function ProfilePage() {
   const [doctor, setDoctor] = useState(null)
   const [patients, setPatients] = useState([])
   const [assignedPatients, setAssignedPatients] = useState([])
+  const [activities, setActivities] = useState([])
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -42,7 +66,9 @@ export default function ProfilePage() {
   const [patientPendingRemoval, setPatientPendingRemoval] = useState(null)
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [isActivityDialogOpen, setIsActivityDialogOpen] = useState(false)
   const [removePatientAssignmentsOnDelete, setRemovePatientAssignmentsOnDelete] = useState(false)
+  const [isSubmittingActivity, setIsSubmittingActivity] = useState(false)
 
   const authHeaders = useMemo(() => ({
     Authorization: `Bearer ${token}`,
@@ -62,14 +88,16 @@ export default function ProfilePage() {
           headers: authHeaders,
         })
         const currentDoctor = getResponseData(doctorResponse)
-        const [assignedPatientsResponse, patientsResponse] = await Promise.all([
+        const [assignedPatientsResponse, patientsResponse, activitiesResponse] = await Promise.all([
           api.get(`/doctors/${currentDoctor.id}/patients`),
           api.get("/patients?page=1&limit=100"),
+          api.get(`/doctors/${currentDoctor.id}/activities`),
         ])
 
         setDoctor(currentDoctor)
         setAssignedPatients(getResponseData(assignedPatientsResponse))
         setPatients(getResponseData(patientsResponse))
+        setActivities(getResponseData(activitiesResponse) || [])
         setForm(buildDoctorProfileForm(currentDoctor))
         setPhoneNumber(normalizeRomanianPhoneNumber(currentDoctor.phone_number))
         setEmailInput(currentDoctor.pending_email || currentDoctor.email || "")
@@ -77,6 +105,7 @@ export default function ProfilePage() {
         setDoctor(null)
         setAssignedPatients([])
         setPatients([])
+        setActivities([])
         notifyError(getErrorMessage(error))
       } finally {
         setIsLoading(false)
@@ -124,6 +153,26 @@ export default function ProfilePage() {
       || optionLabel === normalizedAssignmentQuery
     )
   })
+
+  const handleActivityCreate = async (payload) => {
+    if (!doctor || isSubmittingActivity) {
+      return
+    }
+
+    setIsSubmittingActivity(true)
+
+    try {
+      const response = await api.post(`/doctors/${doctor.id}/activities`, payload)
+      const nextActivity = getResponseData(response)
+      setActivities((current) => [...current, nextActivity].sort((left, right) => new Date(left.scheduled_at) - new Date(right.scheduled_at)))
+      setIsActivityDialogOpen(false)
+      notifySuccess(getResponseMessage(response))
+    } catch (error) {
+      notifyError(getErrorMessage(error))
+    } finally {
+      setIsSubmittingActivity(false)
+    }
+  }
 
   const handleFormChange = (event) => {
     const {name, value} = event.target
@@ -295,8 +344,87 @@ export default function ProfilePage() {
             </div>
           </section>
         ) : doctor ? (
-          <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <div className="grid gap-6">
+          <section className="grid gap-6">
+            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <section className="monitor-card rounded-[28px] p-6">
+                <div className="mb-6 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patients</p>
+                    <h2 className="mt-2 text-2xl font-semibold text-white">Assigned Patients</h2>
+                  </div>
+                  <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
+                    <CountValue value={assignedPatients.length}/>
+                  </span>
+                </div>
+
+                <ul className="space-y-3">
+                  {assignedPatients.length === 0 && (
+                    <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                      No patients are currently assigned to this doctor.
+                    </li>
+                  )}
+                  {assignedPatients.map((patient) => (
+                    <li key={patient.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+                      <div className="flex flex-col gap-4">
+                        <div>
+                          <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}`}>
+                            {formatPatientFullName(patient)}
+                          </Link>
+                          <p className="mt-2 text-xs uppercase tracking-[0.22em] text-[#879196]">{patient.department}</p>
+                          <p className="mt-2 text-sm text-[#b6bec9]">{patient.cnp}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPatientPendingRemoval(patient)}
+                          disabled={removingPatientId === patient.id}
+                          className="console-button-secondary rounded-2xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                        >
+                          {removingPatientId === patient.id ? "Removing..." : "Remove Patient"}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="monitor-card rounded-[28px] p-6">
+                <div className="mb-6 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Activities</p>
+                    <h2 className="mt-2 text-2xl font-semibold text-white">Upcoming Activities</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsActivityDialogOpen(true)}
+                    className="console-button-secondary rounded-2xl px-4 py-2 text-sm font-semibold"
+                  >
+                    Add Activity
+                  </button>
+                </div>
+
+                <ul className="space-y-3">
+                  {activities.length === 0 && (
+                    <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                      No future activities are scheduled for this doctor.
+                    </li>
+                  )}
+                  {activities.map((activity) => (
+                    <li key={activity.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">
+                        {formatActivityType(activity.type)}
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-white">{activity.title}</p>
+                      {activity.description && (
+                        <p className="mt-2 text-sm text-[#b6bec9]">{activity.description}</p>
+                      )}
+                      <p className="mt-3 text-xs text-[#879196]">{formatDateTime(activity.scheduled_at)}</p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
               <section className="monitor-card rounded-[28px] p-6">
                 <div className="mb-6 flex items-center justify-between gap-4">
                   <div>
@@ -365,49 +493,6 @@ export default function ProfilePage() {
               </section>
 
               <section className="monitor-card rounded-[28px] p-6">
-                <div className="mb-6 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patients</p>
-                    <h2 className="mt-2 text-2xl font-semibold text-white">Assigned Patients</h2>
-                  </div>
-                  <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
-                    <CountValue value={assignedPatients.length}/>
-                  </span>
-                </div>
-
-                <ul className="space-y-3">
-                  {assignedPatients.length === 0 && (
-                    <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                      No patients are currently assigned to this doctor.
-                    </li>
-                  )}
-                  {assignedPatients.map((patient) => (
-                    <li key={patient.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                          <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}`}>
-                            {formatPatientFullName(patient)}
-                          </Link>
-                          <p className="mt-2 text-xs uppercase tracking-[0.22em] text-[#879196]">{patient.department}</p>
-                          <p className="mt-2 text-sm text-[#b6bec9]">{patient.cnp}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setPatientPendingRemoval(patient)}
-                          disabled={removingPatientId === patient.id}
-                          className="console-button-secondary rounded-2xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
-                        >
-                          {removingPatientId === patient.id ? "Removing..." : "Remove Patient"}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            </div>
-
-            <div className="grid gap-6">
-              <section className="monitor-card rounded-[28px] p-6">
                 <div className="mb-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Assignment</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Assign Patient</h2>
@@ -445,6 +530,7 @@ export default function ProfilePage() {
                   </button>
                 </form>
               </section>
+
 
               <section className="monitor-card rounded-[28px] p-6">
                 <div className="mb-6">
@@ -484,7 +570,7 @@ export default function ProfilePage() {
                 </form>
               </section>
 
-              <section className="monitor-card rounded-[28px] p-6">
+               <section className="monitor-card rounded-[28px] p-6">
                 <div className="mb-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Account</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Account Status</h2>
@@ -493,8 +579,7 @@ export default function ProfilePage() {
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
                     <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Current State</p>
-                    <p
-                      className="mt-2 text-lg font-semibold text-white">{doctor.is_active ? "Active doctor account" : "Inactive doctor account"}</p>
+                    <p className="mt-2 text-lg font-semibold text-white">{doctor.is_active ? "Active doctor account" : "Inactive doctor account"}</p>
                     <p className="mt-2 text-sm text-[#b6bec9]">
                       {doctor.deleted_at ? `Deactivated at ${new Date(doctor.deleted_at).toLocaleString()}` : "Account is available for normal login and patient management."}
                     </p>
@@ -645,6 +730,13 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+
+        <DoctorActivityDialog
+          isOpen={isActivityDialogOpen}
+          isSubmitting={isSubmittingActivity}
+          onClose={() => setIsActivityDialogOpen(false)}
+          onSubmit={handleActivityCreate}
+        />
       </div>
     </div>
   )

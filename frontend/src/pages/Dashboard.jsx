@@ -4,7 +4,6 @@ import CountValue from "../components/CountValue"
 import {useNotifications} from "../components/NotificationProvider"
 import {api} from "../services/api"
 import {getErrorMessage, getResponseData} from "../services/apiMessages"
-import {pushStoredEvent, readStoredEvents, subscribeToStoredEvents} from "../services/eventsFeed"
 import {createWebSocket} from "../services/ws"
 import VitalsChart from "../components/VitalsChart"
 import {DEPARTMENTS, departmentHref} from "../constants/departments"
@@ -15,8 +14,6 @@ export default function Dashboard() {
   const [vitals, setVitals] = useState([])
   const [visibleAlerts, setVisibleAlerts] = useState([])
   const [alertCount, setAlertCount] = useState(0)
-  const [events, setEvents] = useState(() => readStoredEvents())
-  const [visibleEvents, setVisibleEvents] = useState(() => readStoredEvents().slice(0, 2))
   const [stats, setStats] = useState([])
   const [batchStatus, setBatchStatus] = useState(null)
   const [patients, setPatients] = useState([])
@@ -24,7 +21,6 @@ export default function Dashboard() {
   const [newAlertIds, setNewAlertIds] = useState([])
   const alertAudioRef = useRef(null)
   const alertBufferRef = useRef([])
-  const eventBufferRef = useRef(readStoredEvents())
   const alertHighlightTimeoutsRef = useRef([])
 
   const [chartData, setChartData] = useState([])
@@ -53,13 +49,6 @@ export default function Dashboard() {
   useEffect(() => {
     loadDashboardData()
   }, [loadDashboardData])
-
-  useEffect(() => {
-    return subscribeToStoredEvents((nextEvents) => {
-      setEvents(nextEvents)
-      eventBufferRef.current = nextEvents
-    })
-  }, [])
 
   useEffect(() => {
     const intervalId = window.setInterval(async () => {
@@ -111,15 +100,10 @@ export default function Dashboard() {
         })
       }
 
-      if (msg.type === "event") {
-        const nextEvents = pushStoredEvent(msg.data)
-        eventBufferRef.current = nextEvents
-      }
     })
 
     const intervalId = window.setInterval(() => {
-      const nextVisibleAlerts = alertBufferRef.current.slice(0, 3)
-      const nextVisibleEvents = eventBufferRef.current.slice(0, 2)
+      const nextVisibleAlerts = alertBufferRef.current.slice(0, 6)
 
       setVisibleAlerts((prev) => {
         const nextIds = new Set(nextVisibleAlerts.map((alert) => alert.id))
@@ -142,8 +126,6 @@ export default function Dashboard() {
 
         return nextVisibleAlerts.filter((alert) => nextIds.has(alert.id))
       })
-
-      setVisibleEvents(nextVisibleEvents)
     }, 2500)
 
     return () => {
@@ -155,8 +137,7 @@ export default function Dashboard() {
   }, [])
 
   const latestVital = vitals[0]
-  const previewAlerts = visibleAlerts.slice(0, 3)
-  const previewEvents = visibleEvents.slice(0, 2)
+  const previewAlerts = visibleAlerts.slice(0, 6)
   const recentVitals = vitals.slice(0, 5)
   const latestBatchRun = stats.reduce((latest, stat) => {
     if (!stat.computed_at) {
@@ -232,20 +213,16 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="monitor-panel rounded-2xl p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:min-w-[36rem]">
+              <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Patients</p>
                 <p className="mt-3 text-3xl font-semibold text-white"><CountValue value={patients.length}/></p>
               </div>
-              <div className="monitor-panel rounded-2xl p-4">
+              <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Alerts</p>
                 <p className="mt-3 text-3xl font-semibold text-[#ffb3bc]"><CountValue value={alertCount}/></p>
               </div>
-              <div className="monitor-panel rounded-2xl p-4">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Events</p>
-                <p className="mt-3 text-3xl font-semibold text-[#9dccff]"><CountValue value={events.length}/></p>
-              </div>
-              <div className="monitor-panel rounded-2xl p-4 sm:col-span-2 lg:col-span-1">
+              <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Latest HR</p>
                 <p className="mt-3 text-3xl font-semibold text-[#ffb84d]">{latestVital ? latestVital.heart_rate : "--"}</p>
               </div>
@@ -370,7 +347,7 @@ export default function Dashboard() {
                   </li>
                 ))}
               </ul>
-              {alertCount > 3 && (
+              {alertCount > 6 && (
                 <div className="mt-4">
                   <Link
                     className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
@@ -381,50 +358,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className="monitor-card rounded-[28px] p-6">
-              <div className="mb-5 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Events</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Hospital Events</h2>
-                </div>
-              </div>
-              <ul className="space-y-3">
-                {events.length === 0 && (
-                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                    Waiting for hospital events such as admissions, transfers, and treatment updates.
-                  </li>
-                )}
-                {previewEvents.map((event) => (
-                  <li key={event.id} className="rounded-2xl border border-[#3b424b] bg-[#1b2430] px-4 py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p
-                          className="text-xs uppercase tracking-[0.25em] text-[#9dccff]">{new Date(event.timestamp).toLocaleTimeString()}</p>
-                        <p className="mt-2 text-sm font-medium text-white">
-                          {event.patient_id && patientNameById[event.patient_id] ? `${patientNameById[event.patient_id]} | ` : ""}{event.message || event.event_type || "Hospital event"}
-                        </p>
-                        {event.event_type && (
-                          <p
-                            className="mt-2 text-xs uppercase tracking-[0.22em] text-[#879196]">{event.event_type.replaceAll("_", " ")}</p>
-                        )}
-                      </div>
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                        {new Date(event.timestamp).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              {events.length > 2 && (
-                <div className="mt-4">
-                  <Link
-                    className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
-                    to="/events">
-                    Show more
-                  </Link>
-                </div>
-              )}
-            </div>
           </div>
         </section>
 

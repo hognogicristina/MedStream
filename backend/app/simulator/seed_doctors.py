@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import date, datetime, timedelta
 import random
 
 from sqlalchemy import delete
 
 from app.api.doctors import pwd_context
 from app.db.session import SessionLocal
+from app.models.doctor_activity import DoctorActivity
 from app.models.doctor import Doctor
 from app.models.doctor_password_reset import DoctorPasswordReset
 from app.models.doctor_patient import doctor_patients
@@ -29,6 +30,7 @@ SPECIALIZATIONS = [
     "Psychiatry",
     "Radiology",
 ]
+ACTIVITY_TYPES = ["surgery", "appointment", "intervention"]
 def generate_name(rng):
     Faker.seed(rng.randint(1, 999999))
 
@@ -63,25 +65,42 @@ def run():
     generated_doctors = [generate_doctor_payload(index) for index in range(1, DOCTOR_COUNT + 1)]
 
     with SessionLocal() as db:
+        db.execute(delete(DoctorActivity))
         db.execute(delete(doctor_patients))
         db.execute(delete(DoctorPasswordReset))
         db.execute(delete(Doctor))
 
         for payload in generated_doctors:
-            db.add(
-                Doctor(
-                    first_name=payload["first_name"],
-                    last_name=payload["last_name"],
-                    email=payload["email"],
-                    pending_email=None,
-                    email_confirmed=True,
-                    phone_number=payload["phone_number"],
-                    birth_date=payload["birth_date"],
-                    password_hash=pwd_context.hash(PASSWORD),
-                    specialization=payload["specialization"],
-                    license_number=payload["license_number"],
-                )
+            doctor = Doctor(
+                first_name=payload["first_name"],
+                last_name=payload["last_name"],
+                email=payload["email"],
+                pending_email=None,
+                email_confirmed=True,
+                phone_number=payload["phone_number"],
+                birth_date=payload["birth_date"],
+                password_hash=pwd_context.hash(PASSWORD),
+                specialization=payload["specialization"],
+                license_number=payload["license_number"],
             )
+            db.add(doctor)
+            db.flush()
+
+            rng = build_rng(f"doctor-activity:{doctor.id}")
+            activity_count = rng.randint(1, 3)
+
+            for activity_index in range(activity_count):
+                activity_type = ACTIVITY_TYPES[(doctor.id + activity_index) % len(ACTIVITY_TYPES)]
+                scheduled_at = datetime.utcnow().replace(microsecond=0) + timedelta(days=rng.randint(1, 20), hours=rng.randint(7, 16))
+                db.add(
+                    DoctorActivity(
+                        doctor_id=doctor.id,
+                        type=activity_type,
+                        title=f"{activity_type.title()} for {doctor.specialization}",
+                        description=f"Scheduled {activity_type} session led by Dr. {doctor.last_name}.",
+                        scheduled_at=scheduled_at,
+                    )
+                )
 
         db.commit()
 

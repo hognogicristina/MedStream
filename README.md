@@ -1,105 +1,227 @@
 # MedStream
 
-MedStream is a real-time hospital monitoring system with a FastAPI backend, PostgreSQL, Kafka event streaming, and a React frontend. It supports live vitals streaming, alerting, department-based dashboards, patient detail monitoring, medication administration events, and a story-driven ambulance scenario for demo use.
+MedStream is a hospital monitoring application for managing patients, tracking live vitals, reviewing alerts, and documenting admission-related clinical activity.
 
-## Stack
+## Overview
 
-- Backend: FastAPI, SQLAlchemy, PostgreSQL
-- Streaming: Kafka, WebSocket
-- Frontend: React, Vite, React Router, Recharts
-- Auth: basic doctor login with bcrypt password hashing
+MedStream combines patient administration, clinical monitoring, and medical record tracking in a single web application. It supports real-time vital sign updates, automatic alert generation, patient admission and discharge workflows, and structured patient documentation such as allergies, diagnosis entries, and medical history.
 
-## Features
+The system includes a FastAPI backend, a PostgreSQL database, a React frontend, and a live monitoring pipeline that streams vitals into the application and updates the interface through WebSocket connections.
 
-- Home page, login page, dashboard, and patient detail page
-- Real-time vitals stream over Kafka and WebSocket
-- Alert generation for abnormal vitals
-- Department grouping for ER, ICU, and Ward
-- Patient replay timeline
-- Hospital events feed
-- Medication administration and live medication events
-- Doctor login with seeded demo accounts
-- Story-based ambulance scenario simulator
+## Purpose of the Application
 
-## Project Structure
+Hospitals and clinical teams need a consolidated view of patient status that is both operational and medically useful. MedStream addresses this need by:
 
-```text
-MedStream/
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── batch/
-│   │   ├── core/
-│   │   ├── db/
-│   │   ├── kafka/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── simulator/
-│   │   └── websocket/
-│   └── requirements.txt
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   └── package.json
-└── docker-compose.yml
-```
+- centralizing patient identity and admission data
+- exposing live vital-sign monitoring in the interface
+- generating alerts when abnormal thresholds are crossed
+- preserving structured medical records for allergies, diagnosis, and history
+- supporting discharge and readmission workflows with an admission history timeline
 
-## Prerequisites
+From a clinical perspective, the application is designed to reduce fragmentation between patient management, live monitoring, and historical review.
 
-- Python 3.11+ recommended
-- Node.js 20+ recommended
-- npm
-- Docker and Docker Compose
+## Key Features
 
-## Environment Setup
+### Patient Management
 
-Create a `.env` file in the project root if you run backend services from the root, or in `backend/` if you run the backend from there.
+- Create patients with structured demographic and identity data
+- Edit patient information after creation
+- Track core patient fields such as:
+  - CNP
+  - phone number
+  - birth date
+  - gender
+  - department
+  - arrival method
+  - full address
+- Transfer patients between departments
+- Discharge patients
+- Readmit discharged patients
 
-Example:
+### Monitoring
 
-```env
-POSTGRES_DB=medstream
-POSTGRES_USER=medstream
-POSTGRES_PASSWORD=medstream
-DATABASE_URL=postgresql://medstream:medstream@localhost:5432/medstream
-```
+- Live vitals tracking for:
+  - heart rate
+  - oxygen saturation
+  - temperature
+  - blood pressure
+- Automatic alert generation when configured thresholds are exceeded
+- Real-time dashboard updates through WebSocket messages
+- Patient-specific live monitoring on the patient page
 
-The backend also uses these defaults if not overridden:
+### Medical Data
 
-```env
-KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-KAFKA_VITALS_TOPIC=vitals-events
-KAFKA_EVENTS_TOPIC=hospital-events
-```
+- Patient medical history entries
+- Patient diagnosis timeline
+- Patient allergies
+- Medication administration records
 
-## Install
+### Admission System
 
-### Quick start
+- Discharge workflow with reason tracking
+- Readmission workflow with required reason
+- Dedicated admission history timeline
+- Separate admission-history page for each patient
 
-From the project root:
+### Analytics
+
+- Department-oriented dashboard overview
+- Aggregated patient statistics from batch processing
+- Batch status visibility
+- Calculated metrics such as average heart rate, average temperature, total alerts, and anomaly rate
+
+## Architecture
+
+### Backend
+
+The backend is built with FastAPI and SQLAlchemy. It is responsible for:
+
+- exposing REST endpoints for doctors, patients, alerts, vitals, and analytics
+- validating incoming payloads with Pydantic schemas
+- persisting application data in PostgreSQL
+- broadcasting live updates through WebSocket connections
+- running background threads for simulation, consumption, and batch analytics
+
+### Frontend
+
+The frontend is built with React, Vite, React Router, and Tailwind CSS. It provides:
+
+- authenticated application routing
+- dashboard and patient workflows
+- doctor account management
+- responsive monitoring views
+- notification feedback for backend-driven operations
+
+### Data Flow
+
+The main application flow is:
+
+1. Data is created or updated through frontend forms or backend simulators.
+2. The FastAPI backend validates and stores the data in PostgreSQL.
+3. Real-time monitoring updates are broadcast through WebSocket.
+4. The React frontend listens for live vital and alert messages and updates the UI.
+5. Batch jobs compute aggregated statistics used by the dashboard analytics views.
+
+## Streaming vs Batch Processing
+
+MedStream uses two different processing styles because not all hospital data has the same urgency.
+
+### Streaming
+
+Streaming is used for information that must appear immediately:
+
+- live vitals are produced continuously
+- the backend consumes those vital messages
+- alerts are generated as soon as abnormal values are detected
+- vitals and alerts are pushed to the frontend through WebSocket
+
+In simple terms, streaming handles what is happening right now.
+
+### Batch Processing
+
+Batch processing is used for data that is summarized over time:
+
+- aggregated statistics are computed in the background
+- department-level metrics are updated periodically
+- dashboard analytics are based on stored and processed values rather than a single live sample
+
+In simple terms, batch processing handles trends and summaries rather than immediate bedside changes.
+
+## Database Design
+
+The application is centered around the `patients` table and several related clinical tables.
+
+### Core Tables
+
+- `patients`
+  - stores patient identity, demographics, admission status, department, arrival method, and address
+- `patient_allergies`
+  - stores allergy name, severity, patient reference, and creation time
+- `patient_medical_history`
+  - stores structured history entries such as illnesses, chronic conditions, surgeries, and injuries
+- `patient_diagnosis`
+  - stores diagnosis records and notes for each patient
+- `patient_admission_history`
+  - stores discharge and readmission actions with reason and timestamp
+
+### Related Monitoring Tables
+
+- `vitals`
+  - stores recorded vital sign values
+- `alerts`
+  - stores alerts created from abnormal vital values
+- `medication_administrations`
+  - stores administered medications and dosage
+- `patient_stats`
+  - stores computed analytics snapshots
+
+### Relationships
+
+- One patient can have many allergy entries.
+- One patient can have many medical-history entries.
+- One patient can have many diagnosis entries.
+- One patient can have many admission-history entries.
+- One patient can have many vital records, alerts, and medication administrations.
+
+## Validation & Error Handling
+
+Validation is primarily backend-driven.
+
+- FastAPI and Pydantic validate request payloads
+- backend schemas normalize and validate fields such as phone numbers, departments, and required text
+- API responses return structured success and error messages
+- the frontend mostly handles presentation and form UX
+- user-facing notifications are driven by backend response messages
+
+This means validation rules are enforced consistently at the API level rather than duplicated across the client.
+
+## Installation
+
+### Backend
+
+1. Create a Python virtual environment:
 
 ```bash
-./start-dev.sh
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-This starts Docker services, the FastAPI backend, and the Vite frontend from one place.
+2. Install backend dependencies:
 
-Expected local URLs:
+```bash
+pip install -r backend/requirements.txt
+```
 
-- Frontend: `http://localhost:5173`
-- Backend: `http://localhost:8000`
-- Kafka UI: `http://localhost:8080`
-- pgAdmin: `http://localhost:5050`
+3. Start the backend:
 
-Prerequisites for the one-command flow:
+```bash
+uvicorn backend.app.main:app --reload
+```
 
-- Docker and Docker Compose running
-- frontend dependencies already installed with `npm install --prefix frontend`
-- backend dependencies already installed, either in `.venv` or in your active Python environment
+The backend runs on `http://localhost:8000`.
 
-### 1. Start infrastructure
+### Frontend
 
-From the project root:
+1. Install frontend dependencies:
+
+```bash
+cd frontend
+npm install
+```
+
+2. Start the development server:
+
+```bash
+npm run dev
+```
+
+The frontend runs on `http://localhost:5173`.
+
+### Docker
+
+The project includes Docker Compose for infrastructure services.
+
+Start containers from the project root:
 
 ```bash
 docker compose up -d
@@ -107,295 +229,96 @@ docker compose up -d
 
 This starts:
 
-- PostgreSQL on `localhost:5432`
-- pgAdmin on `http://localhost:5050`
-- Zookeeper on `localhost:2181`
-- Kafka on `localhost:9092`
-- Kafka UI on `http://localhost:8080`
+- PostgreSQL
+- pgAdmin
+- Zookeeper
+- Kafka
+- Kafka UI
 
-## Backend Setup
-
-### 1. Create a virtual environment
-
-From the project root:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 2. Install Python dependencies
-
-```bash
-pip install -r backend/requirements.txt
-```
-
-### 3. Run the backend
-
-From the project root:
-
-```bash
-uvicorn backend.app.main:app --reload
-```
-
-Backend runs at:
-
-- API: `http://localhost:8000`
-- Swagger docs: `http://localhost:8000/docs`
-
-## Frontend Setup
-
-### 1. Install dependencies
-
-```bash
-cd frontend
-npm install
-```
-
-### 2. Run the frontend
-
-```bash
-npm run dev
-```
-
-Frontend runs at:
-
-- App: `http://localhost:5173`
-
-### 3. Optional production build
-
-```bash
-npm run build
-npm run preview
-```
-
-## First Run
-
-Recommended order:
-
-1. Start Docker services
-2. Start backend with `uvicorn`
-3. Seed patients
-4. Seed doctors
-5. Start frontend
-
-If you want one local development entrypoint after dependencies are installed, use:
+An optional convenience script is also included:
 
 ```bash
 ./start-dev.sh
 ```
 
+This script starts the local development stack from one entry point when dependencies are already installed.
+
+## Configuration
+
+The backend reads configuration from environment variables through a `.env` file.
+
+Typical values include:
+
+```env
+DATABASE_URL=postgresql://medstream:medstream@localhost:5432/medstream
+POSTGRES_DB=medstream
+POSTGRES_USER=medstream
+POSTGRES_PASSWORD=medstream
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+KAFKA_VITALS_TOPIC=vitals-events
+```
+
+Default ports used in local development:
+
+- Frontend: `5173`
+- Backend: `8000`
+- PostgreSQL: `5432`
+- pgAdmin: `5050`
+- Kafka UI: `8080`
+
 ## Seed Data
 
-### Seed patients
+The project contains seed scripts that generate realistic demo data for development and presentation.
 
-From the project root:
+- patient data is generated with varied departments and demographics
+- medical-like values are generated for vitals
+- allergies, diagnosis history, medical history, and admission history are generated automatically
+- doctor seed data is also available
+
+Useful commands:
 
 ```bash
 python3 -m backend.app.simulator.seed
-```
-
-This creates realistic demo patients across `ER`, `ICU`, `Cardiology`, `Internal Medicine`, `Neurology`, and `Ward`.
-
-### Seed doctors
-
-From the project root:
-
-```bash
 python3 -m backend.app.simulator.seed_doctors
-```
-
-This creates the demo doctor roster and updates existing matching records if you run it again.
-
-### Seed all demo data
-
-From the project root:
-
-```bash
 python3 -m backend.app.simulator.seed_all
 ```
 
-This initializes the schema if needed, then runs the doctor and patient seeders in sequence. It is safe to rerun for local demo setup because doctors are matched by email and patients are matched by CNP.
-
-Example login:
+Example demo credentials after seeding doctors:
 
 - Email: `elena.popescu@medstream.local`
 - Password: `password123`
 
-## Running the Demo Flow
+## Usage
 
-### Standard live simulator
+### Create a Patient
 
-The backend starts the general vitals simulator automatically through background threads when the API starts.
+1. Open the application and navigate to the patient creation page.
+2. Enter identity, demographic, arrival, and address information.
+3. Submit the form to create a new patient record.
 
-### Story-based ambulance scenario
+### Monitor a Patient
 
-Run this in a separate terminal from the project root:
+1. Open the dashboard to review live metrics and alerts.
+2. Open a patient page to review patient-specific vitals and alert activity.
+3. Continue monitoring as live WebSocket updates arrive.
 
-```bash
-python3 -m backend.app.simulator.scenario_simulator
-```
+### Discharge or Readmit a Patient
 
-This simulates:
+1. Open the patient page or the admission history page.
+2. If the patient is admitted, use the discharge widget and provide a reason.
+3. If the patient is discharged, use the readmit widget and provide a reason.
+4. Review the admission history timeline for the recorded action.
 
-1. ambulance arrival with chest pain
-2. ER intake
-3. critical vitals
-4. treatment started
-5. ICU transfer if needed
-6. stabilization
-7. recovery
+### Add Diagnosis or Medical History
 
-The frontend dashboard will show both changing vitals and hospital event messages during the scenario.
+1. Open the patient page to add medical history and allergies.
+2. Open the diagnosis page to add diagnosis entries.
+3. Review the paginated lists to browse older entries.
 
-## Frontend Navigation
+## Future Improvements
 
-- `/` home page
-- `/login` doctor login
-- `/dashboard` monitoring dashboard
-- `/patient/:id` patient detail page
-
-## Alert Audio
-
-The frontend expects an alert sound file at:
-
-```text
-frontend/public/alert.mp3
-```
-
-Place your audio file there if you want alert playback.
-
-## Main API Endpoints
-
-### Authentication
-
-- `POST /login`
-- `POST /doctors/login`
-
-Request body:
-
-```json
-{
-  "email": "elena.popescu@medstream.local",
-  "password": "password123"
-}
-```
-
-Response:
-
-```json
-{
-  "token": "doctor-1-..."
-}
-```
-
-### Doctors
-
-- `GET /doctors`
-- `POST /doctors`
-
-### Patients
-
-- `GET /patients?page=1&limit=10`
-- `POST /patients`
-- `PATCH /patients/{id}/department`
-- `POST /patients/{id}/medication`
-
-Example department update:
-
-```json
-{
-  "department": "ICU"
-}
-```
-
-Example medication administration:
-
-```json
-{
-  "medication_name": "Nitroglycerin",
-  "dosage": "0.4 mg"
-}
-```
-
-### Monitoring
-
-- `GET /vitals`
-- `GET /alerts`
-- `GET /stats`
-- `GET /health`
-- WebSocket: `ws://localhost:8000/ws`
-
-## How the System Works
-
-### Vitals flow
-
-1. Simulator sends vitals into Kafka
-2. Kafka consumer reads vitals
-3. Backend stores vitals in PostgreSQL
-4. Backend generates alerts when thresholds are crossed
-5. Backend broadcasts vitals and alerts through WebSocket
-6. Frontend updates dashboard and patient views live
-
-### Event flow
-
-1. Scenario simulator or medication endpoint creates an event
-2. Event is sent through Kafka or directly broadcast from the backend endpoint
-3. WebSocket clients receive `type: "event"`
-4. Frontend updates the event feed
-
-## Useful Commands
-
-### Stop infrastructure
-
-```bash
-docker compose down
-```
-
-### Stop and remove volumes
-
-```bash
-docker compose down -v
-```
-
-### Rebuild frontend
-
-```bash
-cd frontend
-npm run build
-```
-
-### Verify backend imports
-
-```bash
-python3 -m compileall backend/app
-```
-
-## Troubleshooting
-
-### Login fails
-
-- Make sure doctors are seeded
-- Verify backend is running on port `8000`
-- Try the example seeded credential above
-
-### No live data on dashboard
-
-- Make sure Kafka and Zookeeper are running
-- Make sure backend is running
-- Make sure patients are seeded
-- Check `http://localhost:8080` for Kafka topic activity
-
-### Schema mismatch after model changes
-
-This project uses `create_all`, not migrations. If you already have an older local database schema, new columns or tables may not appear automatically in an existing database. In that case, reset the database volume or recreate the schema.
-
-### Frontend alert sound not playing
-
-- Make sure `frontend/public/alert.mp3` exists
-- Browser autoplay policies may require a user interaction first
-
-## Demo Credential
-
-- Email: `elena.popescu@medstream.local`
-- Password: `password123`
+- richer risk scoring based on multi-signal patient conditions
+- more advanced anomaly detection beyond static thresholds
+- deeper analytics and trend exploration per department and patient
+- role expansion beyond doctor-focused access
+- production-ready migrations instead of schema evolution through startup initialization

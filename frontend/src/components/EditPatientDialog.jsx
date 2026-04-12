@@ -16,6 +16,7 @@ function buildPatientEditForm(patient) {
     gender: patient?.gender || "",
     birth_date: patient?.birth_date || "",
     cnp: patient?.cnp || "",
+    arrival_method: patient?.arrival_method || "self",
   }
 }
 
@@ -57,6 +58,7 @@ export default function EditPatientDialog({
     gender: form.gender.trim(),
     birth_date: form.birth_date,
     cnp: form.cnp.trim(),
+    arrival_method: form.arrival_method,
     phone_number: normalizedPhoneNumber,
     address: normalizePatientAddress(address),
   }
@@ -66,6 +68,7 @@ export default function EditPatientDialog({
     gender: (patient.gender || "").trim(),
     birth_date: patient.birth_date || "",
     cnp: (patient.cnp || "").trim(),
+    arrival_method: patient.arrival_method || "self",
     phone_number: normalizeRomanianPhoneNumber(patient.phone_number),
     address: normalizePatientAddress(patient.address),
   }
@@ -79,6 +82,7 @@ export default function EditPatientDialog({
     && normalizedCurrentValues.gender
     && normalizedCurrentValues.birth_date
     && normalizedCurrentValues.cnp
+    && normalizedCurrentValues.arrival_method
     && normalizedCurrentValues.phone_number,
   )
   const isStepTwoValid = Boolean(

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -119,6 +119,7 @@ class PatientBase(BaseModel):
     phone_number: str
     birth_date: date
     gender: str
+    arrival_method: str = "self"
     address: PatientAddressCreate
 
     @field_validator("first_name", "last_name", "gender", mode="before")
@@ -141,6 +142,14 @@ class PatientBase(BaseModel):
     def format_phone_number(cls, value):
         return normalize_phone_number(value)
 
+    @field_validator("arrival_method", mode="before")
+    @classmethod
+    def validate_arrival_method(cls, value):
+        normalized_value = require_non_empty(value or "self", "Arrival method").lower()
+        if normalized_value not in {"ambulance", "self"}:
+            raise ValueError("Arrival method must be ambulance or self.")
+        return normalized_value
+
 
 class PatientCreate(PatientBase):
     pass
@@ -154,6 +163,7 @@ class PatientUpdate(BaseModel):
     phone_number: str | None = None
     birth_date: date | None = None
     gender: str | None = None
+    arrival_method: str | None = None
     address: PatientAddressUpdate | None = None
 
     @field_validator("first_name", "last_name", "gender", mode="before")
@@ -182,11 +192,24 @@ class PatientUpdate(BaseModel):
     def format_phone_number(cls, value):
         return normalize_phone_number(value)
 
+    @field_validator("arrival_method", mode="before")
+    @classmethod
+    def validate_optional_arrival_method(cls, value):
+        if value is None:
+            return value
+        normalized_value = require_non_empty(value, "Arrival method").lower()
+        if normalized_value not in {"ambulance", "self"}:
+            raise ValueError("Arrival method must be ambulance or self.")
+        return normalized_value
+
 
 class PatientRead(PatientBase):
     id: int
     phone_number: str | None = None
     address: PatientAddressRead | None = None
+    is_discharged: bool = False
+    discharge_reason: str | None = None
+    discharge_date: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -199,6 +222,15 @@ class PatientDepartmentUpdate(BaseModel):
     @classmethod
     def validate_department_name(cls, value):
         return validate_department(value)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def validate_reason(cls, value):
+        return require_non_empty(value, "Reason")
+
+
+class PatientDischargeUpdate(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
 
     @field_validator("reason", mode="before")
     @classmethod

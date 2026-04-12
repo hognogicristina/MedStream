@@ -1,4 +1,6 @@
-from sqlalchemy import Date, Integer, String
+from datetime import datetime
+
+from sqlalchemy import Boolean, Date, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -16,6 +18,10 @@ class Patient(Base):
     phone_number: Mapped[str | None] = mapped_column(String(50), unique=True, nullable=True)
     birth_date: Mapped[Date] = mapped_column(Date)
     gender: Mapped[str] = mapped_column(String(20))
+    arrival_method: Mapped[str] = mapped_column(String(20), default="self")
+    is_discharged: Mapped[bool] = mapped_column(Boolean, default=False)
+    discharge_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    discharge_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     address_street: Mapped[str | None] = mapped_column(String(120), nullable=True)
     address_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
     address_apartment: Mapped[str | None] = mapped_column(String(30), nullable=True)
