@@ -137,8 +137,6 @@ The application is centered around the `patients` table and several related clin
   - stores patient identity, demographics, admission status, department, arrival method, and address
 - `patient_allergies`
   - stores allergy name, severity, patient reference, and creation time
-- `patient_medical_history`
-  - stores structured history entries such as illnesses, chronic conditions, surgeries, and injuries
 - `patient_diagnosis`
   - stores diagnosis records and notes for each patient
 - `patient_admission_history`

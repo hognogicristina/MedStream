@@ -5,10 +5,12 @@ from sqlalchemy import delete
 
 from app.api.doctors import pwd_context
 from app.db.session import SessionLocal
-from app.models.doctor_activity import DoctorActivity
-from app.models.doctor import Doctor
-from app.models.doctor_password_reset import DoctorPasswordReset
-from app.models.doctor_patient import doctor_patients
+from app.models.doctor.doctor_activity import DoctorActivity
+from app.models.doctor.doctor import Doctor
+from app.models.doctor.doctor_password_reset import DoctorPasswordReset
+from app.models.doctor.doctor_patient import doctor_patients
+from app.models.patient.patient import Patient
+from app.models.patient.patient_activity_patients import patient_activity_patients
 from faker import Faker
 
 def get_fake(rng):
@@ -32,13 +34,8 @@ SPECIALIZATIONS = [
 ]
 ACTIVITY_TYPES = ["surgery", "appointment", "intervention"]
 def generate_name(rng):
-    Faker.seed(rng.randint(1, 999999))
-
-    first_name = fake.first_name()
-    last_name = fake.last_name()
-
-    return first_name, last_name
-
+    fake = get_fake(rng)
+    return fake.first_name(), fake.last_name()
 
 def build_rng(seed_suffix: str):
     return random.Random(f"{SEED}:{seed_suffix}")
@@ -89,18 +86,36 @@ def run():
             rng = build_rng(f"doctor-activity:{doctor.id}")
             activity_count = rng.randint(1, 3)
 
+            patients = db.query(Patient).all()
+
             for activity_index in range(activity_count):
                 activity_type = ACTIVITY_TYPES[(doctor.id + activity_index) % len(ACTIVITY_TYPES)]
-                scheduled_at = datetime.utcnow().replace(microsecond=0) + timedelta(days=rng.randint(1, 20), hours=rng.randint(7, 16))
-                db.add(
-                    DoctorActivity(
-                        doctor_id=doctor.id,
-                        type=activity_type,
-                        title=f"{activity_type.title()} for {doctor.specialization}",
-                        description=f"Scheduled {activity_type} session led by Dr. {doctor.last_name}.",
-                        scheduled_at=scheduled_at,
-                    )
+                scheduled_at = datetime.utcnow().replace(microsecond=0) + timedelta(
+                    days=rng.randint(1, 20),
+                    hours=rng.randint(7, 16),
                 )
+
+                activity = DoctorActivity(
+                    doctor_id=doctor.id,
+                    type=activity_type,
+                    title=f"{activity_type.title()} for {doctor.specialization}",
+                    description=f"Scheduled {activity_type} session led by Dr. {doctor.last_name}.",
+                    scheduled_at=scheduled_at,
+                    status=rng.choice(["incoming", "completed", "canceled"]),
+                )
+
+                db.add(activity)
+                db.flush()
+
+                assigned_patients = rng.sample(patients, k=min(len(patients), rng.randint(1, 5)))
+
+                for patient in assigned_patients:
+                    db.execute(
+                        patient_activity_patients.insert().values(
+                            activity_id=activity.id,
+                            patient_id=patient.id
+                        )
+                    )
 
         db.commit()
 

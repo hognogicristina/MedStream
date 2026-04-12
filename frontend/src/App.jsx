@@ -12,6 +12,7 @@ import LoginPage from "./pages/LoginPage"
 import PatientPage from "./pages/PatientPage"
 import PatientDiagnosisPage from "./pages/PatientDiagnosisPage"
 import PatientAdmissionHistoryPage from "./pages/PatientAdmissionHistoryPage"
+import PatientMedicalHistoryPage from "./pages/PatientMedicalHistoryPage"
 import ProfilePage from "./pages/ProfilePage"
 import RecoverAccountPage from "./pages/RecoverAccountPage"
 import RegisterPage from "./pages/RegisterPage"
@@ -22,6 +23,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomePage/>}/>
+
         <Route
           path="/login"
           element={
@@ -30,6 +32,7 @@ function App() {
             </PublicOnlyRoute>
           }
         />
+
         <Route
           path="/register"
           element={
@@ -38,6 +41,7 @@ function App() {
             </PublicOnlyRoute>
           }
         />
+
         <Route
           path="/forgot-password"
           element={
@@ -46,6 +50,7 @@ function App() {
             </PublicOnlyRoute>
           }
         />
+
         <Route
           path="/reset-password"
           element={
@@ -54,6 +59,7 @@ function App() {
             </PublicOnlyRoute>
           }
         />
+
         <Route
           path="/recover-account"
           element={
@@ -62,6 +68,7 @@ function App() {
             </PublicOnlyRoute>
           }
         />
+
         <Route
           element={
             <ProtectedRoute>
@@ -73,6 +80,7 @@ function App() {
           <Route path="/departments/:name" element={<DepartmentPage/>}/>
           <Route path="/patient/:id" element={<PatientPage/>}/>
           <Route path="/patients/:id/diagnosis" element={<PatientDiagnosisPage/>}/>
+          <Route path="/patients/:id/medical-history" element={<PatientMedicalHistoryPage/>}/>
           <Route path="/patients/:id/admission-history" element={<PatientAdmissionHistoryPage/>}/>
           <Route path="/alerts" element={<AlertsPage/>}/>
           <Route path="/patients/new" element={<AddPatientPage/>}/>

@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, Date, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.doctor_patient import doctor_patients
+from app.models.doctor.doctor_patient import doctor_patients
 
 
 class Doctor(Base):

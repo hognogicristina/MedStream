@@ -4,7 +4,7 @@ from sqlalchemy import select
 from app.batch.status import batch_status_store
 from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
-from app.models.patient_stats import PatientStats
+from app.models.patient.patient_stats import PatientStats
 from app.schemas.stats import BatchJobStatusRead, PatientStatsRead
 
 router = APIRouter(prefix="/stats", tags=["stats"])

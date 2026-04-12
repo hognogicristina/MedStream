@@ -10,9 +10,9 @@ from sqlalchemy.orm import selectinload
 
 from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
-from app.models.doctor_activity import DoctorActivity
-from app.models.doctor import Doctor
-from app.models.doctor_password_reset import DoctorPasswordReset
+from app.models.doctor.doctor_activity import DoctorActivity
+from app.models.doctor.doctor import Doctor
+from app.models.doctor.doctor_password_reset import DoctorPasswordReset
 from app.models.patient import Patient
 from app.schemas.doctor import (
     AccountRecoveryRequestResponse,
@@ -28,7 +28,7 @@ from app.schemas.doctor import (
     PasswordResetRequest,
     PasswordResetRequestResponse,
 )
-from app.schemas.doctor_activity import DoctorActivityCreate, DoctorActivityRead
+from app.schemas.doctor_activity import DoctorActivityCreate, DoctorActivityRead, DoctorActivityUpdate
 from app.schemas.patient import PatientRead
 from app.schemas.validators import normalize_phone_lookup
 from app.services.notifications import (
@@ -127,7 +127,8 @@ def create_doctor_reset_token(db, doctor: Doctor):
     return raw_token, reset
 
 
-def ensure_doctor_uniqueness(db, *, email: str | None = None, phone_number: str | None = None, license_number: str | None = None, doctor_id: int | None = None):
+def ensure_doctor_uniqueness(db, *, email: str | None = None, phone_number: str | None = None, license_number: str | None = None,
+                             doctor_id: int | None = None):
     if email:
         email_query = select(Doctor).where(or_(Doctor.email == email, Doctor.pending_email == email))
         if doctor_id is not None:
@@ -166,13 +167,14 @@ def get_doctor_activities(doctor_id: int):
 
         activities = db.execute(
             select(DoctorActivity)
-            .where(
-                DoctorActivity.doctor_id == doctor_id,
-                DoctorActivity.scheduled_at >= datetime.now(UTC).replace(tzinfo=None),
-            )
+            .where(DoctorActivity.doctor_id == doctor_id)
             .order_by(DoctorActivity.scheduled_at.asc(), DoctorActivity.id.asc())
         ).scalars().all()
-        return success_response("Doctor activities retrieved successfully.", serialize_many(activities, DoctorActivityRead))
+
+        return success_response(
+            "Doctor activities retrieved successfully.",
+            serialize_many(activities, DoctorActivityRead),
+        )
 
 
 @router.post("/{doctor_id}/activities", response_model=ApiResponse[DoctorActivityRead])
@@ -183,20 +185,64 @@ def create_doctor_activity(doctor_id: int, payload: DoctorActivityCreate):
         if doctor is None:
             raise HTTPException(status_code=404, detail="Doctor not found.")
 
+        patients = db.execute(
+            select(Patient).where(Patient.id.in_(payload.patient_ids))
+        ).scalars().all()
+
         activity = DoctorActivity(
             doctor_id=doctor_id,
             type=payload.type,
             title=payload.title,
             description=payload.description,
             scheduled_at=payload.scheduled_at,
+            status="incoming",
         )
+
+        activity.patients.extend(patients)
+
         db.add(activity)
         db.commit()
         db.refresh(activity)
+
         return success_response(
             "Doctor activity added successfully.",
             serialize(activity, DoctorActivityRead),
             status_code=201,
+        )
+
+
+@router.patch("/{doctor_id}/activities/{activity_id}", response_model=ApiResponse[DoctorActivityRead])
+def update_doctor_activity(doctor_id: int, activity_id: int, payload: DoctorActivityUpdate):
+    with SessionLocal() as db:
+        activity = db.get(DoctorActivity, activity_id)
+
+        if activity is None or activity.doctor_id != doctor_id:
+            raise HTTPException(status_code=404, detail="Activity not found.")
+
+        if payload.title is not None:
+            activity.title = payload.title
+
+        if payload.description is not None:
+            activity.description = payload.description
+
+        if payload.scheduled_at is not None:
+            activity.scheduled_at = payload.scheduled_at
+
+        if payload.status is not None:
+            activity.status = payload.status
+
+        if payload.patient_ids is not None:
+            patients = db.execute(
+                select(Patient).where(Patient.id.in_(payload.patient_ids))
+            ).scalars().all()
+            activity.patients = patients
+
+        db.commit()
+        db.refresh(activity)
+
+        return success_response(
+            "Doctor activity updated successfully.",
+            serialize(activity, DoctorActivityRead),
         )
 
 
@@ -422,9 +468,9 @@ def register_doctor(payload: DoctorCreate):
         license_match = next((doctor for doctor in matching_doctors if doctor.license_number == payload.license_number), None)
 
         for match, message in (
-            (email_match, "Email already registered."),
-            (phone_match, "Phone number already registered."),
-            (license_match, "License number already registered."),
+                (email_match, "Email already registered."),
+                (phone_match, "Phone number already registered."),
+                (license_match, "License number already registered."),
         ):
             if match and match.is_active:
                 raise HTTPException(status_code=400, detail=message)

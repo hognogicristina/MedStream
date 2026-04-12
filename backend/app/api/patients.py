@@ -8,13 +8,13 @@ from sqlalchemy.orm import selectinload
 from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
 from app.models.medication_administration import MedicationAdministration
-from app.models.patient_admission_history import PatientAdmissionHistory
-from app.models.patient import Patient
-from app.models.patient_allergy import PatientAllergy
-from app.models.patient_condition import PatientCondition
-from app.models.patient_condition_assignment import PatientConditionAssignment
-from app.models.patient_diagnosis import PatientDiagnosis
-from app.models.patient_medical_history import PatientMedicalHistory
+from app.models.patient.patient_admission_history import PatientAdmissionHistory
+from app.models.patient.patient import Patient
+from app.models.patient.patient_activity import PatientActivity
+from app.models.patient.patient_allergy import PatientAllergy
+from app.models.patient.patient_condition import PatientCondition
+from app.models.patient.patient_condition_assignment import PatientConditionAssignment
+from app.models.patient.patient_diagnosis import PatientDiagnosis
 from app.schemas.doctor import DoctorRead
 from app.schemas.medication import MedicationAdministrationCreate, MedicationAdministrationRead
 from app.schemas.patient import PatientCreate, PatientDepartmentUpdate, PatientDischargeUpdate, PatientRead, PatientUpdate
@@ -24,9 +24,11 @@ from app.schemas.patient_admission_history import (
     PatientAdmissionHistoryRead,
 )
 from app.schemas.patient_allergy import PatientAllergyCreate, PatientAllergyPage, PatientAllergyRead
-from app.schemas.patient_condition import PatientConditionAssignmentCreate, PatientConditionRead
-from app.schemas.patient_diagnosis import PatientDiagnosisCreate, PatientDiagnosisPage, PatientDiagnosisRead
-from app.schemas.patient_medical_history import PatientMedicalHistoryCreate, PatientMedicalHistoryPage, PatientMedicalHistoryRead
+from app.schemas.patient_condition import PatientConditionAssignmentCreate, PatientConditionRead, PatientConditionAssignmentRead, \
+    ConditionUpdate
+from app.schemas.patient_diagnosis import PatientDiagnosisCreate, PatientDiagnosisPage, PatientDiagnosisRead, PatientDiagnosisUpdate
+from app.schemas.patient_activity import PatientActivityRead
+from app.schemas.patient_medication import MedicationUpdate
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -86,9 +88,9 @@ def ensure_patient_identity_uniqueness(db, *, cnp: str | None = None, phone_numb
 
 @router.get("", response_model=ApiResponse[list[PatientRead]])
 def list_patients(
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, le=100),
-    condition_id: int | None = Query(default=None, ge=1),
+        page: int = Query(1, ge=1),
+        limit: int = Query(10, le=100),
+        condition_id: int | None = Query(default=None, ge=1),
 ):
     with SessionLocal() as db:
         offset = (page - 1) * limit
@@ -240,9 +242,9 @@ def readmit_patient(id: int, payload: PatientAdmissionActionCreate):
 
 @router.get("/{id}/admission-history", response_model=ApiResponse[PatientAdmissionHistoryPage])
 def get_patient_admission_history(
-    id: int,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(5, ge=1, le=100),
+        id: int,
+        page: int = Query(1, ge=1),
+        page_size: int = Query(5, ge=1, le=100),
 ):
     with SessionLocal() as db:
         get_patient_or_404(db, id)
@@ -259,6 +261,45 @@ def get_patient_admission_history(
         return success_response(
             "Patient admission history retrieved successfully.",
             build_paginated_payload(entries, total, page, page_size, PatientAdmissionHistoryRead),
+        )
+
+
+@router.get("/{id}/medical-history", response_model=ApiResponse[dict])
+def get_full_medical_history(id: int):
+    with SessionLocal() as db:
+        get_patient_or_404(db, id)
+
+        conditions = db.execute(
+            select(PatientCondition)
+            .join(PatientConditionAssignment, PatientConditionAssignment.condition_id == PatientCondition.id)
+            .where(PatientConditionAssignment.patient_id == id)
+        ).scalars().all()
+
+        allergies = db.execute(
+            select(PatientAllergy).where(PatientAllergy.patient_id == id)
+        ).scalars().all()
+
+        diagnosis = db.execute(
+            select(PatientDiagnosis).where(PatientDiagnosis.patient_id == id)
+        ).scalars().all()
+
+        medications = db.execute(
+            select(MedicationAdministration).where(MedicationAdministration.patient_id == id)
+        ).scalars().all()
+
+        activities = db.execute(
+            select(PatientActivity).where(PatientActivity.patient_id == id)
+        ).scalars().all()
+
+        return success_response(
+            "Patient full medical history retrieved successfully.",
+            {
+                "conditions": serialize_many(conditions, PatientConditionRead),
+                "allergies": serialize_many(allergies, PatientAllergyRead),
+                "diagnosis": serialize_many(diagnosis, PatientDiagnosisRead),
+                "medications": serialize_many(medications, MedicationAdministrationRead),
+                "activities": serialize_many(activities, PatientActivityRead),
+            },
         )
 
 
@@ -309,6 +350,29 @@ def assign_patient_condition(id: int, payload: PatientConditionAssignmentCreate)
         return success_response("Patient condition assigned successfully.", serialize_many(conditions, PatientConditionRead))
 
 
+@router.patch("/condition/{assignment_id}", response_model=ApiResponse[PatientConditionAssignmentRead])
+def update_condition_assignment(assignment_id: int, payload: ConditionUpdate):
+    with SessionLocal() as db:
+        assignment = db.get(PatientConditionAssignment, assignment_id)
+
+        if assignment is None:
+            raise HTTPException(status_code=404, detail="Assignment not found.")
+
+        if payload.status:
+            assignment.status = payload.status
+
+        if payload.notes:
+            assignment.notes = payload.notes
+
+        db.commit()
+        db.refresh(assignment)
+
+        return success_response(
+            "Condition updated successfully.",
+            serialize(assignment, PatientConditionAssignmentRead),
+        )
+
+
 @router.get("/{id}/allergies", response_model=ApiResponse[PatientAllergyPage])
 def get_patient_allergies(id: int, page: int = Query(1, ge=1), page_size: int = Query(5, ge=1, le=100)):
     with SessionLocal() as db:
@@ -342,47 +406,6 @@ def create_patient_allergy(id: int, payload: PatientAllergyCreate):
         db.commit()
         db.refresh(allergy)
         return success_response("Patient allergy added successfully.", serialize(allergy, PatientAllergyRead), status_code=201)
-
-
-@router.get("/{id}/medical-history", response_model=ApiResponse[PatientMedicalHistoryPage])
-def get_patient_medical_history(id: int, page: int = Query(1, ge=1), page_size: int = Query(5, ge=1, le=100)):
-    with SessionLocal() as db:
-        get_patient_or_404(db, id)
-        total = db.execute(
-            select(func.count()).select_from(PatientMedicalHistory).where(PatientMedicalHistory.patient_id == id)
-        ).scalar_one()
-        medical_history = db.execute(
-            select(PatientMedicalHistory)
-            .where(PatientMedicalHistory.patient_id == id)
-            .order_by(desc(PatientMedicalHistory.date), desc(PatientMedicalHistory.created_at), desc(PatientMedicalHistory.id))
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        ).scalars().all()
-        return success_response(
-            "Patient medical history retrieved successfully.",
-            build_paginated_payload(medical_history, total, page, page_size, PatientMedicalHistoryRead),
-        )
-
-
-@router.post("/{id}/medical-history", response_model=ApiResponse[PatientMedicalHistoryRead])
-def create_patient_medical_history(id: int, payload: PatientMedicalHistoryCreate):
-    with SessionLocal() as db:
-        patient = get_patient_or_404(db, id)
-        history_entry = PatientMedicalHistory(
-            patient_id=patient.id,
-            condition_name=payload.condition_name,
-            description=payload.description,
-            type=payload.type,
-            date=datetime.utcnow().date(),
-        )
-        db.add(history_entry)
-        db.commit()
-        db.refresh(history_entry)
-        return success_response(
-            "Patient medical history entry added successfully.",
-            serialize(history_entry, PatientMedicalHistoryRead),
-            status_code=201,
-        )
 
 
 @router.get("/{id}/diagnosis", response_model=ApiResponse[PatientDiagnosisPage])
@@ -424,6 +447,26 @@ def create_patient_diagnosis(id: int, payload: PatientDiagnosisCreate):
         )
 
 
+@router.patch("/diagnosis/{diagnosis_id}", response_model=ApiResponse[PatientDiagnosisRead])
+def update_patient_diagnosis(diagnosis_id: int, payload: PatientDiagnosisUpdate):
+    with SessionLocal() as db:
+        diagnosis = db.get(PatientDiagnosis, diagnosis_id)
+
+        if diagnosis is None:
+            raise HTTPException(status_code=404, detail="Diagnosis not found.")
+
+        diagnosis.status = payload.status
+        diagnosis.status_note = payload.note
+
+        db.commit()
+        db.refresh(diagnosis)
+
+        return success_response(
+            "Diagnosis status updated successfully.",
+            serialize(diagnosis, PatientDiagnosisRead),
+        )
+
+
 @router.post("/{id}/medication", response_model=ApiResponse[MedicationAdministrationRead])
 def administer_medication(id: int, payload: MedicationAdministrationCreate):
     with SessionLocal() as db:
@@ -441,4 +484,77 @@ def administer_medication(id: int, payload: MedicationAdministrationCreate):
             "Medication administered successfully.",
             serialize(medication, MedicationAdministrationRead),
             status_code=201,
+        )
+
+
+@router.get("/{id}/medications", response_model=ApiResponse[list[MedicationAdministrationRead]])
+def get_patient_medications(id: int):
+    with SessionLocal() as db:
+        get_patient_or_404(db, id)
+
+        meds = db.execute(
+            select(MedicationAdministration)
+            .where(MedicationAdministration.patient_id == id)
+            .order_by(desc(MedicationAdministration.created_at))
+        ).scalars().all()
+
+        return success_response(
+            "Patient medications retrieved successfully.",
+            serialize_many(meds, MedicationAdministrationRead),
+        )
+
+
+@router.get("/{id}/activities", response_model=ApiResponse[list[PatientActivityRead]])
+def get_patient_activities(id: int):
+    with SessionLocal() as db:
+        get_patient_or_404(db, id)
+
+        activities = db.execute(
+            select(PatientActivity)
+            .where(PatientActivity.patient_id == id)
+            .order_by(desc(PatientActivity.scheduled_at))
+        ).scalars().all()
+
+        return success_response(
+            "Patient activities retrieved successfully.",
+            serialize_many(activities, PatientActivityRead),
+        )
+
+
+@router.patch("/medications/{medication_id}", response_model=ApiResponse[MedicationAdministrationRead])
+def update_medication(medication_id: int, payload: MedicationUpdate):
+    with SessionLocal() as db:
+        medication = db.get(MedicationAdministration, medication_id)
+
+        if medication is None:
+            raise HTTPException(status_code=404, detail="Medication not found.")
+
+        if payload.dosage:
+            medication.dosage = payload.dosage
+            medication.last_updated_note = payload.note
+
+        db.commit()
+        db.refresh(medication)
+
+        return success_response(
+            "Medication updated successfully.",
+            serialize(medication, MedicationAdministrationRead),
+        )
+
+
+@router.get("/{id}/doctors", response_model=ApiResponse[list[DoctorRead]])
+def get_patient_doctors(id: int):
+    with SessionLocal() as db:
+        get_patient_or_404(db, id)
+
+        doctors = db.execute(
+            select(Doctor)
+            .join(doctor_patients, doctor_patients.c.doctor_id == Doctor.id)
+            .where(doctor_patients.c.patient_id == id)
+            .order_by(Doctor.id.desc())
+        ).scalars().all()
+
+        return success_response(
+            "Patient doctors retrieved successfully.",
+            serialize_many(doctors, DoctorRead),
         )

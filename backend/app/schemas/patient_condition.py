@@ -14,3 +14,37 @@ class PatientConditionRead(BaseModel):
 
 class PatientConditionAssignmentCreate(BaseModel):
     condition_id: int
+
+
+class PatientConditionAssignmentRead(BaseModel):
+    id: int
+    patient_id: int
+    condition_id: int
+
+    status: str
+    notes: str | None = None
+    diagnosed_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PatientConditionWithDetails(BaseModel):
+    id: int
+    name: str
+    description: str | None = None
+
+    status: str
+    notes: str | None = None
+    diagnosed_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ConditionUpdate(BaseModel):
+    id: int
+    name: str
+    description: str | None = None
+    status: str
+    notes: str | None = None
+    diagnosed_at: datetime
+    model_config = {"from_attributes": True}

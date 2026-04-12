@@ -11,6 +11,9 @@ from app.models.vital import Vital
 
 from app.websocket.manager import manager
 
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
 
 def build_consumer():
     return Consumer(
@@ -93,7 +96,7 @@ def run():
                         alerts = create_alerts(db, vital)
                         db.commit()
 
-                        asyncio.run(
+                        loop.run_until_complete(
                             manager.broadcast(
                                 {
                                     "type": "vital",
@@ -113,7 +116,7 @@ def run():
                         for alert in alerts:
                             db.refresh(alert)
 
-                            asyncio.run(
+                            loop.run_until_complete(
                                 manager.broadcast(
                                     {
                                         "type": "alert",

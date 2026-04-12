@@ -8,16 +8,16 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.alert import Alert
 from app.models.encounter import Encounter
-from app.models.doctor_patient import doctor_patients
+from app.models.doctor.doctor_patient import doctor_patients
 from app.models.medication_administration import MedicationAdministration
-from app.models.patient_admission_history import PatientAdmissionHistory
-from app.models.patient import Patient
-from app.models.patient_allergy import PatientAllergy
-from app.models.patient_condition import PatientCondition
-from app.models.patient_condition_assignment import PatientConditionAssignment
-from app.models.patient_diagnosis import PatientDiagnosis
-from app.models.patient_medical_history import PatientMedicalHistory
-from app.models.patient_stats import PatientStats
+from app.models.patient.patient_admission_history import PatientAdmissionHistory
+from app.models.patient.patient import Patient
+from app.models.patient.patient_allergy import PatientAllergy
+from app.models.patient.patient_condition import PatientCondition
+from app.models.patient.patient_condition_assignment import PatientConditionAssignment
+from app.models.patient.patient_diagnosis import PatientDiagnosis
+from app.models.patient.patient_stats import PatientStats
+
 from app.models.vital import Vital
 from app.simulator.patient_profiles import DEPARTMENT_PROFILE_MAP, build_patient_state, generate_vitals
 from faker import Faker
@@ -45,14 +45,6 @@ ALLERGY_OPTIONS = [
     ("Ibuprofen", "mild"),
     ("Dust mites", "mild"),
 ]
-MEDICAL_HISTORY_OPTIONS = [
-    ("Appendectomy", "Laparoscopic appendectomy with full recovery.", "surgery"),
-    ("Type 2 Diabetes", "Ongoing oral medication management.", "chronic"),
-    ("Hypertension", "Controlled with daily antihypertensive therapy.", "chronic"),
-    ("Community-acquired pneumonia", "Resolved after inpatient antibiotic treatment.", "illness"),
-    ("Migraine disorder", "Intermittent episodes with neurologic follow-up.", "chronic"),
-    ("Knee ligament repair", "Surgical repair after sports injury.", "surgery"),
-]
 DIAGNOSIS_OPTIONS = [
     ("Acute bronchitis", "Supportive care and observation."),
     ("Atrial fibrillation", "Telemetry monitoring recommended."),
@@ -70,12 +62,8 @@ PATIENT_CONDITION_OPTIONS = [
 
 
 def generate_name(rng):
-    Faker.seed(rng.randint(1, 999999))
-
-    first_name = fake.first_name()
-    last_name = fake.last_name()
-
-    return first_name, last_name
+    fake = get_fake(rng)
+    return fake.first_name(), fake.last_name()
 
 
 def build_rng(seed_suffix: str):
@@ -193,7 +181,6 @@ def reset_seed_tables(db):
         "patient_condition_assignments",
         "patient_conditions",
         "patient_diagnosis",
-        "patient_medical_history",
         "patient_allergies",
         "vitals",
         "encounters",
@@ -282,38 +269,24 @@ def seed_allergies(db, patient: Patient):
         )
 
 
-def seed_medical_history(db, patient: Patient):
-    rng = build_rng(f"medical-history:{patient.id}")
-    history_count = rng.randint(1, 4)
-    entries = rng.sample(MEDICAL_HISTORY_OPTIONS, k=history_count)
-    today = date.today()
-
-    for index, (condition_name, description, history_type) in enumerate(entries):
-        candidate_date = patient.birth_date + timedelta(days=rng.randint(7000, 22000))
-        history_date = min(candidate_date, today)
-        db.add(
-            PatientMedicalHistory(
-                patient_id=patient.id,
-                condition_name=condition_name,
-                description=description,
-                type=history_type,
-                date=history_date,
-                created_at=datetime.utcnow() - timedelta(days=index * 20 + rng.randint(10, 1800)),
-            )
-        )
-
-
 def seed_diagnosis(db, patient: Patient):
     rng = build_rng(f"diagnosis:{patient.id}")
     diagnosis_count = rng.randint(1, 2)
 
+    statuses = ["Active", "Resolved", "Chronic"]
+
     for diagnosis, notes in rng.sample(DIAGNOSIS_OPTIONS, k=diagnosis_count):
+        status = rng.choice(statuses)
+
         db.add(
             PatientDiagnosis(
                 patient_id=patient.id,
                 diagnosis=diagnosis,
                 notes=notes,
+                status=status,
+                status_note=f"Auto-generated status: {status}" if status != "Active" else None,
                 created_at=datetime.utcnow() - timedelta(hours=rng.randint(1, 96)),
+                updated_at=datetime.utcnow(),
             )
         )
 
@@ -356,7 +329,13 @@ def seed_conditions(db):
     conditions = []
 
     for name, description in PATIENT_CONDITION_OPTIONS:
-        condition = PatientCondition(name=name, description=description)
+        condition = PatientCondition(
+            name=name,
+            description=description,
+            status="active",
+            notes=None,
+            created_at=datetime.utcnow()
+        )
         db.add(condition)
         conditions.append(condition)
 
@@ -368,6 +347,8 @@ def seed_patient_conditions(db, patient: Patient, conditions: list[PatientCondit
     rng = build_rng(f"conditions:{patient.id}")
     condition_count = rng.randint(0, min(3, len(conditions)))
 
+    statuses = ["Stable", "Improving", "Worsening"]
+
     if condition_count == 0:
         return
 
@@ -377,27 +358,6 @@ def seed_patient_conditions(db, patient: Patient, conditions: list[PatientCondit
                 patient_id=patient.id,
                 condition_id=condition.id,
                 created_at=datetime.utcnow() - timedelta(days=rng.randint(5, 900)),
-            )
-        )
-        return
-
-    if rng.random() < 0.3:
-        discharge_date = datetime.utcnow() - timedelta(days=rng.randint(10, 160))
-        readmission_date = discharge_date + timedelta(days=rng.randint(1, 14))
-        db.add(
-            PatientAdmissionHistory(
-                patient_id=patient.id,
-                type="discharge",
-                reason="Previous admission completed with stable recovery.",
-                created_at=discharge_date,
-            )
-        )
-        db.add(
-            PatientAdmissionHistory(
-                patient_id=patient.id,
-                type="readmission",
-                reason="Returned for renewed monitoring after symptom progression.",
-                created_at=readmission_date,
             )
         )
 
@@ -438,7 +398,6 @@ def run():
             seed_vitals_and_alerts(db, patient)
             seed_medication_history(db, patient)
             seed_allergies(db, patient)
-            seed_medical_history(db, patient)
             seed_diagnosis(db, patient)
             seed_admission_history(db, patient)
             seed_patient_conditions(db, patient, seeded_conditions)
@@ -448,7 +407,7 @@ def run():
     run_batch_stats()
     print(
         f"Generated {PATIENT_COUNT} patients with encounters, vitals, alerts, medications, allergies, "
-        "medical history, diagnoses, and analytics snapshots"
+        "diagnoses, and analytics snapshots"
     )
 
 

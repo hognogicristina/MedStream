@@ -1,16 +1,5 @@
-from app.models.doctor_patient import doctor_patients
-from app.models.doctor_password_reset import DoctorPasswordReset
-from app.models.patient import Patient
-from app.models.doctor import Doctor
 from app.models.encounter import Encounter
 from app.models.vital import Vital
 from app.models.alert import Alert
 from app.models.medication_administration import MedicationAdministration
-from app.models.patient_stats import PatientStats
-from app.models.patient_allergy import PatientAllergy
-from app.models.patient_diagnosis import PatientDiagnosis
-from app.models.patient_medical_history import PatientMedicalHistory
-from app.models.patient_admission_history import PatientAdmissionHistory
-from app.models.patient_condition import PatientCondition
-from app.models.patient_condition_assignment import PatientConditionAssignment
-from app.models.doctor_activity import DoctorActivity
+

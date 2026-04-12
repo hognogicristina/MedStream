@@ -2,22 +2,25 @@ from sqlalchemy import inspect
 
 from app.db.base import Base
 from app.db.session import engine
-from app.models import (
-    Alert,
+from app.models.doctor import (
     Doctor,
     DoctorPasswordReset,
-    Encounter,
-    MedicationAdministration,
+    DoctorActivity,
+    doctor_patients,
+)
+from app.models.patient import (
     Patient,
     PatientAdmissionHistory,
     PatientAllergy,
     PatientCondition,
     PatientConditionAssignment,
     PatientDiagnosis,
-    PatientMedicalHistory,
-    DoctorActivity,
+)
+from app.models import (
+    Alert,
+    Encounter,
+    MedicationAdministration,
     Vital,
-    doctor_patients,
 )
 from app.db.session import SessionLocal
 from app.schemas.validators import ROMANIA_COUNTRY, normalize_phone_number

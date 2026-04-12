@@ -55,7 +55,7 @@ export default function PatientDiagnosisPage() {
   }, [diagnosisPage, id, notifyError])
 
   useEffect(() => {
-    loadPageData(diagnosisPage)
+    loadPageData(diagnosisPage).then(r => r)
   }, [diagnosisPage, loadPageData])
 
   const handleChange = (event) => {

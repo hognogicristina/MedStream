@@ -28,7 +28,12 @@ class PatientDiagnosisRead(BaseModel):
     patient_id: int
     diagnosis: str
     notes: str | None = None
+
+    status: str
+    status_note: str | None = None
+
     created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -38,3 +43,15 @@ class PatientDiagnosisPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class PatientDiagnosisUpdate(BaseModel):
+    status: str
+    note: str | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value):
+        if value not in {"Active", "Resolved", "Chronic", "Inactive"}:
+            raise ValueError("Invalid diagnosis status.")
+        return value

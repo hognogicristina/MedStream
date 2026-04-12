@@ -2,7 +2,7 @@ from sqlalchemy import func
 
 from app.db.session import SessionLocal
 from app.models.alert import Alert
-from app.models.patient_stats import PatientStats
+from app.models.patient.patient_stats import PatientStats
 from app.models.vital import Vital
 
 
