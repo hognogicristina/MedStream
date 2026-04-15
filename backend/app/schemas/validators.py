@@ -1,6 +1,6 @@
 import re
 
-from app.constants import DEPARTMENTS
+from app.simulator.run_simulator import DEPARTMENTS
 
 ROMANIA_COUNTRY = "Romania"
 CNP_CONTROL_WEIGHTS = "279146358279"

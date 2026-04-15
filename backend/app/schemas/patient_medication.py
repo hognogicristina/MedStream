@@ -5,20 +5,20 @@ from datetime import datetime
 from app.schemas.validators import require_non_empty
 
 
-class MedicationAdministrationCreate(BaseModel):
-    medication_name: str
+class PatientMedicationCreate(BaseModel):
+    name: str
     dosage: str
 
-    @field_validator("medication_name", "dosage", mode="before")
+    @field_validator("name", "dosage", mode="before")
     @classmethod
     def validate_required_text(cls, value, info):
         return require_non_empty(value, info.field_name.replace("_", " ").title())
 
 
-class MedicationAdministrationRead(BaseModel):
+class PatientMedicationRead(BaseModel):
     id: int
     patient_id: int
-    medication_name: str
+    name: str
     dosage: str
 
     created_at: datetime

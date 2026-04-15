@@ -3,7 +3,7 @@ import {State, City} from 'country-state-city'
 export function getCountyOptions() {
   const states = State.getStatesOfCountry("RO")
   return states.map(state => ({
-    name: state.name.replace(/ County/g, ""), // optional cleanup if they contain " County"
+    name: state.name.replace(/ County/g, ""),
     isoCode: state.isoCode
   })).sort((a, b) => a.name.localeCompare(b.name))
 }

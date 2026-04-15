@@ -19,7 +19,9 @@ from app.core.config import settings
 from app.db.init_db import init_db
 from app.kafka.consumer import run as run_consumer
 from app.kafka.topics import ensure_topics
-from app.kafka.vitals_simulator import run as run_simulator
+from threading import Thread
+from app.simulator.run_simulator import run as run_simulator
+from app.api.departments import router as departments_router
 
 background_threads_started = False
 background_threads_lock = threading.Lock()
@@ -81,6 +83,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def start_simulator():
+    thread = Thread(target=run_simulator, daemon=True)
+    thread.start()
 
 
 def extract_error_message(detail) -> str:
@@ -147,6 +155,7 @@ app.include_router(vitals_router)
 app.include_router(alerts_router)
 app.include_router(ws_router)
 app.include_router(stats_router)
+app.include_router(departments_router)
 
 
 @app.options("/{rest_of_path:path}")

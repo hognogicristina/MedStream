@@ -6,7 +6,6 @@ import {Link, useParams} from "react-router-dom"
 import DataTable from "../components/DataTable"
 import {api} from "../services/api"
 import {getErrorMessage, getResponseData} from "../services/apiMessages"
-import {DEPARTMENTS, departmentHref} from "../constants/departments"
 import {formatPatientFullName} from "../utils/patients"
 
 const SEVERITY_FILTERS = [
@@ -27,6 +26,20 @@ export default function DepartmentPage() {
   const [alerts, setAlerts] = useState([])
   const [batchStatus, setBatchStatus] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [departments, setDepartments] = useState([])
+
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const res = await api.get("/departments")
+        setDepartments(getResponseData(res))
+      } catch (error) {
+        notifyError(getErrorMessage(error))
+      }
+    }
+
+    loadDepartments()
+  }, [notifyError])
 
   useEffect(() => {
     const loadDepartmentData = async () => {
@@ -107,11 +120,15 @@ export default function DepartmentPage() {
               <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">Department patients and analytics.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {DEPARTMENTS.map((department) => (
+              {departments.map((department) => (
                 <Link
                   key={department}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold ${department === departmentName ? "console-button-primary" : "console-button-secondary"}`}
-                  to={departmentHref(department)}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                    department === departmentName
+                      ? "console-button-primary"
+                      : "console-button-secondary"
+                  }`}
+                  to={`/departments/${encodeURIComponent(department)}`}
                 >
                   {department}
                 </Link>

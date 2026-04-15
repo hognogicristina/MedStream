@@ -120,6 +120,7 @@ class PatientBase(BaseModel):
     birth_date: date
     gender: str
     arrival_method: str = "self"
+    is_pregnant: bool = False
     address: PatientAddressCreate
 
     @field_validator("first_name", "last_name", "gender", mode="before")
@@ -127,15 +128,15 @@ class PatientBase(BaseModel):
     def validate_required_text(cls, value, info):
         return require_non_empty(value, info.field_name.replace("_", " ").title())
 
-    @field_validator("department", mode="before")
-    @classmethod
-    def validate_department_name(cls, value):
-        return validate_department(value)
+    # @field_validator("department", mode="before")
+    # @classmethod
+    # def validate_department_name(cls, value):
+    #     return validate_department(value)
 
-    @field_validator("cnp", mode="before")
-    @classmethod
-    def validate_patient_cnp(cls, value):
-        return validate_cnp(value)
+    # @field_validator("cnp", mode="before")
+    # @classmethod
+    # def validate_patient_cnp(cls, value):
+    #     return validate_cnp(value)
 
     @field_validator("phone_number", mode="before")
     @classmethod

@@ -1,7 +1,8 @@
 import {useEffect, useRef, useState} from "react"
 import {NavLink, useLocation, useNavigate} from "react-router-dom"
 import {useAuth} from "../auth/AuthContext"
-import {DEPARTMENTS, departmentHref, formatDepartmentLabel} from "../constants/departments"
+import {getResponseData} from "../services/apiMessages.js";
+import {api} from "../services/api";
 
 function DepartmentsIcon() {
   return (
@@ -60,6 +61,7 @@ export default function Navbar() {
   const {logout} = useAuth()
   const [openMenu, setOpenMenu] = useState("")
   const navRef = useRef(null)
+  const [departments, setDepartments] = useState([])
 
   const handleLogout = () => {
     setOpenMenu("")
@@ -84,6 +86,18 @@ export default function Navbar() {
     return () => {
       document.removeEventListener("mousedown", handlePointerDown)
     }
+  }, [])
+
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const res = await api.get("/departments")
+        setDepartments(getResponseData(res))
+      } catch {
+      }
+    }
+
+    loadDepartments()
   }, [])
 
   return (
@@ -115,15 +129,15 @@ export default function Navbar() {
             </NavTooltip>
             <div
               className={`absolute right-0 top-full z-40 mt-2 w-56 rounded-[16px] border border-[#3b424b] bg-[#161b22] p-2 ${openMenu === "departments" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
-              <div className="space-y-1">
-                {DEPARTMENTS.map((department) => (
+              <div className="space-y-1 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+                {departments.map((department) => (
                   <NavLink
                     key={department}
                     className="block rounded-xl px-4 py-2 text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
-                    to={departmentHref(department)}
+                    to={`/departments/${encodeURIComponent(department)}`}
                     onClick={() => setOpenMenu("")}
                   >
-                    {formatDepartmentLabel(department)}
+                    {department}
                   </NavLink>
                 ))}
               </div>

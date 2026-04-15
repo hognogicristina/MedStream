@@ -1,22 +1,27 @@
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
+from app.api.doctors import get_current_doctor
+from app.models.doctor.doctor_activity import DoctorActivity
+from app.models.doctor.doctor_activity_doctor import doctor_activity_doctors
+
 from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
-from app.models.medication_administration import MedicationAdministration
+from app.models.patient.patient_medication import PatientMedication
 from app.models.patient.patient_admission_history import PatientAdmissionHistory
 from app.models.patient.patient import Patient
-from app.models.patient.patient_activity import PatientActivity
+from app.models.doctor.doctor_activity import DoctorActivity
+from app.models.patient.patient_activity_doctor import patient_activity_doctors
 from app.models.patient.patient_allergy import PatientAllergy
 from app.models.patient.patient_condition import PatientCondition
 from app.models.patient.patient_condition_assignment import PatientConditionAssignment
 from app.models.patient.patient_diagnosis import PatientDiagnosis
 from app.schemas.doctor import DoctorRead
-from app.schemas.medication import MedicationAdministrationCreate, MedicationAdministrationRead
+from app.schemas.patient_medication import PatientMedicationCreate, PatientMedicationRead
 from app.schemas.patient import PatientCreate, PatientDepartmentUpdate, PatientDischargeUpdate, PatientRead, PatientUpdate
 from app.schemas.patient_admission_history import (
     PatientAdmissionActionCreate,
@@ -26,9 +31,14 @@ from app.schemas.patient_admission_history import (
 from app.schemas.patient_allergy import PatientAllergyCreate, PatientAllergyPage, PatientAllergyRead
 from app.schemas.patient_condition import PatientConditionAssignmentCreate, PatientConditionRead, PatientConditionAssignmentRead, \
     ConditionUpdate
-from app.schemas.patient_diagnosis import PatientDiagnosisCreate, PatientDiagnosisPage, PatientDiagnosisRead, PatientDiagnosisUpdate
-from app.schemas.patient_activity import PatientActivityRead
+from app.schemas.doctor_activity import DoctorActivityRead
 from app.schemas.patient_medication import MedicationUpdate
+from app.schemas.patient_diagnosis import (
+    PatientDiagnosisCreate,
+    PatientDiagnosisRead,
+    PatientDiagnosisPage,
+    PatientDiagnosisUpdate
+)
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -70,6 +80,31 @@ def get_patient_or_404(db, patient_id: int):
     return patient
 
 
+def verify_patient_access(db, doctor_id: int, patient_id: int):
+    # Check if doctor is explicitly assigned
+    is_assigned = db.execute(
+        select(Patient.id)
+        .join(patient.doctors.property.secondary, patient.doctors.property.secondary.c.patient_id == Patient.id)
+        .where(patient.doctors.property.secondary.c.doctor_id == doctor_id, Patient.id == patient_id)
+    ).scalar_one_or_none()
+    
+    if is_assigned is not None:
+        return
+        
+    has_activity = db.execute(
+        select(DoctorActivity.id)
+        .join(Patient.activities.property.secondary, Patient.activities.property.secondary.c.activity_id == DoctorActivity.id)
+        .join(doctor_activity_doctors, doctor_activity_doctors.c.doctor_activity_id == DoctorActivity.id)
+        .where(
+            doctor_activity_doctors.c.doctor_id == doctor_id, 
+            Patient.activities.property.secondary.c.patient_id == patient_id
+        )
+    ).scalar_one_or_none()
+    
+    if has_activity is None:
+        raise HTTPException(status_code=403, detail="Doctor is not assigned to this patient.")
+
+
 def ensure_patient_identity_uniqueness(db, *, cnp: str | None = None, phone_number: str | None = None, patient_id: int | None = None):
     if cnp:
         cnp_query = select(Patient).where(Patient.cnp == cnp)
@@ -88,12 +123,9 @@ def ensure_patient_identity_uniqueness(db, *, cnp: str | None = None, phone_numb
 
 @router.get("", response_model=ApiResponse[list[PatientRead]])
 def list_patients(
-        page: int = Query(1, ge=1),
-        limit: int = Query(10, le=100),
         condition_id: int | None = Query(default=None, ge=1),
 ):
     with SessionLocal() as db:
-        offset = (page - 1) * limit
         patient_query = select(Patient)
 
         if condition_id is not None:
@@ -103,9 +135,13 @@ def list_patients(
             ).where(PatientConditionAssignment.condition_id == condition_id)
 
         patients = db.execute(
-            patient_query.order_by(desc(Patient.id)).offset(offset).limit(limit)
+            patient_query.order_by(desc(Patient.id))
         ).scalars().all()
-        return success_response("Patients retrieved successfully.", serialize_many(patients, PatientRead))
+
+        return success_response(
+            "Patients retrieved successfully.",
+            serialize_many(patients, PatientRead)
+        )
 
 
 @router.get("/{id}", response_model=ApiResponse[PatientRead])
@@ -284,11 +320,14 @@ def get_full_medical_history(id: int):
         ).scalars().all()
 
         medications = db.execute(
-            select(MedicationAdministration).where(MedicationAdministration.patient_id == id)
+            select(PatientMedication).where(PatientMedication.patient_id == id)
         ).scalars().all()
 
         activities = db.execute(
-            select(PatientActivity).where(PatientActivity.patient_id == id)
+            select(DoctorActivity)
+            .options(selectinload(DoctorActivity.doctors), selectinload(DoctorActivity.patients))
+            .join(patient_activity_doctors, patient_activity_doctors.c.activity_id == DoctorActivity.id)
+            .where(patient_activity_doctors.c.patient_id == id)
         ).scalars().all()
 
         return success_response(
@@ -297,8 +336,14 @@ def get_full_medical_history(id: int):
                 "conditions": serialize_many(conditions, PatientConditionRead),
                 "allergies": serialize_many(allergies, PatientAllergyRead),
                 "diagnosis": serialize_many(diagnosis, PatientDiagnosisRead),
-                "medications": serialize_many(medications, MedicationAdministrationRead),
-                "activities": serialize_many(activities, PatientActivityRead),
+                "medications": serialize_many(medications, PatientMedicationRead),
+                "activities": [
+                    {
+                        **serialize(activity, DoctorActivityRead),
+                        "patient_ids": [p.id for p in activity.patients],
+                        "doctor_ids": [d.id for d in activity.doctors]
+                    } for activity in activities
+                ],
             },
         )
 
@@ -317,9 +362,11 @@ def get_patient_conditions(id: int):
 
 
 @router.post("/{id}/conditions", response_model=ApiResponse[list[PatientConditionRead]])
-def assign_patient_condition(id: int, payload: PatientConditionAssignmentCreate):
+def assign_patient_condition(id: int, payload: PatientConditionAssignmentCreate, authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
     with SessionLocal() as db:
         patient = get_patient_or_404(db, id)
+        verify_patient_access(db, current_doctor.id, patient.id)
         condition = db.get(PatientCondition, payload.condition_id)
 
         if condition is None:
@@ -351,12 +398,15 @@ def assign_patient_condition(id: int, payload: PatientConditionAssignmentCreate)
 
 
 @router.patch("/condition/{assignment_id}", response_model=ApiResponse[PatientConditionAssignmentRead])
-def update_condition_assignment(assignment_id: int, payload: ConditionUpdate):
+def update_condition_assignment(assignment_id: int, payload: ConditionUpdate, authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
     with SessionLocal() as db:
         assignment = db.get(PatientConditionAssignment, assignment_id)
 
         if assignment is None:
             raise HTTPException(status_code=404, detail="Assignment not found.")
+            
+        verify_patient_access(db, current_doctor.id, assignment.patient_id)
 
         if payload.status:
             assignment.status = payload.status
@@ -394,9 +444,11 @@ def get_patient_allergies(id: int, page: int = Query(1, ge=1), page_size: int = 
 
 
 @router.post("/{id}/allergies", response_model=ApiResponse[PatientAllergyRead])
-def create_patient_allergy(id: int, payload: PatientAllergyCreate):
+def create_patient_allergy(id: int, payload: PatientAllergyCreate, authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
     with SessionLocal() as db:
         patient = get_patient_or_404(db, id)
+        verify_patient_access(db, current_doctor.id, patient.id)
         allergy = PatientAllergy(
             patient_id=patient.id,
             allergy_name=payload.allergy_name,
@@ -429,9 +481,11 @@ def get_patient_diagnosis(id: int, page: int = Query(1, ge=1), page_size: int = 
 
 
 @router.post("/{id}/diagnosis", response_model=ApiResponse[PatientDiagnosisRead])
-def create_patient_diagnosis(id: int, payload: PatientDiagnosisCreate):
+def create_patient_diagnosis(id: int, payload: PatientDiagnosisCreate, authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
     with SessionLocal() as db:
         patient = get_patient_or_404(db, id)
+        verify_patient_access(db, current_doctor.id, patient.id)
         diagnosis_entry = PatientDiagnosis(
             patient_id=patient.id,
             diagnosis=payload.diagnosis,
@@ -448,12 +502,15 @@ def create_patient_diagnosis(id: int, payload: PatientDiagnosisCreate):
 
 
 @router.patch("/diagnosis/{diagnosis_id}", response_model=ApiResponse[PatientDiagnosisRead])
-def update_patient_diagnosis(diagnosis_id: int, payload: PatientDiagnosisUpdate):
+def update_patient_diagnosis(diagnosis_id: int, payload: PatientDiagnosisUpdate, authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
     with SessionLocal() as db:
         diagnosis = db.get(PatientDiagnosis, diagnosis_id)
 
         if diagnosis is None:
             raise HTTPException(status_code=404, detail="Diagnosis not found.")
+            
+        verify_patient_access(db, current_doctor.id, diagnosis.patient_id)
 
         diagnosis.status = payload.status
         diagnosis.status_note = payload.note
@@ -467,13 +524,15 @@ def update_patient_diagnosis(diagnosis_id: int, payload: PatientDiagnosisUpdate)
         )
 
 
-@router.post("/{id}/medication", response_model=ApiResponse[MedicationAdministrationRead])
-def administer_medication(id: int, payload: MedicationAdministrationCreate):
+@router.post("/{id}/medication", response_model=ApiResponse[PatientMedicationRead])
+def administer_medication(id: int, payload: PatientMedicationCreate, authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
     with SessionLocal() as db:
         patient = get_patient_or_404(db, id)
-        medication = MedicationAdministration(
+        verify_patient_access(db, current_doctor.id, patient.id)
+        medication = PatientMedication(
             patient_id=patient.id,
-            medication_name=payload.medication_name,
+            name=payload.name,
             dosage=payload.dosage,
         )
         db.add(medication)
@@ -482,52 +541,63 @@ def administer_medication(id: int, payload: MedicationAdministrationCreate):
 
         return success_response(
             "Medication administered successfully.",
-            serialize(medication, MedicationAdministrationRead),
+            serialize(medication, PatientMedicationRead),
             status_code=201,
         )
 
 
-@router.get("/{id}/medications", response_model=ApiResponse[list[MedicationAdministrationRead]])
+@router.get("/{id}/medications", response_model=ApiResponse[list[PatientMedicationRead]])
 def get_patient_medications(id: int):
     with SessionLocal() as db:
         get_patient_or_404(db, id)
 
         meds = db.execute(
-            select(MedicationAdministration)
-            .where(MedicationAdministration.patient_id == id)
-            .order_by(desc(MedicationAdministration.created_at))
+            select(PatientMedication)
+            .where(PatientMedication.patient_id == id)
+            .order_by(desc(PatientMedication.created_at))
         ).scalars().all()
 
         return success_response(
             "Patient medications retrieved successfully.",
-            serialize_many(meds, MedicationAdministrationRead),
+            serialize_many(meds, PatientMedicationRead),
         )
 
 
-@router.get("/{id}/activities", response_model=ApiResponse[list[PatientActivityRead]])
+@router.get("/{id}/activities", response_model=ApiResponse[list[DoctorActivityRead]])
 def get_patient_activities(id: int):
     with SessionLocal() as db:
         get_patient_or_404(db, id)
 
         activities = db.execute(
-            select(PatientActivity)
-            .where(PatientActivity.patient_id == id)
-            .order_by(desc(PatientActivity.scheduled_at))
+            select(DoctorActivity)
+            .options(selectinload(DoctorActivity.doctors), selectinload(DoctorActivity.patients))
+            .join(patient_activity_doctors, patient_activity_doctors.c.activity_id == DoctorActivity.id)
+            .where(patient_activity_doctors.c.patient_id == id)
+            .order_by(desc(DoctorActivity.scheduled_at))
         ).scalars().all()
 
         return success_response(
             "Patient activities retrieved successfully.",
-            serialize_many(activities, PatientActivityRead),
+            [
+                {
+                    **serialize(activity, DoctorActivityRead),
+                    "patient_ids": [p.id for p in activity.patients],
+                    "doctor_ids": [d.id for d in activity.doctors]
+                } for activity in activities
+            ],
         )
 
 
-@router.patch("/medications/{medication_id}", response_model=ApiResponse[MedicationAdministrationRead])
-def update_medication(medication_id: int, payload: MedicationUpdate):
+@router.patch("/medications/{medication_id}", response_model=ApiResponse[PatientMedicationRead])
+def update_medication(medication_id: int, payload: MedicationUpdate, authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
     with SessionLocal() as db:
-        medication = db.get(MedicationAdministration, medication_id)
+        medication = db.get(PatientMedication, medication_id)
 
         if medication is None:
             raise HTTPException(status_code=404, detail="Medication not found.")
+            
+        verify_patient_access(db, current_doctor.id, medication.patient_id)
 
         if payload.dosage:
             medication.dosage = payload.dosage
@@ -538,7 +608,7 @@ def update_medication(medication_id: int, payload: MedicationUpdate):
 
         return success_response(
             "Medication updated successfully.",
-            serialize(medication, MedicationAdministrationRead),
+            serialize(medication, PatientMedicationRead),
         )
 
 
@@ -549,8 +619,8 @@ def get_patient_doctors(id: int):
 
         doctors = db.execute(
             select(Doctor)
-            .join(doctor_patients, doctor_patients.c.doctor_id == Doctor.id)
-            .where(doctor_patients.c.patient_id == id)
+            .join(doctor_activity_patients, doctor_activity_patients.c.doctor_id == Doctor.id)
+            .where(doctor_activity_patients.c.patient_id == id)
             .order_by(Doctor.id.desc())
         ).scalars().all()
 

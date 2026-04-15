@@ -20,7 +20,9 @@ export default function AlertsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [alerts, setAlerts] = useState([])
   const [patients, setPatients] = useState([])
+  const [patientActivities, setPatientActivities] = useState([])
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(true)
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false)
   const alertAudioRef = useRef(null)
 
   if (!alertAudioRef.current) {
@@ -76,6 +78,29 @@ export default function AlertsPage() {
     normal: visibleAlerts.filter((alert) => alert.severity === "normal").length,
   }
 
+  useEffect(() => {
+    if (!scopedPatient) {
+      setPatientActivities([])
+      return
+    }
+
+    const loadActivities = async () => {
+      setIsLoadingActivities(true)
+      try {
+        const response = await api.get(`/patients/${scopedPatient.id}/activities`)
+        const activities = getResponseData(response) || []
+        const incoming = activities.filter(a => a.status === 'incoming')
+        setPatientActivities(incoming)
+      } catch (error) {
+        notifyError(getErrorMessage(error))
+      } finally {
+        setIsLoadingActivities(false)
+      }
+    }
+
+    loadActivities()
+  }, [scopedPatient, notifyError])
+
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
@@ -91,7 +116,9 @@ export default function AlertsPage() {
               {scopedCnp && (
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
-                    Patient: {scopedPatientName || (scopedPatient ? formatPatientFullName(scopedPatient) : "Unknown patient")}
+                    Patient: {scopedPatient ? (
+                      <Link to={`/patient/${scopedPatient.id}`} className="hover:underline text-inherit">{formatPatientFullName(scopedPatient)}</Link>
+                    ) : (scopedPatientName || "Unknown patient")}
                   </span>
                   <Link className="console-link text-sm font-semibold" to="/alerts">
                     Clear filter
@@ -226,6 +253,36 @@ export default function AlertsPage() {
             )}
           />
         </section>
+
+        {scopedCnp && (
+          <section className="monitor-card rounded-[28px] p-6">
+            <div className="mb-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Schedule</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Incoming Activities</h2>
+            </div>
+            
+            {isLoadingActivities ? (
+              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                Loading activities...
+              </div>
+            ) : patientActivities.length === 0 ? (
+              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                No incoming activities for this patient.
+              </div>
+            ) : (
+              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {patientActivities.map(activity => (
+                  <li key={activity.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">{activity.type}</p>
+                    <p className="mt-2 text-sm font-semibold text-white">{activity.title}</p>
+                    {activity.description && <p className="mt-2 text-sm text-[#b6bec9]">{activity.description}</p>}
+                    <p className="mt-3 text-xs text-[#879196]">{new Date(activity.scheduled_at).toLocaleString()}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
     </div>
   )

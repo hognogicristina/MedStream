@@ -148,7 +148,7 @@ The application is centered around the `patients` table and several related clin
   - stores recorded vital sign values
 - `alerts`
   - stores alerts created from abnormal vital values
-- `medication_administrations`
+- `patient_medication`
   - stores administered medications and dosage
 - `patient_stats`
   - stores computed analytics snapshots

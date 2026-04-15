@@ -1,7 +1,8 @@
-import {useEffect, useMemo, useState} from "react"
+import {useEffect, useMemo, useState, useRef} from "react"
 import {Link, useNavigate} from "react-router-dom"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
+import DataTable from "../components/DataTable"
 import DoctorActivityDialog from "../components/DoctorActivityDialog"
 import {useNotifications} from "../components/NotificationProvider"
 import {useAuth} from "../auth/AuthContext"
@@ -69,6 +70,8 @@ export default function ProfilePage() {
   const [isActivityDialogOpen, setIsActivityDialogOpen] = useState(false)
   const [removePatientAssignmentsOnDelete, setRemovePatientAssignmentsOnDelete] = useState(false)
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false)
+  const [isAssignDropdownOpen, setIsAssignDropdownOpen] = useState(false)
+  const assignInputRef = useRef(null)
 
   const authHeaders = useMemo(() => ({
     Authorization: `Bearer ${token}`,
@@ -153,6 +156,17 @@ export default function ProfilePage() {
       || optionLabel === normalizedAssignmentQuery
     )
   })
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (assignInputRef.current && !assignInputRef.current.contains(event.target)) {
+        setIsAssignDropdownOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   const handleActivityCreate = async (payload) => {
     if (!doctor || isSubmittingActivity) {
@@ -357,14 +371,17 @@ export default function ProfilePage() {
                   </span>
                 </div>
 
-                <ul className="space-y-3">
-                  {assignedPatients.length === 0 && (
-                    <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                      No patients are currently assigned to this doctor.
-                    </li>
-                  )}
-                  {assignedPatients.map((patient) => (
-                    <li key={patient.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+                <DataTable
+                  items={assignedPatients}
+                  loading={isLoading}
+                  emptyMessage="No patients are currently assigned to this doctor."
+                  pageSize={5}
+                  controlsLayoutClassName="hidden"
+                  getItemKey={(patient) => patient.id}
+                  shellClassName="space-y-3"
+                  bodyClassName="space-y-3"
+                  renderRow={(patient) => (
+                    <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
                       <div className="flex flex-col gap-4">
                         <div>
                           <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}`}>
@@ -377,14 +394,14 @@ export default function ProfilePage() {
                           type="button"
                           onClick={() => setPatientPendingRemoval(patient)}
                           disabled={removingPatientId === patient.id}
-                          className="console-button-secondary rounded-2xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                          className="console-button-secondary w-max rounded-2xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                         >
                           {removingPatientId === patient.id ? "Removing..." : "Remove Patient"}
                         </button>
                       </div>
-                    </li>
-                  ))}
-                </ul>
+                    </div>
+                  )}
+                />
               </section>
 
               <section className="monitor-card rounded-[28px] p-6">
@@ -402,25 +419,43 @@ export default function ProfilePage() {
                   </button>
                 </div>
 
-                <ul className="space-y-3">
-                  {activities.length === 0 && (
-                    <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                      No future activities are scheduled for this doctor.
-                    </li>
-                  )}
-                  {activities.map((activity) => (
-                    <li key={activity.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                <DataTable
+                  items={activities}
+                  loading={isLoading}
+                  emptyMessage="No future activities are scheduled for this doctor."
+                  pageSize={3}
+                  controlsLayoutClassName="hidden"
+                  simplePagination={true}
+                  getItemKey={(activity) => activity.id}
+                  shellClassName="space-y-3"
+                  bodyClassName="space-y-3"
+                  renderRow={(activity) => (
+                    <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">
-                        {formatActivityType(activity.type)}
+                        {formatActivityType(activity.type)} · {activity.status}
                       </p>
                       <p className="mt-2 text-sm font-semibold text-white">{activity.title}</p>
                       {activity.description && (
                         <p className="mt-2 text-sm text-[#b6bec9]">{activity.description}</p>
                       )}
+                      
+                      {activity.patient_ids && activity.patient_ids.length > 0 && (
+                        <p className="mt-2 text-sm text-[#b6bec9] font-medium">Patients: {activity.patient_ids.join(', ')}</p>
+                      )}
+                      
                       <p className="mt-3 text-xs text-[#879196]">{formatDateTime(activity.scheduled_at)}</p>
-                    </li>
-                  ))}
-                </ul>
+
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          type="button"
+                          className="console-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                />
               </section>
             </div>
 
@@ -499,23 +534,41 @@ export default function ProfilePage() {
                 </div>
 
                 <form className="space-y-4" onSubmit={handleAssignPatient}>
-                  <div className="login-field">
+                  <div className="login-field relative" ref={assignInputRef}>
                     <label className="login-label" htmlFor="assigned_patient">Patient CNP or Full Name</label>
                     <input
                       id="assigned_patient"
                       type="text"
                       value={assignmentQuery}
-                      onChange={(event) => setAssignmentQuery(event.target.value)}
+                      onChange={(event) => {
+                        setAssignmentQuery(event.target.value)
+                        setIsAssignDropdownOpen(true)
+                      }}
+                      onFocus={() => setIsAssignDropdownOpen(true)}
                       className="login-input"
                       placeholder="Example: 6010101123451 or Popescu Andrei"
-                      list="available-patient-suggestions"
+                      autoComplete="off"
                       disabled={availablePatients.length === 0 || isAssigningPatient}
                     />
-                    <datalist id="available-patient-suggestions">
-                      {assignmentSuggestions.map((patient) => (
-                        <option key={patient.id} value={`${patient.cnp} | ${formatPatientFullName(patient)}`}/>
-                      ))}
-                    </datalist>
+                    
+                    {isAssignDropdownOpen && assignmentSuggestions.length > 0 && (
+                      <div className="w-full mt-2 max-h-40 overflow-y-auto rounded-xl border border-[#3b424b] bg-[#161b22] py-2 custom-scrollbar">
+                        {assignmentSuggestions.map((patient) => (
+                          <div
+                            key={patient.id}
+                            className="cursor-pointer px-4 py-2 hover:bg-[#232f3e] text-sm text-[#d5dbdb]"
+                            onClick={() => {
+                              setAssignmentQuery(`${patient.cnp} | ${formatPatientFullName(patient)}`)
+                              setIsAssignDropdownOpen(false)
+                            }}
+                          >
+                            <span className="font-semibold text-white">{patient.cnp}</span>
+                            <span className="text-[#879196]"> | {formatPatientFullName(patient)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <p className="mt-2 text-xs text-[#879196]">
                       Start with CNP or full name. Suggestions show both identifiers together.
                     </p>

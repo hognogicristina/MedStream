@@ -1,10 +1,9 @@
-import {useState} from "react"
+import {useEffect, useState} from "react"
 import BackButton from "../components/BackButton"
 import {useNotifications} from "../components/NotificationProvider"
 import {Link, useNavigate} from "react-router-dom"
 import {api} from "../services/api"
 import {getErrorMessage, getResponseData} from "../services/apiMessages"
-import {DEPARTMENTS, formatDepartmentLabel} from "../constants/departments"
 import {buildPatientPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone"
 import {getCityOptions, getCountyOptions} from "../utils/addressOptions"
 import {buildEmptyPatientAddress, normalizePatientAddress} from "../utils/patientAddress"
@@ -27,6 +26,7 @@ export default function AddPatientPage() {
   const [address, setAddress] = useState(buildEmptyPatientAddress())
   const [phoneNumber, setPhoneNumber] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [departments, setDepartments] = useState([])
 
 
   const normalizedPhoneNumber = buildPatientPhoneNumber(phoneNumber)
@@ -93,6 +93,28 @@ export default function AddPatientPage() {
       setIsSubmitting(false)
     }
   }
+
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const res = await api.get("/departments")
+        setDepartments(getResponseData(res))
+      } catch (error) {
+        notifyError(getErrorMessage(error))
+      }
+    }
+
+    loadDepartments()
+  }, [notifyError])
+
+  useEffect(() => {
+    if (departments.length > 0 && !form.department) {
+      setForm((prev) => ({
+        ...prev,
+        department: departments[0],
+      }))
+    }
+  }, [departments])
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -166,9 +188,9 @@ export default function AddPatientPage() {
                     <label className="login-label" htmlFor="patient-department">{"Department"}</label>
                     <select id="patient-department" name="department" value={form.department} onChange={handleChange}
                             className="login-input" required>
-                      {DEPARTMENTS.map((department) => (
+                      {departments.map((department) => (
                         <option key={department} value={department}>
-                          {formatDepartmentLabel(department)}
+                          {department}
                         </option>
                       ))}
                     </select>

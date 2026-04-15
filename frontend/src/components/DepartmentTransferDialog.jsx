@@ -1,15 +1,30 @@
 import {useEffect, useState} from "react"
-import {DEPARTMENTS} from "../constants/departments"
+import {getResponseData} from "../services/apiMessages.js";
 
 export default function DepartmentTransferDialog({
-  currentDepartment,
-  isOpen,
-  isSubmitting,
-  onClose,
-  onSubmit,
-}) {
+                                                   currentDepartment,
+                                                   isOpen,
+                                                   isSubmitting,
+                                                   onClose,
+                                                   onSubmit,
+                                                 }) {
   const [nextDepartment, setNextDepartment] = useState(currentDepartment || "")
   const [reason, setReason] = useState("")
+  const [departments, setDepartments] = useState([])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const loadDepartments = async () => {
+      try {
+        const res = await api.get("/departments")
+        setDepartments(getResponseData(res))
+      } catch {
+      }
+    }
+
+    loadDepartments()
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) {
@@ -77,7 +92,7 @@ export default function DepartmentTransferDialog({
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">Select New Department</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {DEPARTMENTS.map((department) => {
+              {departments.map((department) => {
                 const isCurrent = department === currentDepartment
                 const isSelected = !isCurrent && department === nextDepartment
 
@@ -97,8 +112,8 @@ export default function DepartmentTransferDialog({
                       isCurrent
                         ? "cursor-not-allowed border-[#31363f] bg-[#10151c] text-[#6b7280] opacity-70"
                         : isSelected
-                        ? "border-[#ff9900] bg-[#1b2430]"
-                        : "border-[#3b424b] bg-[#151b22] hover:border-[#4d5661]"
+                          ? "border-[#ff9900] bg-[#1b2430]"
+                          : "border-[#3b424b] bg-[#151b22] hover:border-[#4d5661]"
                     }`}
                   >
                     <p className={`text-sm font-semibold ${isCurrent ? "text-[#879196]" : "text-white"}`}>{department}</p>

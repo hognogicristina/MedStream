@@ -41,10 +41,5 @@ class PatientConditionWithDetails(BaseModel):
 
 
 class ConditionUpdate(BaseModel):
-    id: int
-    name: str
-    description: str | None = None
-    status: str
+    status: str | None = None
     notes: str | None = None
-    diagnosed_at: datetime
-    model_config = {"from_attributes": True}

@@ -6,7 +6,7 @@ from app.models.doctor import (
     Doctor,
     DoctorPasswordReset,
     DoctorActivity,
-    doctor_patients,
+    doctor_activity_patients,
 )
 from app.models.patient import (
     Patient,
@@ -19,7 +19,7 @@ from app.models.patient import (
 from app.models import (
     Alert,
     Encounter,
-    MedicationAdministration,
+    PatientMedication,
     Vital,
 )
 from app.db.session import SessionLocal

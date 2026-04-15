@@ -11,6 +11,7 @@ class DoctorActivityCreate(BaseModel):
     description: str | None = None
     scheduled_at: datetime
     patient_ids: list[int]
+    doctor_ids: list[int]
 
     @field_validator("type", "title", mode="before")
     @classmethod
@@ -32,6 +33,13 @@ class DoctorActivityCreate(BaseModel):
             raise ValueError("At least one patient must be provided.")
         return value
 
+    @field_validator("doctor_ids")
+    @classmethod
+    def validate_doctor_ids(cls, value):
+        if not value:
+            raise ValueError("At least one doctor must be provided.")
+        return value
+
 class DoctorActivityRead(BaseModel):
     id: int
     doctor_id: int
@@ -42,6 +50,7 @@ class DoctorActivityRead(BaseModel):
     created_at: datetime
     status: str
     patient_ids: list[int]
+    doctor_ids: list[int]
 
     model_config = {"from_attributes": True}
 
@@ -52,6 +61,7 @@ class DoctorActivityUpdate(BaseModel):
     scheduled_at: datetime | None = None
     status: str | None = None
     patient_ids: list[int] | None = None
+    doctor_ids: list[int] | None = None
 
     @field_validator("title", mode="before")
     @classmethod

@@ -11,5 +11,7 @@ class PatientActivityRead(BaseModel):
     status: str
 
     doctor_id: int
+    doctor_ids: list[int]
+    patient_ids: list[int]
 
     model_config = {"from_attributes": True}

@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, Date, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.doctor.doctor_patient import doctor_patients
+from app.models.doctor.doctor_activity_patient import doctor_activity_patients
 
 
 class Doctor(Base):
@@ -23,4 +23,4 @@ class Doctor(Base):
     license_number: Mapped[str] = mapped_column(String(50), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    patients: Mapped[list["Patient"]] = relationship("Patient", secondary=doctor_patients, back_populates="doctors")
+    patients: Mapped[list["Patient"]] = relationship("Patient", secondary=doctor_activity_patients, back_populates="doctors")

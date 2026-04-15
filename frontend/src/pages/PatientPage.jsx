@@ -8,6 +8,7 @@ import {api} from "../services/api"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
 import {createWebSocket} from "../services/ws"
 import {formatPatientPhoneWithCode} from "../utils/patientPhone"
+import {useAuth} from "../auth/AuthContext"
 
 function formatDateTime(value) {
   if (!value) {
@@ -79,6 +80,7 @@ function PaginationControls({page, maxPage, onPrevious, onNext}) {
 
 export default function PatientPage() {
   const {notifyError, notifySuccess} = useNotifications()
+  const {doctor} = useAuth()
   const {id} = useParams()
   const pageSize = 5
   const [patient, setPatient] = useState(null)
@@ -98,6 +100,7 @@ export default function PatientPage() {
   const [admissionHistoryPage, setAdmissionHistoryPage] = useState(1)
   const [doctors, setDoctors] = useState([])
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(true)
+  const [patientActivities, setPatientActivities] = useState([])
   const alertAudioRef = useRef(null)
 
   if (!alertAudioRef.current) {
@@ -126,6 +129,24 @@ export default function PatientPage() {
       const patientData = getResponseData(response)
       setPatient(patientData)
       setDepartment(patientData.department)
+
+      try {
+        const activitiesRes = await api.get(`/patients/${id}/activities`)
+        const activities = getResponseData(activitiesRes) || []
+        const incoming = activities.filter(a => a.status === 'incoming')
+        setPatientActivities(incoming)
+      } catch (e) {
+        setPatientActivities([])
+      }
+      
+      try {
+        const doctorsRes = await api.get(`/patients/${id}/doctors`)
+        setDoctors(getResponseData(doctorsRes) || [])
+      } catch (e) {
+        setDoctors([])
+      }
+      setIsLoadingDoctors(false)
+
     } catch (error) {
       setPatient(null)
       setDepartment("")
@@ -227,6 +248,19 @@ export default function PatientPage() {
     }
   }
 
+  const handleAssignToMe = async () => {
+    try {
+      await api.post(`/doctors/${doctor.id}/patients`, { patient_cnp: patient.cnp })
+      notifySuccess("Assigned successfully.")
+      const response = await api.get(`/patients/${id}/doctors`)
+      setDoctors(getResponseData(response) || [])
+    } catch (error) {
+      notifyError(getErrorMessage(error))
+    }
+  }
+
+  const isDoctorAssigned = doctors.some(d => d.id === doctor?.id)
+
   const latestDisplayedVital = vitals[0]
   const paginatedVitals = vitals.slice((vitalsPage - 1) * pageSize, vitalsPage * pageSize)
   const maxVitalsPage = Math.max(1, Math.ceil(vitals.length / pageSize))
@@ -295,33 +329,44 @@ export default function PatientPage() {
             </div>
 
             <div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">{pageTitle}</h1>
+              <div className="mt-2 flex w-full items-start justify-between">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">{pageTitle}</h1>
 
-                <div className="group relative flex items-center">
-                  <button
-                    type="button"
-                    onClick={() => setIsTransferDialogOpen(true)}
-                    className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d5dbdb] transition hover:border-[#ff9900] hover:text-white"
-                  >
-                    {department || "--"}
-                  </button>
+                  <div className="group relative flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setIsTransferDialogOpen(true)}
+                      className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d5dbdb] transition hover:border-[#ff9900] hover:text-white"
+                    >
+                      {department || "--"}
+                    </button>
+
+                    <span
+                      className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs font-medium text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+        Move patient
+      </span>
+                  </div>
 
                   <span
-                    className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs font-medium text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                      Move patient
-                    </span>
+                    className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                      patient?.is_discharged
+                        ? "border-[#7f1d1d] bg-[#3b1010] text-[#fecaca]"
+                        : "border-[#1f4d36] bg-[#0e2519] text-[#bbf7d0]"
+                    }`}
+                  >
+      {patient?.is_discharged ? "Discharged" : "Admitted"}
+    </span>
+                 {!isDoctorAssigned && doctor && !isLoadingDoctors && (
+                   <button
+                     onClick={handleAssignToMe}
+                     className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:border-[#9dccff] hover:bg-[#15202b]"
+                   >
+                     Assign to Me
+                   </button>
+                 )}
                 </div>
 
-                <span
-                  className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
-                    patient?.is_discharged
-                      ? "border-[#7f1d1d] bg-[#3b1010] text-[#fecaca]"
-                      : "border-[#1f4d36] bg-[#0e2519] text-[#bbf7d0]"
-                  }`}
-                >
-                    {patient?.is_discharged ? "Discharged" : "Admitted"}
-                </span>
                 <BackButton/>
               </div>
 
@@ -360,7 +405,7 @@ export default function PatientPage() {
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#879196]">
                           {item.label}
                         </p>
-                        {item.label === "Phone Number" && <BackButton/>}
+                        {item.label === "Phone Number"}
                       </div>
                       <p
                         className={`mt-1 text-base font-semibold text-white ${item.isWide ? "wrap-break-word whitespace-normal leading-relaxed" : ""}`}
@@ -520,7 +565,36 @@ export default function PatientPage() {
             </div>
 
             <div className="monitor-card rounded-[28px] p-6">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Schedule</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Incoming Activities</h2>
+                </div>
+              </div>
 
+              {patientActivities.length === 0 ? (
+                <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                  No incoming activities for this patient.
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {patientActivities.map(activity => (
+                    <li key={activity.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+                      <div className="flex flex-col gap-2">
+                         <div className="flex justify-between items-start">
+                           <div>
+                             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">{activity.type}</p>
+                             <p className="mt-1 text-sm font-semibold text-white">{activity.title}</p>
+                           </div>
+                           <span className="text-xs text-[#879196]">{new Date(activity.scheduled_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                         </div>
+                         {activity.description && <p className="text-sm text-[#b6bec9]">{activity.description}</p>}
+                         <p className="text-xs text-[#879196]">{new Date(activity.scheduled_at).toLocaleDateString()}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </section>

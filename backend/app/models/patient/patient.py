@@ -4,7 +4,8 @@ from sqlalchemy import Boolean, Date, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.doctor.doctor_patient import doctor_patients
+from app.models.doctor.doctor_activity_patient import doctor_activity_patients
+from app.models.patient.patient_activity_doctor import patient_activity_doctors
 
 
 class Patient(Base):
@@ -20,6 +21,7 @@ class Patient(Base):
     gender: Mapped[str] = mapped_column(String(20))
     arrival_method: Mapped[str] = mapped_column(String(20), default="self")
     is_discharged: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_pregnant: Mapped[bool] = mapped_column(Boolean, default=False)
     discharge_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     discharge_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     address_street: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -29,7 +31,13 @@ class Patient(Base):
     address_state: Mapped[str | None] = mapped_column(String(100), nullable=True)
     address_postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     address_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    doctors: Mapped[list["Doctor"]] = relationship("Doctor", secondary=doctor_patients, back_populates="patients")
+    doctors: Mapped[list["Doctor"]] = relationship("Doctor", secondary=doctor_activity_patients, back_populates="patients")
+
+    activities = relationship(
+        "DoctorActivity",
+        secondary=patient_activity_doctors,
+        back_populates="patients"
+    )
 
     @property
     def address(self):

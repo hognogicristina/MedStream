@@ -37,6 +37,7 @@ from app.services.notifications import (
     send_password_reset_notifications,
     send_registration_notifications,
 )
+from app.models.patient.patient_activity_doctor import patient_activity_doctors
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 auth_router = APIRouter(tags=["auth"])
@@ -45,6 +46,14 @@ password_reset_ttl = timedelta(minutes=30)
 
 
 def serialize(model, schema):
+    if isinstance(model, DoctorActivity):
+        data = {
+            **model.__dict__,
+            "patient_ids": [p.id for p in model.patients],
+            "doctor_ids": [d.id for d in model.doctors],
+        }
+        return schema.model_validate(data).model_dump(mode="json")
+
     return schema.model_validate(model).model_dump(mode="json")
 
 
@@ -167,6 +176,7 @@ def get_doctor_activities(doctor_id: int):
 
         activities = db.execute(
             select(DoctorActivity)
+            .options(selectinload(DoctorActivity.patients), selectinload(DoctorActivity.doctors))
             .where(DoctorActivity.doctor_id == doctor_id)
             .order_by(DoctorActivity.scheduled_at.asc(), DoctorActivity.id.asc())
         ).scalars().all()
@@ -186,7 +196,11 @@ def create_doctor_activity(doctor_id: int, payload: DoctorActivityCreate):
             raise HTTPException(status_code=404, detail="Doctor not found.")
 
         patients = db.execute(
-            select(Patient).where(Patient.id.in_(payload.patient_ids))
+            select(Patient).options(selectinload(Patient.doctors)).where(Patient.id.in_(payload.patient_ids))
+        ).scalars().all()
+
+        doctors = db.execute(
+            select(Doctor).where(Doctor.id.in_(payload.doctor_ids))
         ).scalars().all()
 
         activity = DoctorActivity(
@@ -199,6 +213,13 @@ def create_doctor_activity(doctor_id: int, payload: DoctorActivityCreate):
         )
 
         activity.patients.extend(patients)
+        activity.doctors.extend(doctors)
+
+        # Automatically assign doctors to patients
+        for patient in patients:
+            for d in doctors:
+                if d not in patient.doctors:
+                    patient.doctors.append(d)
 
         db.add(activity)
         db.commit()
@@ -233,9 +254,30 @@ def update_doctor_activity(doctor_id: int, activity_id: int, payload: DoctorActi
 
         if payload.patient_ids is not None:
             patients = db.execute(
-                select(Patient).where(Patient.id.in_(payload.patient_ids))
+                select(Patient).options(selectinload(Patient.doctors)).where(Patient.id.in_(payload.patient_ids))
             ).scalars().all()
             activity.patients = patients
+
+        if payload.doctor_ids is not None:
+            doctors = db.execute(
+                select(Doctor).where(Doctor.id.in_(payload.doctor_ids))
+            ).scalars().all()
+            activity.doctors = doctors
+            
+            # Automatically assign added doctors to patients
+            if not getattr(activity, "patients", None):
+                activity_patients = db.execute(
+                    select(Patient).options(selectinload(Patient.doctors)).where(
+                        Patient.activities.any(DoctorActivity.id == activity.id)
+                    )
+                ).scalars().all()
+            else:
+                activity_patients = activity.patients
+                
+            for patient in activity_patients:
+                for d in doctors:
+                    if d not in patient.doctors:
+                        patient.doctors.append(d)
 
         db.commit()
         db.refresh(activity)
@@ -371,7 +413,7 @@ def confirm_password_reset(payload: PasswordResetConfirm):
 
 
 @router.get("/{doctor_id}/patients", response_model=ApiResponse[list[PatientRead]])
-def get_doctor_patients(doctor_id: int):
+def get_doctor_activity_patients(doctor_id: int):
     with SessionLocal() as db:
         doctor = db.execute(
             select(Doctor).options(selectinload(Doctor.patients)).where(Doctor.id == doctor_id)

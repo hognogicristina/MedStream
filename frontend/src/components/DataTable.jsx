@@ -16,6 +16,8 @@ export default function DataTable({
                                     bodyClassName = "divide-y divide-[#3b424b]",
                                     shellClassName = "overflow-hidden rounded-[24px] border border-[#3b424b] bg-[#151b22]",
                                     controlsLayoutClassName,
+                                    bottomControls,
+                                    simplePagination = false,
                                   }) {
   const pageSizeOptions = [5, 10, 15, 25]
   const buildInitialFilterValues = useCallback(() =>
@@ -190,8 +192,11 @@ export default function DataTable({
       </div>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="console-chip rounded-full px-4 py-2 text-sm font-medium">
-          Page {currentPage} of {maxPage}
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="console-chip rounded-full px-4 py-2 text-sm font-medium">
+            Page {currentPage} of {maxPage}
+          </div>
+          {bottomControls}
         </div>
         <div className="console-pagination">
           <button
@@ -203,25 +208,27 @@ export default function DataTable({
             <span className="console-pagination-arrow" aria-hidden="true">‹</span>
             <span className="console-pagination-label">Prev</span>
           </button>
-          <div className="console-pagination-pages">
-            {pageNumbers.map((pageNumber, index) => (
-              pageNumber === "..." ? (
-                <span key={`ellipsis-${index}`} className="console-pagination-ellipsis">
-                  ...
-                </span>
-              ) : (
-                <button
-                  key={pageNumber}
-                  type="button"
-                  className={`console-pagination-page ${pageNumber === currentPage ? "console-pagination-page-active" : ""}`}
-                  onClick={() => setCurrentPage(pageNumber)}
-                  aria-current={pageNumber === currentPage ? "page" : undefined}
-                >
-                  {pageNumber}
-                </button>
-              )
-            ))}
-          </div>
+          {!simplePagination && (
+            <div className="console-pagination-pages">
+              {pageNumbers.map((pageNumber, index) => (
+                pageNumber === "..." ? (
+                  <span key={`ellipsis-${index}`} className="console-pagination-ellipsis">
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    className={`console-pagination-page ${pageNumber === currentPage ? "console-pagination-page-active" : ""}`}
+                    onClick={() => setCurrentPage(pageNumber)}
+                    aria-current={pageNumber === currentPage ? "page" : undefined}
+                  >
+                    {pageNumber}
+                  </button>
+                )
+              ))}
+            </div>
+          )}
           <button
             className="console-pagination-button"
             onClick={() => setCurrentPage((prev) => Math.min(maxPage, prev + 1))}

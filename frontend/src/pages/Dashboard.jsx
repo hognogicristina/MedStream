@@ -6,7 +6,6 @@ import {api} from "../services/api"
 import {getErrorMessage, getResponseData} from "../services/apiMessages"
 import {createWebSocket} from "../services/ws"
 import VitalsChart from "../components/VitalsChart"
-import {DEPARTMENTS, departmentHref} from "../constants/departments"
 import {formatPatientFullName} from "../utils/patients"
 
 export default function Dashboard() {
@@ -22,6 +21,7 @@ export default function Dashboard() {
   const alertAudioRef = useRef(null)
   const alertBufferRef = useRef([])
   const alertHighlightTimeoutsRef = useRef([])
+  const [departments, setDepartments] = useState([])
 
   const [chartData, setChartData] = useState([])
 
@@ -31,14 +31,18 @@ export default function Dashboard() {
 
   const loadDashboardData = useCallback(async () => {
     try {
-      const [patientsRes, statsRes, batchStatusRes] = await Promise.all([
+      const [patientsRes, statsRes, batchStatusRes, departmentsRes] = await Promise.all([
         api.get("/patients?page=1&limit=100"),
         api.get("/stats"),
         api.get("/stats/batch-status"),
+        api.get("/departments"),
       ])
+
       setPatients(getResponseData(patientsRes))
       setStats(getResponseData(statsRes))
       setBatchStatus(getResponseData(batchStatusRes))
+      setDepartments(getResponseData(departmentsRes))
+
     } catch (error) {
       notifyError(getErrorMessage(error))
     } finally {
@@ -49,6 +53,18 @@ export default function Dashboard() {
   useEffect(() => {
     loadDashboardData()
   }, [loadDashboardData])
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await api.get("/departments")
+        setDepartments(getResponseData(res))
+      } catch {
+      }
+    }
+
+    load()
+  }, [])
 
   useEffect(() => {
     const intervalId = window.setInterval(async () => {
@@ -406,10 +422,9 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-3">
-              {DEPARTMENTS.map((department) => (
-                <Link key={department} className="monitor-panel rounded-[24px] p-5" to={departmentHref(department)}>
-                  <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Department</p>
-                  <h3 className="mt-2 text-xl font-semibold text-white">{department}</h3>
+              {departments.map((dep) => (
+                <Link key={dep} to={`/departments/${encodeURIComponent(dep)}`}>
+                  {dep}
                 </Link>
               ))}
             </div>

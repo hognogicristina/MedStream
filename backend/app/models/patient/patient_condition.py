@@ -10,7 +10,7 @@ class PatientCondition(Base):
     __tablename__ = "patient_conditions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(120), unique=True)
+    name: Mapped[str] = mapped_column(Text, unique=True)
     status: Mapped[str] = mapped_column(String(50))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
