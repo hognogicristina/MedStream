@@ -1,7 +1,5 @@
 from datetime import datetime
-
 from pydantic import BaseModel, field_validator
-
 from app.schemas.validators import require_non_empty
 
 
@@ -18,10 +16,10 @@ class PatientAllergyCreate(BaseModel):
 class PatientAllergyRead(BaseModel):
     id: int
     patient_id: int
+    doctor_id: int
     allergy_name: str
     severity: str
     created_at: datetime
-
     model_config = {"from_attributes": True}
 
 

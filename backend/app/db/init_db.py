@@ -2,24 +2,21 @@ from sqlalchemy import inspect
 
 from app.db.base import Base
 from app.db.session import engine
-from app.models.doctor import (
-    Doctor,
-    DoctorPasswordReset,
-    DoctorActivity,
-    doctor_activity_patients,
-)
-from app.models.patient import (
-    Patient,
-    PatientAdmissionHistory,
-    PatientAllergy,
-    PatientCondition,
-    PatientConditionAssignment,
-    PatientDiagnosis,
-)
+from app.models.doctor.doctor import Doctor
+from app.models.doctor.doctor_password_reset import DoctorPasswordReset
+from app.models.doctor.doctor_activity import DoctorActivity
+from app.models.doctor.doctor_activity_patient import doctor_activity_patients
+
+from app.models.patient.patient import Patient
+from app.models.patient.patient_admission_history import PatientAdmissionHistory
+from app.models.patient.patient_allergy import PatientAllergy
+from app.models.patient.patient_condition import PatientCondition
+from app.models.patient.patient_condition_assignment import PatientConditionAssignment
+from app.models.patient.patient_diagnosis import PatientDiagnosis
+from app.models.patient.patient_medication import PatientMedication
 from app.models import (
     Alert,
     Encounter,
-    PatientMedication,
     Vital,
 )
 from app.db.session import SessionLocal

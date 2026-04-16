@@ -11,6 +11,7 @@ class PatientAdmissionHistory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
+    doctor_id: Mapped[int] = mapped_column(ForeignKey("doctors.id"))
     type: Mapped[str] = mapped_column(String(20))
     reason: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

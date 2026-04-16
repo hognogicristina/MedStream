@@ -31,7 +31,7 @@ from app.schemas.doctor import (
 from app.schemas.doctor_activity import DoctorActivityCreate, DoctorActivityRead, DoctorActivityUpdate
 from app.schemas.patient import PatientRead
 from app.schemas.validators import normalize_phone_lookup
-from app.services.notifications import (
+from app.service.notifications import (
     send_account_recovery_notifications,
     send_email_change_confirmation,
     send_password_reset_notifications,
@@ -215,7 +215,6 @@ def create_doctor_activity(doctor_id: int, payload: DoctorActivityCreate):
         activity.patients.extend(patients)
         activity.doctors.extend(doctors)
 
-        # Automatically assign doctors to patients
         for patient in patients:
             for d in doctors:
                 if d not in patient.doctors:
@@ -263,7 +262,7 @@ def update_doctor_activity(doctor_id: int, activity_id: int, payload: DoctorActi
                 select(Doctor).where(Doctor.id.in_(payload.doctor_ids))
             ).scalars().all()
             activity.doctors = doctors
-            
+
             # Automatically assign added doctors to patients
             if not getattr(activity, "patients", None):
                 activity_patients = db.execute(
@@ -273,7 +272,7 @@ def update_doctor_activity(doctor_id: int, activity_id: int, payload: DoctorActi
                 ).scalars().all()
             else:
                 activity_patients = activity.patients
-                
+
             for patient in activity_patients:
                 for d in doctors:
                     if d not in patient.doctors:

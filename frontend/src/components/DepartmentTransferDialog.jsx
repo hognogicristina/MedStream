@@ -1,4 +1,5 @@
 import {useEffect, useState} from "react"
+import {api} from "../services/api"
 import {getResponseData} from "../services/apiMessages.js";
 
 export default function DepartmentTransferDialog({
@@ -11,6 +12,11 @@ export default function DepartmentTransferDialog({
   const [nextDepartment, setNextDepartment] = useState(currentDepartment || "")
   const [reason, setReason] = useState("")
   const [departments, setDepartments] = useState([])
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const itemsPerPage = 4
+  const maxPage = Math.max(1, Math.ceil(departments.length / itemsPerPage))
+  const currentDepartments = departments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   useEffect(() => {
     if (!isOpen) return
@@ -92,7 +98,7 @@ export default function DepartmentTransferDialog({
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">Select New Department</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {departments.map((department) => {
+              {currentDepartments.map((department) => {
                 const isCurrent = department === currentDepartment
                 const isSelected = !isCurrent && department === nextDepartment
 
@@ -118,12 +124,36 @@ export default function DepartmentTransferDialog({
                   >
                     <p className={`text-sm font-semibold ${isCurrent ? "text-[#879196]" : "text-white"}`}>{department}</p>
                     <p className={`mt-1 text-sm ${isCurrent ? "text-[#6b7280]" : "text-[#b6bec9]"}`}>
-                      {isCurrent ? "Current assignment" : "Available transfer destination"}
+                      {isCurrent ? "Current assignment" : "Available destination"}
                     </p>
                   </button>
                 )
               })}
             </div>
+            
+            {departments.length > itemsPerPage && (
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-xs font-semibold text-[#879196]">Page {currentPage} of {maxPage}</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="console-pagination-button"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(p => Math.min(maxPage, p + 1))}
+                    disabled={currentPage === maxPage}
+                    className="console-pagination-button"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from app.core.http import success_response
-from app.service.departments import load_departments
+from app.service.medical_history import load_departments
 
 router = APIRouter(prefix="/departments", tags=["departments"])
 

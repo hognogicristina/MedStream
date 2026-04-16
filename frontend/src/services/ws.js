@@ -56,7 +56,6 @@ function connectSocket() {
       const data = JSON.parse(event.data)
       broadcastMessage(data)
     } catch {
-      // Ignore malformed websocket payloads.
     }
   }
 

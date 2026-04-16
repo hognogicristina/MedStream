@@ -98,9 +98,6 @@ export default function LoginPage() {
             <form className="login-form" onSubmit={handleSubmit}>
 
               <div className="login-field">
-                <label className="login-label" htmlFor="identifier">
-                  {"Email or Phone Number"}
-                </label>
                 <input
                   id="identifier"
                   type="text"
@@ -113,9 +110,6 @@ export default function LoginPage() {
               </div>
 
               <div className="login-field">
-                <label className="login-label" htmlFor="password">
-                  {"Password"}
-                </label>
                 <input
                   id="password"
                   type="password"

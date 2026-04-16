@@ -66,7 +66,6 @@ class DoctorRead(BaseModel):
     license_number: str
     is_active: bool
     deleted_at: datetime | None
-
     model_config = {"from_attributes": True}
 
 
@@ -112,7 +111,6 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     token: str
-
     model_config = {"from_attributes": True}
 
 

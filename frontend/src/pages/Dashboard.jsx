@@ -72,7 +72,6 @@ export default function Dashboard() {
         const response = await api.get("/stats/batch-status")
         setBatchStatus(getResponseData(response))
       } catch {
-        // Keep the previous batch status when polling fails.
       }
     }, 10000)
 
@@ -112,7 +111,6 @@ export default function Dashboard() {
         setAlertCount(alertBufferRef.current.length)
         alertAudioRef.current.currentTime = 0
         alertAudioRef.current.play().catch(() => {
-          // Audio autoplay can be blocked by the browser.
         })
       }
 

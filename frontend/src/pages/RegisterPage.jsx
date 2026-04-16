@@ -1,7 +1,7 @@
-import {useState} from "react"
+import {useEffect, useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
 import {api} from "../services/api"
-import {getErrorMessage, getResponseMessage} from "../services/apiMessages"
+import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
 import {
   buildPatientPhoneNumber,
   ROMANIA_PHONE_PLACEHOLDER,
@@ -25,6 +25,19 @@ export default function RegisterPage() {
   const [message, setMessage] = useState("")
   const [isError, setIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [departments, setDepartments] = useState([])
+
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const res = await api.get("/departments")
+        setDepartments(getResponseData(res))
+      } catch (error) {
+        console.error("Failed to load departments", error)
+      }
+    }
+    loadDepartments()
+  }, [])
 
   const normalizedPhoneNumber = buildPatientPhoneNumber(form.phone_number)
 
@@ -196,7 +209,7 @@ export default function RegisterPage() {
                         value={form.first_name}
                         onChange={handleChange}
                         className="login-input"
-                        placeholder={"Example: Elena"}
+                        placeholder={"Elena"}
                         required
                       />
                     </div>
@@ -212,7 +225,7 @@ export default function RegisterPage() {
                         value={form.last_name}
                         onChange={handleChange}
                         className="login-input"
-                        placeholder={"Example: Popescu"}
+                        placeholder={"Popescu"}
                         required
                       />
                     </div>
@@ -229,7 +242,7 @@ export default function RegisterPage() {
                       value={form.email}
                       onChange={handleChange}
                       className="login-input"
-                      placeholder={"Example: doctor@medstream.ro"}
+                      placeholder={"doctor@medstream.ro"}
                       required
                     />
                   </div>
@@ -270,16 +283,19 @@ export default function RegisterPage() {
                       <label className="login-label" htmlFor="specialization">
                         {"Specialization"}
                       </label>
-                      <input
+                      <select
                         id="specialization"
                         name="specialization"
-                        type="text"
                         value={form.specialization}
                         onChange={handleChange}
                         className="login-input w-full"
-                        placeholder={"Example: Cardiology"}
                         required
-                      />
+                      >
+                        <option value="">Specialization</option>
+                        {departments.map(dep => (
+                          <option key={dep} value={dep}>{dep}</option>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="login-field relative z-0">
@@ -293,7 +309,7 @@ export default function RegisterPage() {
                         value={form.license_number}
                         onChange={handleChange}
                         className="login-input w-full"
-                        placeholder={"Example: DOC-20458"}
+                        placeholder={"DOC-20458"}
                         required
                       />
                     </div>

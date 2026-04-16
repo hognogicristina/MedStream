@@ -1,5 +1,4 @@
 from datetime import datetime
-
 from pydantic import BaseModel
 
 
@@ -10,7 +9,6 @@ class PatientStatsRead(BaseModel):
     avg_oxygen: float
     alerts_count: int
     computed_at: datetime
-
     model_config = {"from_attributes": True}
 
 

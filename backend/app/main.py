@@ -9,7 +9,8 @@ from fastapi.responses import JSONResponse, Response
 
 from app.api.alerts import router as alerts_router
 from app.api.doctors import auth_router, router as doctors_router
-from app.api.patients import router as patients_router
+from app.api.patients import option_router, router as patients_router
+from app.api.departments import router as departments_router
 from app.api.stats import router as stats_router
 from app.api.vitals import router as vitals_router
 from app.api.ws import router as ws_router
@@ -21,7 +22,6 @@ from app.kafka.consumer import run as run_consumer
 from app.kafka.topics import ensure_topics
 from threading import Thread
 from app.simulator.run_simulator import run as run_simulator
-from app.api.departments import router as departments_router
 
 background_threads_started = False
 background_threads_lock = threading.Lock()
@@ -149,6 +149,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(patients_router)
+app.include_router(option_router)
 app.include_router(auth_router)
 app.include_router(doctors_router)
 app.include_router(vitals_router)

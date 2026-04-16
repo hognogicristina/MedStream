@@ -9,6 +9,7 @@ from passlib.context import CryptContext
 
 from app.db.session import SessionLocal
 from app.kafka.producer import send_message
+from app.service.medical_history import DIAGNOSIS, ALLERGIES, DRUGS, ACTIVITY_TYPES, DOSAGES, FREQUENCIES, DEPARTMENTS, COUNTIES, STATUS
 
 from app.models.patient.patient import Patient
 from app.models.doctor.doctor import Doctor
@@ -26,80 +27,6 @@ from app.models.doctor.doctor_activity_patient import doctor_activity_patients
 
 fake = Faker("ro_RO")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-BASE_DIR = Path(__file__).resolve().parent
-
-
-def load_csv_column(path, index):
-    values = []
-    with open(BASE_DIR / path) as f:
-        reader = csv.reader(f)
-        next(reader, None)
-        for row in reader:
-            if len(row) > index:
-                values.append(row[index].strip())
-    return list(set(values))
-
-
-DIAGNOSIS = load_csv_column("diagnosis.csv", 1)
-ALLERGIES = load_csv_column("allergies.csv", 4)
-ACTIVITY_TYPES = [
-    "CONSULTATION",
-    "SURGERY",
-    "PROCEDURE",
-    "TRANSFER",
-    "LAB TEST",
-    "IMAGING"
-]
-DOSAGES = ["250mg", "500mg", "1g", "5ml", "10ml"]
-FREQUENCIES = [
-    "once daily",
-    "twice daily",
-    "every 8 hours",
-    "every 12 hours",
-    "as needed"
-]
-
-
-def load_departments():
-    values = set()
-
-    with open(BASE_DIR / "departments.csv") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            values.add(row["Department"].strip())
-
-    return list(values)
-
-
-DEPARTMENTS = load_departments()
-
-
-def load_drugs():
-    rows = []
-    with open(BASE_DIR / "drugs.csv") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            rows.append({
-                "medication": row["drug_name"].strip(),
-                "condition": row["medical_condition"].strip(),
-                "pregnancy_category": row["pregnancy_category"].strip()
-            })
-    return rows
-
-
-DRUGS = load_drugs()
-
-
-def load_counties():
-    values = []
-    with open(BASE_DIR / "counties.csv", encoding="cp1252") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            values.append(row["name"].strip())
-    return values
-
-
-COUNTIES = load_counties()
 
 
 def assign_doctor_to_patient(db, doctor_id, patient_id):
@@ -160,27 +87,51 @@ def random_doctor_for_department(db, department):
         .first()
 
 
-def generate_doctors(db, count=20):
-    for i in range(count):
-        department = DEPARTMENTS[i % len(DEPARTMENTS)]
+def generate_doctors(db, count=40):
+    doctors = []
+
+    for dept in DEPARTMENTS:
         birth_date = fake.date_of_birth(minimum_age=25, maximum_age=70)
 
         doctor = Doctor(
             first_name=fake.first_name(),
             last_name=fake.last_name(),
-            email=f"doctor{i}@med.local",
+            email=f"{dept.lower()}_{random.randint(1000, 9999)}@med.local",
             password_hash=pwd_context.hash("password123"),
-            specialization=department,
-            license_number=f"LIC-{1000 + i}",
+            specialization=dept,
+            license_number=f"LIC-{random.randint(10000, 99999)}",
             phone_number=f"+407{random.randint(1000000, 9999999)}",
             birth_date=birth_date
         )
+
         db.add(doctor)
+        doctors.append(doctor)
+
+    remaining = max(0, count - len(DEPARTMENTS))
+
+    for i in range(remaining):
+        dept = random.choice(DEPARTMENTS)
+        birth_date = fake.date_of_birth(minimum_age=25, maximum_age=70)
+
+        db.add(Doctor(
+            first_name=fake.first_name(),
+            last_name=fake.last_name(),
+            email=f"doctor_extra_{i}@med.local",
+            password_hash=pwd_context.hash("password123"),
+            specialization=dept,
+            license_number=f"LIC-{20000 + i}",
+            phone_number=f"+407{random.randint(1000000, 9999999)}",
+            birth_date=birth_date
+        ))
 
     db.commit()
 
 
 def generate_patient(db, index):
+    doctor = db.query(Doctor).order_by(func.random()).first()
+    if not doctor:
+        return None
+
     gender = random.choice(["male", "female"])
     birth_date = fake.date_of_birth(minimum_age=18, maximum_age=90)
     is_discharged = False
@@ -217,7 +168,7 @@ def generate_patient(db, index):
         first_name=fake.first_name_male() if gender == "male" else fake.first_name_female(),
         last_name=fake.last_name(),
         gender=gender,
-        department=random.choice(DEPARTMENTS),
+        department=doctor.specialization,
         birth_date=birth_date,
         cnp=generate_cnp(birth_date, gender, index),
         phone_number=generate_phone(db),
@@ -231,16 +182,7 @@ def generate_patient(db, index):
     db.add(patient)
     db.flush()
 
-    db.add(PatientAdmissionHistory(
-        patient_id=patient.id,
-        type="admission",
-        reason="Initial admission",
-        created_at=now - timedelta(hours=random.randint(1, 48))
-    ))
-
-    doctor = random_doctor_for_department(db, patient.department)
-    if doctor:
-        assign_doctor_to_patient(db, doctor.id, patient.id)
+    assign_doctor_to_patient(db, doctor.id, patient.id)
 
     db.add(Encounter(
         patient_id=patient.id,
@@ -254,12 +196,21 @@ def generate_patient(db, index):
         None
     )
 
+    db.add(PatientAdmissionHistory(
+        patient_id=patient.id,
+        doctor_id=doctor.id,
+        type="admission",
+        reason="Initial admission",
+        created_at=now - timedelta(hours=random.randint(1, 48))
+    ))
+
     if not is_discharged:
         if diagnosis:
             db.add(PatientDiagnosis(
                 patient_id=patient.id,
+                doctor_id=doctor.id,
                 diagnosis=diagnosis,
-                status="active"
+                status=random.choice(STATUS)
             ))
 
         if condition_name:
@@ -270,7 +221,7 @@ def generate_patient(db, index):
             if not condition:
                 condition = PatientCondition(
                     name=condition_name,
-                    status=random.choice(["active", "improving", "stable", "worsening", "critical", "resolved", "chronic"])
+                    status=random.choice(STATUS)
                 )
                 db.add(condition)
                 db.flush()
@@ -278,32 +229,34 @@ def generate_patient(db, index):
             existing_assignment = db.execute(
                 select(PatientConditionAssignment).where(
                     PatientConditionAssignment.patient_id == patient.id,
-                    PatientConditionAssignment.condition_id == condition.id
+                    PatientConditionAssignment.condition_id == condition.id,
+                    PatientConditionAssignment.doctor_id == doctor.id
                 )
             ).scalar_one_or_none()
 
             if not existing_assignment:
                 db.add(PatientConditionAssignment(
                     patient_id=patient.id,
-                    condition_id=condition.id
+                    condition_id=condition.id,
+                    doctor_id=doctor.id,
                 ))
 
         dosage = f"{random.choice(['1', '2'])}x {random.choice(DOSAGES)}"
         frequency = random.choice(FREQUENCIES)
 
-        if doctor:
-            db.add(PatientMedication(
-                patient_id=patient.id,
-                doctor_id=doctor.id,
-                name=medication_name,
-                dosage=dosage,
-                frequency=frequency,
-                created_at=datetime.utcnow().date()
-            ))
+        db.add(PatientMedication(
+            patient_id=patient.id,
+            doctor_id=doctor.id,
+            name=medication_name,
+            dosage=dosage,
+            frequency=frequency,
+            created_at=datetime.utcnow().date()
+        ))
 
         for allergy in random.sample(ALLERGIES, k=random.randint(0, 2)):
             db.add(PatientAllergy(
                 patient_id=patient.id,
+                doctor_id=doctor.id,
                 allergy_name=allergy,
                 severity=random.choice(["mild", "moderate", "severe"])
             ))
@@ -324,16 +277,17 @@ def generate_patient(db, index):
             existing_assignment = db.execute(
                 select(PatientConditionAssignment).where(
                     PatientConditionAssignment.patient_id == patient.id,
-                    PatientConditionAssignment.condition_id == condition.id
+                    PatientConditionAssignment.condition_id == condition.id,
+                    PatientConditionAssignment.doctor_id == doctor.id
                 )
             ).scalar_one_or_none()
 
             if not existing_assignment:
                 db.add(PatientConditionAssignment(
                     patient_id=patient.id,
-                    condition_id=condition.id
+                    condition_id=condition.id,
+                    doctor_id=doctor.id
                 ))
-
     db.commit()
 
     return {
@@ -492,8 +446,18 @@ def run():
                         "Stable condition"
                     ])
 
+                    doctor_link = db.execute(
+                        doctor_activity_patients.select().where(
+                            doctor_activity_patients.c.patient_id == patient.id
+                        )
+                    ).first()
+
+                    if not doctor_link:
+                        continue
+
                     db.add(PatientAdmissionHistory(
                         patient_id=patient.id,
+                        doctor_id=doctor_link.doctor_id,
                         type="discharge",
                         reason=patient.discharge_reason,
                         created_at=patient.discharge_date
@@ -514,6 +478,7 @@ def run():
                 create_alerts(db, pid, vital, vitals)
 
                 send_message("vitals-events", {
+                    "event": "vital",
                     "patient_id": pid,
                     **vitals
                 })

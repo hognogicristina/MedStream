@@ -86,9 +86,19 @@ def run():
                         raise RuntimeError(str(message.error()))
 
                     payload = json.loads(message.value().decode("utf-8"))
+                    payload = payload.get("data", payload)
+                    allowed_fields = {
+                        "patient_id",
+                        "heart_rate",
+                        "oxygen_saturation",
+                        "temperature",
+                        "systolic_bp",
+                        "diastolic_bp",
+                    }
 
+                    clean_payload = {k: v for k, v in payload.items() if k in allowed_fields}
                     with SessionLocal() as db:
-                        vital = Vital(**payload)
+                        vital = Vital(**clean_payload)
                         db.add(vital)
                         db.commit()
                         db.refresh(vital)

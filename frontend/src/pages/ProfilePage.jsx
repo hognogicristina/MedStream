@@ -157,7 +157,6 @@ export default function ProfilePage() {
     )
   })
 
-  // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (assignInputRef.current && !assignInputRef.current.contains(event.target)) {
@@ -375,7 +374,7 @@ export default function ProfilePage() {
                   items={assignedPatients}
                   loading={isLoading}
                   emptyMessage="No patients are currently assigned to this doctor."
-                  pageSize={5}
+                  pageSize={3}
                   controlsLayoutClassName="hidden"
                   getItemKey={(patient) => patient.id}
                   shellClassName="space-y-3"

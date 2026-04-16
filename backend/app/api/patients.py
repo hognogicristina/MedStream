@@ -8,6 +8,8 @@ from sqlalchemy.orm import selectinload
 from app.api.doctors import get_current_doctor
 from app.models.doctor.doctor_activity import DoctorActivity
 from app.models.doctor.doctor_activity_doctor import doctor_activity_doctors
+from app.models.doctor.doctor_activity_patient import doctor_activity_patients
+from app.service.medical_history import DIAGNOSIS, ALLERGIES, DRUGS, ACTIVITY_TYPES, DOSAGES, FREQUENCIES, DEPARTMENTS, COUNTIES
 
 from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
@@ -41,6 +43,7 @@ from app.schemas.patient_diagnosis import (
 )
 
 router = APIRouter(prefix="/patients", tags=["patients"])
+option_router = APIRouter(tags=["auth"])
 
 
 def serialize(model, schema):
@@ -81,26 +84,25 @@ def get_patient_or_404(db, patient_id: int):
 
 
 def verify_patient_access(db, doctor_id: int, patient_id: int):
-    # Check if doctor is explicitly assigned
     is_assigned = db.execute(
         select(Patient.id)
         .join(patient.doctors.property.secondary, patient.doctors.property.secondary.c.patient_id == Patient.id)
         .where(patient.doctors.property.secondary.c.doctor_id == doctor_id, Patient.id == patient_id)
     ).scalar_one_or_none()
-    
+
     if is_assigned is not None:
         return
-        
+
     has_activity = db.execute(
         select(DoctorActivity.id)
         .join(Patient.activities.property.secondary, Patient.activities.property.secondary.c.activity_id == DoctorActivity.id)
         .join(doctor_activity_doctors, doctor_activity_doctors.c.doctor_activity_id == DoctorActivity.id)
         .where(
-            doctor_activity_doctors.c.doctor_id == doctor_id, 
+            doctor_activity_doctors.c.doctor_id == doctor_id,
             Patient.activities.property.secondary.c.patient_id == patient_id
         )
     ).scalar_one_or_none()
-    
+
     if has_activity is None:
         raise HTTPException(status_code=403, detail="Doctor is not assigned to this patient.")
 
@@ -306,10 +308,13 @@ def get_full_medical_history(id: int):
         get_patient_or_404(db, id)
 
         conditions = db.execute(
-            select(PatientCondition)
-            .join(PatientConditionAssignment, PatientConditionAssignment.condition_id == PatientCondition.id)
+            select(PatientCondition, PatientConditionAssignment)
+            .join(
+                PatientConditionAssignment,
+                PatientConditionAssignment.condition_id == PatientCondition.id
+            )
             .where(PatientConditionAssignment.patient_id == id)
-        ).scalars().all()
+        ).all()
 
         allergies = db.execute(
             select(PatientAllergy).where(PatientAllergy.patient_id == id)
@@ -333,7 +338,14 @@ def get_full_medical_history(id: int):
         return success_response(
             "Patient full medical history retrieved successfully.",
             {
-                "conditions": serialize_many(conditions, PatientConditionRead),
+                "conditions": [
+                    {
+                        **serialize(condition, PatientConditionRead),
+                        "doctor_id": assignment.doctor_id,
+                        "assignment_id": assignment.id,
+                    }
+                    for condition, assignment in conditions
+                ],
                 "allergies": serialize_many(allergies, PatientAllergyRead),
                 "diagnosis": serialize_many(diagnosis, PatientDiagnosisRead),
                 "medications": serialize_many(medications, PatientMedicationRead),
@@ -405,7 +417,7 @@ def update_condition_assignment(assignment_id: int, payload: ConditionUpdate, au
 
         if assignment is None:
             raise HTTPException(status_code=404, detail="Assignment not found.")
-            
+
         verify_patient_access(db, current_doctor.id, assignment.patient_id)
 
         if payload.status:
@@ -509,7 +521,7 @@ def update_patient_diagnosis(diagnosis_id: int, payload: PatientDiagnosisUpdate,
 
         if diagnosis is None:
             raise HTTPException(status_code=404, detail="Diagnosis not found.")
-            
+
         verify_patient_access(db, current_doctor.id, diagnosis.patient_id)
 
         diagnosis.status = payload.status
@@ -570,9 +582,14 @@ def get_patient_activities(id: int):
 
         activities = db.execute(
             select(DoctorActivity)
-            .options(selectinload(DoctorActivity.doctors), selectinload(DoctorActivity.patients))
-            .join(patient_activity_doctors, patient_activity_doctors.c.activity_id == DoctorActivity.id)
-            .where(patient_activity_doctors.c.patient_id == id)
+            .join(doctor_activity_doctors, doctor_activity_doctors.c.doctor_activity_id == DoctorActivity.id)
+            .join(Patient.doctors.property.secondary,
+                  Patient.doctors.property.secondary.c.doctor_id == doctor_activity_doctors.c.doctor_id)
+            .where(Patient.doctors.property.secondary.c.patient_id == id)
+            .options(
+                selectinload(DoctorActivity.doctors),
+                selectinload(DoctorActivity.patients)
+            )
             .order_by(desc(DoctorActivity.scheduled_at))
         ).scalars().all()
 
@@ -581,9 +598,10 @@ def get_patient_activities(id: int):
             [
                 {
                     **serialize(activity, DoctorActivityRead),
-                    "patient_ids": [p.id for p in activity.patients],
+                    "patient_ids": [],
                     "doctor_ids": [d.id for d in activity.doctors]
-                } for activity in activities
+                }
+                for activity in activities
             ],
         )
 
@@ -596,7 +614,7 @@ def update_medication(medication_id: int, payload: MedicationUpdate, authorizati
 
         if medication is None:
             raise HTTPException(status_code=404, detail="Medication not found.")
-            
+
         verify_patient_access(db, current_doctor.id, medication.patient_id)
 
         if payload.dosage:
@@ -612,19 +630,32 @@ def update_medication(medication_id: int, payload: MedicationUpdate, authorizati
         )
 
 
-@router.get("/{id}/doctors", response_model=ApiResponse[list[DoctorRead]])
-def get_patient_doctors(id: int):
+@option_router.get("/options/diagnosis")
+def get_diagnosis_options():
+    return success_response("Diagnosis options", DIAGNOSIS)
+
+
+@option_router.get("/options/allergies")
+def get_allergy_options():
+    return success_response("Allergy options", ALLERGIES)
+
+
+@option_router.get("/options/medications")
+def get_medication_options():
+    meds = list({d["medication"] for d in DRUGS})
+    return success_response("Medication options", meds)
+
+
+@option_router.get("/options/conditions")
+def get_condition_options():
     with SessionLocal() as db:
-        get_patient_or_404(db, id)
-
-        doctors = db.execute(
-            select(Doctor)
-            .join(doctor_activity_patients, doctor_activity_patients.c.doctor_id == Doctor.id)
-            .where(doctor_activity_patients.c.patient_id == id)
-            .order_by(Doctor.id.desc())
-        ).scalars().all()
-
+        conditions = db.query(PatientCondition).all()
         return success_response(
-            "Patient doctors retrieved successfully.",
-            serialize_many(doctors, DoctorRead),
+            "Condition options",
+            serialize_many(conditions, PatientConditionRead)
         )
+
+
+@option_router.get("/options/activities")
+def get_activity_options():
+    return success_response("Activity type options", ACTIVITY_TYPES)

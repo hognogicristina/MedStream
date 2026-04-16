@@ -1,7 +1,5 @@
 from datetime import datetime
-
 from pydantic import BaseModel, Field, field_validator
-
 from app.schemas.validators import require_non_empty
 
 
@@ -17,10 +15,10 @@ class PatientAdmissionActionCreate(BaseModel):
 class PatientAdmissionHistoryRead(BaseModel):
     id: int
     patient_id: int
+    doctor_id: int
     type: str
     reason: str
     created_at: datetime
-
     model_config = {"from_attributes": True}
 
 

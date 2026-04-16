@@ -224,6 +224,23 @@ export default function DepartmentPage() {
 
                   return alertSummary.severities.has(value)
                 },
+              },
+              {
+                id: "statusFilter",
+                label: "Status",
+                type: "select",
+                defaultValue: "all",
+                options: [
+                  {value: "all", label: "All patients"},
+                  {value: "admitted", label: "Admitted"},
+                  {value: "discharged", label: "Discharged"},
+                ],
+                matches: ({patient}, value) => {
+                  if (value === "all") return true
+                  if (value === "admitted") return !patient.is_discharged
+                  if (value === "discharged") return patient.is_discharged === true
+                  return true
+                },
               }
             ]}
             getItemKey={(row) => row.patient.id}

@@ -80,9 +80,10 @@ function PaginationControls({page, maxPage, onPrevious, onNext}) {
 
 export default function PatientPage() {
   const {notifyError, notifySuccess} = useNotifications()
-  const {doctor} = useAuth()
+  const {token} = useAuth()
   const {id} = useParams()
   const pageSize = 5
+  const [currentDoctor, setCurrentDoctor] = useState(null)
   const [patient, setPatient] = useState(null)
   const [vitals, setVitals] = useState([])
   const [vitalsHistory, setVitalsHistory] = useState([])
@@ -102,6 +103,9 @@ export default function PatientPage() {
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(true)
   const [patientActivities, setPatientActivities] = useState([])
   const alertAudioRef = useRef(null)
+  const [showActivityDialog, setShowActivityDialog] = useState(false)
+  const [activityTypes, setActivityTypes] = useState([])
+  const [activityForm, setActivityForm] = useState({title: "", description: "", type: "", scheduled_at: "", doctor_ids: []})
 
   if (!alertAudioRef.current) {
     alertAudioRef.current = new Audio("/alert.mp3")
@@ -121,6 +125,20 @@ export default function PatientPage() {
     setIsTransferDialogOpen(false)
   }, [id])
 
+  useEffect(() => {
+    const fetchMe = async () => {
+      if (!token) return
+      try {
+        const res = await api.get("/doctors/me", {
+          headers: {Authorization: `Bearer ${token}`}
+        })
+        setCurrentDoctor(getResponseData(res))
+      } catch (e) {
+      }
+    }
+    fetchMe()
+  }, [token])
+
   const loadPatient = useCallback(async () => {
     setIsLoadingPatient(true)
 
@@ -129,16 +147,22 @@ export default function PatientPage() {
       const patientData = getResponseData(response)
       setPatient(patientData)
       setDepartment(patientData.department)
+      const typesRes = await api.get("/options/activities")
+      setActivityTypes(getResponseData(typesRes) || [])
 
       try {
         const activitiesRes = await api.get(`/patients/${id}/activities`)
         const activities = getResponseData(activitiesRes) || []
-        const incoming = activities.filter(a => a.status === 'incoming')
+        const now = Date.now()
+        const incoming = activities.filter(a => {
+          if (!a.scheduled_at) return false
+          return new Date(a.scheduled_at).getTime() > now
+        })
         setPatientActivities(incoming)
       } catch (e) {
         setPatientActivities([])
       }
-      
+
       try {
         const doctorsRes = await api.get(`/patients/${id}/doctors`)
         setDoctors(getResponseData(doctorsRes) || [])
@@ -155,6 +179,20 @@ export default function PatientPage() {
       setIsLoadingPatient(false)
     }
   }, [id, notifyError])
+
+  const openActivityDialog = () => {
+    if (!currentDoctor) return
+
+    setActivityForm({
+      title: "",
+      description: "",
+      type: "",
+      scheduled_at: "",
+      doctor_ids: [currentDoctor.id]
+    })
+
+    setShowActivityDialog(true)
+  }
 
   const loadAdmissionHistory = useCallback(async (page = admissionHistoryPage) => {
     setIsLoadingAdmissionHistory(true)
@@ -249,8 +287,10 @@ export default function PatientPage() {
   }
 
   const handleAssignToMe = async () => {
+    if (!currentDoctor || !patient) return
+
     try {
-      await api.post(`/doctors/${doctor.id}/patients`, { patient_cnp: patient.cnp })
+      await api.post(`/doctors/${currentDoctor.id}/patients/${patient.id}`)
       notifySuccess("Assigned successfully.")
       const response = await api.get(`/patients/${id}/doctors`)
       setDoctors(getResponseData(response) || [])
@@ -259,8 +299,7 @@ export default function PatientPage() {
     }
   }
 
-  const isDoctorAssigned = doctors.some(d => d.id === doctor?.id)
-
+  const isDoctorAssigned = currentDoctor && doctors.some(d => d.id === currentDoctor.id)
   const latestDisplayedVital = vitals[0]
   const paginatedVitals = vitals.slice((vitalsPage - 1) * pageSize, vitalsPage * pageSize)
   const maxVitalsPage = Math.max(1, Math.ceil(vitals.length / pageSize))
@@ -300,6 +339,7 @@ export default function PatientPage() {
     {label: "Birth Date", value: patientBirthDate},
     {label: "Age", value: patientAge},
     {label: "Gender", value: patient?.gender || "--"},
+    ...(patient?.gender?.toLowerCase() === 'female' ? [{label: "Pregnant", value: patient?.is_pregnant ? "Yes" : "No"}] : []),
     {label: "Arrival Method", value: formatArrivalMethod(patient?.arrival_method)},
     {label: "Phone Number", value: patient?.phone_number ? formatPatientPhoneWithCode(patient.phone_number) : "--"},
     {label: "Country", value: patientCountry},
@@ -318,6 +358,29 @@ export default function PatientPage() {
       setAdmissionHistoryPage(maxAdmissionHistoryPage)
     }
   }, [admissionHistoryPage, maxAdmissionHistoryPage])
+
+  const handleCreateActivity = async () => {
+    try {
+      if (activityForm.doctor_ids.length === 0) {
+        notifyError("Select at least one doctor")
+        return
+      }
+      const mainDoctor = activityForm.doctor_ids[0]
+      await api.post(`/doctors/${mainDoctor}/activities`, {
+        ...activityForm,
+        patient_ids: [Number(id)]
+      })
+      notifySuccess("Activity created")
+      setShowActivityDialog(false)
+      loadPatient()
+    } catch (e) {
+      notifyError(getErrorMessage(e))
+    }
+  }
+
+  const departmentDoctors = doctors.filter(
+    d => d.specialization === patient?.department
+  )
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -357,14 +420,20 @@ export default function PatientPage() {
                   >
       {patient?.is_discharged ? "Discharged" : "Admitted"}
     </span>
-                 {!isDoctorAssigned && doctor && !isLoadingDoctors && (
-                   <button
-                     onClick={handleAssignToMe}
-                     className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:border-[#9dccff] hover:bg-[#15202b]"
-                   >
-                     Assign to Me
-                   </button>
-                 )}
+                  {!isDoctorAssigned && currentDoctor && !isLoadingDoctors && (
+                    <button
+                      onClick={handleAssignToMe}
+                      className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:border-[#9dccff] hover:bg-[#15202b]"
+                    >
+                      Assign to Me
+                    </button>
+                  )}
+                  {isDoctorAssigned && currentDoctor && !isLoadingDoctors && (
+                    <span
+                      className="inline-flex rounded-full border border-[#1f4d36] bg-[#0e2519] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#bbf7d0]">
+                     Assigned
+                   </span>
+                  )}
                 </div>
 
                 <BackButton/>
@@ -570,8 +639,93 @@ export default function PatientPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Schedule</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Incoming Activities</h2>
                 </div>
+                <button
+                  onClick={openActivityDialog}
+                  className="console-button-secondary rounded-full px-3 py-1 text-xs font-semibold"
+                >
+                  Add Activity
+                </button>
               </div>
 
+              {showActivityDialog && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+                  <div className="monitor-card p-6 rounded-2xl w-full max-w-md space-y-3">
+
+                    <h2 className="text-xl text-white">Add Activity</h2>
+
+                    <input
+                      className="console-input w-full"
+                      placeholder="Activity Title"
+                      value={activityForm.title}
+                      onChange={e => setActivityForm({...activityForm, title: e.target.value})}
+                    />
+
+                    <textarea
+                      className="console-input w-full"
+                      placeholder="Activity Description"
+                      value={activityForm.description}
+                      onChange={e => setActivityForm({...activityForm, description: e.target.value})}
+                    />
+
+                    <select
+                      className="console-input w-full"
+                      value={activityForm.type}
+                      onChange={e => setActivityForm({...activityForm, type: e.target.value})}
+                    >
+                      <option value="">Select type</option>
+                      {activityTypes.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+
+                    <input
+                      type="datetime-local"
+                      className="console-input w-full"
+                      value={activityForm.scheduled_at}
+                      onChange={e => setActivityForm({...activityForm, scheduled_at: e.target.value})}
+                    />
+
+                    <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
+                      <span className="text-sm text-[#ff9900]">Doctors (same department)</span>
+
+                      {departmentDoctors.map(d => (
+                        <label key={d.id} className="flex gap-2 items-center text-sm">
+                          <input
+                            type="checkbox"
+                            checked={activityForm.doctor_ids.includes(d.id)}
+                            onChange={(e) => {
+                              const ids = new Set(activityForm.doctor_ids)
+                              if (e.target.checked) ids.add(d.id)
+                              else ids.delete(d.id)
+
+                              setActivityForm({...activityForm, doctor_ids: [...ids]})
+                            }}
+                          />
+                          {d.first_name} {d.last_name}
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={handleCreateActivity}
+                        disabled={activityForm.doctor_ids.length === 0}
+                        className="console-button-primary w-full"
+                      >
+                        Save
+                      </button>
+
+                      <button
+                        onClick={() => setShowActivityDialog(false)}
+                        className="console-button-secondary w-full"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+              )}
               {patientActivities.length === 0 ? (
                 <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
                   No incoming activities for this patient.
@@ -581,15 +735,18 @@ export default function PatientPage() {
                   {patientActivities.map(activity => (
                     <li key={activity.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
                       <div className="flex flex-col gap-2">
-                         <div className="flex justify-between items-start">
-                           <div>
-                             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">{activity.type}</p>
-                             <p className="mt-1 text-sm font-semibold text-white">{activity.title}</p>
-                           </div>
-                           <span className="text-xs text-[#879196]">{new Date(activity.scheduled_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                         </div>
-                         {activity.description && <p className="text-sm text-[#b6bec9]">{activity.description}</p>}
-                         <p className="text-xs text-[#879196]">{new Date(activity.scheduled_at).toLocaleDateString()}</p>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">{activity.type}</p>
+                            <p className="mt-1 text-sm font-semibold text-white">{activity.title}</p>
+                          </div>
+                          <span className="text-xs text-[#879196]">{new Date(activity.scheduled_at).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}</span>
+                        </div>
+                        {activity.description && <p className="text-sm text-[#b6bec9]">{activity.description}</p>}
+                        <p className="text-xs text-[#879196]">{new Date(activity.scheduled_at).toLocaleDateString()}</p>
                       </div>
                     </li>
                   ))}
@@ -618,3 +775,4 @@ export default function PatientPage() {
     </div>
   )
 }
+

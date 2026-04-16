@@ -18,13 +18,12 @@ class PatientMedicationCreate(BaseModel):
 class PatientMedicationRead(BaseModel):
     id: int
     patient_id: int
+    doctor_id: int
     name: str
     dosage: str
-
     created_at: datetime
     updated_at: datetime | None = None
     last_updated_note: str | None = None
-
     model_config = {"from_attributes": True}
 
 

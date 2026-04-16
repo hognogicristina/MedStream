@@ -11,6 +11,7 @@ class PatientAllergy(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
+    doctor_id: Mapped[int] = mapped_column(ForeignKey("doctors.id"))
     allergy_name: Mapped[str] = mapped_column(String(255))
     severity: Mapped[str] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
