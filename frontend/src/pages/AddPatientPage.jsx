@@ -1,6 +1,7 @@
 import {useEffect, useState} from "react"
 import BackButton from "../components/BackButton"
 import {useNotifications} from "../components/NotificationProvider"
+import {useAuth} from "../auth/AuthContext"
 import {Link, useNavigate} from "react-router-dom"
 import {api} from "../services/api"
 import {getErrorMessage, getResponseData} from "../services/apiMessages"
@@ -20,13 +21,14 @@ export default function AddPatientPage() {
     cnp: "",
     birth_date: "",
     gender: "",
-    department: "ER",
     arrival_method: "self",
+    is_pregnant: false,
   })
   const [address, setAddress] = useState(buildEmptyPatientAddress())
   const [phoneNumber, setPhoneNumber] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [departments, setDepartments] = useState([])
+  const {token} = useAuth()
+  const [currentDoctor, setCurrentDoctor] = useState(null)
 
 
   const normalizedPhoneNumber = buildPatientPhoneNumber(phoneNumber)
@@ -36,7 +38,6 @@ export default function AddPatientPage() {
     && form.cnp.trim()
     && form.birth_date
     && form.gender.trim()
-    && form.department.trim()
     && normalizedPhoneNumber.trim(),
   )
   const isStepTwoValid = Boolean(
@@ -49,7 +50,13 @@ export default function AddPatientPage() {
 
   const handleChange = (event) => {
     const {name, value} = event.target
-    setForm((prev) => ({...prev, [name]: value}))
+    setForm((prev) => {
+      const updates = { [name]: name === "is_pregnant" ? value === "true" : value }
+      if (name === "gender" && value === "male") {
+        updates.is_pregnant = false
+      }
+      return { ...prev, ...updates }
+    })
   }
 
   const handleAddressChange = (event) => {
@@ -83,10 +90,23 @@ export default function AddPatientPage() {
     try {
       const response = await api.post("/patients", {
         ...form,
+        department: currentDoctor?.specialization || "ER",
         phone_number: normalizedPhoneNumber,
         address: normalizePatientAddress(address),
       })
-      navigate(`/patient/${getResponseData(response).id}`)
+      const patientData = getResponseData(response)
+
+      if (currentDoctor?.id) {
+        try {
+          await api.post(`/doctors/${currentDoctor.id}/patients/${patientData.id}`, null, {
+            headers: token ? {Authorization: `Bearer ${token}`} : {}
+          })
+        } catch (assignError) {
+          console.error("Failed to assign patient to doctor", assignError)
+        }
+      }
+
+      navigate(`/patient/${patientData.id}`)
     } catch (error) {
       notifyError(getErrorMessage(error))
     } finally {
@@ -95,26 +115,19 @@ export default function AddPatientPage() {
   }
 
   useEffect(() => {
-    const loadDepartments = async () => {
+    const fetchMe = async () => {
+      if (!token) return
       try {
-        const res = await api.get("/departments")
-        setDepartments(getResponseData(res))
+        const res = await api.get("/doctors/me", {
+          headers: {Authorization: `Bearer ${token}`}
+        })
+        setCurrentDoctor(getResponseData(res))
       } catch (error) {
-        notifyError(getErrorMessage(error))
+        console.error("Failed to load current doctor", error)
       }
     }
-
-    loadDepartments()
-  }, [notifyError])
-
-  useEffect(() => {
-    if (departments.length > 0 && !form.department) {
-      setForm((prev) => ({
-        ...prev,
-        department: departments[0],
-      }))
-    }
-  }, [departments])
+    fetchMe()
+  }, [token])
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -185,14 +198,18 @@ export default function AddPatientPage() {
                            placeholder={ROMANIA_PHONE_PLACEHOLDER} className="login-input" required/>
                   </div>
                   <div className="login-field">
-                    <label className="login-label" htmlFor="patient-department">{"Department"}</label>
-                    <select id="patient-department" name="department" value={form.department} onChange={handleChange}
-                            className="login-input" required>
-                      {departments.map((department) => (
-                        <option key={department} value={department}>
-                          {department}
-                        </option>
-                      ))}
+                    <label className="login-label" htmlFor="patient-pregnant">{"Pregnant"}</label>
+                    <select
+                      id="patient-pregnant"
+                      name="is_pregnant"
+                      value={String(form.is_pregnant)}
+                      onChange={handleChange}
+                      className="login-input"
+                      disabled={!form.gender || form.gender === "male"}
+                      required
+                    >
+                      <option value="false">{"No"}</option>
+                      <option value="true">{"Yes"}</option>
                     </select>
                   </div>
                   <div className="login-field">

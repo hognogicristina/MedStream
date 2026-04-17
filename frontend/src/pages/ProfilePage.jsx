@@ -4,7 +4,7 @@ import ActivityList from "../components/ActivityList"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
 import DataTable from "../components/DataTable"
-import DoctorActivityDialog from "../components/DoctorActivityDialog"
+import ActivityDialog from "../components/ActivityDialog"
 import {useNotifications} from "../components/NotificationProvider"
 import {useAuth} from "../auth/AuthContext"
 import {api} from "../services/api"
@@ -432,7 +432,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="monitor-panel rounded-2xl p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Assigned</p>
-                  <p className="mt-3 text-lg font-semibold text-white"><CountValue value={assignedPatients.length.length}/></p>
+                  <p className="mt-3 text-lg font-semibold text-white"><CountValue value={assignedPatients.length}/></p>
                 </div>
                 <div className="monitor-panel rounded-2xl p-4 sm:col-span-2 lg:col-span-1">
                   <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Available</p>
@@ -914,7 +914,7 @@ export default function ProfilePage() {
         )}
 
         {isActivityDialogOpen && (
-          <DoctorActivityDialog
+          <ActivityDialog
             activity={selectedActivity}
             activityTypes={activityTypes}
             currentDoctorId={doctor?.id}

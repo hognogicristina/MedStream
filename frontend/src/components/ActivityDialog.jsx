@@ -35,19 +35,19 @@ function matchesParticipantSearch(item, query) {
   return fullName.includes(normalizedQuery)
 }
 
-export default function PatientActivityDialog({
-                                                activity,
-                                                activityTypes,
-                                                currentDoctorId,
-                                                doctors,
-                                                isOpen,
-                                                isSubmitting,
-                                                mode = "create",
-                                                onClose,
-                                                onSubmit,
-                                                patientSelectionMode = "multiple",
-                                                patients,
-                                              }) {
+export default function ActivityDialog({
+                                         activity,
+                                         activityTypes,
+                                         currentDoctorId,
+                                         doctors,
+                                         isOpen,
+                                         isSubmitting,
+                                         mode = "create",
+                                         onClose,
+                                         onSubmit,
+                                         patientSelectionMode = "multiple",
+                                         patients,
+                                       }) {
   const patientPageSize = 8
   const buildInitialForm = () => {
     const selectedDoctorIds = Array.from(new Set([
@@ -74,8 +74,13 @@ export default function PatientActivityDialog({
   const [patientPage, setPatientPage] = useState(1)
 
   const filteredPatients = useMemo(
-    () => patients.filter((patient) => matchesParticipantSearch(patient, patientQuery)),
-    [patientQuery, patients],
+    () => patients
+      .filter((patient) =>
+        !patient.is_discharged &&
+        patient.department === doctors.find(d => d.id === currentDoctorId)?.specialization
+      )
+      .filter((patient) => matchesParticipantSearch(patient, patientQuery)),
+    [patientQuery, patients, doctors, currentDoctorId],
   )
   const maxPatientPage = Math.max(1, Math.ceil(filteredPatients.length / patientPageSize))
   const currentPatientPage = Math.min(patientPage, maxPatientPage)
@@ -229,7 +234,7 @@ export default function PatientActivityDialog({
 
           <div className={`grid gap-4 ${patientSelectionMode === "hidden" ? "" : "sm:grid-cols-2"}`}>
             {patientSelectionMode !== "hidden" && mode !== "edit" && (
-              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+              <div className="rounded-xl border border-[#3b424b] bg-[#151b22] p-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">
                     {patientSelectionMode === "single" ? "Patient" : "Patients Involved"}
@@ -295,14 +300,13 @@ export default function PatientActivityDialog({
                 )}
               </div>
             )}
-
-            <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+            <div className="rounded-xl border border-[#3b424b] bg-[#151b22] p-3 text-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">Doctors Involved</p>
-              <div className="mt-3 space-y-2 max-h-44 overflow-y-auto pr-1">
+              <div className="mt-3 space-y-2 max-h-36 overflow-y-auto pr-1">
                 {doctors.map((doctor) => {
                   const isCurrentDoctor = doctor.id === currentDoctorId
                   return (
-                    <label key={doctor.id} className="flex items-center gap-3 text-sm text-[#d5dbdb]">
+                    <label key={doctor.id} className="flex items-center gap-2 text-xs text-[#d5dbdb]">
                       <input
                         type="checkbox"
                         checked={form.doctorIds.includes(doctor.id) || isCurrentDoctor}

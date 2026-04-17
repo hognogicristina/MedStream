@@ -8,15 +8,20 @@ export default function DepartmentTransferDialog({
                                                    isSubmitting,
                                                    onClose,
                                                    onSubmit,
+                                                   allDoctors = [],
                                                  }) {
-  const [nextDepartment, setNextDepartment] = useState(currentDepartment || "")
+  const [nextDepartment, setNextDepartment] = useState("")
+  const [nextDoctorId, setNextDoctorId] = useState("")
   const [reason, setReason] = useState("")
   const [departments, setDepartments] = useState([])
   const [currentPage, setCurrentPage] = useState(1)
 
+  const availableDepartments = departments.filter((dep) => dep !== currentDepartment)
   const itemsPerPage = 4
-  const maxPage = Math.max(1, Math.ceil(departments.length / itemsPerPage))
-  const currentDepartments = departments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+  const maxPage = Math.max(1, Math.ceil(availableDepartments.length / itemsPerPage))
+  const currentDepartments = availableDepartments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
+  const availableDoctors = allDoctors.filter(d => d.specialization === nextDepartment)
 
   useEffect(() => {
     if (!isOpen) return
@@ -38,7 +43,8 @@ export default function DepartmentTransferDialog({
     }
 
     const resetTimer = window.setTimeout(() => {
-      setNextDepartment(currentDepartment || "")
+      setNextDepartment("")
+      setNextDoctorId("")
       setReason("")
     }, 0)
 
@@ -50,7 +56,7 @@ export default function DepartmentTransferDialog({
   }
 
   const trimmedReason = reason.trim()
-  const canSubmit = nextDepartment && nextDepartment !== currentDepartment && trimmedReason.length > 0 && !isSubmitting
+  const canSubmit = nextDepartment && nextDoctorId && trimmedReason.length > 0 && !isSubmitting
 
   const handleSubmit = (event) => {
     event.preventDefault()
@@ -61,6 +67,7 @@ export default function DepartmentTransferDialog({
 
     onSubmit({
       department: nextDepartment,
+      doctorId: nextDoctorId,
       reason: trimmedReason,
     })
   }
@@ -99,61 +106,57 @@ export default function DepartmentTransferDialog({
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">Select New Department</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {currentDepartments.map((department) => {
-                const isCurrent = department === currentDepartment
-                const isSelected = !isCurrent && department === nextDepartment
+                const isSelected = department === nextDepartment
 
                 return (
                   <button
                     key={department}
                     type="button"
                     onClick={() => {
-                      if (isCurrent || isSubmitting) {
+                      if (isSubmitting) {
                         return
                       }
 
                       setNextDepartment(department)
+                      setNextDoctorId("")
                     }}
-                    disabled={isCurrent || isSubmitting}
+                    disabled={isSubmitting}
                     className={`rounded-2xl border px-4 py-4 text-left transition ${
-                      isCurrent
-                        ? "cursor-not-allowed border-[#31363f] bg-[#10151c] text-[#6b7280] opacity-70"
-                        : isSelected
-                          ? "border-[#ff9900] bg-[#1b2430]"
-                          : "border-[#3b424b] bg-[#151b22] hover:border-[#4d5661]"
+                      isSelected
+                        ? "border-[#ff9900] bg-[#1b2430]"
+                        : "border-[#3b424b] bg-[#151b22] hover:border-[#4d5661]"
                     }`}
                   >
-                    <p className={`text-sm font-semibold ${isCurrent ? "text-[#879196]" : "text-white"}`}>{department}</p>
-                    <p className={`mt-1 text-sm ${isCurrent ? "text-[#6b7280]" : "text-[#b6bec9]"}`}>
-                      {isCurrent ? "Current assignment" : "Available destination"}
+                    <p className={`text-sm font-semibold text-white`}>{department}</p>
+                    <p className={`mt-1 text-sm text-[#b6bec9]`}>
+                      Available destination
                     </p>
                   </button>
                 )
               })}
             </div>
-            
-            {departments.length > itemsPerPage && (
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-xs font-semibold text-[#879196]">Page {currentPage} of {maxPage}</p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="console-pagination-button"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage(p => Math.min(maxPage, p + 1))}
-                    disabled={currentPage === maxPage}
-                    className="console-pagination-button"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]" htmlFor="doctor-select">
+              Assign Doctor
+            </label>
+            <select
+              id="doctor-select"
+              value={nextDoctorId}
+              onChange={(e) => setNextDoctorId(e.target.value)}
+              disabled={isSubmitting || !nextDepartment}
+              className="console-input mt-3 w-full rounded-2xl px-4 py-3 outline-none"
+            >
+              <option value="" disabled>
+                {nextDepartment ? "Select a doctor" : "Select a department first"}
+              </option>
+              {availableDoctors.map(doc => (
+                <option key={doc.id} value={doc.id}>
+                  Dr. {doc.first_name} {doc.last_name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -165,7 +168,7 @@ export default function DepartmentTransferDialog({
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               placeholder="Enter the operational reason for this transfer."
-              rows={4}
+              rows={2}
               className="console-input mt-3 w-full rounded-2xl px-4 py-3 outline-none"
               disabled={isSubmitting}
               required
@@ -173,22 +176,42 @@ export default function DepartmentTransferDialog({
             <p className="mt-2 text-xs text-[#879196]">Document why the patient is being reassigned before confirming the transfer.</p>
           </div>
 
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
-            >
-              {isSubmitting ? "Transferring..." : "Confirm Transfer"}
-            </button>
+          <div className="flex items-center justify-between">
+            <div>
+              {availableDepartments.length > itemsPerPage && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-[#879196]">Page {currentPage} of {maxPage}</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1 || isSubmitting}
+                      className="console-pagination-button"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(p => Math.min(maxPage, p + 1))}
+                      disabled={currentPage === maxPage || isSubmitting}
+                      className="console-pagination-button"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+              >
+                {isSubmitting ? "Transferring..." : "Confirm Transfer"}
+              </button>
+            </div>
           </div>
         </form>
       </div>

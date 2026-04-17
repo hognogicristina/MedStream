@@ -7,7 +7,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
-from app.api.activities import router as activities_router
 from app.api.alerts import router as alerts_router
 from app.api.conditions import router as conditions_router
 from app.api.doctors import auth_router, router as doctors_router
@@ -155,7 +154,6 @@ app.include_router(patients_router)
 app.include_router(option_router)
 app.include_router(auth_router)
 app.include_router(doctors_router)
-app.include_router(activities_router)
 app.include_router(conditions_router)
 app.include_router(medications_router)
 app.include_router(vitals_router)
