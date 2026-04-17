@@ -97,15 +97,6 @@ def update_activity(activity_id: int, payload: DoctorActivityUpdate, authorizati
             activity.status = normalized_status
             updated_fields.append("status")
 
-        if payload.patient_ids is not None:
-            patients = load_patients_for_activity(db, payload.patient_ids)
-            for patient in patients:
-                verify_patient_assignment(db, current_doctor.id, patient.id)
-            ensure_activity_patients_match_doctor_department(patients, current_doctor)
-        else:
-            patients = list(activity.patients)
-        ensure_activity_patients_are_editable(patients)
-
         if payload.doctor_ids is not None:
             doctor_ids = payload.doctor_ids
             if current_doctor.id not in doctor_ids:
@@ -114,11 +105,10 @@ def update_activity(activity_id: int, payload: DoctorActivityUpdate, authorizati
         else:
             doctors = list(activity.doctors)
 
-        if payload.patient_ids is not None or payload.doctor_ids is not None:
+        patients = list(activity.patients)
+        if payload.doctor_ids is not None:
             ensure_activity_departments_match(patients, doctors)
             attach_activity_relationships(activity, patients, doctors)
-            if payload.patient_ids is not None:
-                updated_fields.append("patient_ids")
             if payload.doctor_ids is not None:
                 updated_fields.append("doctor_ids")
 

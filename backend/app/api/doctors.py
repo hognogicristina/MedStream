@@ -286,9 +286,6 @@ def update_doctor_activity(doctor_id: int, activity_id: int, payload: DoctorActi
             activity.status = normalized_status
             updated_fields.append("status")
 
-        if payload.patient_ids is not None:
-            raise HTTPException(status_code=400, detail="Patient cannot be modified for an existing activity.")
-
         patients = list(activity.patients)
         ensure_activity_patients_are_editable(patients)
 
@@ -300,7 +297,8 @@ def update_doctor_activity(doctor_id: int, activity_id: int, payload: DoctorActi
         else:
             doctors = list(activity.doctors)
 
-        if payload.patient_ids is not None or payload.doctor_ids is not None:
+        patients = list(activity.patients)
+        if payload.doctor_ids is not None:
             ensure_activity_departments_match(patients, doctors)
             attach_activity_relationships(activity, patients, doctors)
             if payload.doctor_ids is not None:

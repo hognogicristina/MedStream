@@ -158,6 +158,11 @@ export default function ProfilePage() {
   const availablePatients = patients.filter(
     (patient) => !assignedPatients.some((assignedPatient) => assignedPatient.id === patient.id),
   )
+  const filteredAssignedPatients = availablePatients.filter(
+    (patient) =>
+      patient.department === doctor?.specialization
+      && patient.is_discharged === false
+  )
   const activityPatients = assignedPatients.filter((patient) => patient.department === doctor?.specialization)
   const activityDoctors = allDoctors.filter((item) => item.specialization === doctor?.specialization)
   const isProfileFormValid = Boolean(
@@ -175,7 +180,7 @@ export default function ProfilePage() {
   const isPendingEmail = Boolean(doctor?.pending_email) || doctor?.email_confirmed === false
   const isEmailDirty = emailInput.trim() && emailInput.trim() !== displayedEmail
   const normalizedAssignmentQuery = assignmentQuery.trim().toLowerCase()
-  const assignmentSuggestions = availablePatients
+  const assignmentSuggestions = filteredAssignedPatients
     .filter((patient) => {
       if (!normalizedAssignmentQuery) {
         return true
@@ -185,7 +190,7 @@ export default function ProfilePage() {
       return patient.cnp.toLowerCase().includes(normalizedAssignmentQuery) || patientName.includes(normalizedAssignmentQuery)
     })
     .slice(0, 8)
-  const selectedPatient = availablePatients.find((patient) => {
+  const selectedPatient = filteredAssignedPatients.find((patient) => {
     const patientName = formatPatientFullName(patient)
     const normalizedPatientName = patientName.toLowerCase()
     const optionLabel = `${patient.cnp} | ${patientName}`.toLowerCase()
@@ -405,12 +410,6 @@ export default function ProfilePage() {
     setActivityPage(1)
   }, [activities])
 
-  const filteredAssignedPatients = assignedPatients.filter(
-    (patient) =>
-      patient.department === doctor?.specialization
-      && patient.is_discharged === false
-  )
-
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
@@ -433,11 +432,11 @@ export default function ProfilePage() {
                 </div>
                 <div className="monitor-panel rounded-2xl p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Assigned</p>
-                  <p className="mt-3 text-lg font-semibold text-white"><CountValue value={filteredAssignedPatients.length.length}/></p>
+                  <p className="mt-3 text-lg font-semibold text-white"><CountValue value={assignedPatients.length.length}/></p>
                 </div>
                 <div className="monitor-panel rounded-2xl p-4 sm:col-span-2 lg:col-span-1">
                   <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Available</p>
-                  <p className="mt-3 text-lg font-semibold text-white"><CountValue value={availablePatients.length}/></p>
+                  <p className="mt-3 text-lg font-semibold text-white"><CountValue value={filteredAssignedPatients.length}/></p>
                 </div>
               </div>
             </div>
@@ -465,7 +464,7 @@ export default function ProfilePage() {
                 </div>
 
                 <DataTable
-                  items={filteredAssignedPatients}
+                  items={assignedPatients}
                   loading={isLoading}
                   emptyMessage="No patients are currently assigned to this doctor."
                   pageSize={3}
@@ -645,7 +644,7 @@ export default function ProfilePage() {
                       className="login-input"
                       placeholder="Example: 6010101123451 or Popescu Andrei"
                       autoComplete="off"
-                      disabled={availablePatients.length === 0 || isAssigningPatient}
+                      disabled={filteredAssignedPatients.length === 0 || isAssigningPatient}
                     />
 
                     {isAssignDropdownOpen && assignmentSuggestions.length > 0 && (
