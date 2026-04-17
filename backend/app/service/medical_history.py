@@ -29,6 +29,19 @@ def load_drugs():
     return rows
 
 
+def load_conditions():
+    values = set()
+
+    with open(DATA_DIR / "drugs.csv", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            condition = (row.get("medical_condition") or "").strip()
+            if condition:
+                values.add(condition)
+
+    return sorted(values)
+
+
 def load_departments():
     values = set()
 
@@ -54,7 +67,9 @@ DEPARTMENTS = load_departments()
 DIAGNOSIS = load_csv_column("diagnosis.csv", 1)
 ALLERGIES = load_csv_column("allergies.csv", 4)
 DRUGS = load_drugs()
-ACTIVITY_TYPES = ["CONSULTATION", "SURGERY", "PROCEDURE", "TRANSFER", "LAB TEST", "IMAGING"]
+CONDITIONS = load_conditions()
+ACTIVITY_TYPES = ["Consultation", "Surgery", "Procedure", "Transfer", "Lab test", "Imaging"]
 DOSAGES = ["250mg", "500mg", "1g", "5ml", "10ml"]
 FREQUENCIES = ["once daily", "twice daily", "every 8 hours", "every 12 hours", "as needed"]
 STATUS = ["active", "improving", "stable", "worsening", "critical", "resolved", "chronic"]
+DISCHARGE = ["Recovered", "Transferred", "Stable condition"]

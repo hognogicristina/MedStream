@@ -1,6 +1,6 @@
 import re
 
-from app.simulator.run_simulator import DEPARTMENTS
+from app.helpers.medical_history import DEPARTMENTS
 
 ROMANIA_COUNTRY = "Romania"
 CNP_CONTROL_WEIGHTS = "279146358279"

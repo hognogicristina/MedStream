@@ -8,6 +8,18 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
+from app.api.activity_utils import (
+    attach_activity_relationships,
+    ensure_activity_departments_match,
+    ensure_activity_patients_are_editable,
+    ensure_activity_patients_match_doctor_department,
+    ensure_activity_modifier,
+    ensure_supported_activity_type,
+    load_activity_or_404,
+    load_doctors_for_activity,
+    load_patients_for_activity,
+    serialize_activity,
+)
 from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
 from app.models.doctor.doctor_activity import DoctorActivity
@@ -47,12 +59,7 @@ password_reset_ttl = timedelta(minutes=30)
 
 def serialize(model, schema):
     if isinstance(model, DoctorActivity):
-        data = {
-            **model.__dict__,
-            "patient_ids": [p.id for p in model.patients],
-            "doctor_ids": [d.id for d in model.doctors],
-        }
-        return schema.model_validate(data).model_dump(mode="json")
+        return serialize_activity(model)
 
     return schema.model_validate(model).model_dump(mode="json")
 
@@ -188,102 +195,125 @@ def get_doctor_activities(doctor_id: int):
 
 
 @router.post("/{doctor_id}/activities", response_model=ApiResponse[DoctorActivityRead])
-def create_doctor_activity(doctor_id: int, payload: DoctorActivityCreate):
+def create_doctor_activity(doctor_id: int, payload: DoctorActivityCreate, authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
+    from app.api.patients import verify_patient_assignment
+
     with SessionLocal() as db:
+        if current_doctor.id != doctor_id:
+            raise HTTPException(status_code=403, detail="Doctors can only create activities for themselves.")
+
         doctor = db.get(Doctor, doctor_id)
 
         if doctor is None:
             raise HTTPException(status_code=404, detail="Doctor not found.")
 
-        patients = db.execute(
-            select(Patient).options(selectinload(Patient.doctors)).where(Patient.id.in_(payload.patient_ids))
-        ).scalars().all()
+        ensure_supported_activity_type(payload.type)
+        patients = load_patients_for_activity(db, payload.patient_ids)
+        for patient in patients:
+            verify_patient_assignment(db, current_doctor.id, patient.id)
+        ensure_activity_patients_match_doctor_department(patients, current_doctor)
+        ensure_activity_patients_are_editable(patients)
 
-        doctors = db.execute(
-            select(Doctor).where(Doctor.id.in_(payload.doctor_ids))
-        ).scalars().all()
+        doctor_ids = payload.doctor_ids
+        if current_doctor.id not in doctor_ids:
+            doctor_ids = [current_doctor.id, *doctor_ids]
+        doctors = load_doctors_for_activity(db, doctor_ids)
+        ensure_activity_departments_match(patients, doctors)
 
         activity = DoctorActivity(
             doctor_id=doctor_id,
+            patient_id=patients[0].id,
             type=payload.type,
             title=payload.title,
             description=payload.description,
             scheduled_at=payload.scheduled_at,
             status="incoming",
         )
-
-        activity.patients.extend(patients)
-        activity.doctors.extend(doctors)
-
-        for patient in patients:
-            for d in doctors:
-                if d not in patient.doctors:
-                    patient.doctors.append(d)
+        attach_activity_relationships(activity, patients, doctors)
 
         db.add(activity)
         db.commit()
         db.refresh(activity)
+        activity = load_activity_or_404(db, activity.id)
 
         return success_response(
             "Doctor activity added successfully.",
-            serialize(activity, DoctorActivityRead),
+            serialize_activity(activity),
             status_code=201,
         )
 
 
 @router.patch("/{doctor_id}/activities/{activity_id}", response_model=ApiResponse[DoctorActivityRead])
-def update_doctor_activity(doctor_id: int, activity_id: int, payload: DoctorActivityUpdate):
-    with SessionLocal() as db:
-        activity = db.get(DoctorActivity, activity_id)
+def update_doctor_activity(doctor_id: int, activity_id: int, payload: DoctorActivityUpdate,
+                           authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
+    from app.api.patients import verify_patient_assignment
 
-        if activity is None or activity.doctor_id != doctor_id:
+    with SessionLocal() as db:
+        if current_doctor.id != doctor_id:
+            raise HTTPException(status_code=403, detail="Doctors can only update their own activities.")
+
+        activity = load_activity_or_404(db, activity_id)
+
+        if activity.doctor_id != doctor_id:
             raise HTTPException(status_code=404, detail="Activity not found.")
+
+        ensure_activity_modifier(activity, doctor_id)
+        updated_fields = []
+
+        if payload.type is not None:
+            ensure_supported_activity_type(payload.type)
+            activity.type = payload.type
+            updated_fields.append("type")
 
         if payload.title is not None:
             activity.title = payload.title
+            updated_fields.append("title")
 
         if payload.description is not None:
             activity.description = payload.description
+            updated_fields.append("description")
 
         if payload.scheduled_at is not None:
             activity.scheduled_at = payload.scheduled_at
+            updated_fields.append("scheduled_at")
 
         if payload.status is not None:
-            activity.status = payload.status
+            normalized_status = payload.status.strip().lower()
+            if normalized_status not in {"incoming", "completed", "canceled"}:
+                raise HTTPException(status_code=400, detail="Invalid activity status.")
+            activity.status = normalized_status
+            updated_fields.append("status")
 
         if payload.patient_ids is not None:
-            patients = db.execute(
-                select(Patient).options(selectinload(Patient.doctors)).where(Patient.id.in_(payload.patient_ids))
-            ).scalars().all()
-            activity.patients = patients
+            raise HTTPException(status_code=400, detail="Patient cannot be modified for an existing activity.")
+
+        patients = list(activity.patients)
+        ensure_activity_patients_are_editable(patients)
 
         if payload.doctor_ids is not None:
-            doctors = db.execute(
-                select(Doctor).where(Doctor.id.in_(payload.doctor_ids))
-            ).scalars().all()
-            activity.doctors = doctors
+            doctor_ids = payload.doctor_ids
+            if current_doctor.id not in doctor_ids:
+                doctor_ids = [current_doctor.id, *doctor_ids]
+            doctors = load_doctors_for_activity(db, doctor_ids)
+        else:
+            doctors = list(activity.doctors)
 
-            # Automatically assign added doctors to patients
-            if not getattr(activity, "patients", None):
-                activity_patients = db.execute(
-                    select(Patient).options(selectinload(Patient.doctors)).where(
-                        Patient.activities.any(DoctorActivity.id == activity.id)
-                    )
-                ).scalars().all()
-            else:
-                activity_patients = activity.patients
-
-            for patient in activity_patients:
-                for d in doctors:
-                    if d not in patient.doctors:
-                        patient.doctors.append(d)
+        if payload.patient_ids is not None or payload.doctor_ids is not None:
+            ensure_activity_departments_match(patients, doctors)
+            attach_activity_relationships(activity, patients, doctors)
+            if payload.doctor_ids is not None:
+                updated_fields.append("doctor_ids")
 
         db.commit()
-        db.refresh(activity)
+        activity = load_activity_or_404(db, activity.id)
 
         return success_response(
-            "Doctor activity updated successfully.",
-            serialize(activity, DoctorActivityRead),
+            "Doctor activity updated successfully."
+            if not updated_fields
+            else f"Doctor activity updated successfully. Updated: {', '.join(updated_fields)}.",
+            serialize_activity(activity),
         )
 
 
@@ -449,8 +479,12 @@ def delete_doctor(doctor_id: int, payload: DoctorDeactivateRequest):
 
 
 @router.post("/{doctor_id}/patients/{patient_id}", response_model=ApiResponse[list[PatientRead]])
-def assign_patient_to_doctor(doctor_id: int, patient_id: int):
+def assign_patient_to_doctor(doctor_id: int, patient_id: int, authorization: str | None = Header(default=None)):
+    current_doctor = get_current_doctor(authorization)
     with SessionLocal() as db:
+        if current_doctor.id != doctor_id:
+            raise HTTPException(status_code=403, detail="Doctors can only assign patients to themselves.")
+
         doctor = db.execute(
             select(Doctor).options(selectinload(Doctor.patients)).where(Doctor.id == doctor_id)
         ).scalar_one_or_none()
@@ -461,6 +495,9 @@ def assign_patient_to_doctor(doctor_id: int, patient_id: int):
 
         if patient is None:
             raise HTTPException(status_code=404, detail="Patient not found.")
+
+        if doctor.specialization != patient.department:
+            raise HTTPException(status_code=400, detail="Doctor can only be assigned to patients in the same department.")
 
         if not any(existing_patient.id == patient.id for existing_patient in doctor.patients):
             doctor.patients.append(patient)

@@ -21,6 +21,7 @@ from app.models import (
 )
 from app.db.session import SessionLocal
 from app.schemas.validators import ROMANIA_COUNTRY, normalize_phone_number
+from app.service.medical_history import CONDITIONS, STATUS
 
 
 def ensure_doctor_columns():
@@ -78,6 +79,7 @@ def ensure_patient_columns():
     inspector = inspect(engine)
     columns = {column["name"] for column in inspector.get_columns("patients")}
     indexes = {index["name"] for index in inspector.get_indexes("patients")}
+    condition_assignment_columns = {column["name"] for column in inspector.get_columns("patient_condition_assignments")}
 
     with engine.begin() as connection:
         if "phone_number" not in columns:
@@ -111,6 +113,15 @@ def ensure_patient_columns():
 
         if "ix_patients_phone_number" not in indexes:
             connection.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS ix_patients_phone_number ON patients (phone_number)")
+
+        if "status" not in condition_assignment_columns:
+            connection.exec_driver_sql("ALTER TABLE patient_condition_assignments ADD COLUMN status VARCHAR(50) NOT NULL DEFAULT 'active'")
+
+        if "notes" not in condition_assignment_columns:
+            connection.exec_driver_sql("ALTER TABLE patient_condition_assignments ADD COLUMN notes TEXT")
+
+        if "diagnosed_at" not in condition_assignment_columns:
+            connection.exec_driver_sql("ALTER TABLE patient_condition_assignments ADD COLUMN diagnosed_at TIMESTAMP NOT NULL DEFAULT NOW()")
 
 
 def normalize_patient_phone_numbers():
@@ -214,10 +225,44 @@ def cleanup_legacy_event_table():
         connection.exec_driver_sql("DROP TABLE IF EXISTS events")
 
 
+def cleanup_legacy_medical_history_table():
+    inspector = inspect(engine)
+
+    if not inspector.has_table("patient_medical_history"):
+        return
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql("DROP TABLE IF EXISTS patient_medical_history")
+
+
+def sync_conditions_from_drugs():
+    with SessionLocal() as db:
+        existing_conditions = {
+            condition.name: condition
+            for condition in db.query(PatientCondition).all()
+        }
+        did_change = False
+
+        for name in CONDITIONS:
+            if name in existing_conditions:
+                continue
+
+            db.add(PatientCondition(
+                name=name,
+                status="active" if "active" in STATUS else STATUS[0],
+            ))
+            did_change = True
+
+        if did_change:
+            db.commit()
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     ensure_doctor_columns()
     ensure_patient_columns()
     cleanup_legacy_event_table()
+    cleanup_legacy_medical_history_table()
+    sync_conditions_from_drugs()
     normalize_doctor_defaults()
     normalize_patient_phone_numbers()

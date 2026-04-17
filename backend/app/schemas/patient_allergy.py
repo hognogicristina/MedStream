@@ -28,3 +28,7 @@ class PatientAllergyPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class PatientAllergyUpdate(BaseModel):
+    severity: str | None = None

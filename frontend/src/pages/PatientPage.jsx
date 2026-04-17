@@ -1,8 +1,11 @@
 import {useCallback, useEffect, useRef, useState} from "react"
 import {Link, useParams} from "react-router-dom"
 import BackButton from "../components/BackButton"
+import ActivityList from "../components/ActivityList"
 import DepartmentTransferDialog from "../components/DepartmentTransferDialog"
 import EditPatientDialog from "../components/EditPatientDialog"
+import PatientActivityDialog from "../components/PatientActivityDialog"
+import {usePatientAdmissionActions} from "../hooks/usePatientAdmissionActions"
 import {useNotifications} from "../components/NotificationProvider"
 import {api} from "../services/api"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
@@ -48,6 +51,22 @@ function formatArrivalMethod(value) {
   return value || "--"
 }
 
+function normalizeActivity(activity, patientId) {
+  const patientIds = Array.isArray(activity.patient_ids) ? activity.patient_ids : []
+  const doctorIds = Array.isArray(activity.doctor_ids) ? activity.doctor_ids : []
+  const patients = Array.isArray(activity.patients) ? activity.patients : []
+  const doctors = Array.isArray(activity.doctors) ? activity.doctors : []
+
+  return {
+    ...activity,
+    patient_ids: patientIds,
+    doctor_ids: doctorIds,
+    patients,
+    doctors,
+    belongsToPatient: patientIds.map(String).includes(String(patientId)) || String(activity.patient_id || "") === String(patientId),
+  }
+}
+
 function PaginationControls({page, maxPage, onPrevious, onNext}) {
   return (
     <div className="mb-4 flex items-center justify-between gap-3">
@@ -86,26 +105,36 @@ export default function PatientPage() {
   const [currentDoctor, setCurrentDoctor] = useState(null)
   const [patient, setPatient] = useState(null)
   const [vitals, setVitals] = useState([])
-  const [vitalsHistory, setVitalsHistory] = useState([])
   const [alerts, setAlerts] = useState([])
-  const [admissionHistory, setAdmissionHistory] = useState([])
-  const [admissionHistoryTotal, setAdmissionHistoryTotal] = useState(0)
   const [department, setDepartment] = useState("")
   const [isUpdatingDepartment, setIsUpdatingDepartment] = useState(false)
   const [isLoadingPatient, setIsLoadingPatient] = useState(true)
-  const [isLoadingAdmissionHistory, setIsLoadingAdmissionHistory] = useState(true)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isSavingPatient, setIsSavingPatient] = useState(false)
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
   const [vitalsPage, setVitalsPage] = useState(1)
-  const [admissionHistoryPage, setAdmissionHistoryPage] = useState(1)
   const [doctors, setDoctors] = useState([])
+  const [allDoctors, setAllDoctors] = useState([])
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(true)
   const [patientActivities, setPatientActivities] = useState([])
+  const [isLoadingActivities, setIsLoadingActivities] = useState(true)
+  const [activityLoadError, setActivityLoadError] = useState("")
+  const [isSavingActivity, setIsSavingActivity] = useState(false)
+  const [activityDialogMode, setActivityDialogMode] = useState("create")
+  const [selectedActivity, setSelectedActivity] = useState(null)
+  const [activityPendingCancellation, setActivityPendingCancellation] = useState(null)
   const alertAudioRef = useRef(null)
   const [showActivityDialog, setShowActivityDialog] = useState(false)
   const [activityTypes, setActivityTypes] = useState([])
-  const [activityForm, setActivityForm] = useState({title: "", description: "", type: "", scheduled_at: "", doctor_ids: []})
+  const authHeaders = token ? {Authorization: `Bearer ${token}`} : {}
+  const admissionActions = usePatientAdmissionActions({
+    authHeaders,
+    patientId: id,
+    onPatientChange: setPatient,
+    notifyError,
+    notifySuccess,
+  })
+  const {loadDischargeTypes} = admissionActions
 
   if (!alertAudioRef.current) {
     alertAudioRef.current = new Audio("/alert.mp3")
@@ -114,15 +143,16 @@ export default function PatientPage() {
   useEffect(() => {
     setPatient(null)
     setVitals([])
-    setVitalsHistory([])
     setAlerts([])
-    setAdmissionHistory([])
-    setAdmissionHistoryTotal(0)
     setDepartment("")
     setVitalsPage(1)
-    setAdmissionHistoryPage(1)
     setIsEditDialogOpen(false)
     setIsTransferDialogOpen(false)
+    setPatientActivities([])
+    setActivityLoadError("")
+    setShowActivityDialog(false)
+    setSelectedActivity(null)
+    setActivityPendingCancellation(null)
   }, [id])
 
   useEffect(() => {
@@ -133,7 +163,8 @@ export default function PatientPage() {
           headers: {Authorization: `Bearer ${token}`}
         })
         setCurrentDoctor(getResponseData(res))
-      } catch (e) {
+      } catch (error) {
+        console.error("Failed to load current doctor", error)
       }
     }
     fetchMe()
@@ -141,35 +172,56 @@ export default function PatientPage() {
 
   const loadPatient = useCallback(async () => {
     setIsLoadingPatient(true)
+    setIsLoadingDoctors(true)
+    setIsLoadingActivities(true)
+    setActivityLoadError("")
 
     try {
       const response = await api.get(`/patients/${id}`)
       const patientData = getResponseData(response)
       setPatient(patientData)
       setDepartment(patientData.department)
-      const typesRes = await api.get("/options/activities")
-      setActivityTypes(getResponseData(typesRes) || [])
+      const [typesResult, activitiesResult, patientDoctorsResult, doctorsResult] = await Promise.allSettled([
+        api.get("/options/activities"),
+        api.get(`/patients/${id}/activities`),
+        api.get(`/patients/${id}/doctors`),
+        api.get("/doctors"),
+      ])
 
-      try {
-        const activitiesRes = await api.get(`/patients/${id}/activities`)
-        const activities = getResponseData(activitiesRes) || []
-        const now = Date.now()
-        const incoming = activities.filter(a => {
-          if (!a.scheduled_at) return false
-          return new Date(a.scheduled_at).getTime() > now
-        })
-        setPatientActivities(incoming)
-      } catch (e) {
+      if (typesResult.status === "fulfilled") {
+        setActivityTypes(getResponseData(typesResult.value) || [])
+      } else {
+        setActivityTypes([])
+        notifyError(getErrorMessage(typesResult.reason))
+      }
+
+      if (activitiesResult.status === "fulfilled") {
+        const activities = (getResponseData(activitiesResult.value) || [])
+          .map((activity) => normalizeActivity(activity, id))
+          .filter((activity) => activity.belongsToPatient)
+          .sort((left, right) => new Date(left.scheduled_at) - new Date(right.scheduled_at))
+
+        setPatientActivities(activities)
+        setActivityLoadError("")
+      } else {
         setPatientActivities([])
+        setActivityLoadError(getErrorMessage(activitiesResult.reason))
+        notifyError(getErrorMessage(activitiesResult.reason))
       }
 
-      try {
-        const doctorsRes = await api.get(`/patients/${id}/doctors`)
-        setDoctors(getResponseData(doctorsRes) || [])
-      } catch (e) {
+      if (patientDoctorsResult.status === "fulfilled") {
+        setDoctors(getResponseData(patientDoctorsResult.value) || [])
+      } else {
         setDoctors([])
+        notifyError(getErrorMessage(patientDoctorsResult.reason))
       }
-      setIsLoadingDoctors(false)
+
+      if (doctorsResult.status === "fulfilled") {
+        setAllDoctors(getResponseData(doctorsResult.value) || [])
+      } else {
+        setAllDoctors([])
+        notifyError(getErrorMessage(doctorsResult.reason))
+      }
 
     } catch (error) {
       setPatient(null)
@@ -177,47 +229,21 @@ export default function PatientPage() {
       notifyError(getErrorMessage(error))
     } finally {
       setIsLoadingPatient(false)
+      setIsLoadingDoctors(false)
+      setIsLoadingActivities(false)
     }
   }, [id, notifyError])
 
   const openActivityDialog = () => {
-    if (!currentDoctor) return
-
-    setActivityForm({
-      title: "",
-      description: "",
-      type: "",
-      scheduled_at: "",
-      doctor_ids: [currentDoctor.id]
-    })
-
+    if (!currentDoctor || !canManagePatientActivities) return
+    setActivityDialogMode("create")
+    setSelectedActivity(null)
     setShowActivityDialog(true)
   }
-
-  const loadAdmissionHistory = useCallback(async (page = admissionHistoryPage) => {
-    setIsLoadingAdmissionHistory(true)
-
-    try {
-      const response = await api.get(`/patients/${id}/admission-history?page=${page}&page_size=${pageSize}`)
-      const data = getResponseData(response) || {}
-      setAdmissionHistory(data.items || [])
-      setAdmissionHistoryTotal(data.total || 0)
-    } catch (error) {
-      setAdmissionHistory([])
-      setAdmissionHistoryTotal(0)
-      notifyError(getErrorMessage(error))
-    } finally {
-      setIsLoadingAdmissionHistory(false)
-    }
-  }, [admissionHistoryPage, id, notifyError])
 
   useEffect(() => {
     loadPatient().then(r => r)
   }, [loadPatient])
-
-  useEffect(() => {
-    loadAdmissionHistory(admissionHistoryPage).then(r => r)
-  }, [admissionHistoryPage, loadAdmissionHistory])
 
   useEffect(() => {
     const socket = createWebSocket((msg) => {
@@ -231,7 +257,6 @@ export default function PatientPage() {
           time: new Date().toLocaleTimeString(),
         }
 
-        setVitalsHistory((prev) => [...prev, vital])
         setVitals((prev) => [vital, ...prev.slice(0, 20)])
       }
 
@@ -255,6 +280,8 @@ export default function PatientPage() {
       const response = await api.patch(`/patients/${id}/department`, {
         department: nextDepartment,
         reason,
+      }, {
+        headers: authHeaders,
       })
 
       const patientData = getResponseData(response)
@@ -273,7 +300,9 @@ export default function PatientPage() {
     setIsSavingPatient(true)
 
     try {
-      const response = await api.patch(`/patients/${id}`, payload)
+      const response = await api.patch(`/patients/${id}`, payload, {
+        headers: authHeaders,
+      })
       const patientData = getResponseData(response)
       setPatient(patientData)
       setDepartment(patientData.department)
@@ -287,11 +316,13 @@ export default function PatientPage() {
   }
 
   const handleAssignToMe = async () => {
-    if (!currentDoctor || !patient) return
+    if (!currentDoctor || !patient || currentDoctor.specialization !== patient.department) return
 
     try {
-      await api.post(`/doctors/${currentDoctor.id}/patients/${patient.id}`)
-      notifySuccess("Assigned successfully.")
+      const assignResponse = await api.post(`/doctors/${currentDoctor.id}/patients/${patient.id}`, null, {
+        headers: authHeaders,
+      })
+      notifySuccess(getResponseMessage(assignResponse))
       const response = await api.get(`/patients/${id}/doctors`)
       setDoctors(getResponseData(response) || [])
     } catch (error) {
@@ -300,10 +331,14 @@ export default function PatientPage() {
   }
 
   const isDoctorAssigned = currentDoctor && doctors.some(d => d.id === currentDoctor.id)
+  const canAssignToCurrentPatient = currentDoctor && patient && currentDoctor.specialization === patient.department
+  const isPatientLocked = Boolean(patient?.is_discharged)
+  const canManagePatient = Boolean(isDoctorAssigned && currentDoctor)
+  const canEditPatientRecord = Boolean(canManagePatient && !isPatientLocked)
+  const canManagePatientActivities = Boolean(canEditPatientRecord && patient && currentDoctor.specialization === patient.department)
   const latestDisplayedVital = vitals[0]
   const paginatedVitals = vitals.slice((vitalsPage - 1) * pageSize, vitalsPage * pageSize)
   const maxVitalsPage = Math.max(1, Math.ceil(vitals.length / pageSize))
-  const maxAdmissionHistoryPage = Math.max(1, Math.ceil(admissionHistoryTotal / pageSize))
   const previewAlerts = alerts.slice(0, 3)
   const patientFullName = patient ? `${patient.last_name} ${patient.first_name}`.trim() : ""
   const pageTitle = patientFullName || (isLoadingPatient ? "Loading patient..." : "Patient")
@@ -339,7 +374,7 @@ export default function PatientPage() {
     {label: "Birth Date", value: patientBirthDate},
     {label: "Age", value: patientAge},
     {label: "Gender", value: patient?.gender || "--"},
-    ...(patient?.gender?.toLowerCase() === 'female' ? [{label: "Pregnant", value: patient?.is_pregnant ? "Yes" : "No"}] : []),
+    {label: "Pregnant", value: patient?.is_pregnant ? "Yes" : "No"},
     {label: "Arrival Method", value: formatArrivalMethod(patient?.arrival_method)},
     {label: "Phone Number", value: patient?.phone_number ? formatPatientPhoneWithCode(patient.phone_number) : "--"},
     {label: "Country", value: patientCountry},
@@ -354,32 +389,90 @@ export default function PatientPage() {
   }, [maxVitalsPage, vitalsPage])
 
   useEffect(() => {
-    if (admissionHistoryPage > maxAdmissionHistoryPage) {
-      setAdmissionHistoryPage(maxAdmissionHistoryPage)
-    }
-  }, [admissionHistoryPage, maxAdmissionHistoryPage])
+    loadDischargeTypes().then(() => {
+    })
+  }, [id, loadDischargeTypes])
 
-  const handleCreateActivity = async () => {
+  const upsertActivity = (activity) => {
+    const normalizedActivity = normalizeActivity(activity, id)
+
+    setPatientActivities((current) => {
+      const nextActivities = current.filter((item) => item.id !== normalizedActivity.id)
+      nextActivities.push(normalizedActivity)
+      return nextActivities.sort((left, right) => new Date(left.scheduled_at) - new Date(right.scheduled_at))
+    })
+  }
+
+  const handleActivitySubmit = async (payload) => {
+    if (!currentDoctor || isSavingActivity) {
+      return
+    }
+
+    setIsSavingActivity(true)
+
     try {
-      if (activityForm.doctor_ids.length === 0) {
-        notifyError("Select at least one doctor")
-        return
-      }
-      const mainDoctor = activityForm.doctor_ids[0]
-      await api.post(`/doctors/${mainDoctor}/activities`, {
-        ...activityForm,
-        patient_ids: [Number(id)]
-      })
-      notifySuccess("Activity created")
+      const response = activityDialogMode === "edit" && selectedActivity
+        ? await api.patch(`/activities/${selectedActivity.id}`, payload, {
+          headers: authHeaders,
+        })
+        : await api.post("/activities", payload, {
+          headers: authHeaders,
+        })
+
+      upsertActivity(getResponseData(response))
       setShowActivityDialog(false)
-      loadPatient()
+      setSelectedActivity(null)
+      setActivityPendingCancellation(null)
+      notifySuccess(getResponseMessage(response))
     } catch (e) {
       notifyError(getErrorMessage(e))
+    } finally {
+      setIsSavingActivity(false)
     }
   }
 
-  const departmentDoctors = doctors.filter(
+  const handleActivityEdit = (activity) => {
+    if (!canManagePatientActivities || !activity.doctor_ids?.includes(currentDoctor?.id) || activity.status === "canceled") {
+      return
+    }
+    setActivityDialogMode("edit")
+    setSelectedActivity(activity)
+    setShowActivityDialog(true)
+  }
+
+  const handleCancelActivity = async () => {
+    if (!activityPendingCancellation || isSavingActivity) {
+      return
+    }
+
+    setIsSavingActivity(true)
+
+    try {
+      const response = await api.patch(`/activities/${activityPendingCancellation.id}`, {
+        status: "canceled",
+      }, {
+        headers: authHeaders,
+      })
+
+      upsertActivity(getResponseData(response))
+      setActivityPendingCancellation(null)
+      notifySuccess(getResponseMessage(response))
+    } catch (error) {
+      notifyError(getErrorMessage(error))
+    } finally {
+      setIsSavingActivity(false)
+    }
+  }
+
+  const departmentDoctors = allDoctors.filter(
     d => d.specialization === patient?.department
+  )
+  const patientActivityOptions = patient ? [{...patient, isCurrent: true}] : []
+  const canCurrentDoctorManageActivity = (activity) => Boolean(
+    currentDoctor?.id
+    && activity.doctor_ids?.includes(currentDoctor.id)
+    && !patient?.is_discharged
+    && currentDoctor.specialization === patient?.department
   )
 
   return (
@@ -400,7 +493,8 @@ export default function PatientPage() {
                     <button
                       type="button"
                       onClick={() => setIsTransferDialogOpen(true)}
-                      className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d5dbdb] transition hover:border-[#ff9900] hover:text-white"
+                      disabled={!canEditPatientRecord}
+                      className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d5dbdb] transition hover:border-[#ff9900] hover:text-white disabled:cursor-not-allowed disabled:border-[#31363f] disabled:bg-[#10151c] disabled:text-[#6b7280]"
                     >
                       {department || "--"}
                     </button>
@@ -423,7 +517,8 @@ export default function PatientPage() {
                   {!isDoctorAssigned && currentDoctor && !isLoadingDoctors && (
                     <button
                       onClick={handleAssignToMe}
-                      className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:border-[#9dccff] hover:bg-[#15202b]"
+                      disabled={!canAssignToCurrentPatient || isPatientLocked}
+                      className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:border-[#9dccff] hover:bg-[#15202b] disabled:cursor-not-allowed disabled:border-[#31363f] disabled:bg-[#10151c] disabled:text-[#6b7280]"
                     >
                       Assign to Me
                     </button>
@@ -442,8 +537,9 @@ export default function PatientPage() {
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <button
                   type="button"
-                  onClick={() => setIsEditDialogOpen(true)}
-                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:text-white"
+                  onClick={() => canEditPatientRecord && setIsEditDialogOpen(true)}
+                  disabled={!canEditPatientRecord}
+                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:text-white disabled:cursor-not-allowed disabled:text-[#6b7280]"
                 >
                   Edit patient
                 </button>
@@ -452,7 +548,7 @@ export default function PatientPage() {
                   to={`/patients/${id}/medical-history`}
                   className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#ffcc80] transition hover:text-white"
                 >
-                  Medical History
+                  Clinical Records
                 </Link>
 
                 <Link
@@ -637,125 +733,86 @@ export default function PatientPage() {
               <div className="mb-5 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Schedule</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Incoming Activities</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Patient Activities</h2>
                 </div>
                 <button
                   onClick={openActivityDialog}
-                  className="console-button-secondary rounded-full px-3 py-1 text-xs font-semibold"
+                  disabled={!canManagePatientActivities}
+                  className="console-button-secondary rounded-full px-3 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                 >
                   Add Activity
                 </button>
               </div>
 
-              {showActivityDialog && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-                  <div className="monitor-card p-6 rounded-2xl w-full max-w-md space-y-3">
-
-                    <h2 className="text-xl text-white">Add Activity</h2>
-
-                    <input
-                      className="console-input w-full"
-                      placeholder="Activity Title"
-                      value={activityForm.title}
-                      onChange={e => setActivityForm({...activityForm, title: e.target.value})}
-                    />
-
-                    <textarea
-                      className="console-input w-full"
-                      placeholder="Activity Description"
-                      value={activityForm.description}
-                      onChange={e => setActivityForm({...activityForm, description: e.target.value})}
-                    />
-
-                    <select
-                      className="console-input w-full"
-                      value={activityForm.type}
-                      onChange={e => setActivityForm({...activityForm, type: e.target.value})}
-                    >
-                      <option value="">Select type</option>
-                      {activityTypes.map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-
-                    <input
-                      type="datetime-local"
-                      className="console-input w-full"
-                      value={activityForm.scheduled_at}
-                      onChange={e => setActivityForm({...activityForm, scheduled_at: e.target.value})}
-                    />
-
-                    <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
-                      <span className="text-sm text-[#ff9900]">Doctors (same department)</span>
-
-                      {departmentDoctors.map(d => (
-                        <label key={d.id} className="flex gap-2 items-center text-sm">
-                          <input
-                            type="checkbox"
-                            checked={activityForm.doctor_ids.includes(d.id)}
-                            onChange={(e) => {
-                              const ids = new Set(activityForm.doctor_ids)
-                              if (e.target.checked) ids.add(d.id)
-                              else ids.delete(d.id)
-
-                              setActivityForm({...activityForm, doctor_ids: [...ids]})
-                            }}
-                          />
-                          {d.first_name} {d.last_name}
-                        </label>
-                      ))}
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                      <button
-                        onClick={handleCreateActivity}
-                        disabled={activityForm.doctor_ids.length === 0}
-                        className="console-button-primary w-full"
-                      >
-                        Save
-                      </button>
-
-                      <button
-                        onClick={() => setShowActivityDialog(false)}
-                        className="console-button-secondary w-full"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-
-                  </div>
-                </div>
-              )}
-              {patientActivities.length === 0 ? (
+              {activityLoadError ? (
                 <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                  No incoming activities for this patient.
+                  {activityLoadError}
                 </div>
               ) : (
-                <ul className="space-y-3">
-                  {patientActivities.map(activity => (
-                    <li key={activity.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                      <div className="flex flex-col gap-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">{activity.type}</p>
-                            <p className="mt-1 text-sm font-semibold text-white">{activity.title}</p>
-                          </div>
-                          <span className="text-xs text-[#879196]">{new Date(activity.scheduled_at).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}</span>
-                        </div>
-                        {activity.description && <p className="text-sm text-[#b6bec9]">{activity.description}</p>}
-                        <p className="text-xs text-[#879196]">{new Date(activity.scheduled_at).toLocaleDateString()}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <ActivityList
+                  activities={patientActivities}
+                  canManageActivity={canCurrentDoctorManageActivity}
+                  emptyMessage="No activities exist for this patient."
+                  isLoading={isLoadingActivities}
+                  loadingMessage="Loading patient activities..."
+                  onCancel={(activity) => setActivityPendingCancellation(activity)}
+                  onEdit={handleActivityEdit}
+                />
               )}
             </div>
           </div>
         </section>
       </div>
+
+      {showActivityDialog && (
+        <PatientActivityDialog
+          activity={selectedActivity}
+          activityTypes={activityTypes}
+          currentDoctorId={currentDoctor?.id}
+          doctors={departmentDoctors}
+          isOpen={showActivityDialog}
+          isSubmitting={isSavingActivity}
+          mode={activityDialogMode}
+          onClose={() => {
+            setShowActivityDialog(false)
+            setSelectedActivity(null)
+          }}
+          onSubmit={handleActivitySubmit}
+          patients={patientActivityOptions}
+          patientSelectionMode="hidden"
+        />
+      )}
+
+      {activityPendingCancellation && (
+        <div className="console-modal-overlay z-50">
+          <div className="console-modal monitor-card rounded-[28px] p-6 w-full max-w-md">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patient Activities</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Cancel Activity</h2>
+              <p className="mt-3 text-sm text-[#b6bec9]">Are you sure you want to cancel this activity?</p>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setActivityPendingCancellation(null)}
+                disabled={isSavingActivity}
+                className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+              >
+                Keep Activity
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelActivity}
+                disabled={isSavingActivity}
+                className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+              >
+                {isSavingActivity ? "Canceling..." : "Yes, Cancel Activity"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <EditPatientDialog
         isOpen={isEditDialogOpen}
@@ -775,4 +832,3 @@ export default function PatientPage() {
     </div>
   )
 }
-

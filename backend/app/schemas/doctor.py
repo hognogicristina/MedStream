@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator, model_validator
 from app.schemas.validators import (
     normalize_phone_number,
     require_non_empty,
+    validate_department,
     validate_email_address,
     validate_password_strength,
 )
@@ -21,10 +22,15 @@ class DoctorCreate(BaseModel):
     specialization: str
     license_number: str
 
-    @field_validator("first_name", "last_name", "specialization", "license_number", mode="before")
+    @field_validator("first_name", "last_name", "license_number", mode="before")
     @classmethod
     def validate_required_text(cls, value, info):
         return require_non_empty(value, info.field_name.replace("_", " ").title())
+
+    @field_validator("specialization", mode="before")
+    @classmethod
+    def validate_specialization(cls, value):
+        return validate_department(value)
 
     @field_validator("email", mode="before")
     @classmethod
@@ -77,12 +83,19 @@ class DoctorUpdate(BaseModel):
     phone_number: str | None = None
     birth_date: date | None = None
 
-    @field_validator("first_name", "last_name", "specialization", "license_number", mode="before")
+    @field_validator("first_name", "last_name", "license_number", mode="before")
     @classmethod
     def validate_optional_text(cls, value, info):
         if value is None:
             return value
         return require_non_empty(value, info.field_name.replace("_", " ").title())
+
+    @field_validator("specialization", mode="before")
+    @classmethod
+    def validate_optional_specialization(cls, value):
+        if value is None:
+            return value
+        return validate_department(value)
 
     @field_validator("phone_number", mode="before")
     @classmethod

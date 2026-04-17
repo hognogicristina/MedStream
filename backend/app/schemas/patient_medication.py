@@ -8,8 +8,10 @@ from app.schemas.validators import require_non_empty
 class PatientMedicationCreate(BaseModel):
     name: str
     dosage: str
+    frequency: str
+    notes: str
 
-    @field_validator("name", "dosage", mode="before")
+    @field_validator("name", "dosage", "frequency", "notes", mode="before")
     @classmethod
     def validate_required_text(cls, value, info):
         return require_non_empty(value, info.field_name.replace("_", " ").title())
@@ -21,6 +23,8 @@ class PatientMedicationRead(BaseModel):
     doctor_id: int
     name: str
     dosage: str
+    frequency: str
+    notes: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
     last_updated_note: str | None = None
@@ -28,18 +32,18 @@ class PatientMedicationRead(BaseModel):
 
 
 class MedicationUpdate(BaseModel):
-    dosage: str
-    note: str | None = None
+    dosage: str | None = None
+    frequency: str | None = None
+    note: str
 
-    @field_validator("dosage", mode="before")
+    @field_validator("dosage", "frequency", mode="before")
     @classmethod
-    def validate_dosage(cls, value):
-        return require_non_empty(value, "Dosage")
+    def validate_text_fields(cls, value, info):
+        if value is None:
+            return value
+        return require_non_empty(value, info.field_name.replace("_", " ").title())
 
     @field_validator("note", mode="before")
     @classmethod
-    def normalize_note(cls, value):
-        if value is None:
-            return value
-        trimmed = str(value).strip()
-        return trimmed or None
+    def validate_note(cls, value):
+        return require_non_empty(value, "Note")

@@ -15,7 +15,7 @@ function buildPatientEditForm(patient) {
     last_name: patient?.last_name || "",
     gender: patient?.gender || "",
     birth_date: patient?.birth_date || "",
-    cnp: patient?.cnp || "",
+    is_pregnant: Boolean(patient?.is_pregnant),
     arrival_method: patient?.arrival_method || "self",
   }
 }
@@ -57,7 +57,7 @@ export default function EditPatientDialog({
     last_name: form.last_name.trim(),
     gender: form.gender.trim(),
     birth_date: form.birth_date,
-    cnp: form.cnp.trim(),
+    is_pregnant: Boolean(form.is_pregnant),
     arrival_method: form.arrival_method,
     phone_number: normalizedPhoneNumber,
     address: normalizePatientAddress(address),
@@ -67,7 +67,7 @@ export default function EditPatientDialog({
     last_name: (patient.last_name || "").trim(),
     gender: (patient.gender || "").trim(),
     birth_date: patient.birth_date || "",
-    cnp: (patient.cnp || "").trim(),
+    is_pregnant: Boolean(patient.is_pregnant),
     arrival_method: patient.arrival_method || "self",
     phone_number: normalizeRomanianPhoneNumber(patient.phone_number),
     address: normalizePatientAddress(patient.address),
@@ -81,7 +81,6 @@ export default function EditPatientDialog({
     && normalizedCurrentValues.last_name
     && normalizedCurrentValues.gender
     && normalizedCurrentValues.birth_date
-    && normalizedCurrentValues.cnp
     && normalizedCurrentValues.arrival_method
     && normalizedCurrentValues.phone_number,
   )
@@ -96,7 +95,15 @@ export default function EditPatientDialog({
 
   const handleChange = (event) => {
     const {name, value} = event.target
-    setForm((current) => ({...current, [name]: value}))
+    setForm((current) => {
+      const next = {...current, [name]: value}
+
+      if (name === "gender" && value !== "female") {
+        next.is_pregnant = false
+      }
+
+      return next
+    })
   }
 
   const handleAddressChange = (event) => {
@@ -184,11 +191,6 @@ export default function EditPatientDialog({
                          className="login-input" required/>
                 </div>
                 <div className="login-field">
-                  <label className="login-label" htmlFor="edit-cnp">CNP</label>
-                  <input id="edit-cnp" name="cnp" type="text" value={form.cnp} onChange={handleChange} className="login-input"
-                         placeholder={"Example: 6010101123451"} required/>
-                </div>
-                <div className="login-field">
                   <label className="login-label" htmlFor="edit-phone-number">{"Phone Number"}</label>
                   <input
                     id="edit-phone-number"
@@ -199,6 +201,20 @@ export default function EditPatientDialog({
                     className="login-input"
                     required
                   />
+                </div>
+                <div className="login-field">
+                  <label className="login-label" htmlFor="edit-is-pregnant">Pregnant</label>
+                  <select
+                    id="edit-is-pregnant"
+                    name="is_pregnant"
+                    value={form.is_pregnant ? "true" : "false"}
+                    onChange={(event) => setForm((current) => ({...current, is_pregnant: event.target.value === "true"}))}
+                    className="login-input"
+                    disabled={form.gender !== "female"}
+                  >
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                  </select>
                 </div>
               </div>
             </div>

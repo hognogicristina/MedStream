@@ -5,6 +5,7 @@ import BackButton from "../components/BackButton"
 import PatientAdmissionActionCard from "../components/PatientAdmissionActionCard"
 import {useNotifications} from "../components/NotificationProvider"
 import {usePatientAdmissionActions} from "../hooks/usePatientAdmissionActions"
+import {useAuth} from "../auth/AuthContext"
 import {api} from "../services/api"
 import {getErrorMessage, getResponseData} from "../services/apiMessages"
 
@@ -23,12 +24,8 @@ function formatDateTime(value) {
 }
 
 function formatAdmissionType(value) {
-  if (value === "readmission") {
+  if (String(value).toLowerCase() === "readmission") {
     return "Readmission"
-  }
-
-  if (value === "discharge") {
-    return "Discharge"
   }
 
   return value || "--"
@@ -37,6 +34,7 @@ function formatAdmissionType(value) {
 export default function PatientAdmissionHistoryPage() {
   const {id} = useParams()
   const {notifyError, notifySuccess} = useNotifications()
+  const {token} = useAuth()
   const pageSize = 8
   const [patient, setPatient] = useState(null)
   const [entries, setEntries] = useState([])
@@ -77,6 +75,7 @@ export default function PatientAdmissionHistoryPage() {
   }, [maxPage, page])
 
   const admissionActions = usePatientAdmissionActions({
+    authHeaders: token ? {Authorization: `Bearer ${token}`} : {},
     patientId: id,
     onPatientChange: setPatient,
     onHistoryRefresh: async () => {
@@ -86,8 +85,13 @@ export default function PatientAdmissionHistoryPage() {
     notifyError,
     notifySuccess,
   })
+  const {loadDischargeTypes} = admissionActions
 
   const patientName = patient ? `${patient.last_name} ${patient.first_name}`.trim() : "Patient"
+
+  useEffect(() => {
+    loadDischargeTypes().then(() => {})
+  }, [loadDischargeTypes])
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -172,9 +176,13 @@ export default function PatientAdmissionHistoryPage() {
 
           <PatientAdmissionActionCard
             patient={patient}
+            canManagePatient={Boolean(token)}
             dischargeReason={admissionActions.dischargeReason}
+            dischargeType={admissionActions.dischargeType}
+            dischargeTypes={admissionActions.dischargeTypes}
             readmitReason={admissionActions.readmitReason}
             onDischargeReasonChange={admissionActions.setDischargeReason}
+            onDischargeTypeChange={admissionActions.setDischargeType}
             onReadmitReasonChange={admissionActions.setReadmitReason}
             onDischargeSubmit={admissionActions.handleDischargeSubmit}
             onReadmitSubmit={admissionActions.handleReadmitSubmit}

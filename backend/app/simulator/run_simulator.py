@@ -356,7 +356,7 @@ def create_alerts(db, patient_id, vital_obj, vital_data):
 
 def generate_activity(db, patient_id, condition_name=None, diagnosis=None):
     patient = db.get(Patient, patient_id)
-    if not patient:
+    if not patient or patient.is_discharged:
         return
 
     doctor_link = db.execute(

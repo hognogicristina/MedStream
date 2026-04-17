@@ -1,16 +1,20 @@
 export default function PatientAdmissionActionCard({
   patient,
+  canManagePatient = true,
   dischargeReason,
+  dischargeType,
+  dischargeTypes = [],
   readmitReason,
   onDischargeReasonChange,
+  onDischargeTypeChange,
   onReadmitReasonChange,
   onDischargeSubmit,
   onReadmitSubmit,
   isSubmittingDischarge,
   isSubmittingReadmit,
 }) {
-  const canSubmitDischarge = dischargeReason.trim().length > 0 && !patient?.is_discharged
-  const canSubmitReadmit = readmitReason.trim().length > 0 && Boolean(patient?.is_discharged)
+  const canSubmitDischarge = canManagePatient && dischargeReason.trim().length > 0 && Boolean(dischargeType) && !patient?.is_discharged
+  const canSubmitReadmit = canManagePatient && readmitReason.trim().length > 0 && Boolean(patient?.is_discharged)
 
   return (
     <section className="monitor-card rounded-[28px] p-6">
@@ -30,6 +34,7 @@ export default function PatientAdmissionActionCard({
             onChange={(event) => onReadmitReasonChange(event.target.value)}
             placeholder="Reason for readmission"
             className="console-input min-h-28 w-full rounded-2xl px-4 py-3 outline-none"
+            disabled={!canManagePatient || isSubmittingReadmit}
             required
           />
 
@@ -43,11 +48,28 @@ export default function PatientAdmissionActionCard({
         </form>
       ) : (
         <form className="space-y-4" onSubmit={onDischargeSubmit}>
+          <div className="login-field">
+            <label className="login-label" htmlFor="discharge-type">Type</label>
+            <select
+              id="discharge-type"
+              value={dischargeType}
+              onChange={(event) => onDischargeTypeChange(event.target.value)}
+              className="login-input"
+              disabled={!canManagePatient || isSubmittingDischarge}
+              required
+            >
+              <option value="">Select type</option>
+              {dischargeTypes.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
           <textarea
             value={dischargeReason}
             onChange={(event) => onDischargeReasonChange(event.target.value)}
             placeholder="Reason for discharge"
             className="console-input min-h-28 w-full rounded-2xl px-4 py-3 outline-none"
+            disabled={!canManagePatient || isSubmittingDischarge}
             required
           />
 

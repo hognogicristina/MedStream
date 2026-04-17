@@ -1,5 +1,6 @@
 import {useEffect, useMemo, useState, useRef} from "react"
 import {Link, useNavigate} from "react-router-dom"
+import ActivityList from "../components/ActivityList"
 import BackButton from "../components/BackButton"
 import CountValue from "../components/CountValue"
 import DataTable from "../components/DataTable"
@@ -19,26 +20,35 @@ const buildDoctorProfileForm = (doctor) => ({
   birth_date: doctor?.birth_date || "",
 })
 
-function formatDateTime(value) {
-  if (!value) {
-    return "--"
+function normalizeActivity(activity, patientOptions = [], doctorOptions = []) {
+  const patientIds = Array.isArray(activity.patient_ids) ? activity.patient_ids : []
+  const doctorIds = Array.isArray(activity.doctor_ids) ? activity.doctor_ids : []
+  const fallbackPatientsById = new Map(patientOptions.map((patient) => [patient.id, patient]))
+  const fallbackDoctorsById = new Map(doctorOptions.map((doctor) => [doctor.id, doctor]))
+  const patients = Array.isArray(activity.patients) && activity.patients.length > 0
+    ? activity.patients
+    : patientIds.map((patientId) => {
+      const patient = fallbackPatientsById.get(patientId)
+      return patient
+        ? {id: patient.id, first_name: patient.first_name, last_name: patient.last_name}
+        : null
+    }).filter(Boolean)
+  const doctors = Array.isArray(activity.doctors) && activity.doctors.length > 0
+    ? activity.doctors
+    : doctorIds.map((doctorId) => {
+      const doctor = fallbackDoctorsById.get(doctorId)
+      return doctor
+        ? {id: doctor.id, first_name: doctor.first_name, last_name: doctor.last_name}
+        : null
+    }).filter(Boolean)
+
+  return {
+    ...activity,
+    patient_ids: patientIds,
+    doctor_ids: doctorIds,
+    patients,
+    doctors,
   }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value))
-}
-
-function formatActivityType(value) {
-  if (!value) {
-    return "--"
-  }
-
-  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 export default function ProfilePage() {
@@ -49,6 +59,9 @@ export default function ProfilePage() {
   const [patients, setPatients] = useState([])
   const [assignedPatients, setAssignedPatients] = useState([])
   const [activities, setActivities] = useState([])
+  const [allDoctors, setAllDoctors] = useState([])
+  const [departments, setDepartments] = useState([])
+  const [activityTypes, setActivityTypes] = useState([])
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -70,8 +83,18 @@ export default function ProfilePage() {
   const [isActivityDialogOpen, setIsActivityDialogOpen] = useState(false)
   const [removePatientAssignmentsOnDelete, setRemovePatientAssignmentsOnDelete] = useState(false)
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false)
+  const [activityDialogMode, setActivityDialogMode] = useState("create")
+  const [selectedActivity, setSelectedActivity] = useState(null)
+  const [activityPendingCancellation, setActivityPendingCancellation] = useState(null)
   const [isAssignDropdownOpen, setIsAssignDropdownOpen] = useState(false)
   const assignInputRef = useRef(null)
+  const [activityPage, setActivityPage] = useState(1)
+  const ACTIVITY_PAGE_SIZE = 2
+  const paginatedActivities = useMemo(() => {
+    const start = (activityPage - 1) * ACTIVITY_PAGE_SIZE
+    return activities.slice(start, start + ACTIVITY_PAGE_SIZE)
+  }, [activities, activityPage])
+  const totalActivityPages = Math.ceil(activities.length / ACTIVITY_PAGE_SIZE)
 
   const authHeaders = useMemo(() => ({
     Authorization: `Bearer ${token}`,
@@ -91,16 +114,27 @@ export default function ProfilePage() {
           headers: authHeaders,
         })
         const currentDoctor = getResponseData(doctorResponse)
-        const [assignedPatientsResponse, patientsResponse, activitiesResponse] = await Promise.all([
+        const [assignedPatientsResponse, patientsResponse, activitiesResponse, doctorsResponse, departmentsResponse, activityTypesResponse] = await Promise.all([
           api.get(`/doctors/${currentDoctor.id}/patients`),
           api.get("/patients?page=1&limit=100"),
           api.get(`/doctors/${currentDoctor.id}/activities`),
+          api.get("/doctors"),
+          api.get("/departments"),
+          api.get("/options/activities"),
         ])
 
+        const assignedPatientsData = getResponseData(assignedPatientsResponse) || []
+        const patientsData = getResponseData(patientsResponse) || []
+        const doctorsData = getResponseData(doctorsResponse) || []
+        const normalizedActivities = (getResponseData(activitiesResponse) || []).map((activity) => normalizeActivity(activity, patientsData, doctorsData))
+
         setDoctor(currentDoctor)
-        setAssignedPatients(getResponseData(assignedPatientsResponse))
-        setPatients(getResponseData(patientsResponse))
-        setActivities(getResponseData(activitiesResponse) || [])
+        setAssignedPatients(assignedPatientsData)
+        setPatients(patientsData)
+        setActivities(normalizedActivities)
+        setAllDoctors(doctorsData)
+        setDepartments(getResponseData(departmentsResponse) || [])
+        setActivityTypes(getResponseData(activityTypesResponse) || [])
         setForm(buildDoctorProfileForm(currentDoctor))
         setPhoneNumber(normalizeRomanianPhoneNumber(currentDoctor.phone_number))
         setEmailInput(currentDoctor.pending_email || currentDoctor.email || "")
@@ -109,6 +143,9 @@ export default function ProfilePage() {
         setAssignedPatients([])
         setPatients([])
         setActivities([])
+        setAllDoctors([])
+        setDepartments([])
+        setActivityTypes([])
         notifyError(getErrorMessage(error))
       } finally {
         setIsLoading(false)
@@ -121,6 +158,8 @@ export default function ProfilePage() {
   const availablePatients = patients.filter(
     (patient) => !assignedPatients.some((assignedPatient) => assignedPatient.id === patient.id),
   )
+  const activityPatients = assignedPatients.filter((patient) => patient.department === doctor?.specialization)
+  const activityDoctors = allDoctors.filter((item) => item.specialization === doctor?.specialization)
   const isProfileFormValid = Boolean(
     form.first_name.trim()
     && form.last_name.trim()
@@ -167,7 +206,7 @@ export default function ProfilePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const handleActivityCreate = async (payload) => {
+  const handleActivitySubmit = async (payload) => {
     if (!doctor || isSubmittingActivity) {
       return
     }
@@ -175,10 +214,52 @@ export default function ProfilePage() {
     setIsSubmittingActivity(true)
 
     try {
-      const response = await api.post(`/doctors/${doctor.id}/activities`, payload)
-      const nextActivity = getResponseData(response)
-      setActivities((current) => [...current, nextActivity].sort((left, right) => new Date(left.scheduled_at) - new Date(right.scheduled_at)))
+      const response = activityDialogMode === "edit" && selectedActivity
+        ? await api.patch(`/doctors/${doctor.id}/activities/${selectedActivity.id}`, payload, {
+          headers: authHeaders,
+        })
+        : await api.post(`/doctors/${doctor.id}/activities`, payload, {
+          headers: authHeaders,
+        })
+      const nextActivity = normalizeActivity(getResponseData(response), patients, allDoctors)
+      setActivities((current) => [...current.filter((item) => item.id !== nextActivity.id), nextActivity].sort((left, right) => new Date(left.scheduled_at) - new Date(right.scheduled_at)))
       setIsActivityDialogOpen(false)
+      setSelectedActivity(null)
+      setActivityPendingCancellation(null)
+      notifySuccess(getResponseMessage(response))
+    } catch (error) {
+      notifyError(getErrorMessage(error))
+    } finally {
+      setIsSubmittingActivity(false)
+    }
+  }
+
+  const handleActivityEdit = (activity) => {
+    if (activity.status === "canceled") {
+      return
+    }
+
+    setActivityDialogMode("edit")
+    setSelectedActivity(activity)
+    setIsActivityDialogOpen(true)
+  }
+
+  const handleCancelActivity = async () => {
+    if (!doctor || !activityPendingCancellation || isSubmittingActivity) {
+      return
+    }
+
+    setIsSubmittingActivity(true)
+
+    try {
+      const response = await api.patch(`/doctors/${doctor.id}/activities/${activityPendingCancellation.id}`, {
+        status: "canceled",
+      }, {
+        headers: authHeaders,
+      })
+      const nextActivity = normalizeActivity(getResponseData(response), patients, allDoctors)
+      setActivities((current) => [...current.filter((item) => item.id !== nextActivity.id), nextActivity].sort((left, right) => new Date(left.scheduled_at) - new Date(right.scheduled_at)))
+      setActivityPendingCancellation(null)
       notifySuccess(getResponseMessage(response))
     } catch (error) {
       notifyError(getErrorMessage(error))
@@ -261,7 +342,9 @@ export default function ProfilePage() {
     setIsAssigningPatient(true)
 
     try {
-      const response = await api.post(`/doctors/${doctor.id}/patients/${selectedPatient.id}`)
+      const response = await api.post(`/doctors/${doctor.id}/patients/${selectedPatient.id}`, null, {
+        headers: authHeaders,
+      })
       setAssignedPatients(getResponseData(response))
       setAssignmentQuery("")
       notifySuccess(getResponseMessage(response))
@@ -318,6 +401,16 @@ export default function ProfilePage() {
     }
   }
 
+  useEffect(() => {
+    setActivityPage(1)
+  }, [activities])
+
+  const filteredAssignedPatients = assignedPatients.filter(
+    (patient) =>
+      patient.department === doctor?.specialization
+      && patient.is_discharged === false
+  )
+
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
@@ -330,7 +423,8 @@ export default function ProfilePage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{"Doctor Control Panel"}</h1>
-                <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">{"Manage profile details, patient assignments, and account status from one workspace."}</p>
+                <p
+                  className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">{"Manage profile details, patient assignments, and account status from one workspace."}</p>
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div className="monitor-panel rounded-2xl p-4">
@@ -339,7 +433,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="monitor-panel rounded-2xl p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Assigned</p>
-                  <p className="mt-3 text-lg font-semibold text-white"><CountValue value={assignedPatients.length}/></p>
+                  <p className="mt-3 text-lg font-semibold text-white"><CountValue value={filteredAssignedPatients.length.length}/></p>
                 </div>
                 <div className="monitor-panel rounded-2xl p-4 sm:col-span-2 lg:col-span-1">
                   <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Available</p>
@@ -371,7 +465,7 @@ export default function ProfilePage() {
                 </div>
 
                 <DataTable
-                  items={assignedPatients}
+                  items={filteredAssignedPatients}
                   loading={isLoading}
                   emptyMessage="No patients are currently assigned to this doctor."
                   pageSize={3}
@@ -411,50 +505,49 @@ export default function ProfilePage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsActivityDialogOpen(true)}
-                    className="console-button-secondary rounded-2xl px-4 py-2 text-sm font-semibold"
+                    onClick={() => {
+                      setActivityDialogMode("create")
+                      setSelectedActivity(null)
+                      setIsActivityDialogOpen(true)
+                    }}
+                    disabled={activityPatients.length === 0}
+                    className="console-button-secondary rounded-2xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                   >
                     Add Activity
                   </button>
                 </div>
 
-                <DataTable
-                  items={activities}
-                  loading={isLoading}
+                <ActivityList
+                  activities={paginatedActivities}
                   emptyMessage="No future activities are scheduled for this doctor."
-                  pageSize={3}
-                  controlsLayoutClassName="hidden"
-                  simplePagination={true}
-                  getItemKey={(activity) => activity.id}
-                  shellClassName="space-y-3"
-                  bodyClassName="space-y-3"
-                  renderRow={(activity) => (
-                    <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">
-                        {formatActivityType(activity.type)} · {activity.status}
-                      </p>
-                      <p className="mt-2 text-sm font-semibold text-white">{activity.title}</p>
-                      {activity.description && (
-                        <p className="mt-2 text-sm text-[#b6bec9]">{activity.description}</p>
-                      )}
-                      
-                      {activity.patient_ids && activity.patient_ids.length > 0 && (
-                        <p className="mt-2 text-sm text-[#b6bec9] font-medium">Patients: {activity.patient_ids.join(', ')}</p>
-                      )}
-                      
-                      <p className="mt-3 text-xs text-[#879196]">{formatDateTime(activity.scheduled_at)}</p>
-
-                      <div className="mt-4 flex gap-2">
-                        <button
-                          type="button"
-                          className="console-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  isLoading={isLoading}
+                  loadingMessage="Loading doctor activities..."
+                  onCancel={(activity) => setActivityPendingCancellation(activity)}
+                  onEdit={handleActivityEdit}
                 />
+                {totalActivityPages > 1 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <button
+                      onClick={() => setActivityPage((p) => Math.max(1, p - 1))}
+                      disabled={activityPage === 1}
+                      className="console-button-secondary px-4 py-2 rounded-xl text-sm"
+                    >
+                      Previous
+                    </button>
+
+                    <span className="text-sm text-[#b6bec9]">
+      Page {activityPage} of {totalActivityPages}
+    </span>
+
+                    <button
+                      onClick={() => setActivityPage((p) => Math.min(totalActivityPages, p + 1))}
+                      disabled={activityPage === totalActivityPages}
+                      className="console-button-secondary px-4 py-2 rounded-xl text-sm"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
               </section>
             </div>
 
@@ -488,8 +581,13 @@ export default function ProfilePage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="login-field">
                       <label className="login-label" htmlFor="specialization">Specialization</label>
-                      <input id="specialization" name="specialization" type="text" value={form.specialization} onChange={handleFormChange}
-                             className="login-input" placeholder="Example: Cardiology" required/>
+                      <select id="specialization" name="specialization" value={form.specialization} onChange={handleFormChange}
+                              className="login-input" required>
+                        <option value="">Select specialization</option>
+                        {departments.map((department) => (
+                          <option key={department} value={department}>{department}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="login-field">
                       <label className="login-label" htmlFor="license_number">License Number</label>
@@ -549,9 +647,10 @@ export default function ProfilePage() {
                       autoComplete="off"
                       disabled={availablePatients.length === 0 || isAssigningPatient}
                     />
-                    
+
                     {isAssignDropdownOpen && assignmentSuggestions.length > 0 && (
-                      <div className="w-full mt-2 max-h-40 overflow-y-auto rounded-xl border border-[#3b424b] bg-[#161b22] py-2 custom-scrollbar">
+                      <div
+                        className="w-full mt-2 max-h-40 overflow-y-auto rounded-xl border border-[#3b424b] bg-[#161b22] py-2 custom-scrollbar">
                         {assignmentSuggestions.map((patient) => (
                           <div
                             key={patient.id}
@@ -622,7 +721,7 @@ export default function ProfilePage() {
                 </form>
               </section>
 
-               <section className="monitor-card rounded-[28px] p-6">
+              <section className="monitor-card rounded-[28px] p-6">
                 <div className="mb-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Account</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Account Status</h2>
@@ -631,7 +730,8 @@ export default function ProfilePage() {
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
                     <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Current State</p>
-                    <p className="mt-2 text-lg font-semibold text-white">{doctor.is_active ? "Active doctor account" : "Inactive doctor account"}</p>
+                    <p
+                      className="mt-2 text-lg font-semibold text-white">{doctor.is_active ? "Active doctor account" : "Inactive doctor account"}</p>
                     <p className="mt-2 text-sm text-[#b6bec9]">
                       {doctor.deleted_at ? `Deactivated at ${new Date(doctor.deleted_at).toLocaleString()}` : "Account is available for normal login and patient management."}
                     </p>
@@ -783,12 +883,54 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <DoctorActivityDialog
-          isOpen={isActivityDialogOpen}
-          isSubmitting={isSubmittingActivity}
-          onClose={() => setIsActivityDialogOpen(false)}
-          onSubmit={handleActivityCreate}
-        />
+        {activityPendingCancellation && (
+          <div className="console-modal-overlay z-50">
+            <div className="console-modal monitor-card rounded-[28px] p-6 w-full max-w-md">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Activities</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Cancel Activity</h2>
+                <p className="mt-3 text-sm text-[#b6bec9]">Are you sure you want to cancel this activity?</p>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setActivityPendingCancellation(null)}
+                  disabled={isSubmittingActivity}
+                  className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+                >
+                  Keep Activity
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelActivity}
+                  disabled={isSubmittingActivity}
+                  className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                >
+                  {isSubmittingActivity ? "Canceling..." : "Yes, Cancel Activity"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isActivityDialogOpen && (
+          <DoctorActivityDialog
+            activity={selectedActivity}
+            activityTypes={activityTypes}
+            currentDoctorId={doctor?.id}
+            doctors={activityDoctors}
+            isOpen={isActivityDialogOpen}
+            isSubmitting={isSubmittingActivity}
+            mode={activityDialogMode}
+            onClose={() => {
+              setIsActivityDialogOpen(false)
+              setSelectedActivity(null)
+            }}
+            onSubmit={handleActivitySubmit}
+            patients={activityPatients}
+          />
+        )}
       </div>
     </div>
   )

@@ -165,6 +165,7 @@ class PatientUpdate(BaseModel):
     birth_date: date | None = None
     gender: str | None = None
     arrival_method: str | None = None
+    is_pregnant: bool | None = None
     address: PatientAddressUpdate | None = None
 
     @field_validator("first_name", "last_name", "gender", mode="before")
@@ -231,7 +232,13 @@ class PatientDepartmentUpdate(BaseModel):
 
 
 class PatientDischargeUpdate(BaseModel):
+    type: str = Field(min_length=1, max_length=100)
     reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def validate_type(cls, value):
+        return require_non_empty(value, "Type")
 
     @field_validator("reason", mode="before")
     @classmethod

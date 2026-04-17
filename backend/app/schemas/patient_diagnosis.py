@@ -42,12 +42,14 @@ class PatientDiagnosisPage(BaseModel):
 
 
 class PatientDiagnosisUpdate(BaseModel):
-    status: str
+    status: str | None = None
     note: str | None = None
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, value):
+        if value is None:
+            return value
         if value not in {"active", "resolved", "chronic", "inactive"}:
             raise ValueError("Invalid diagnosis status.")
         return value
