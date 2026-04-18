@@ -28,7 +28,6 @@ function normalizeMedicationForm(form) {
     name: trimValue(form.name),
     dosage: trimValue(form.dosage),
     frequency: trimValue(form.frequency),
-    notes: trimValue(form.notes),
   }
 }
 
@@ -71,9 +70,9 @@ export default function PatientMedicalHistoryPage() {
   const [showDialog, setShowDialog] = useState(null)
   const [editItem, setEditItem] = useState(null)
 
-  const [diagnosisForm, setDiagnosisForm] = useState({diagnosis: "", notes: ""})
+  const [diagnosisForm, setDiagnosisForm] = useState({diagnosis: "", notes: "", status: ""})
   const [editDiagnosisForm, setEditDiagnosisForm] = useState({diagnosis: "", notes: "", status: "", note: ""})
-  const [medicationForm, setMedicationForm] = useState({name: "", dosage: "", frequency: "", notes: ""})
+  const [medicationForm, setMedicationForm] = useState({name: "", dosage: "", frequency: ""})
   const [editMedicationForm, setEditMedicationForm] = useState({dosage: "", frequency: "", note: ""})
   const [allergyForm, setAllergyForm] = useState({name: "", severity: "mild"})
   const [editAllergyForm, setEditAllergyForm] = useState({name: "", severity: "mild"})
@@ -217,23 +216,28 @@ export default function PatientMedicalHistoryPage() {
       frequency: editItem.frequency || "",
       note: editItem.last_updated_note || "",
     })
-    : normalizeMedicationForm({name: "", dosage: "", frequency: "", notes: ""})
+    : normalizeMedicationForm({name: "", dosage: "", frequency: ""})
   const currentMedicationValues = showDialog === "edit_medication"
     ? normalizeMedicationUpdateForm(editMedicationForm)
     : normalizeMedicationForm(medicationForm)
-  const medicationComparisonKeys = showDialog === "edit_medication"
-    ? ["dosage", "frequency"]
-    : ["name", "dosage", "frequency", "notes"]
-  const medicationNoteField = showDialog === "edit_medication" ? currentMedicationValues.note : currentMedicationValues.notes
-  const canSubmitMedication = hasChanges(
+  const canSubmitAddMedication = hasChanges(
+    normalizeMedicationForm({name: "", dosage: "", frequency: ""}),
+    normalizeMedicationForm(medicationForm),
+    ["name", "dosage", "frequency"],
+  ) && Boolean(
+    trimValue(medicationForm.name)
+    && trimValue(medicationForm.dosage)
+    && trimValue(medicationForm.frequency),
+  )
+
+  const canSubmitEditMedication = hasChanges(
     initialMedicationValues,
     currentMedicationValues,
-    medicationComparisonKeys,
+    ["dosage", "frequency"],
   ) && Boolean(
     currentMedicationValues.dosage
     && currentMedicationValues.frequency
-    && medicationNoteField
-    && (showDialog === "edit_medication" || currentMedicationValues.name),
+    && currentMedicationValues.note,
   )
 
   const initialConditionValues = editItem && showDialog === "edit_condition"
@@ -276,14 +280,14 @@ export default function PatientMedicalHistoryPage() {
         response = await api.post(`/patients/${id}/diagnosis`, diagnosisForm, {
           headers: authHeaders,
         })
-        setDiagnosisForm({diagnosis: "", notes: ""})
+        setDiagnosisForm({diagnosis: "", notes: "", status: ""})
       }
 
       if (type === "medication") {
         response = await api.post(`/patients/${id}/medication`, normalizeMedicationForm(medicationForm), {
           headers: authHeaders,
         })
-        setMedicationForm({name: "", dosage: "", frequency: "", notes: ""})
+        setMedicationForm({name: "", dosage: "", frequency: ""})
       }
 
       if (type === "edit_diagnosis") {
@@ -509,11 +513,25 @@ export default function PatientMedicalHistoryPage() {
                   <div className="max-w-xl">
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80] mb-1">{item.type}</p>
                     <p className="text-sm font-semibold text-white">{item.label}</p>
-                    {(item.description || item.notes || item.dosage) && (
-                      <p className="text-sm text-[#b6bec9] mt-1">{item.description || item.notes || item.dosage}</p>
+                    {item.type === "diagnosis" && item.notes && (
+                      <p className="text-sm text-[#b6bec9] mt-1">{item.notes}</p>
                     )}
-                    {(item.last_updated_note || item.status_note || item.notes) && (() => {
-                      const raw = item.last_updated_note || item.status_note || item.notes
+
+                    {item.type === "medication" && item.dosage && (
+                      <p className="text-sm text-[#b6bec9] mt-1">{item.dosage}</p>
+                    )}
+                    {(
+                      (item.type === "diagnosis" && item.status_note)
+                      || (item.type === "medication" && item.last_updated_note)
+                      || (item.type === "condition" && item.notes)
+                    ) && (() => {
+                      const raw =
+                        item.type === "diagnosis"
+                          ? item.status_note
+                          : item.type === "medication"
+                            ? item.last_updated_note
+                            : item.notes
+
                       const splitIndex = raw.indexOf("Modified by doctor:")
 
                       const mainText = splitIndex !== -1 ? raw.slice(0, splitIndex).trim() : raw
@@ -526,16 +544,18 @@ export default function PatientMedicalHistoryPage() {
                         </div>
                       )
                     })()}
-                    {(item.status || item.severity) && (
-                      <span
-                        className={`inline-block mt-3 px-2 py-0.5 rounded text-xs font-medium uppercase tracking-wider ${
-                          ["severe", "worsened", "critical"].includes((item.status || item.severity).toLowerCase())
-                            ? "bg-[#3b1010] text-[#fecaca] border border-[#7f1d1d]"
-                            : "bg-[#0e2519] text-[#bbf7d0] border border-[#1f4d36]"
-                        }`}
-                      >
-                        {item.status || item.severity}
-                      </span>
+                    {item.status && (
+                      <div className="mt-2">
+    <span
+      className={`inline-block px-2 py-0.5 rounded text-xs font-medium uppercase tracking-wider ${
+        ["severe", "worsened", "critical"].includes(item.status.toLowerCase())
+          ? "bg-[#3b1010] text-[#fecaca] border border-[#7f1d1d]"
+          : "bg-[#0e2519] text-[#bbf7d0] border border-[#1f4d36]"
+      }`}
+    >
+      {item.status}
+    </span>
+                      </div>
                     )}
                   </div>
 
@@ -605,6 +625,20 @@ export default function PatientMedicalHistoryPage() {
                       />
                     </div>
                     <div className="login-field">
+                      <label className="login-label" htmlFor="diagnosis-status">Status</label>
+                      <select
+                        id="diagnosis-status"
+                        className="login-input"
+                        value={diagnosisForm.status}
+                        onChange={(event) => setDiagnosisForm({...diagnosisForm, status: event.target.value})}
+                      >
+                        <option value="">Select status</option>
+                        {["active", "resolved", "chronic", "inactive"].map((status) => (
+                          <option key={status} value={status}>{status}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="login-field">
                       <label className="login-label" htmlFor="diagnosis-notes">Notes</label>
                       <textarea
                         id="diagnosis-notes"
@@ -663,15 +697,6 @@ export default function PatientMedicalHistoryPage() {
                           ))}
                         </select>
                       </div>
-                    </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="medication-notes">Reason / Notes</label>
-                      <textarea
-                        id="medication-notes"
-                        className="login-input min-h-24"
-                        value={medicationForm.notes}
-                        onChange={(event) => setMedicationForm({...medicationForm, notes: event.target.value})}
-                      />
                     </div>
                   </>
                 )}
@@ -820,6 +845,7 @@ export default function PatientMedicalHistoryPage() {
                       <textarea
                         id="edit-medication-notes"
                         className="login-input min-h-24"
+                        required
                         value={editMedicationForm.note}
                         onChange={(event) => setEditMedicationForm({...editMedicationForm, note: event.target.value})}
                       />
@@ -872,14 +898,14 @@ export default function PatientMedicalHistoryPage() {
                     disabled={
                       isSubmitting
                       || !canMutateRecords
-                      || (showDialog === "edit_diagnosis" && !trimValue(editDiagnosisForm.status))
-                      || (showDialog === "medication" && !canSubmitMedication)
-                      || (showDialog === "edit_medication" && !canSubmitMedication)
+                      || (showDialog === "edit_diagnosis" && (!trimValue(editDiagnosisForm.status) || !trimValue(editDiagnosisForm.note)))
+                      || (showDialog === "medication" && !canSubmitAddMedication)
+                      || (showDialog === "edit_medication" && !canSubmitEditMedication)
                       || (showDialog === "edit_allergy" && !canSubmitAllergy)
                       || (showDialog === "edit_condition" && !canSubmitCondition)
                       || (showDialog === "condition" && !conditionId)
-                      || (showDialog === "diagnosis" && !trimValue(diagnosisForm.diagnosis))
-                      || (showDialog === "allergy" && !trimValue(allergyForm.name))
+                      || (showDialog === "diagnosis" && (!trimValue(diagnosisForm.diagnosis) || !trimValue(diagnosisForm.status)))
+                      || (showDialog === "allergy" && (!trimValue(allergyForm.name) || !trimValue(allergyForm.severity)))
                     }
                     className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                   >

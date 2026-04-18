@@ -224,13 +224,16 @@ export default function PatientPage() {
         }
       }
 
-      if (currentDoctor && doctors.some(d => d.id === currentDoctor.id)) {
-        try {
-          await api.delete(`/doctors/${currentDoctor.id}/patients/${id}`, {headers: authHeaders})
-        } catch (e) {
-          notifyError(getErrorMessage(e))
-        }
-      }
+      const oldDepartmentDocs = doctors.filter(doc => doc.specialization === department)
+      await Promise.allSettled(
+        oldDepartmentDocs.map(async (doc) => {
+          try {
+            await api.delete(`/doctors/${doc.id}/patients/${id}`, {headers: authHeaders})
+          } catch (e) {
+            notifyError(getErrorMessage(e))
+          }
+        })
+      )
 
       const doctorsResponse = await api.get(`/patients/${id}/doctors`)
       setDoctors(getResponseData(doctorsResponse) || [])

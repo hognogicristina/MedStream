@@ -24,26 +24,133 @@ from app.models.patient.patient_admission_history import PatientAdmissionHistory
 from app.models.patient.patient_medication import PatientMedication
 from app.models.doctor.doctor_activity import DoctorActivity
 from app.models.doctor.doctor_activity_patient import doctor_activity_patients
+from app.service.assign_patients import assign_doctor_to_patient
 
 fake = Faker("ro_RO")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from collections import deque
+
+AGGREGATION_WINDOW = 5
+MAX_STREAMED_PATIENTS = 50
+VITAL_SAMPLE_RATE = 0.02
+ALWAYS_STREAM_ALERTS = True
+PATIENT_STATES = ["stable", "monitoring", "warning", "critical", "recovering"]
+
+vitals_buffer = deque()
+alerts_buffer = deque()
+patient_states = {}
+patient_last_normal_time = {}
 
 
-def assign_doctor_to_patient(db, doctor_id, patient_id):
-    exists = db.execute(
-        doctor_activity_patients.select().where(
-            (doctor_activity_patients.c.doctor_id == doctor_id) &
-            (doctor_activity_patients.c.patient_id == patient_id)
+def evaluate_patient_state(pid, vitals):
+    hr = vitals["heart_rate"]
+    spo2 = vitals["oxygen_saturation"]
+    temp = vitals["temperature"]
+
+    if spo2 < 88 or hr > 130 or temp > 39:
+        return "critical"
+
+    if spo2 < 92 or hr > 110 or temp > 38:
+        return "warning"
+
+    return "stable"
+
+
+def handle_state_transition(db, patient, new_state):
+    pid = patient.id
+    old_state = patient_states.get(pid)
+
+    if old_state == new_state:
+        return
+
+    patient_states[pid] = new_state
+
+    if new_state == "critical":
+        create_critical_flow(db, patient)
+
+    elif new_state == "warning":
+        create_warning_flow(db, patient)
+
+    elif new_state == "stable":
+        handle_stable_flow(db, patient)
+
+
+def create_critical_flow(db, patient):
+    doctor = random_doctor_for_department(db, patient.department)
+
+    db.add(DoctorActivity(
+        doctor_id=doctor.id,
+        patient_id=patient.id,
+        type="SURGERY",
+        title="Emergency surgery",
+        description="Critical condition requires immediate intervention",
+        status="incoming",
+        scheduled_at=datetime.utcnow() + timedelta(minutes=10)
+    ))
+
+
+def create_warning_flow(db, patient):
+    doctor = random_doctor_for_department(db, patient.department)
+
+    db.add(DoctorActivity(
+        doctor_id=doctor.id,
+        patient_id=patient.id,
+        type="PROCEDURE",
+        title="Further investigation",
+        description="Patient shows abnormal vitals",
+        status="incoming",
+        scheduled_at=datetime.utcnow() + timedelta(hours=2)
+    ))
+
+
+def handle_stable_flow(db, patient):
+    pid = patient.id
+
+    if pid not in patient_last_normal_time:
+        patient_last_normal_time[pid] = datetime.utcnow()
+        return
+
+    elapsed = datetime.utcnow() - patient_last_normal_time[pid]
+
+    if elapsed > timedelta(hours=6):
+        try_discharge_patient(db, patient)
+
+
+def try_discharge_patient(db, patient):
+    has_pending = db.query(DoctorActivity).filter(
+        DoctorActivity.patient_id == patient.id,
+        DoctorActivity.status == "incoming"
+    ).count() > 0
+
+    if has_pending:
+        return
+
+    patient.is_discharged = True
+    patient.discharge_date = datetime.utcnow()
+    patient.discharge_reason = "Recovered"
+
+
+def transfer_patient(db, patient, new_department):
+    new_doctor = random_doctor_for_department(db, new_department)
+
+    patient.department = new_department
+
+    db.execute(
+        doctor_activity_patients.delete().where(
+            doctor_activity_patients.c.patient_id == patient.id
         )
-    ).first()
+    )
 
-    if not exists:
-        db.execute(
-            doctor_activity_patients.insert().values(
-                doctor_id=doctor_id,
-                patient_id=patient_id
-            )
-        )
+    assign_doctor_to_patient(db, new_doctor.id, patient.id)
+
+    db.add(DoctorActivity(
+        doctor_id=new_doctor.id,
+        patient_id=patient.id,
+        type="TRANSFER",
+        title=f"Transferred to {new_department}",
+        description="Patient condition requires specialized care",
+        status="completed"
+    ))
 
 
 def generate_cnp(birth_date, gender, index):
@@ -204,6 +311,19 @@ def generate_patient(db, index):
         created_at=now - timedelta(hours=random.randint(1, 48))
     ))
 
+    if patient.is_pregnant:
+        doctor = random_doctor_for_department(db, "Obstetrics")
+
+        db.add(DoctorActivity(
+            doctor_id=doctor.id,
+            patient_id=patient.id,
+            type="PROCEDURE",
+            title="Childbirth preparation",
+            description="Pregnancy monitoring and delivery planning",
+            status="incoming",
+            scheduled_at=datetime.utcnow() + timedelta(days=1)
+        ))
+
     if not is_discharged:
         if diagnosis:
             db.add(PatientDiagnosis(
@@ -315,6 +435,14 @@ def create_alerts(db, patient_id, vital_obj, vital_data):
     created = False
 
     if vital_data["heart_rate"] > 120:
+        send_message("alerts-events", {
+            "event": "alert",
+            "patient_id": patient_id,
+            "type": "heart_rate",
+            "value": vital_data["heart_rate"],
+            "severity": "high"
+        })
+
         db.add(Alert(
             patient_id=patient_id,
             vital_id=vital_obj.id,
@@ -323,8 +451,20 @@ def create_alerts(db, patient_id, vital_obj, vital_data):
             severity="high"
         ))
         created = True
+        alerts_buffer.append({
+            "timestamp": datetime.utcnow(),
+            "type": "heart_rate"
+        })
 
     if vital_data["oxygen_saturation"] < 90:
+        send_message("alerts-events", {
+            "event": "alert",
+            "patient_id": patient_id,
+            "type": "heart_rate",
+            "value": vital_data["heart_rate"],
+            "severity": "high"
+        })
+
         db.add(Alert(
             patient_id=patient_id,
             vital_id=vital_obj.id,
@@ -333,8 +473,20 @@ def create_alerts(db, patient_id, vital_obj, vital_data):
             severity="critical"
         ))
         created = True
+        alerts_buffer.append({
+            "timestamp": datetime.utcnow(),
+            "type": "heart_rate"
+        })
 
     if vital_data["temperature"] > 38:
+        send_message("alerts-events", {
+            "event": "alert",
+            "patient_id": patient_id,
+            "type": "heart_rate",
+            "value": vital_data["heart_rate"],
+            "severity": "high"
+        })
+
         db.add(Alert(
             patient_id=patient_id,
             vital_id=vital_obj.id,
@@ -343,8 +495,20 @@ def create_alerts(db, patient_id, vital_obj, vital_data):
             severity="high"
         ))
         created = True
+        alerts_buffer.append({
+            "timestamp": datetime.utcnow(),
+            "type": "heart_rate"
+        })
 
     if not created:
+        send_message("alerts-events", {
+            "event": "alert",
+            "patient_id": patient_id,
+            "type": "heart_rate",
+            "value": vital_data["heart_rate"],
+            "severity": "high"
+        })
+
         db.add(Alert(
             patient_id=patient_id,
             vital_id=vital_obj.id,
@@ -352,6 +516,41 @@ def create_alerts(db, patient_id, vital_obj, vital_data):
             message="Patient stable",
             severity="normal"
         ))
+        alerts_buffer.append({
+            "timestamp": datetime.utcnow(),
+            "type": "heart_rate"
+        })
+
+
+def aggregate_and_send():
+    now = datetime.utcnow()
+    window_start = now - timedelta(seconds=AGGREGATION_WINDOW)
+
+    recent_vitals = [v for v in vitals_buffer if v["timestamp"] >= window_start]
+    recent_alerts = [a for a in alerts_buffer if a["timestamp"] >= window_start]
+
+    if not recent_vitals:
+        return
+
+    avg_hr = sum(v["heart_rate"] for v in recent_vitals) / len(recent_vitals)
+    avg_spo2 = sum(v["oxygen_saturation"] for v in recent_vitals) / len(recent_vitals)
+    avg_temp = sum(v["temperature"] for v in recent_vitals) / len(recent_vitals)
+
+    send_message("aggregated-events", {
+        "event": "aggregation",
+        "timestamp": now.isoformat(),
+        "avg_heart_rate": round(avg_hr, 2),
+        "avg_oxygen": round(avg_spo2, 2),
+        "avg_temperature": round(avg_temp, 2),
+        "alerts_count": len(recent_alerts),
+        "samples": len(recent_vitals)
+    })
+
+    while vitals_buffer and vitals_buffer[0]["timestamp"] < window_start:
+        vitals_buffer.popleft()
+
+    while alerts_buffer and alerts_buffer[0]["timestamp"] < window_start:
+        alerts_buffer.popleft()
 
 
 def generate_activity(db, patient_id, condition_name=None, diagnosis=None):
@@ -359,18 +558,26 @@ def generate_activity(db, patient_id, condition_name=None, diagnosis=None):
     if not patient or patient.is_discharged:
         return
 
-    doctor_link = db.execute(
+    doctor_links = db.execute(
         doctor_activity_patients.select().where(
             doctor_activity_patients.c.patient_id == patient_id
         )
-    ).first()
+    ).all()
 
-    if not doctor_link:
+    if not doctor_links:
         return
 
-    doctor = db.get(Doctor, doctor_link.doctor_id)
-    if not doctor:
+    valid_doctors = []
+
+    for link in doctor_links:
+        doctor = db.get(Doctor, link.doctor_id)
+        if doctor and doctor.specialization == patient.department:
+            valid_doctors.append(doctor)
+
+    if not valid_doctors:
         return
+
+    doctor = random.choice(valid_doctors)
 
     activity_type = random.choice(ACTIVITY_TYPES)
     source = condition_name or diagnosis or "medical condition"
@@ -394,7 +601,7 @@ def generate_activity(db, patient_id, condition_name=None, diagnosis=None):
         title = f"Imaging - {source}"
         description = f"Imaging required to assess {source}"
 
-    activity = DoctorActivity(
+    db.add(DoctorActivity(
         doctor_id=doctor.id,
         patient_id=patient_id,
         type=activity_type,
@@ -402,9 +609,10 @@ def generate_activity(db, patient_id, condition_name=None, diagnosis=None):
         description=description,
         status=random.choice(["incoming", "completed"]),
         scheduled_at=datetime.utcnow() + timedelta(hours=random.randint(1, 72))
-    )
+    ))
 
-    db.add(activity)
+
+streamed_patients = set()
 
 
 def run():
@@ -415,6 +623,7 @@ def run():
             generate_doctors(db)
 
     counter = 1
+    last_aggregation = datetime.utcnow()
 
     while True:
         with SessionLocal() as db:
@@ -436,6 +645,10 @@ def run():
                 patient = db.get(Patient, pid)
                 if not patient or patient.is_discharged:
                     continue
+
+                if (datetime.utcnow() - last_aggregation).seconds >= AGGREGATION_WINDOW:
+                    aggregate_and_send()
+                    last_aggregation = datetime.utcnow()
 
                 if random.random() < 0.005:
                     patient.is_discharged = True
@@ -466,6 +679,10 @@ def run():
                     continue
 
                 vitals = generate_vitals(pid)
+                vitals_buffer.append({
+                    "timestamp": datetime.utcnow(),
+                    **vitals
+                })
 
                 vital = Vital(
                     patient_id=pid,
@@ -475,20 +692,36 @@ def run():
                 db.add(vital)
                 db.flush()
 
+                new_state = evaluate_patient_state(pid, vitals)
+                handle_state_transition(db, patient, new_state)
+
                 create_alerts(db, pid, vital, vitals)
 
-                send_message("vitals-events", {
-                    "event": "vital",
-                    "patient_id": pid,
-                    **vitals
-                })
+                should_stream = False
 
-                if random.random() < 0.2:
+                if pid in streamed_patients:
+                    should_stream = True
+
+                elif len(streamed_patients) < MAX_STREAMED_PATIENTS:
+                    streamed_patients.add(pid)
+                    should_stream = True
+
+                elif random.random() < VITAL_SAMPLE_RATE:
+                    should_stream = True
+
+                if should_stream:
+                    send_message("vitals-events", {
+                        "event": "vital",
+                        "patient_id": pid,
+                        **vitals
+                    })
+
+                if random.random() < 0.05:
                     generate_activity(db, pid, condition_name, diagnosis)
 
             db.commit()
 
-        time.sleep(1)
+        time.sleep(2)
 
 
 if __name__ == "__main__":

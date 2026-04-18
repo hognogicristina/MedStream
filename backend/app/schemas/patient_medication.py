@@ -2,19 +2,25 @@ from datetime import date
 from pydantic import BaseModel, field_validator
 from datetime import datetime
 
-from app.schemas.validators import require_non_empty
+from app.schemas.validators import require_non_empty, strip_string
 
 
 class PatientMedicationCreate(BaseModel):
     name: str
     dosage: str
     frequency: str
-    notes: str
+    notes: str | None = None
 
-    @field_validator("name", "dosage", "frequency", "notes", mode="before")
+    @field_validator("name", "dosage", "frequency", mode="before")
     @classmethod
     def validate_required_text(cls, value, info):
         return require_non_empty(value, info.field_name.replace("_", " ").title())
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def validate_optional_notes(cls, value):
+        trimmed = strip_string(value)
+        return trimmed or None
 
 
 class PatientMedicationRead(BaseModel):

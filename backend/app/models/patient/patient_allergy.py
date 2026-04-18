@@ -15,3 +15,7 @@ class PatientAllergy(Base):
     allergy_name: Mapped[str] = mapped_column(String(255))
     severity: Mapped[str] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    @property
+    def status(self) -> str:
+        return (self.severity or "").strip() or "Unknown"

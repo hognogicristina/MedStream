@@ -19,6 +19,7 @@ class PatientAllergyRead(BaseModel):
     doctor_id: int
     allergy_name: str
     severity: str
+    status: str = "Unknown"
     created_at: datetime
     model_config = {"from_attributes": True}
 

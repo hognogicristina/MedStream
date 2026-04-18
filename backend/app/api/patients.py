@@ -43,6 +43,7 @@ from app.schemas.patient_diagnosis import (
     PatientDiagnosisPage,
     PatientDiagnosisUpdate
 )
+from app.service.assign_patients import assign_doctor_to_patient
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 option_router = APIRouter(tags=["auth"])
@@ -316,16 +317,22 @@ def discharge_patient(id: int, payload: PatientDischargeUpdate, authorization: s
 @router.post("/{id}/readmit", response_model=ApiResponse[PatientRead])
 def readmit_patient(id: int, payload: PatientAdmissionActionCreate, authorization: str | None = Header(default=None)):
     current_doctor = get_current_doctor(authorization)
+
     with SessionLocal() as db:
         patient = get_patient_or_404(db, id)
-        verify_patient_assignment(db, current_doctor.id, patient.id)
 
         if not patient.is_discharged:
             raise HTTPException(status_code=400, detail="Patient is not currently discharged.")
 
+        if patient.department != current_doctor.specialization:
+            patient.department = current_doctor.specialization
+
         patient.is_discharged = False
         patient.discharge_reason = None
         patient.discharge_date = None
+
+        assign_doctor_to_patient(db, current_doctor.id, patient.id)
+
         db.add(
             PatientAdmissionHistory(
                 patient_id=patient.id,
@@ -335,10 +342,14 @@ def readmit_patient(id: int, payload: PatientAdmissionActionCreate, authorizatio
                 created_at=datetime.utcnow(),
             )
         )
+
         db.commit()
         db.refresh(patient)
 
-        return success_response("Patient readmitted successfully.", serialize(patient, PatientRead))
+        return success_response(
+            "Patient readmitted successfully.",
+            serialize(patient, PatientRead)
+        )
 
 
 @router.get("/{id}/admission-history", response_model=ApiResponse[PatientAdmissionHistoryPage])

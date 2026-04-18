@@ -99,6 +99,7 @@ export default function ProfilePage() {
   const authHeaders = useMemo(() => ({
     Authorization: `Bearer ${token}`,
   }), [token])
+  const hasAssignedPatients = assignedPatients.length > 0
 
   useEffect(() => {
     const loadWorkspace = async () => {
@@ -581,7 +582,7 @@ export default function ProfilePage() {
                     <div className="login-field">
                       <label className="login-label" htmlFor="specialization">Specialization</label>
                       <select id="specialization" name="specialization" value={form.specialization} onChange={handleFormChange}
-                              className="login-input" required>
+                              className="login-input" required disabled={hasAssignedPatients}>
                         <option value="">Select specialization</option>
                         {departments.map((department) => (
                           <option key={department} value={department}>{department}</option>
