@@ -4,6 +4,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.utils.datetime import now_utc
 
 
 class Encounter(Base):
@@ -15,4 +16,4 @@ class Encounter(Base):
     encounter_type: Mapped[str] = mapped_column(String(50))
     chief_complaint: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(50), default="open")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)

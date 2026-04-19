@@ -66,12 +66,19 @@ class DoctorRead(BaseModel):
     email: str
     pending_email: str | None = None
     email_confirmed: bool = True
+    email_verified: bool = True
     phone_number: str | None
     birth_date: date | None = None
     specialization: str
     license_number: str
     is_active: bool
     deleted_at: datetime | None
+
+    @model_validator(mode="after")
+    def populate_email_verified(self):
+        self.email_verified = self.email_confirmed
+        return self
+
     model_config = {"from_attributes": True}
 
 
@@ -145,6 +152,7 @@ class PasswordResetRequestResponse(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str
+    confirm_password: str | None = None
 
     @field_validator("token", mode="before")
     @classmethod
@@ -155,6 +163,12 @@ class PasswordResetConfirm(BaseModel):
     @classmethod
     def validate_new_password(cls, value):
         return validate_password_strength(value)
+
+    @model_validator(mode="after")
+    def validate_password_confirmation(self):
+        if self.confirm_password is not None and self.new_password != self.confirm_password:
+            raise ValueError("Passwords do not match.")
+        return self
 
 
 class PasswordResetConfirmResponse(BaseModel):
@@ -169,3 +183,7 @@ class AccountRecoveryRequestResponse(BaseModel):
 
 class DoctorDeactivateRequest(BaseModel):
     remove_patient_assignments: bool = False
+
+
+class EmailVerificationResponse(BaseModel):
+    message: str

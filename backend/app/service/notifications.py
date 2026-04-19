@@ -1,30 +1,65 @@
 import asyncio
-import secrets
 from email.message import EmailMessage
+from urllib.parse import urlencode
 
 import aiosmtplib
+import asyncio
 
 from app.core.config import settings
 
 
-def generate_verification_code():
-    return f"{secrets.randbelow(1000000):06d}"
+def _build_frontend_link(path: str, token: str):
+    query = urlencode({"token": token})
+    return f"{settings.frontend_base_url.rstrip('/')}{path}?{query}"
+
+
+def build_verify_email_link(token: str):
+    return _build_frontend_link("/verify-email", token)
 
 
 def build_password_reset_link(token: str):
-    return f"https://medstream.local/reset-password?token={token}"
+    return _build_frontend_link("/reset-password", token)
 
 
-def build_account_recovery_link(token: str):
-    return f"https://medstream.local/recover-account?token={token}"
+def _render_html_email(title: str, message: str, action_label: str, action_url: str):
+    return f"""\
+<!doctype html>
+<html lang="en">
+  <body style="margin:0;padding:0;background:#16191f;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif;color:#f2f3f3;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:32px 16px;background:#16191f;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;border:1px solid #3b424b;background:#1b2430;border-radius:20px;overflow:hidden;">
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0 0 12px;font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#ff9900;font-weight:700;">MedStream</p>
+                <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#ffffff;">{title}</h1>
+                <p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:#d5dbdb;">{message}</p>
+                <a href="{action_url}" style="display:inline-block;padding:14px 22px;border-radius:14px;background:#ec7211;color:#16191f;text-decoration:none;font-weight:700;">
+                  {action_label}
+                </a>
+                <p style="margin:24px 0 8px;font-size:13px;color:#879196;">If the button does not work, use this link:</p>
+                <p style="margin:0;font-size:13px;line-height:1.6;word-break:break-all;">
+                  <a href="{action_url}" style="color:#9dccff;text-decoration:none;">{action_url}</a>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+"""
 
 
-async def send_email_async(recipient: str, subject: str, message: str):
+async def send_email_async(recipient: str, subject: str, text_body: str, html_body: str):
     email = EmailMessage()
     email["From"] = settings.smtp_user or "no-reply@medstream.local"
     email["To"] = recipient
     email["Subject"] = subject
-    email.set_content(message)
+    email.set_content(text_body)
+    email.add_alternative(html_body, subtype="html")
 
     await aiosmtplib.send(
         email,
@@ -32,84 +67,53 @@ async def send_email_async(recipient: str, subject: str, message: str):
         port=settings.smtp_port,
         username=settings.smtp_user or None,
         password=settings.smtp_pass or None,
-        start_tls=True,
+        start_tls=settings.smtp_port not in (465, 1025),
+        use_tls=settings.smtp_port == 465,
     )
 
 
-def send_email(recipient: str, subject: str, message: str):
+def send_email(recipient: str, subject: str, text_body: str, html_body: str):
+    if not settings.smtp_host:
+        raise RuntimeError("SMTP host not configured.")
+
     try:
-        if not settings.smtp_host:
-            raise RuntimeError("SMTP host not configured")
-
-        asyncio.run(send_email_async(recipient, subject, message))
-        print(f"[EMAIL-SENT] to={recipient} subject={subject} message={message}")
-    except Exception as exc:
-        print(f"[EMAIL-FALLBACK] to={recipient} subject={subject} message={message} error={exc}")
-
-
-def send_sms(recipient: str, message: str):
-    print(f"[SMS] to={recipient} message={message}")
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run(send_email_async(recipient, subject, text_body, html_body))
+        else:
+            loop.run_until_complete(send_email_async(recipient, subject, text_body, html_body))
+    except RuntimeError:
+        asyncio.run(send_email_async(recipient, subject, text_body, html_body))
 
 
-def send_registration_notifications(email: str, phone_number: str | None, first_name: str):
-    verification_code = generate_verification_code()
-    email_message = (
-        f"Hello Dr. {first_name}, welcome to MedStream. "
-        f"Your registration verification code is {verification_code}. "
-        f"Use this code to confirm your clinician account setup."
+def send_registration_verification_email(email: str, first_name: str, token: str):
+    action_url = build_verify_email_link(token)
+    message = f"Hello Dr. {first_name}, your MedStream account is ready. Validate your email address to complete registration."
+    send_email(
+        email,
+        "Validate your MedStream email",
+        f"{message}\n\nValidate Email: {action_url}",
+        _render_html_email("Validate Your Email", message, "Validate Email", action_url),
     )
-    send_email(email, "MedStream registration verification", email_message)
-
-    if phone_number:
-        sms_message = (
-            f"MedStream verification code: {verification_code}. "
-            f"Complete your doctor account setup with this code."
-        )
-        send_sms(phone_number, sms_message)
 
 
-def send_password_reset_notifications(email: str, phone_number: str | None, token: str):
-    reset_link = build_password_reset_link(token)
-    verification_code = generate_verification_code()
-    email_message = (
-        f"MedStream password reset requested. "
-        f"Use reset link: {reset_link} "
-        f"or verification code {verification_code}. "
-        f"This reset request expires shortly."
+def send_password_reset_email(email: str, first_name: str, token: str):
+    action_url = build_password_reset_link(token)
+    message = f"Hello Dr. {first_name}, we received a request to reset your MedStream password. This link expires shortly."
+    send_email(
+        email,
+        "Reset your MedStream password",
+        f"{message}\n\nReset Password: {action_url}",
+        _render_html_email("Reset Your Password", message, "Reset Password", action_url),
     )
-    send_email(email, "MedStream password reset", email_message)
-
-    if phone_number:
-        sms_message = (
-            f"MedStream reset code: {verification_code}. "
-            f"Reset link: {reset_link}"
-        )
-        send_sms(phone_number, sms_message)
 
 
-def send_account_recovery_notifications(email: str, phone_number: str | None, token: str):
-    recovery_link = build_account_recovery_link(token)
-    verification_code = generate_verification_code()
-    email_message = (
-        f"MedStream account recovery requested. "
-        f"Use recovery link: {recovery_link} "
-        f"or verification code {verification_code}. "
-        f"This recovery request expires shortly."
+def send_email_change_verification_email(email: str, first_name: str, token: str):
+    action_url = build_verify_email_link(token)
+    message = f"Hello Dr. {first_name}, confirm your new email address to finish updating your MedStream account."
+    send_email(
+        email,
+        "Confirm your MedStream email change",
+        f"{message}\n\nVerify Email: {action_url}",
+        _render_html_email("Confirm Email Change", message, "Verify Email", action_url),
     )
-    send_email(email, "MedStream account recovery", email_message)
-
-    if phone_number:
-        sms_message = (
-            f"MedStream recovery code: {verification_code}. "
-            f"Recovery link: {recovery_link}"
-        )
-        send_sms(phone_number, sms_message)
-
-
-def send_email_change_confirmation(email: str, first_name: str):
-    confirmation_code = generate_verification_code()
-    email_message = (
-        f"Hello Dr. {first_name}, MedStream received a request to change your account email. "
-        f"Use confirmation code {confirmation_code} to confirm {email}."
-    )
-    send_email(email, "MedStream email change confirmation", email_message)

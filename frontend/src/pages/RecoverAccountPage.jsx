@@ -45,7 +45,7 @@ export default function RecoverAccountPage() {
               </Link>
             </div>
             <h1 className="login-title">{"Account Recovery"}</h1>
-            <p className="login-subtitle">{"Request an account recovery link using the doctor email or phone number associated with MedStream."}</p>
+            <p className="login-subtitle">{"Request an account recovery email for the doctor account associated with MedStream."}</p>
             <div className="auth-metrics">
               <div className="auth-metric">
                 <p className="auth-metric-label">Access</p>
@@ -67,7 +67,7 @@ export default function RecoverAccountPage() {
             <div className="login-header">
               <p className="login-brand">{"Recovery"}</p>
               <h1 className="login-title">{"Recover Account"}</h1>
-              <p className="login-subtitle">{"Enter email or phone to start account recovery."}</p>
+              <p className="login-subtitle">{"Enter your email to start account recovery."}</p>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
@@ -78,7 +78,7 @@ export default function RecoverAccountPage() {
                   value={identifier}
                   onChange={(event) => setIdentifier(event.target.value)}
                   className="login-input"
-                  placeholder={"Email address or phone number"}
+                  placeholder={"Email address"}
                   required
                 />
               </div>

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query, Header
 from sqlalchemy import desc, func, select
@@ -298,7 +298,7 @@ def discharge_patient(id: int, payload: PatientDischargeUpdate, authorization: s
 
         patient.is_discharged = True
         patient.discharge_reason = payload.reason
-        patient.discharge_date = datetime.utcnow()
+        patient.discharge_date = datetime.now(timezone.utc)
         db.add(
             PatientAdmissionHistory(
                 patient_id=patient.id,
@@ -339,7 +339,7 @@ def readmit_patient(id: int, payload: PatientAdmissionActionCreate, authorizatio
                 doctor_id=current_doctor.id,
                 type="Readmission",
                 reason=payload.reason,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             )
         )
 

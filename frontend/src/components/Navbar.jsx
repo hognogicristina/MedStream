@@ -43,6 +43,16 @@ function UserIcon() {
   )
 }
 
+function MetricsIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path d="M4 14.5V10M10 14.5V6.5M16 14.5V3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
+            strokeLinejoin="round"/>
+      <path d="M2.75 16.5h14.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
 function NavTooltip({label, children}) {
   return (
     <div className="group relative flex items-center">
@@ -73,6 +83,7 @@ export default function Navbar() {
     `inline-flex h-11 w-11 items-center justify-center rounded-md ${isActive ? "console-button-primary" : "console-button-secondary"}`
   const departmentsActive = location.pathname.startsWith("/departments")
   const profileActive = location.pathname.startsWith("/profile")
+  const metricsActive = location.pathname.startsWith("/metrics")
 
   useEffect(() => {
     const handlePointerDown = (event) => {
@@ -150,6 +161,46 @@ export default function Navbar() {
               <span className="sr-only">{"Alerts"}</span>
             </NavLink>
           </NavTooltip>
+
+          <div className="relative flex items-center">
+            <NavTooltip label={"Metrics"}>
+              <button
+                type="button"
+                aria-label={"Metrics"}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${openMenu === "metrics" ? "console-button-active" : metricsActive ? "console-button-primary" : "console-button-secondary"}`}
+                onClick={() => setOpenMenu((current) => current === "metrics" ? "" : "metrics")}
+              >
+                <MetricsIcon/>
+                <span className="sr-only">{"Metrics"}</span>
+              </button>
+            </NavTooltip>
+            <div
+              className={`absolute right-0 top-full z-40 mt-2 w-48 rounded-[16px] border border-[#3b424b] bg-[#161b22] p-2 ${openMenu === "metrics" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
+              <div className="space-y-1">
+                <NavLink
+                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
+                  to="/metrics/streaming"
+                  onClick={() => setOpenMenu("")}
+                >
+                  {"Streaming"}
+                </NavLink>
+                <NavLink
+                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
+                  to="/metrics/batch"
+                  onClick={() => setOpenMenu("")}
+                >
+                  {"Batch"}
+                </NavLink>
+                <NavLink
+                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
+                  to="/metrics/comparison"
+                  onClick={() => setOpenMenu("")}
+                >
+                  {"Comparison"}
+                </NavLink>
+              </div>
+            </div>
+          </div>
 
           <NavTooltip label={"Add Patient"}>
             <NavLink aria-label={"Add Patient"} className={navLinkClassName} to="/patients/new">

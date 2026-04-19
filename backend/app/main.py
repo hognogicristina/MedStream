@@ -1,6 +1,6 @@
-import threading
-import time
 from contextlib import asynccontextmanager
+from time import perf_counter
+import threading
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -8,20 +8,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from app.api.alerts import router as alerts_router
+from app.api.batch import router as batch_router
 from app.api.conditions import router as conditions_router
 from app.api.doctors import auth_router, router as doctors_router
 from app.api.medications import router as medications_router
+from app.api.metrics import router as metrics_router
 from app.api.patients import option_router, router as patients_router
 from app.api.departments import router as departments_router
 from app.api.stats import router as stats_router
 from app.api.vitals import router as vitals_router
 from app.api.ws import router as ws_router
 from app.batch.patient_stats_job import run as run_batch
-from app.batch.status import batch_status_store, next_run_from, utc_now
+from app.batch.runtime import batch_runtime_controller
+from app.batch.status import batch_status_store, utc_now
 from app.core.config import settings
 from app.db.init_db import init_db
+from app.db.session import SessionLocal
 from app.kafka.consumer import run as run_consumer
 from app.kafka.topics import ensure_topics
+from app.service.metrics import refresh_batch_snapshot
 from threading import Thread
 from app.simulator.run_simulator import run as run_simulator
 
@@ -29,30 +34,27 @@ background_threads_started = False
 background_threads_lock = threading.Lock()
 
 
-def run_batch_loop():
-    interval_seconds = settings.batch_interval_seconds
-    next_run_at = utc_now()
-    batch_status_store.configure(interval_seconds, next_run_at)
+def execute_batch_job():
+    started_at = utc_now()
+    batch_status_store.mark_started(started_at, batch_runtime_controller.next_run_time(), "Loading data")
 
-    while True:
-        now = utc_now()
-        sleep_seconds = (next_run_at - now).total_seconds()
-
-        if sleep_seconds > 0:
-            time.sleep(sleep_seconds)
-
-        started_at = utc_now()
-        next_run_at = next_run_from(started_at, interval_seconds)
-        batch_status_store.mark_started(started_at, next_run_at)
-
-        try:
-            run_batch()
-            finished_at = utc_now()
-            batch_status_store.mark_success(finished_at, next_run_at)
-        except Exception as error:
-            print("Batch error:", error)
-            finished_at = utc_now()
-            batch_status_store.mark_failure(finished_at, error, next_run_at)
+    try:
+        duration_started_at = perf_counter()
+        batch_status_store.mark_progress(10, "Loading data")
+        batch_status_store.mark_progress(40, "Aggregating vitals")
+        run_batch()
+        batch_status_store.mark_progress(70, "Computing insights")
+        duration_ms = round((perf_counter() - duration_started_at) * 1000, 2)
+        with SessionLocal() as db:
+            refresh_batch_snapshot(db, duration_ms)
+        batch_status_store.mark_progress(90, "Finalizing")
+        finished_at = utc_now()
+        batch_status_store.mark_success(finished_at, batch_runtime_controller.next_run_time(), duration_ms)
+    except Exception as error:
+        print("Batch error:", error)
+        finished_at = utc_now()
+        duration_ms = round((perf_counter() - duration_started_at) * 1000, 2)
+        batch_status_store.mark_failure(finished_at, error, batch_runtime_controller.next_run_time(), duration_ms)
 
 
 def start_background_threads():
@@ -63,8 +65,8 @@ def start_background_threads():
             return
 
         threading.Thread(target=run_consumer, daemon=True, name="medstream-consumer").start()
-        threading.Thread(target=run_batch_loop, daemon=True, name="medstream-batch").start()
         threading.Thread(target=run_simulator, daemon=True, name="medstream-simulator").start()
+        batch_runtime_controller.start(execute_batch_job, settings.batch_interval_seconds)
         background_threads_started = True
 
 
@@ -74,6 +76,7 @@ async def lifespan(app: FastAPI):
     ensure_topics()
     start_background_threads()
     yield
+    batch_runtime_controller.shutdown()
 
 
 app = FastAPI(title="MedStream", lifespan=lifespan)
@@ -161,6 +164,8 @@ app.include_router(alerts_router)
 app.include_router(ws_router)
 app.include_router(stats_router)
 app.include_router(departments_router)
+app.include_router(metrics_router)
+app.include_router(batch_router)
 
 
 @app.options("/{rest_of_path:path}")

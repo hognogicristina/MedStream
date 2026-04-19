@@ -1,6 +1,7 @@
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.13.0
+APScheduler==3.10.4
 bcrypt==4.0.1
 certifi==2026.2.25
 click==8.3.2

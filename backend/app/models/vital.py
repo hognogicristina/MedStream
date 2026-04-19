@@ -4,6 +4,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.utils.datetime import now_utc
 
 
 class Vital(Base):
@@ -16,4 +17,4 @@ class Vital(Base):
     temperature: Mapped[int] = mapped_column(Integer)
     systolic_bp: Mapped[int] = mapped_column(Integer)
     diastolic_bp: Mapped[int] = mapped_column(Integer)
-    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)

@@ -4,6 +4,7 @@ from sqlalchemy import DateTime, Float, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.utils.datetime import now_utc
 
 
 class PatientStats(Base):
@@ -15,4 +16,4 @@ class PatientStats(Base):
     avg_temperature: Mapped[float] = mapped_column(Float)
     avg_oxygen: Mapped[float] = mapped_column(Float)
     alerts_count: Mapped[int] = mapped_column(Integer)
-    computed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)

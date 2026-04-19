@@ -4,6 +4,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, UniqueConstraint, String, 
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.utils.datetime import now_utc
 
 
 class PatientMedication(Base):
@@ -16,7 +17,7 @@ class PatientMedication(Base):
     dosage: Mapped[str] = mapped_column(String(100))
     frequency: Mapped[str] = mapped_column(String(100))
     last_updated_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -7,6 +7,7 @@ from app.db.base import Base
 from app.models.doctor.doctor_activity_patient import doctor_activity_patients
 from app.models.patient.patient_activity_doctor import patient_activity_doctors
 from app.models.doctor.doctor_activity_doctor import doctor_activity_doctors
+from app.utils.datetime import now_utc
 
 
 class DoctorActivity(Base):
@@ -20,7 +21,7 @@ class DoctorActivity(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="incoming")
     scheduled_at: Mapped[datetime] = mapped_column(DateTime)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
     patients = relationship(
         "Patient",

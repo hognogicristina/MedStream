@@ -5,6 +5,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, UniqueConstraint, Text, St
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.utils.datetime import now_utc
 
 
 class PatientActivity(Base):
@@ -19,4 +20,4 @@ class PatientActivity(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="incoming")
     scheduled_at: Mapped[datetime] = mapped_column(DateTime)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)

@@ -4,6 +4,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.utils.datetime import now_utc
 
 
 class Alert(Base):
@@ -15,4 +16,4 @@ class Alert(Base):
     alert_type: Mapped[str] = mapped_column(String(50))
     message: Mapped[str] = mapped_column(String(255))
     severity: Mapped[str] = mapped_column(String(20), default="high")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)

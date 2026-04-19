@@ -1,16 +1,17 @@
 import {useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
+import {useNotifications} from "../components/NotificationProvider"
 import {api} from "../services/api"
-import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
+import {getErrorMessage, getResponseMessage} from "../services/apiMessages"
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate()
-  const [identifier, setIdentifier] = useState("")
+  const {notifySuccess, notifyError} = useNotifications()
+  const [email, setEmail] = useState("")
   const [message, setMessage] = useState("")
   const [isError, setIsError] = useState(false)
-  const [resetToken, setResetToken] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const canRequestReset = identifier.trim().length > 0
+  const canRequestReset = email.trim().length > 0
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -19,19 +20,19 @@ export default function ForgotPasswordPage() {
     }
     setMessage("")
     setIsError(false)
-    setResetToken("")
     setIsSubmitting(true)
 
     try {
-      const response = await api.post("/doctors/password-reset/request", {
-        identifier,
+      const response = await api.post("/auth/forgot-password", {
+        identifier: email.trim(),
       })
 
       setMessage(getResponseMessage(response))
-      setResetToken(getResponseData(response).reset_token)
+      notifySuccess(getResponseMessage(response))
     } catch (error) {
       setIsError(true)
       setMessage(getErrorMessage(error))
+      notifyError(getErrorMessage(error))
     } finally {
       setIsSubmitting(false)
     }
@@ -49,7 +50,7 @@ export default function ForgotPasswordPage() {
               </Link>
             </div>
             <h1 className="login-title">{"Password Recovery"}</h1>
-            <p className="login-subtitle">{"Request a reset token using your doctor email or phone number, then continue to reset the account password."}</p>
+            <p className="login-subtitle">{"Request a secure password reset email for your doctor account."}</p>
             <div className="auth-metrics">
               <div className="auth-metric">
                 <p className="auth-metric-label">Live</p>
@@ -71,18 +72,18 @@ export default function ForgotPasswordPage() {
             <div className="login-header">
               <p className="login-brand">{"Recovery"}</p>
               <h1 className="login-title">{"Forgot Password"}</h1>
-              <p className="login-subtitle">{"Request a password reset token to regain access."}</p>
+              <p className="login-subtitle">{"Enter your email address to receive a password reset link."}</p>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
               <div className="login-field">
                 <input
-                  id="identifier"
-                  type="text"
-                  value={identifier}
-                  onChange={(event) => setIdentifier(event.target.value)}
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   className="login-input"
-                  placeholder={"Email address or phone number"}
+                  placeholder={"Email address"}
                   required
                 />
               </div>
@@ -91,22 +92,6 @@ export default function ForgotPasswordPage() {
                 <p className={isError ? "login-error" : "login-success"}>
                   {message}
                 </p>
-              )}
-
-              {resetToken && (
-                <div className="auth-section">
-                  <div className="auth-section-header">
-                    <p className="auth-section-label">{"Reset Token"}</p>
-                    <p className="auth-section-copy break-all">{resetToken}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold"
-                    onClick={() => navigate("/reset-password", {state: {token: resetToken}})}
-                  >
-                    {"Continue to Reset Password"}
-                  </button>
-                </div>
               )}
 
               <div className="auth-actions">
@@ -122,9 +107,9 @@ export default function ForgotPasswordPage() {
                   <Link className="auth-link" to="/login">
                     {"Back to login"}
                   </Link>
-                  <Link className="auth-link" to="/recover-account">
-                    {"Recover account"}
-                  </Link>
+                  <button type="button" className="auth-link" onClick={() => navigate("/login")}>
+                    {"Go to login"}
+                  </button>
                 </div>
               </div>
             </form>

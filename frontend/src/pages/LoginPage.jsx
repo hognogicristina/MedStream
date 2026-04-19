@@ -125,9 +125,9 @@ export default function LoginPage() {
                 <Link className="auth-link" to="/forgot-password">
                   {"Forgot password?"}
                 </Link>
-                <Link className="auth-link" to="/recover-account">
-                  {"Recover account"}
-                </Link>
+                <span className="auth-link opacity-70">
+                  {"Email verification required"}
+                </span>
               </div>
 
               {feedback && (

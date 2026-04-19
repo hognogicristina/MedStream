@@ -3,6 +3,7 @@ from sqlalchemy import inspect
 from app.db.base import Base
 from app.db.session import engine
 from app.models.doctor.doctor import Doctor
+from app.models.doctor.doctor_email_verification import DoctorEmailVerification
 from app.models.doctor.doctor_password_reset import DoctorPasswordReset
 from app.models.doctor.doctor_activity import DoctorActivity
 from app.models.doctor.doctor_activity_patient import doctor_activity_patients

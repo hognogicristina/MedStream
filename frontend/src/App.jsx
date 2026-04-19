@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute"
 import PublicOnlyRoute from "./components/PublicOnlyRoute"
 import AddPatientPage from "./pages/AddPatientPage"
 import AlertsPage from "./pages/AlertsPage"
+import BatchMetricsPage from "./pages/BatchMetricsPage"
 import DepartmentPage from "./pages/DepartmentPage"
 import Dashboard from "./pages/Dashboard"
 import ForgotPasswordPage from "./pages/ForgotPasswordPage"
@@ -17,6 +18,9 @@ import ProfilePage from "./pages/ProfilePage"
 import RecoverAccountPage from "./pages/RecoverAccountPage"
 import RegisterPage from "./pages/RegisterPage"
 import ResetPasswordPage from "./pages/ResetPasswordPage"
+import StreamingMetricsPage from "./pages/StreamingMetricsPage"
+import StreamingBatchPage from "./pages/StreamingBatchPage"
+import VerifyEmailPage from "./pages/VerifyEmailPage"
 
 function App() {
   return (
@@ -61,6 +65,11 @@ function App() {
         />
 
         <Route
+          path="/verify-email"
+          element={<VerifyEmailPage/>}
+        />
+
+        <Route
           path="/recover-account"
           element={
             <PublicOnlyRoute>
@@ -83,6 +92,9 @@ function App() {
           <Route path="/patients/:id/medical-history" element={<PatientMedicalHistoryPage/>}/>
           <Route path="/patients/:id/admission-history" element={<PatientAdmissionHistoryPage/>}/>
           <Route path="/alerts" element={<AlertsPage/>}/>
+          <Route path="/metrics/streaming" element={<StreamingMetricsPage/>}/>
+          <Route path="/metrics/batch" element={<BatchMetricsPage/>}/>
+          <Route path="/metrics/comparison" element={<StreamingBatchPage/>}/>
           <Route path="/patients/new" element={<AddPatientPage/>}/>
           <Route path="/profile" element={<ProfilePage/>}/>
         </Route>

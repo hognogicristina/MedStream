@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_pass: str = ""
+    frontend_base_url: str = "http://localhost:5173"
 
     heart_rate_alert_threshold: int = 120
     oxygen_alert_threshold: int = 92

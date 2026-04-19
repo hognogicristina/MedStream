@@ -119,7 +119,7 @@ export default function RegisterPage() {
 
       navigate("/login", {
         state: {
-          message: getResponseMessage(response),
+          message: getResponseMessage(response) || "Account created. Please verify your email.",
         },
       })
     } catch (error) {

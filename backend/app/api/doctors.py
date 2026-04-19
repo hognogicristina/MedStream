@@ -1,12 +1,12 @@
-import hashlib
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query
 from passlib.context import CryptContext
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
+from fastapi import BackgroundTasks
 
 from app.api.activity_utils import (
     attach_activity_relationships,
@@ -24,6 +24,7 @@ from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
 from app.models.doctor.doctor_activity import DoctorActivity
 from app.models.doctor.doctor import Doctor
+from app.models.doctor.doctor_email_verification import DoctorEmailVerification
 from app.models.doctor.doctor_password_reset import DoctorPasswordReset
 from app.models.patient import Patient
 from app.schemas.doctor import (
@@ -33,6 +34,7 @@ from app.schemas.doctor import (
     DoctorEmailUpdate,
     DoctorRead,
     DoctorUpdate,
+    EmailVerificationResponse,
     LoginRequest,
     LoginResponse,
     PasswordResetConfirm,
@@ -43,18 +45,14 @@ from app.schemas.doctor import (
 from app.schemas.doctor_activity import DoctorActivityCreate, DoctorActivityRead, DoctorActivityUpdate
 from app.schemas.patient import PatientRead
 from app.schemas.validators import normalize_phone_lookup
-from app.service.notifications import (
-    send_account_recovery_notifications,
-    send_email_change_confirmation,
-    send_password_reset_notifications,
-    send_registration_notifications,
-)
+from app.service.auth_tokens import TOKEN_TTL, create_email_verification_token, create_password_reset_token, hash_token
+from app.service.notifications import send_email_change_verification_email, send_password_reset_email, send_registration_verification_email
+from app.utils.datetime import now_utc, to_utc
 from app.models.patient.patient_activity_doctor import patient_activity_doctors
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 auth_router = APIRouter(tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-password_reset_ttl = timedelta(minutes=30)
 
 
 def serialize(model, schema):
@@ -113,34 +111,6 @@ def get_current_doctor(authorization: str | None):
             raise HTTPException(status_code=403, detail="Doctor account is inactive.")
 
         return doctor
-
-
-def hash_reset_token(token: str):
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-def create_doctor_reset_token(db, doctor: Doctor):
-    now = datetime.now(UTC).replace(tzinfo=None)
-    active_tokens = db.execute(
-        select(DoctorPasswordReset).where(
-            DoctorPasswordReset.doctor_id == doctor.id,
-            DoctorPasswordReset.used_at.is_(None),
-        )
-    ).scalars().all()
-
-    for active_token in active_tokens:
-        active_token.used_at = now
-
-    raw_token = secrets.token_urlsafe(32)
-    reset = DoctorPasswordReset(
-        doctor_id=doctor.id,
-        token_hash=hash_reset_token(raw_token),
-        expires_at=now + password_reset_ttl,
-    )
-    db.add(reset)
-    db.commit()
-    db.refresh(reset)
-    return raw_token, reset
 
 
 def ensure_doctor_uniqueness(db, *, email: str | None = None, phone_number: str | None = None, license_number: str | None = None,
@@ -347,7 +317,11 @@ def update_current_doctor(payload: DoctorUpdate, authorization: str | None = Hea
 
 
 @router.patch("/me/email", response_model=ApiResponse[DoctorRead])
-def update_current_doctor_email(payload: DoctorEmailUpdate, authorization: str | None = Header(default=None)):
+def update_current_doctor_email(
+        payload: DoctorEmailUpdate,
+        background_tasks: BackgroundTasks,
+        authorization: str | None = Header(default=None)
+):
     current_doctor = get_current_doctor(authorization)
 
     with SessionLocal() as db:
@@ -365,7 +339,13 @@ def update_current_doctor_email(payload: DoctorEmailUpdate, authorization: str |
         doctor.email_confirmed = False
         db.commit()
         db.refresh(doctor)
-        send_email_change_confirmation(payload.email, doctor.first_name)
+        raw_token, _ = create_email_verification_token(db, doctor, payload.email)
+        background_tasks.add_task(
+            send_email_change_verification_email,
+            payload.email,
+            doctor.first_name,
+            raw_token
+        )
         return success_response("Doctor email update requested successfully.", serialize(doctor, DoctorRead))
 
 
@@ -374,16 +354,17 @@ def request_password_reset(payload: PasswordResetRequest):
     with SessionLocal() as db:
         doctors = db.execute(select(Doctor)).scalars().all()
         doctor = next((item for item in doctors if doctor_matches_identifier(item, payload.identifier)), None)
+        expires_at = now_utc() + TOKEN_TTL
 
-        if doctor is None:
-            raise HTTPException(status_code=404, detail="Doctor not found.")
+        if doctor is not None:
+            raw_token, reset = create_password_reset_token(db, doctor)
+            expires_at = reset.expires_at
+            send_password_reset_email(doctor.email, doctor.first_name, raw_token)
 
-        raw_token, reset = create_doctor_reset_token(db, doctor)
-        send_password_reset_notifications(doctor.email, doctor.phone_number, raw_token)
         response = PasswordResetRequestResponse(
-            message="Password reset token generated successfully.",
-            reset_token=raw_token,
-            expires_at=reset.expires_at,
+            message="If the email exists, password reset instructions were sent successfully.",
+            reset_token="",
+            expires_at=expires_at,
         )
         return success_response(response.message, response.model_dump(mode="json"))
 
@@ -395,19 +376,20 @@ def request_account_recovery(payload: PasswordResetRequest):
         doctor = next((item for item in doctors if doctor_matches_identifier(item, payload.identifier)), None)
 
         message = "If the account exists, recovery instructions were sent successfully."
+        expires_at = now_utc() + TOKEN_TTL
         if doctor is None:
             response = AccountRecoveryRequestResponse(
                 message=message,
                 recovery_token="",
-                expires_at=datetime.now(UTC).replace(tzinfo=None),
+                expires_at=expires_at,
             )
             return success_response(response.message, response.model_dump(mode="json"))
 
-        raw_token, reset = create_doctor_reset_token(db, doctor)
-        send_account_recovery_notifications(doctor.email, doctor.phone_number, raw_token)
+        raw_token, reset = create_password_reset_token(db, doctor)
+        send_password_reset_email(doctor.email, doctor.first_name, raw_token)
         response = AccountRecoveryRequestResponse(
             message=message,
-            recovery_token=raw_token,
+            recovery_token="",
             expires_at=reset.expires_at,
         )
         return success_response(response.message, response.model_dump(mode="json"))
@@ -416,15 +398,15 @@ def request_account_recovery(payload: PasswordResetRequest):
 @router.post("/password-reset/confirm", response_model=ApiResponse[PasswordResetConfirmResponse])
 def confirm_password_reset(payload: PasswordResetConfirm):
     with SessionLocal() as db:
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = now_utc()
         reset = db.execute(
             select(DoctorPasswordReset).where(
-                DoctorPasswordReset.token_hash == hash_reset_token(payload.token),
+                DoctorPasswordReset.token_hash == hash_token(payload.token),
                 DoctorPasswordReset.used_at.is_(None),
             )
         ).scalar_one_or_none()
 
-        if reset is None or reset.expires_at < now:
+        if reset is None or to_utc(reset.expires_at) < now:
             raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
 
         doctor = db.get(Doctor, reset.doctor_id)
@@ -433,7 +415,7 @@ def confirm_password_reset(payload: PasswordResetConfirm):
             raise HTTPException(status_code=404, detail="Doctor not found.")
 
         doctor.password_hash = pwd_context.hash(payload.new_password)
-        reset.used_at = now
+        reset.used_at = to_utc(now)
         db.commit()
         response = PasswordResetConfirmResponse(message="Password reset successful.")
         return success_response(response.message, response.model_dump(mode="json"))
@@ -469,7 +451,7 @@ def delete_doctor(doctor_id: int, payload: DoctorDeactivateRequest):
         doctor.is_active = False
 
         if doctor.deleted_at is None:
-            doctor.deleted_at = datetime.now(UTC).replace(tzinfo=None)
+            doctor.deleted_at = datetime.now(timezone.utc)
 
         db.commit()
         db.refresh(doctor)
@@ -558,7 +540,7 @@ def register_doctor(payload: DoctorCreate):
             restore_candidate.last_name = payload.last_name
             restore_candidate.email = payload.email
             restore_candidate.pending_email = None
-            restore_candidate.email_confirmed = True
+            restore_candidate.email_confirmed = False
             restore_candidate.phone_number = payload.phone_number
             restore_candidate.birth_date = payload.birth_date
             restore_candidate.password_hash = pwd_context.hash(payload.password)
@@ -568,11 +550,8 @@ def register_doctor(payload: DoctorCreate):
             restore_candidate.deleted_at = None
             db.commit()
             db.refresh(restore_candidate)
-            send_registration_notifications(
-                restore_candidate.email,
-                restore_candidate.phone_number,
-                restore_candidate.first_name,
-            )
+            raw_token, _ = create_email_verification_token(db, restore_candidate, restore_candidate.email)
+            send_registration_verification_email(restore_candidate.email, restore_candidate.first_name, raw_token)
             return restore_candidate
 
         doctor = Doctor(
@@ -580,7 +559,7 @@ def register_doctor(payload: DoctorCreate):
             last_name=payload.last_name,
             email=payload.email,
             pending_email=None,
-            email_confirmed=True,
+            email_confirmed=False,
             phone_number=payload.phone_number,
             birth_date=payload.birth_date,
             password_hash=pwd_context.hash(payload.password),
@@ -595,7 +574,8 @@ def register_doctor(payload: DoctorCreate):
             db.rollback()
             raise HTTPException(status_code=400, detail="Doctor identity fields must be unique.")
 
-        send_registration_notifications(doctor.email, doctor.phone_number, doctor.first_name)
+        raw_token, _ = create_email_verification_token(db, doctor, doctor.email)
+        send_registration_verification_email(doctor.email, doctor.first_name, raw_token)
         return doctor
 
 
@@ -631,4 +611,47 @@ def root_login(payload: LoginRequest):
 @auth_router.post("/register", response_model=ApiResponse[DoctorRead])
 def register(payload: DoctorCreate):
     doctor = register_doctor(payload)
-    return success_response("Doctor account created successfully.", serialize(doctor, DoctorRead), status_code=201)
+    return success_response("Doctor account created successfully. Please verify your email.", serialize(doctor, DoctorRead),
+                            status_code=201)
+
+
+@auth_router.get("/auth/verify-email", response_model=ApiResponse[EmailVerificationResponse])
+def verify_email(token: str = Query(...)):
+    with SessionLocal() as db:
+        verification = db.execute(
+            select(DoctorEmailVerification).where(
+                DoctorEmailVerification.token_hash == hash_token(token),
+                DoctorEmailVerification.used_at.is_(None),
+            )
+        ).scalar_one_or_none()
+
+        if verification is None or to_utc(verification.expires_at) < now_utc():
+            raise HTTPException(status_code=400, detail="Invalid or expired verification token.")
+
+        doctor = db.get(Doctor, verification.doctor_id)
+
+        if doctor is None:
+            raise HTTPException(status_code=404, detail="Doctor not found.")
+
+        if doctor.pending_email and verification.target_email == doctor.pending_email:
+            doctor.email = doctor.pending_email
+            doctor.pending_email = None
+        elif verification.target_email != doctor.email:
+            raise HTTPException(status_code=400, detail="Verification token does not match the doctor email.")
+
+        doctor.email_confirmed = True
+        verification.used_at = now_utc()
+        db.commit()
+
+        response = EmailVerificationResponse(message="Email verified successfully.")
+        return success_response(response.message, response.model_dump(mode="json"))
+
+
+@auth_router.post("/auth/forgot-password", response_model=ApiResponse[PasswordResetRequestResponse])
+def auth_forgot_password(payload: PasswordResetRequest):
+    return request_password_reset(payload)
+
+
+@auth_router.post("/auth/reset-password", response_model=ApiResponse[PasswordResetConfirmResponse])
+def auth_reset_password(payload: PasswordResetConfirm):
+    return confirm_password_reset(payload)

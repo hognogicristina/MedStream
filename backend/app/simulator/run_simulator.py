@@ -1,7 +1,7 @@
 import csv
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from faker import Faker
 from sqlalchemy.sql import func, select
@@ -25,6 +25,7 @@ from app.models.patient.patient_medication import PatientMedication
 from app.models.doctor.doctor_activity import DoctorActivity
 from app.models.doctor.doctor_activity_patient import doctor_activity_patients
 from app.service.assign_patients import assign_doctor_to_patient
+from app.utils.datetime import now_utc, to_utc
 
 fake = Faker("ro_RO")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -85,7 +86,7 @@ def create_critical_flow(db, patient):
         title="Emergency surgery",
         description="Critical condition requires immediate intervention",
         status="incoming",
-        scheduled_at=datetime.utcnow() + timedelta(minutes=10)
+        scheduled_at=now_utc() + timedelta(minutes=10)
     ))
 
 
@@ -99,7 +100,7 @@ def create_warning_flow(db, patient):
         title="Further investigation",
         description="Patient shows abnormal vitals",
         status="incoming",
-        scheduled_at=datetime.utcnow() + timedelta(hours=2)
+        scheduled_at=now_utc() + timedelta(hours=2)
     ))
 
 
@@ -107,10 +108,10 @@ def handle_stable_flow(db, patient):
     pid = patient.id
 
     if pid not in patient_last_normal_time:
-        patient_last_normal_time[pid] = datetime.utcnow()
+        patient_last_normal_time[pid] = now_utc()
         return
 
-    elapsed = datetime.utcnow() - patient_last_normal_time[pid]
+    elapsed = now_utc() - to_utc(patient_last_normal_time[pid])
 
     if elapsed > timedelta(hours=6):
         try_discharge_patient(db, patient)
@@ -126,7 +127,7 @@ def try_discharge_patient(db, patient):
         return
 
     patient.is_discharged = True
-    patient.discharge_date = datetime.utcnow()
+    patient.discharge_date = now_utc()
     patient.discharge_reason = "Recovered"
 
 
@@ -242,7 +243,7 @@ def generate_patient(db, index):
     gender = random.choice(["male", "female"])
     birth_date = fake.date_of_birth(minimum_age=18, maximum_age=90)
     is_discharged = False
-    now = datetime.utcnow()
+    now = now_utc()
 
     address = {
         "address_street": fake.street_name(),
@@ -254,7 +255,7 @@ def generate_patient(db, index):
     }
 
     is_pregnant = False
-    if gender == "female" and 18 <= (datetime.utcnow().year - birth_date.year) <= 45:
+    if gender == "female" and 18 <= (now_utc().year - birth_date.year) <= 45:
         is_pregnant = random.random() < 0.2
 
     if is_pregnant:
@@ -321,7 +322,7 @@ def generate_patient(db, index):
             title="Childbirth preparation",
             description="Pregnancy monitoring and delivery planning",
             status="incoming",
-            scheduled_at=datetime.utcnow() + timedelta(days=1)
+            scheduled_at=now_utc() + timedelta(days=1)
         ))
 
     if not is_discharged:
@@ -370,7 +371,7 @@ def generate_patient(db, index):
             name=medication_name,
             dosage=dosage,
             frequency=frequency,
-            created_at=datetime.utcnow().date()
+            created_at=datetime.now(timezone.utc).date()
         ))
 
         for allergy in random.sample(ALLERGIES, k=random.randint(0, 2)):
@@ -452,7 +453,7 @@ def create_alerts(db, patient_id, vital_obj, vital_data):
         ))
         created = True
         alerts_buffer.append({
-            "timestamp": datetime.utcnow(),
+            "timestamp": now_utc(),
             "type": "heart_rate"
         })
 
@@ -474,7 +475,7 @@ def create_alerts(db, patient_id, vital_obj, vital_data):
         ))
         created = True
         alerts_buffer.append({
-            "timestamp": datetime.utcnow(),
+            "timestamp": now_utc(),
             "type": "heart_rate"
         })
 
@@ -496,7 +497,7 @@ def create_alerts(db, patient_id, vital_obj, vital_data):
         ))
         created = True
         alerts_buffer.append({
-            "timestamp": datetime.utcnow(),
+            "timestamp": now_utc(),
             "type": "heart_rate"
         })
 
@@ -517,17 +518,17 @@ def create_alerts(db, patient_id, vital_obj, vital_data):
             severity="normal"
         ))
         alerts_buffer.append({
-            "timestamp": datetime.utcnow(),
+            "timestamp": now_utc(),
             "type": "heart_rate"
         })
 
 
 def aggregate_and_send():
-    now = datetime.utcnow()
+    now = now_utc()
     window_start = now - timedelta(seconds=AGGREGATION_WINDOW)
 
-    recent_vitals = [v for v in vitals_buffer if v["timestamp"] >= window_start]
-    recent_alerts = [a for a in alerts_buffer if a["timestamp"] >= window_start]
+    recent_vitals = [v for v in vitals_buffer if to_utc(v["timestamp"]) >= window_start]
+    recent_alerts = [a for a in alerts_buffer if to_utc(a["timestamp"]) >= window_start]
 
     if not recent_vitals:
         return
@@ -546,10 +547,10 @@ def aggregate_and_send():
         "samples": len(recent_vitals)
     })
 
-    while vitals_buffer and vitals_buffer[0]["timestamp"] < window_start:
+    while vitals_buffer and to_utc(vitals_buffer[0]["timestamp"]) < window_start:
         vitals_buffer.popleft()
 
-    while alerts_buffer and alerts_buffer[0]["timestamp"] < window_start:
+    while alerts_buffer and to_utc(alerts_buffer[0]["timestamp"]) < window_start:
         alerts_buffer.popleft()
 
 
@@ -608,7 +609,7 @@ def generate_activity(db, patient_id, condition_name=None, diagnosis=None):
         title=title,
         description=description,
         status=random.choice(["incoming", "completed"]),
-        scheduled_at=datetime.utcnow() + timedelta(hours=random.randint(1, 72))
+        scheduled_at=now_utc() + timedelta(hours=random.randint(1, 72))
     ))
 
 
@@ -623,7 +624,7 @@ def run():
             generate_doctors(db)
 
     counter = 1
-    last_aggregation = datetime.utcnow()
+    last_aggregation = now_utc()
 
     while True:
         with SessionLocal() as db:
@@ -646,13 +647,13 @@ def run():
                 if not patient or patient.is_discharged:
                     continue
 
-                if (datetime.utcnow() - last_aggregation).seconds >= AGGREGATION_WINDOW:
+                if (now_utc() - to_utc(last_aggregation)).seconds >= AGGREGATION_WINDOW:
                     aggregate_and_send()
-                    last_aggregation = datetime.utcnow()
+                    last_aggregation = now_utc()
 
                 if random.random() < 0.005:
                     patient.is_discharged = True
-                    patient.discharge_date = datetime.utcnow()
+                    patient.discharge_date = now_utc()
                     patient.discharge_reason = random.choice([
                         "Recovered",
                         "Transferred",
@@ -680,7 +681,7 @@ def run():
 
                 vitals = generate_vitals(pid)
                 vitals_buffer.append({
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": now_utc(),
                     **vitals
                 })
 
