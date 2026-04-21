@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     oxygen_alert_threshold: int = 92
     temperature_alert_threshold: int = 39
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()

@@ -67,15 +67,13 @@ export default function AlertsPage() {
   const scopedCnp = searchParams.get("cnp") || ""
   const scopedPatientName = searchParams.get("patient") || ""
   const scopedPatient = scopedCnp ? patientByCnp[scopedCnp] : null
-  const visibleAlerts = scopedCnp
-    ? alerts.filter((alert) => patientCnpById[alert.patient_id] === scopedCnp)
-    : alerts
+  const validAlerts = alerts.filter((alert) => Boolean(patientNameById[alert.patient_id]))
+  const visibleAlerts = scopedCnp && scopedPatient ? validAlerts.filter((alert) => patientCnpById[alert.patient_id] === scopedCnp) : validAlerts
   const severityCounts = {
     critical: visibleAlerts.filter((alert) => alert.severity === "critical").length,
     high: visibleAlerts.filter((alert) => alert.severity === "high").length,
     normal: visibleAlerts.filter((alert) => alert.severity === "normal").length,
   }
-
 
 
   return (
@@ -90,12 +88,13 @@ export default function AlertsPage() {
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Alerts</h1>
               <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">Live alert queue with filters, sort order, and paging.</p>
-              {scopedCnp && (
+              {scopedCnp && scopedPatient && (
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
                     Patient: {scopedPatient ? (
-                      <Link to={`/patient/${scopedPatient.id}`} className="hover:underline text-inherit">{formatPatientFullName(scopedPatient)}</Link>
-                    ) : (scopedPatientName || "Unknown patient")}
+                    <Link to={`/patient/${scopedPatient.id}`}
+                          className="hover:underline text-inherit">{formatPatientFullName(scopedPatient)}</Link>
+                  ) : (scopedPatientName || "Unknown patient")}
                   </span>
                   <Link className="console-link text-sm font-semibold" to="/alerts">
                     Clear filter
@@ -185,7 +184,7 @@ export default function AlertsPage() {
                 type: "text",
                 placeholder: "Filter by CNP",
                 defaultValue: scopedCnp,
-                disabled: Boolean(scopedCnp),
+                disabled: Boolean(scopedPatient),
                 onChange: (value) => {
                   if (value.trim().length === 13 && /^\d{13}$/.test(value.trim())) {
                     setSearchParams({cnp: value.trim()})

@@ -12,7 +12,7 @@ export default function Dashboard() {
   const {notifyError} = useNotifications()
   const [vitals, setVitals] = useState([])
   const [visibleAlerts, setVisibleAlerts] = useState([])
-  const [alertCount, setAlertCount] = useState(0)
+  const [rawAlertCount, setRawAlertCount] = useState(0)
   const [stats, setStats] = useState([])
   const [batchStatus, setBatchStatus] = useState(null)
   const [patients, setPatients] = useState([])
@@ -108,7 +108,7 @@ export default function Dashboard() {
 
       if (msg.type === "alert") {
         alertBufferRef.current = [msg.data, ...alertBufferRef.current.filter((alert) => alert.id !== msg.data.id)].slice(0, 50)
-        setAlertCount(alertBufferRef.current.length)
+        setRawAlertCount(alertBufferRef.current.length)
         alertAudioRef.current.currentTime = 0
         alertAudioRef.current.play().catch(() => {
         })
@@ -151,7 +151,9 @@ export default function Dashboard() {
   }, [])
 
   const latestVital = vitals[0]
-  const previewAlerts = visibleAlerts.slice(0, 6)
+  const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
+  const previewAlerts = visibleAlerts.filter((alert) => Boolean(patientNameById[alert.patient_id])).slice(0, 6)
+  const alertCount = alertBufferRef.current.filter((alert) => Boolean(patientNameById[alert.patient_id])).length
   const recentVitals = vitals.slice(0, 5)
   const latestBatchRun = stats.reduce((latest, stat) => {
     if (!stat.computed_at) {
@@ -209,7 +211,6 @@ export default function Dashboard() {
   const oxygenDelta = recentVitals.length >= 2 ? recentVitals[0].oxygen_saturation - recentVitals[recentVitals.length - 1].oxygen_saturation : 0
   const temperatureDelta = recentVitals.length >= 2 ? recentVitals[0].temperature - recentVitals[recentVitals.length - 1].temperature : 0
   const formatDelta = (value) => value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1)
-  const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -419,10 +420,30 @@ export default function Dashboard() {
               Department analytics will appear after the system completes at least one successful run.
             </div>
           ) : (
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {departments.map((dep) => (
-                <Link key={dep} to={`/departments/${encodeURIComponent(dep)}`}>
-                  {dep}
+                <Link
+                  key={dep}
+                  to={`/departments/${encodeURIComponent(dep)}`}
+                  className="group rounded-2xl border border-[#3b424b] bg-[#151b22] p-4 transition hover:border-[#9dccff] hover:bg-[#1c2530]"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">
+                        Department
+                      </p>
+
+                      <h3 className="mt-2 text-lg font-semibold text-white group-hover:text-[#9dccff]">
+                        {dep}
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 border-t border-[#2b3139] pt-3">
+                    <p className="text-xs text-[#b6bec9]">
+                      View department details, patients, and activity
+                    </p>
+                  </div>
                 </Link>
               ))}
             </div>
