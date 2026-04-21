@@ -118,16 +118,12 @@ export default function StreamingMetricsPage() {
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Streaming Metrics</h1>
-          <p className="mt-3 max-w-3xl text-sm text-[#b6bec9] sm:text-base">
-            Real-time data (updates every few seconds).
-          </p>
-          <div className="mt-4 rounded-2xl border border-[#2a3441] bg-[#11161c] px-4 py-4 text-sm leading-6 text-[#d5dbdb]">
+          <p className="mt-3 w-full text-sm text-[#b6bec9]">
             This view shows real-time patient monitoring data.
-            <br/>
             Vitals and alerts are processed instantly as they are generated.
-            <br/>
             This allows fast reaction, but values may fluctuate and are not always perfectly accurate.
-          </div>
+            Data is refreshed every ~2.5 seconds using polling, simulating a real-time monitoring system.
+          </p>
           {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
         </header>
 
@@ -144,6 +140,10 @@ export default function StreamingMetricsPage() {
         <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="monitor-card rounded-[24px] p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Live Trend</p>
+            <p className="mt-2 text-sm text-[#b6bec9]">
+              This chart shows the evolution of the average heart rate over time.
+              Each point represents a real-time snapshot, illustrating how values fluctuate continuously.
+            </p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Average Heart Rate</h2>
 
             <div className="mt-6 h-[280px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
@@ -169,6 +169,10 @@ export default function StreamingMetricsPage() {
           <div className="monitor-card rounded-[24px] p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Latest Alerts</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Streaming Alert Feed</h2>
+            <p className="mt-2 text-sm text-[#b6bec9]">
+              Alerts are triggered instantly when predefined thresholds are exceeded
+              (e.g., abnormal heart rate or oxygen levels). This demonstrates real-time anomaly detection.
+            </p>
 
             <div className="mt-6 space-y-3">
               {recentAlerts.items?.length ? recentAlerts.items.map((alert) => (
@@ -213,6 +217,67 @@ export default function StreamingMetricsPage() {
                 Next
               </button>
             </div>
+          </div>
+        </section>
+        <section className="monitor-card rounded-[24px] p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding Streaming Processing</p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">How this page works</h2>
+
+          <div className="mt-4 space-y-4 text-sm text-[#b6bec9] leading-6">
+            <p>
+              This page represents the <strong>streaming (real-time) processing layer</strong> of the system.
+              Data is processed immediately as it is generated, without waiting for accumulation.
+            </p>
+
+            <p>
+              Patient vitals such as heart rate, oxygen level, and temperature are continuously ingested,
+              analyzed, and displayed in near real-time. This allows instant visibility into patient conditions.
+            </p>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">What you are seeing:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Live averages updated every few seconds</li>
+                <li>A continuously updating heart rate trend</li>
+                <li>A real-time alert feed triggered by abnormal values</li>
+                <li>Execution time of streaming computations</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Why streaming processing matters:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Enables immediate detection of critical conditions</li>
+                <li>Supports real-time monitoring systems (e.g., ICU dashboards)</li>
+                <li>Allows instant reaction to anomalies (alerts)</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Technical flow:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Data is produced continuously (simulated sensors or real inputs)</li>
+                <li>Events are sent through a streaming platform (Kafka)</li>
+                <li>A streaming processor consumes and processes events in real-time</li>
+                <li>Alerts are generated instantly when thresholds are exceeded</li>
+                <li>Results are exposed via API and updated in the UI every few seconds</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Trade-offs:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Very low latency (near instant updates)</li>
+                <li>Higher variability (values may fluctuate)</li>
+                <li>Less suitable for deep historical analysis</li>
+                <li>More complex infrastructure (event streaming systems)</li>
+              </ul>
+            </div>
+
+            <p>
+              This layer complements batch processing: streaming provides <strong>speed and reactivity</strong>,
+              while batch provides <strong>accuracy and deeper insights</strong>.
+            </p>
           </div>
         </section>
       </div>

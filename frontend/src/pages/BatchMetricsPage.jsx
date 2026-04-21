@@ -84,7 +84,7 @@ function parseScheduleFromStatus(status) {
         time: "08:00",
         days: [],
         cron_expression: "",
-        summary: `Runs every ${seconds / 3600} hour${seconds / 3600 === 1 ? "" : "s"}`,
+        summary: `Runs every ${seconds} second${seconds === 1 ? "" : "s"}`
       }
     }
 
@@ -299,7 +299,7 @@ export default function BatchMetricsPage() {
   const handleApplySchedule = async () => {
     const payload = {type: scheduleType}
 
-    if (scheduleType === "minutes" || scheduleType === "hours") {
+    if (scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") {
       payload.value = Number(scheduleValue)
     } else if (scheduleType === "daily") {
       payload.time = scheduleTime
@@ -365,14 +365,10 @@ export default function BatchMetricsPage() {
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Batch Metrics</h1>
-          <p className="mt-3 max-w-3xl text-sm text-[#b6bec9] sm:text-base">
-            Aggregated over last 5 minutes.
-          </p>
-          <div className="mt-4 rounded-2xl border border-[#2a3441] bg-[#11161c] px-4 py-4 text-sm leading-6 text-[#d5dbdb]">
+          <p className="mt-3 w-full text-[#b6bec9]">
             This view shows aggregated data computed over a time window (e.g., last 5 minutes).
-            <br/>
             Batch processing analyzes large volumes of historical data, providing more stable and accurate insights.
-          </div>
+          </p>
           {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
         </header>
 
@@ -380,6 +376,11 @@ export default function BatchMetricsPage() {
           <div className="monitor-card rounded-[24px] p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Batch Control</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Scheduling</h2>
+            <p className="mt-2 text-sm text-[#b6bec9]">
+              The batch job runs periodically based on the configured schedule.
+              Lower intervals provide fresher insights but increase system load, while higher intervals
+              reduce processing cost but increase latency of results.
+            </p>
 
             <div className="mt-6 monitor-panel rounded-2xl px-4 py-4">
               <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Current Schedule</p>
@@ -395,6 +396,7 @@ export default function BatchMetricsPage() {
                   value={scheduleType}
                   onChange={(event) => setScheduleType(event.target.value)}
                 >
+                  <option value="seconds">Every X seconds</option>
                   <option value="minutes">Every X minutes</option>
                   <option value="hours">Every X hours</option>
                   <option value="daily">Daily at</option>
@@ -403,10 +405,10 @@ export default function BatchMetricsPage() {
                 </select>
               </label>
 
-              {(scheduleType === "minutes" || scheduleType === "hours") ? (
+              {(scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") ? (
                 <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
                   <span className="text-xs uppercase tracking-[0.2em] text-[#879196]">
-                    {scheduleType === "minutes" ? "Minutes" : "Hours"}
+                    {scheduleType === "seconds" ? "Seconds" : scheduleType === "minutes" ? "Minutes" : "Hours"}
                   </span>
                   <input
                     type="number"
@@ -492,6 +494,10 @@ export default function BatchMetricsPage() {
           <div className="monitor-card rounded-[24px] p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Batch Job Status</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Execution Progress</h2>
+            <p className="mt-2 text-sm text-[#b6bec9]">
+              The batch job executes in stages (loading, aggregating, computing, finalizing),
+              each representing a phase of data processing.
+            </p>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="monitor-panel rounded-2xl px-4 py-3">
@@ -635,6 +641,58 @@ export default function BatchMetricsPage() {
                 Next
               </button>
             </div>
+          </div>
+        </section>
+        <section className="monitor-card rounded-[24px] p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding Batch Processing</p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">How this page works</h2>
+
+          <div className="mt-4 space-y-4 text-sm text-[#b6bec9] leading-6">
+            <p>
+              This page represents the <strong>batch processing layer</strong> of the system.
+              Unlike real-time streaming, where data is processed instantly, batch processing operates on
+              accumulated data over a defined time window.
+            </p>
+
+            <p>
+              In this case, patient data such as heart rate, oxygen level, and temperature are collected continuously,
+              then periodically processed in bulk to generate more stable and reliable insights.
+            </p>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">What you are seeing:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Aggregated averages (heart rate, oxygen, temperature)</li>
+                <li>Total alerts detected during the batch window</li>
+                <li>Execution time of the batch job</li>
+                <li>Top diagnoses and patient distribution across departments</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Why batch processing matters:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Provides more accurate insights by smoothing real-time noise</li>
+                <li>Allows complex computations on large datasets</li>
+                <li>Supports analytics like trends, statistics, and comparisons</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Technical flow:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Data is continuously ingested from the streaming layer</li>
+                <li>Stored in a database (PostgreSQL)</li>
+                <li>Batch job runs at scheduled intervals</li>
+                <li>Data is processed using analytical logic (e.g., aggregation)</li>
+                <li>Results are exposed via API and displayed here</li>
+              </ul>
+            </div>
+
+            <p>
+              This design follows the classic <strong>streaming + batch architecture</strong>, where streaming handles
+              real-time alerts, and batch processing provides deeper analytical insights over time.
+            </p>
           </div>
         </section>
       </div>

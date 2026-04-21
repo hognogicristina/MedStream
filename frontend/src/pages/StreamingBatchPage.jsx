@@ -44,6 +44,9 @@ function ComparisonCard({title, data, differences, accentClass}) {
       </div>
 
       <div className="mt-6 space-y-3">
+        <p className="text-sm text-[#b6bec9]">
+          The value on the right represents the difference between streaming and batch results for each metric.
+        </p>
         {metrics.map((metric) => (
           <div key={metric.label} className="monitor-panel rounded-2xl px-4 py-3">
             <div className="flex items-start justify-between gap-4">
@@ -128,16 +131,15 @@ export default function StreamingBatchPage() {
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Streaming vs Batch</h1>
-          <p className="mt-3 max-w-3xl text-sm text-[#b6bec9] sm:text-base">
-            Compare live rolling metrics with batch-style metrics over the last 5 minutes. Refresh interval: 4 seconds.
-          </p>
-          <div className="mt-4 rounded-2xl border border-[#2a3441] bg-[#11161c] px-4 py-4 text-sm leading-6 text-[#d5dbdb]">
+          <p className="mt-3 w-full text-[#b6bec9]">
             This view compares real-time streaming data with batch-processed results.
-            <br/>
             Streaming is fast and responsive, while batch is slower but more accurate.
-            <br/>
             This demonstrates the trade-off between speed and accuracy in data processing systems.
-          </div>
+          </p>
+          <p className="text-sm text-[#b6bec9]">
+            Each metric displays the current value and the difference compared to the other processing model.
+            Positive values indicate that streaming is higher, while negative values indicate that batch results are higher.
+          </p>
           {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
         </header>
 
@@ -151,6 +153,16 @@ export default function StreamingBatchPage() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Avg Heart Rate Trend</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Last {history.length} Polls</h2>
+              <p className="mt-2 text-sm text-[#b6bec9]">
+                This chart compares how the average heart rate evolves over time for both processing models.
+                The streaming line reacts instantly to changes, while the batch line changes more gradually,
+                reflecting aggregated data over a time window.
+              </p>
+              <p className="mt-2 text-sm text-[#b6bec9]">
+                The divergence between the two lines represents the inherent trade-off in modern data systems:
+                real-time responsiveness versus statistical stability. This comparison highlights why
+                many production systems adopt a hybrid architecture combining both approaches.
+              </p>
             </div>
           </div>
 
@@ -172,6 +184,51 @@ export default function StreamingBatchPage() {
                 <Line type="monotone" dataKey="batch" stroke="#60a5fa" strokeWidth={3} dot={false}/>
               </LineChart>
             </ResponsiveContainer>
+          </div>
+        </section>
+        <section className="monitor-card rounded-[24px] p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding the Comparison</p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Streaming vs Batch Processing</h2>
+
+          <div className="mt-4 space-y-4 text-sm text-[#b6bec9] leading-6">
+            <p>
+              This page provides a direct comparison between <strong>streaming (real-time)</strong> processing
+              and <strong>batch (periodic)</strong> processing using the same underlying data.
+            </p>
+
+            <p>
+              Both systems operate on identical patient data, but process it differently:
+              streaming processes events instantly, while batch processes accumulated data over a time window.
+            </p>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Streaming (Real-Time)</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Processes data immediately as it arrives</li>
+                <li>Very low latency (near-instant updates)</li>
+                <li>Values fluctuate more due to real-time noise</li>
+                <li>Ideal for alerts and monitoring</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Batch Processing</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Processes data periodically (e.g., every few minutes)</li>
+                <li>Higher latency but more stable results</li>
+                <li>Aggregates larger datasets</li>
+                <li>Ideal for analytics and reporting</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Key Insight</p>
+              <p>
+                Streaming prioritizes <strong>speed</strong>, while batch prioritizes <strong>accuracy</strong>.
+                The difference values shown on this page highlight how real-time metrics can deviate
+                from aggregated results.
+              </p>
+            </div>
           </div>
         </section>
       </div>
