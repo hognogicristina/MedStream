@@ -1,11 +1,11 @@
 import {useCallback, useEffect, useMemo, useState} from "react"
 import {useParams} from "react-router-dom"
-import BackButton from "../components/BackButton"
-import DataTable from "../components/DataTable"
-import {useNotifications} from "../components/NotificationProvider"
-import {useAuth} from "../auth/AuthContext"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
+import BackButton from "../components/BackButton.jsx"
+import DataTable from "../components/DataTable.jsx"
+import {useNotifications} from "../components/NotificationProvider.jsx"
+import {useAuth} from "../auth/AuthContext.jsx"
+import {api} from "../services/api.js"
+import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 
 function formatDateTime(value) {
   if (!value) return "--"

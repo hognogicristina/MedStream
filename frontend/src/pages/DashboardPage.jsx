@@ -1,14 +1,14 @@
 import {useCallback, useEffect, useRef, useState} from "react"
 import {Link} from "react-router-dom"
-import CountValue from "../components/CountValue"
-import {useNotifications} from "../components/NotificationProvider"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData} from "../services/apiMessages"
-import {createWebSocket} from "../services/ws"
-import VitalsChart from "../components/VitalsChart"
-import {formatPatientFullName} from "../utils/patients"
+import CountValue from "../components/CountValue.jsx"
+import {useNotifications} from "../components/NotificationProvider.jsx"
+import {api} from "../services/api.js"
+import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
+import {createWebSocket} from "../services/ws.js"
+import VitalsChart from "../components/VitalsChart.jsx"
+import {formatPatientFullName} from "../utils/patients.js"
 
-export default function Dashboard() {
+export default function DashboardPage() {
   const {notifyError} = useNotifications()
   const [vitals, setVitals] = useState([])
   const [visibleAlerts, setVisibleAlerts] = useState([])

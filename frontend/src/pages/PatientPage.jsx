@@ -1,14 +1,14 @@
 import {useCallback, useEffect, useRef, useState} from "react"
 import {Link, useParams} from "react-router-dom"
-import BackButton from "../components/BackButton"
-import DepartmentTransferDialog from "../components/DepartmentTransferDialog"
-import EditPatientDialog from "../components/EditPatientDialog"
-import {useNotifications} from "../components/NotificationProvider"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
-import {createWebSocket} from "../services/ws"
-import {formatPatientPhoneWithCode} from "../utils/patientPhone"
-import {useAuth} from "../auth/AuthContext"
+import BackButton from "../components/BackButton.jsx"
+import DepartmentTransferDialog from "../components/DepartmentTransferDialog.jsx"
+import EditPatientDialog from "../components/EditPatientDialog.jsx"
+import {useNotifications} from "../components/NotificationProvider.jsx"
+import {api} from "../services/api.js"
+import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
+import {createWebSocket} from "../services/ws.js"
+import {formatPatientPhoneWithCode} from "../utils/patientPhone.js"
+import {useAuth} from "../auth/AuthContext.jsx"
 
 function formatDateTime(value) {
   if (!value) {

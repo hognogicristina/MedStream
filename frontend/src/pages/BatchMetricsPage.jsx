@@ -1,7 +1,7 @@
 import {useEffect, useMemo, useState} from "react"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData} from "../services/apiMessages"
-import {downloadCSV} from "../utils/downloadCSV"
+import {api} from "../services/api.js"
+import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
+import {downloadCSV} from "../utils/downloadCSV.js"
 
 const POLL_INTERVAL_MS = 25000
 const STATUS_POLL_INTERVAL_MS = 2500

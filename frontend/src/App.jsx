@@ -6,7 +6,7 @@ import AddPatientPage from "./pages/AddPatientPage"
 import AlertsPage from "./pages/AlertsPage"
 import BatchMetricsPage from "./pages/BatchMetricsPage"
 import DepartmentPage from "./pages/DepartmentPage"
-import Dashboard from "./pages/Dashboard"
+import DashboardPage from "./pages/DashboardPage"
 import ForgotPasswordPage from "./pages/ForgotPasswordPage"
 import HomePage from "./pages/HomePage"
 import LoginPage from "./pages/LoginPage"
@@ -85,7 +85,7 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route path="/dashboard" element={<Dashboard/>}/>
+          <Route path="/dashboard" element={<DashboardPage/>}/>
           <Route path="/departments/:name" element={<DepartmentPage/>}/>
           <Route path="/patient/:id" element={<PatientPage/>}/>
           <Route path="/patients/:id/diagnosis" element={<PatientDiagnosisPage/>}/>
