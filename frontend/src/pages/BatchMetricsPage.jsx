@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useState} from "react"
 import {api} from "../services/api"
 import {getErrorMessage, getResponseData} from "../services/apiMessages"
+import {downloadCSV} from "../utils/downloadCSV"
 
 const POLL_INTERVAL_MS = 25000
 const STATUS_POLL_INTERVAL_MS = 2500
@@ -363,13 +364,60 @@ export default function BatchMetricsPage() {
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Batch Metrics</h1>
-          <p className="mt-3 w-full text-[#b6bec9]">
-            This view shows aggregated data computed over a time window (e.g., last 5 minutes).
-            Batch processing analyzes large volumes of historical data, providing more stable and accurate insights.
-          </p>
-          {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
+          <div className="flex items-start justify-between gap-6">
+
+            <div className="max-w-3xl">
+              <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
+                Demo View
+              </p>
+
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                Batch Metrics
+              </h1>
+
+              <p className="mt-3 text-[#b6bec9]">
+                This view shows aggregated data computed over a time window (e.g., last 5 minutes).
+                Batch processing analyzes large volumes of historical data, providing more stable and accurate insights.
+              </p>
+
+              {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                className="console-button-primary rounded-xl px-4 py-3 text-sm font-semibold"
+                onClick={() => {
+                  const rows = [
+                    ["Metric", "Value"],
+                    ["Avg Heart Rate", data.avg_heart_rate],
+                    ["Avg Oxygen", data.avg_oxygen],
+                    ["Avg Temperature", data.avg_temperature],
+                    ["Alerts", data.alerts],
+                    ["Execution Time (ms)", data.execution_time_ms],
+                  ]
+
+                  downloadCSV("batch_metrics.csv", rows)
+                }}
+              >
+                Export Metrics
+              </button>
+
+              <button
+                className="console-button-primary rounded-xl px-4 py-3 text-sm font-semibold"
+                onClick={() => {
+                  const rows = [
+                    ["Department", "Patients"],
+                    ...patientsPerDepartment.items.map(d => [d.department, d.patients]),
+                  ]
+
+                  downloadCSV("patients_per_department.csv", rows)
+                }}
+              >
+                Export Departments
+              </button>
+            </div>
+
+          </div>
         </header>
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
