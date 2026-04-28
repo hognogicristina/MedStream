@@ -11,7 +11,8 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str = "localhost:9092"
     kafka_vitals_topic: str = "vitals-events"
     kafka_alerts_topic: str = "alerts-events"
-    batch_interval_seconds: int = 30
+    kafka_batch_topic: str = "batch-events"
+    batch_interval_seconds: int = 300
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""

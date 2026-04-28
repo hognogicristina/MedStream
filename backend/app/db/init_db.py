@@ -17,6 +17,7 @@ from app.models.patient.patient_diagnosis import PatientDiagnosis
 from app.models.patient.patient_medication import PatientMedication
 from app.models import (
     Alert,
+    BatchAnalytics,
     Encounter,
     Vital,
 )

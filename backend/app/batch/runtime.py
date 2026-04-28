@@ -10,7 +10,7 @@ from app.batch.status import batch_status_store, utc_now
 class BatchRuntimeController:
     def __init__(self):
         self._lock = threading.Lock()
-        self._interval_seconds = 30
+        self._interval_seconds = 300
         self._cron_expression = None
         self._job_callback = None
         self._job_lock = threading.Lock()

@@ -13,15 +13,12 @@ export default function DashboardPage() {
   const [vitals, setVitals] = useState([])
   const [visibleAlerts, setVisibleAlerts] = useState([])
   const [rawAlertCount, setRawAlertCount] = useState(0)
-  const [stats, setStats] = useState([])
-  const [batchStatus, setBatchStatus] = useState(null)
   const [patients, setPatients] = useState([])
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
   const [newAlertIds, setNewAlertIds] = useState([])
   const alertAudioRef = useRef(null)
   const alertBufferRef = useRef([])
   const alertHighlightTimeoutsRef = useRef([])
-  const [departments, setDepartments] = useState([])
 
   const [chartData, setChartData] = useState([])
 
@@ -31,17 +28,9 @@ export default function DashboardPage() {
 
   const loadDashboardData = useCallback(async () => {
     try {
-      const [patientsRes, statsRes, batchStatusRes, departmentsRes] = await Promise.all([
-        api.get("/patients?page=1&limit=100"),
-        api.get("/stats"),
-        api.get("/stats/batch-status"),
-        api.get("/departments"),
-      ])
+      const [patientsRes] = await Promise.all([api.get("/patients?page=1&limit=100")])
 
       setPatients(getResponseData(patientsRes))
-      setStats(getResponseData(statsRes))
-      setBatchStatus(getResponseData(batchStatusRes))
-      setDepartments(getResponseData(departmentsRes))
 
     } catch (error) {
       notifyError(getErrorMessage(error))
@@ -53,30 +42,6 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboardData()
   }, [loadDashboardData])
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await api.get("/departments")
-        setDepartments(getResponseData(res))
-      } catch {
-      }
-    }
-
-    load()
-  }, [])
-
-  useEffect(() => {
-    const intervalId = window.setInterval(async () => {
-      try {
-        const response = await api.get("/stats/batch-status")
-        setBatchStatus(getResponseData(response))
-      } catch {
-      }
-    }, 10000)
-
-    return () => window.clearInterval(intervalId)
-  }, [])
 
   useEffect(() => {
     const socket = createWebSocket((msg) => {
@@ -155,32 +120,6 @@ export default function DashboardPage() {
   const previewAlerts = visibleAlerts.filter((alert) => Boolean(patientNameById[alert.patient_id])).slice(0, 6)
   const alertCount = alertBufferRef.current.filter((alert) => Boolean(patientNameById[alert.patient_id])).length
   const recentVitals = vitals.slice(0, 5)
-  const latestBatchRun = stats.reduce((latest, stat) => {
-    if (!stat.computed_at) {
-      return latest
-    }
-
-    if (!latest) {
-      return stat.computed_at
-    }
-
-    return new Date(stat.computed_at) > new Date(latest) ? stat.computed_at : latest
-  }, "")
-  const patientsWithStats = stats.length
-  const averageHeartRate = stats.length
-    ? stats.reduce((sum, stat) => sum + stat.avg_heart_rate, 0) / stats.length
-    : 0
-  const averageTemperature = stats.length
-    ? stats.reduce((sum, stat) => sum + stat.avg_temperature, 0) / stats.length
-    : 0
-  const aggregateAlerts = stats.reduce((sum, stat) => sum + stat.alerts_count, 0)
-  const anomalyDetectionRate = patientsWithStats
-    ? (stats.filter((stat) => stat.alerts_count > 0).length / patientsWithStats) * 100
-    : 0
-  const batchStatusLabel = batchStatus?.last_run_status
-    ? batchStatus.last_run_status.charAt(0).toUpperCase() + batchStatus.last_run_status.slice(1)
-    : "Unknown"
-  const lastSuccessfulBatchRun = batchStatus?.last_successful_run_at || latestBatchRun
 
   const currentPatientState = (() => {
     if (!latestVital) {
@@ -374,80 +313,6 @@ export default function DashboardPage() {
             </div>
 
           </div>
-        </section>
-
-        <section id="departments" className="monitor-card rounded-[28px] border border-[#9dccff]/25 p-6">
-          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#9dccff]">Department Analytics</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Department Analytics</h2>
-            </div>
-          </div>
-
-          <div className="mb-6 grid gap-3 lg:grid-cols-6">
-            <div className="monitor-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Current Status</p>
-              <p className="mt-2 text-lg font-semibold text-white">{batchStatusLabel}</p>
-            </div>
-            <div className="monitor-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Last Successful Run</p>
-              <p
-                className="mt-2 text-lg font-semibold text-white">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleTimeString() : "--"}</p>
-              <p
-                className="mt-2 text-sm text-[#b6bec9]">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleDateString() : "No successful run yet"}</p>
-            </div>
-            <div className="monitor-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Avg HR</p>
-              <p className="mt-2 text-lg font-semibold text-white">{patientsWithStats ? averageHeartRate.toFixed(1) : "--"}</p>
-            </div>
-            <div className="monitor-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Avg Temp</p>
-              <p className="mt-2 text-lg font-semibold text-white">{patientsWithStats ? averageTemperature.toFixed(1) : "--"}</p>
-            </div>
-            <div className="monitor-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Aggregated Alerts</p>
-              <p className="mt-2 text-lg font-semibold text-white"><CountValue value={aggregateAlerts}/></p>
-            </div>
-            <div className="monitor-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Anomaly Detection Rate</p>
-              <p className="mt-2 text-lg font-semibold text-white">{patientsWithStats ? `${anomalyDetectionRate.toFixed(0)}%` : "--"}</p>
-              <p className="mt-2 text-sm text-[#b6bec9]">Patients with abnormal findings</p>
-            </div>
-          </div>
-
-          {!isLoadingDashboard && stats.length === 0 ? (
-            <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-              Department analytics will appear after the system completes at least one successful run.
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {departments.map((dep) => (
-                <Link
-                  key={dep}
-                  to={`/departments/${encodeURIComponent(dep)}`}
-                  className="group rounded-2xl border border-[#3b424b] bg-[#151b22] p-4 transition hover:border-[#9dccff] hover:bg-[#1c2530]"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">
-                        Department
-                      </p>
-
-                      <h3 className="mt-2 text-lg font-semibold text-white group-hover:text-[#9dccff]">
-                        {dep}
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 border-t border-[#2b3139] pt-3">
-                    <p className="text-xs text-[#b6bec9]">
-                      View department details, patients, and activity
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
         </section>
       </div>
     </div>

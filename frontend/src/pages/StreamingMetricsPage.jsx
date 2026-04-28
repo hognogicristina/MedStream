@@ -10,6 +10,7 @@ import {
 } from "recharts"
 import {api} from "../services/api"
 import {getErrorMessage, getResponseData} from "../services/apiMessages"
+import {downloadCSV} from "../utils/downloadCSV"
 
 const POLL_INTERVAL_MS = 2500
 const MAX_POINTS = 20
@@ -116,15 +117,60 @@ export default function StreamingMetricsPage() {
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Streaming Metrics</h1>
-          <p className="mt-3 w-full text-sm text-[#b6bec9]">
-            This view shows real-time patient monitoring data.
-            Vitals and alerts are processed instantly as they are generated.
-            This allows fast reaction, but values may fluctuate and are not always perfectly accurate.
-            Data is refreshed every ~2.5 seconds using polling, simulating a real-time monitoring system.
-          </p>
-          {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Streaming Metrics</h1>
+              <p className="mt-3 w-full text-sm text-[#b6bec9]">
+                This view shows real-time patient monitoring data.
+                Vitals and alerts are processed instantly as they are generated.
+                This allows fast reaction, but values may fluctuate and are not always perfectly accurate.
+                Data is refreshed every ~2.5 seconds using polling, simulating a real-time monitoring system.
+              </p>
+              {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                className="console-button-primary rounded-xl px-4 py-3 text-sm font-semibold"
+                onClick={() => {
+                  const rows = [
+                    ["Metric", "Value"],
+                    ["Avg Heart Rate", data.avg_heart_rate],
+                    ["Avg Oxygen", data.avg_oxygen],
+                    ["Avg Temperature", data.avg_temperature],
+                    ["Alerts Count", data.alerts],
+                    ["Execution Time (ms)", data.execution_time_ms],
+                  ]
+
+                  downloadCSV("streaming_metrics.csv", rows)
+                }}
+              >
+                Export Metrics
+              </button>
+
+              <button
+                className="console-button-primary rounded-xl px-4 py-3 text-sm font-semibold"
+                onClick={() => {
+                  const rows = [
+                    ["Alert ID", "Patient ID", "Type", "Severity", "Message", "Created At"],
+                    ...(recentAlerts.items || []).map((alert) => [
+                      alert.id,
+                      alert.patient_id,
+                      alert.alert_type,
+                      alert.severity,
+                      alert.message,
+                      alert.created_at,
+                    ]),
+                  ]
+
+                  downloadCSV("streaming_alerts.csv", rows)
+                }}
+              >
+                Export Alerts
+              </button>
+            </div>
+          </div>
         </header>
 
         <section className="monitor-card rounded-[24px] p-6">
