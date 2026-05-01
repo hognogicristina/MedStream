@@ -1,5 +1,3 @@
-export const ROMANIA_COUNTRY = "Romania"
-
 export function buildEmptyPatientAddress() {
   return {
     street: "",
@@ -31,27 +29,4 @@ export function normalizePatientAddress(address) {
     county: String(address?.county || "").trim(),
     postal_code: String(address?.postal_code || "").replace(/\D/g, ""),
   }
-}
-
-export function formatPatientAddress(address) {
-  const normalizedAddress = normalizePatientAddress(address)
-
-  if (
-    !normalizedAddress.street
-    || !normalizedAddress.number
-    || !normalizedAddress.city
-    || !normalizedAddress.county
-    || !normalizedAddress.postal_code
-  ) {
-    return ""
-  }
-
-  return [
-    `${normalizedAddress.street} ${normalizedAddress.number}`.trim(),
-    normalizedAddress.apartment ? `Ap. ${normalizedAddress.apartment}` : "",
-    normalizedAddress.city,
-    normalizedAddress.county,
-    normalizedAddress.postal_code,
-    ROMANIA_COUNTRY,
-  ].filter(Boolean).join(", ")
 }

@@ -12,7 +12,8 @@ class PatientAdmissionHistory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
-    doctor_id: Mapped[int] = mapped_column(ForeignKey("doctors.id"))
+    doctor_id: Mapped[int | None] = mapped_column(ForeignKey("doctors.id"), nullable=True)
     type: Mapped[str] = mapped_column(String(20))
-    reason: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)

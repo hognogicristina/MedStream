@@ -1,32 +1,25 @@
 import {useEffect, useState} from "react"
 import {Link, useNavigate, useSearchParams} from "react-router-dom"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseMessage} from "../services/apiMessages"
+import {resendVerificationEmail, verifyEmailToken} from "../services/authApi.js"
+import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
+import {VERIFICATION_LINK_EXPIRED_MESSAGE} from "../services/appMessages.js"
 
 export default function VerifyEmailPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const token = searchParams.get("token")
   const [message, setMessage] = useState("")
   const [isError, setIsError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [showResendButton, setShowResendButton] = useState(false)
+  const [isResending, setIsResending] = useState(false)
 
   useEffect(() => {
-    const token = searchParams.get("token")
-
-    if (!token) {
-      setMessage("Verification token is missing.")
-      setIsError(true)
-      setIsLoading(false)
-      return
-    }
-
     let active = true
 
     const verify = async () => {
       try {
-        const response = await api.get("/auth/verify-email", {
-          params: {token},
-        })
+        const response = await verifyEmailToken(token)
 
         if (!active) {
           return
@@ -34,13 +27,19 @@ export default function VerifyEmailPage() {
 
         setMessage(getResponseMessage(response))
         setIsError(false)
+        setShowResendButton(false)
+        window.setTimeout(() => {
+          navigate("/dashboard")
+        }, 1200)
       } catch (error) {
         if (!active) {
           return
         }
 
-        setMessage(getErrorMessage(error))
+        const nextMessage = getErrorMessage(error)
+        setMessage(nextMessage)
         setIsError(true)
+        setShowResendButton(nextMessage === VERIFICATION_LINK_EXPIRED_MESSAGE)
       } finally {
         if (active) {
           setIsLoading(false)
@@ -53,7 +52,26 @@ export default function VerifyEmailPage() {
     return () => {
       active = false
     }
-  }, [searchParams])
+  }, [navigate, token])
+
+  const handleResend = async () => {
+    if (isResending || !showResendButton) {
+      return
+    }
+
+    setIsResending(true)
+    try {
+      const response = await resendVerificationEmail({token})
+      setIsError(false)
+      setShowResendButton(false)
+      setMessage(getResponseMessage(response))
+    } catch (error) {
+      setMessage(getErrorMessage(error))
+      setIsError(true)
+    } finally {
+      setIsResending(false)
+    }
+  }
 
   return (
     <div className="app-shell login-page login-page-centered">
@@ -82,10 +100,20 @@ export default function VerifyEmailPage() {
 
             <div className="login-form">
               <p className={isLoading ? "login-success" : isError ? "login-error" : "login-success"}>
-                {isLoading ? "Verifying email..." : message}
+                {isLoading ? "Loading..." : message}
               </p>
 
               <div className="auth-actions">
+                {showResendButton && (
+                  <button
+                    type="button"
+                    className="login-button"
+                    disabled={isResending}
+                    onClick={handleResend}
+                  >
+                    {isResending ? "Sending..." : "Resend verification email"}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="login-button"

@@ -1,7 +1,7 @@
-export const FALLBACK_API_MESSAGE = "Unexpected error occurred"
+const FALLBACK_API_ERROR_MESSAGE = "Something went wrong"
 
 export function getResponseMessage(response) {
-  return response?.data?.message || FALLBACK_API_MESSAGE
+  return response?.data?.message || ""
 }
 
 export function getResponseData(response) {
@@ -9,5 +9,5 @@ export function getResponseData(response) {
 }
 
 export function getErrorMessage(error) {
-  return error?.response?.data?.message || FALLBACK_API_MESSAGE
+  return error?.response?.data?.message || FALLBACK_API_ERROR_MESSAGE
 }

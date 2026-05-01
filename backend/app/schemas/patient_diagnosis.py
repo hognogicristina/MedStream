@@ -1,24 +1,11 @@
 from datetime import datetime
-from pydantic import BaseModel, field_validator
-from app.schemas.validators import require_non_empty
+
+from pydantic import BaseModel
 
 
 class PatientDiagnosisCreate(BaseModel):
     diagnosis: str
     notes: str | None = None
-
-    @field_validator("diagnosis", mode="before")
-    @classmethod
-    def validate_diagnosis(cls, value):
-        return require_non_empty(value, "Diagnosis")
-
-    @field_validator("notes", mode="before")
-    @classmethod
-    def normalize_optional_notes(cls, value):
-        if value is None:
-            return value
-        trimmed = str(value).strip()
-        return trimmed or None
 
 
 class PatientDiagnosisRead(BaseModel):
@@ -44,12 +31,3 @@ class PatientDiagnosisPage(BaseModel):
 class PatientDiagnosisUpdate(BaseModel):
     status: str | None = None
     note: str | None = None
-
-    @field_validator("status")
-    @classmethod
-    def validate_status(cls, value):
-        if value is None:
-            return value
-        if value not in {"active", "resolved", "chronic", "inactive"}:
-            raise ValueError("Invalid diagnosis status.")
-        return value

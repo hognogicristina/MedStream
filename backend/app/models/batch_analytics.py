@@ -15,5 +15,7 @@ class BatchAnalytics(Base):
     avg_heart_rate: Mapped[float] = mapped_column(Float)
     avg_oxygen: Mapped[float] = mapped_column(Float)
     avg_temperature: Mapped[float] = mapped_column(Float)
+    avg_systolic_bp: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_diastolic_bp: Mapped[float | None] = mapped_column(Float, nullable=True)
     alerts_count: Mapped[int] = mapped_column(Integer)
     patients_count: Mapped[int] = mapped_column(Integer)

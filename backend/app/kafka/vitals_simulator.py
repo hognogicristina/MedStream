@@ -9,7 +9,7 @@ from app.simulator.patient_profiles import build_patient_state, generate_vitals
 
 def load_patients():
     with SessionLocal() as db:
-        return db.query(Patient).all()
+        return db.query(Patient).filter(Patient.is_discharged.is_(False)).all()
 
 
 def run():
@@ -43,6 +43,8 @@ def run():
                             patient_states[patient.id] = build_patient_state(patient)
 
                     for patient in patients:
+                        if patient.is_discharged:
+                            continue
                         state = patient_states[patient.id]
 
                         vitals = generate_vitals(state, patient.id)

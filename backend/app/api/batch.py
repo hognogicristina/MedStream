@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from app.batch.runtime import batch_runtime_controller
 from app.batch.status import batch_status_store
 from app.core.http import ApiResponse, success_response
-from app.schemas.stats import BatchConfigUpdate, BatchCronUpdate, BatchJobStatusRead, BatchProgressRead, BatchScheduleUpdate
+from app.schemas.stats import BatchJobStatusRead, BatchProgressRead, BatchScheduleRead, BatchScheduleUpdate
 
 router = APIRouter(prefix="/batch", tags=["batch"])
 WEEKDAY_MAP = {
@@ -14,6 +14,15 @@ WEEKDAY_MAP = {
     "FRIDAY": "FRI",
     "SATURDAY": "SAT",
     "SUNDAY": "SUN",
+}
+CRON_DAY_TO_FULL = {
+    "MON": "MONDAY",
+    "TUE": "TUESDAY",
+    "WED": "WEDNESDAY",
+    "THU": "THURSDAY",
+    "FRI": "FRIDAY",
+    "SAT": "SATURDAY",
+    "SUN": "SUNDAY",
 }
 
 
@@ -35,6 +44,64 @@ def _parse_time_parts(value: str | None):
     return hour, minute
 
 
+def _parse_schedule_from_snapshot(snapshot: dict) -> BatchScheduleRead:
+    cron_expression = (snapshot.get("cron_expression") or "").strip()
+    interval_seconds = int(snapshot.get("interval_seconds") or 0)
+
+    if not cron_expression:
+        if interval_seconds < 60:
+            return BatchScheduleRead(
+                type="seconds",
+                value=interval_seconds,
+                interval_seconds=interval_seconds,
+            )
+
+        if interval_seconds >= 3600 and interval_seconds % 3600 == 0:
+            return BatchScheduleRead(
+                type="hours",
+                value=interval_seconds // 3600,
+                interval_seconds=interval_seconds,
+            )
+
+        return BatchScheduleRead(
+            type="minutes",
+            value=max(1, interval_seconds // 60),
+            interval_seconds=interval_seconds,
+        )
+
+    parts = cron_expression.split()
+    if len(parts) == 5:
+        minute, hour, day_of_month, month, day_of_week = parts
+        time_value = f"{int(hour):02d}:{int(minute):02d}" if hour.isdigit() and minute.isdigit() else None
+
+        if day_of_month == "*" and month == "*" and day_of_week == "*":
+            return BatchScheduleRead(
+                type="daily",
+                time=time_value,
+                cron_expression=cron_expression,
+                interval_seconds=interval_seconds,
+            )
+
+        if day_of_month == "*" and month == "*" and day_of_week != "*":
+            mapped_days = [
+                CRON_DAY_TO_FULL.get(item.strip().upper(), item.strip().upper())
+                for item in day_of_week.split(",")
+            ]
+            return BatchScheduleRead(
+                type="weekly",
+                time=time_value,
+                days=mapped_days,
+                cron_expression=cron_expression,
+                interval_seconds=interval_seconds,
+            )
+
+    return BatchScheduleRead(
+        type="custom",
+        cron_expression=cron_expression,
+        interval_seconds=interval_seconds,
+    )
+
+
 @router.get("/status", response_model=ApiResponse[BatchProgressRead])
 def get_batch_status():
     snapshot = batch_status_store.snapshot()
@@ -50,26 +117,13 @@ def get_batch_status():
     )
 
 
-@router.post("/config", response_model=ApiResponse[BatchJobStatusRead])
-def update_batch_config(payload: BatchConfigUpdate):
-    batch_runtime_controller.configure_interval(payload.interval_seconds)
-
+@router.get("/schedule", response_model=ApiResponse[BatchScheduleRead])
+def get_batch_schedule():
+    snapshot = batch_status_store.snapshot()
+    schedule_payload = _parse_schedule_from_snapshot(snapshot)
     return success_response(
-        "Batch interval updated successfully.",
-        BatchJobStatusRead.model_validate(batch_status_store.snapshot()).model_dump(mode="json"),
-    )
-
-
-@router.post("/cron", response_model=ApiResponse[BatchJobStatusRead])
-def update_batch_cron(payload: BatchCronUpdate):
-    try:
-        batch_runtime_controller.configure_cron(payload.cron_expression)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Cron expression is invalid.")
-
-    return success_response(
-        "Batch cron schedule updated successfully.",
-        BatchJobStatusRead.model_validate(batch_status_store.snapshot()).model_dump(mode="json"),
+        "Batch schedule retrieved successfully.",
+        schedule_payload.model_dump(mode="json"),
     )
 
 
@@ -77,7 +131,11 @@ def update_batch_cron(payload: BatchCronUpdate):
 def update_batch_schedule(payload: BatchScheduleUpdate):
     schedule_type = (payload.type or "").strip().lower()
 
-    if schedule_type == "minutes":
+    if schedule_type == "seconds":
+        if payload.value is None:
+            raise HTTPException(status_code=400, detail="Seconds value is required.")
+        batch_runtime_controller.configure_interval(payload.value)
+    elif schedule_type == "minutes":
         if payload.value is None:
             raise HTTPException(status_code=400, detail="Minutes value is required.")
         batch_runtime_controller.configure_interval(payload.value * 60)
@@ -108,8 +166,8 @@ def update_batch_schedule(payload: BatchScheduleUpdate):
             raise HTTPException(status_code=400, detail="Cron expression is required for custom scheduling.")
         try:
             batch_runtime_controller.configure_cron(payload.cron_expression)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Cron expression is invalid.")
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail="Cron expression is invalid.") from error
     else:
         raise HTTPException(status_code=400, detail="Schedule type is invalid.")
 

@@ -27,20 +27,12 @@ class BatchJobStatusRead(BaseModel):
     stage: str | None = None
 
 
-class BatchConfigUpdate(BaseModel):
-    interval_seconds: int = Field(ge=1, le=3600)
-
-
 class BatchProgressRead(BaseModel):
     is_running: bool
     progress: int
     stage: str
     last_run: datetime | None
     next_run_in_seconds: int | None = None
-
-
-class BatchCronUpdate(BaseModel):
-    cron_expression: str = Field(min_length=9, max_length=100)
 
 
 class BatchScheduleUpdate(BaseModel):
@@ -51,11 +43,24 @@ class BatchScheduleUpdate(BaseModel):
     cron_expression: str | None = Field(default=None, min_length=9, max_length=100)
 
 
+class BatchScheduleRead(BaseModel):
+    type: str
+    value: int | None = None
+    time: str | None = None
+    days: list[str] = Field(default_factory=list)
+    cron_expression: str | None = None
+    interval_seconds: int
+
+
 class ComparisonMetricsRead(BaseModel):
     avg_heart_rate: float
     avg_oxygen: float
     avg_temperature: float
+    avg_systolic_bp: float | None = None
+    avg_diastolic_bp: float | None = None
     alerts: int
+    patients_count: int | None = None
+    timestamp: datetime | None = None
     execution_time_ms: float
 
 
@@ -88,9 +93,21 @@ class PaginatedTopDiagnosisRead(BaseModel):
     page_size: int
 
 
+class TreatmentEfficiencyRead(BaseModel):
+    name: str
+    count: int
+
+
+class TreatmentEffectivenessRead(BaseModel):
+    effective: int
+    ineffective: int
+
+
 class BatchInsightsRead(BaseModel):
     patients_per_department: PaginatedPatientsPerDepartmentRead
     top_diagnosis: PaginatedTopDiagnosisRead
+    medication_distribution: list[TreatmentEfficiencyRead]
+    treatment_effectiveness: TreatmentEffectivenessRead
 
 
 class PaginatedStreamingAlertsRead(BaseModel):

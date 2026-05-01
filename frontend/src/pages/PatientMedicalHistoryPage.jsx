@@ -3,8 +3,8 @@ import {useParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
 import DataTable from "../components/DataTable.jsx"
 import {useNotifications} from "../components/NotificationProvider.jsx"
-import {useAuth} from "../auth/AuthContext.jsx"
-import {api} from "../services/api.js"
+import {useAuth} from "../components/AuthContext.jsx"
+import {api} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 
 function formatDateTime(value) {

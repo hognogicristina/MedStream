@@ -4,17 +4,17 @@ export default function PatientAdmissionActionCard({
   dischargeReason,
   dischargeType,
   dischargeTypes = [],
-  readmitReason,
+  readmitArrivalMethod,
   onDischargeReasonChange,
   onDischargeTypeChange,
-  onReadmitReasonChange,
+  onReadmitArrivalMethodChange,
   onDischargeSubmit,
   onReadmitSubmit,
   isSubmittingDischarge,
   isSubmittingReadmit,
 }) {
   const canSubmitDischarge = canManagePatient && dischargeReason.trim().length > 0 && Boolean(dischargeType) && !patient?.is_discharged
-  const canSubmitReadmit = canManagePatient && readmitReason.trim().length > 0 && Boolean(patient?.is_discharged)
+  const canSubmitReadmit = canManagePatient && Boolean(readmitArrivalMethod) && Boolean(patient?.is_discharged)
 
   return (
     <section className="monitor-card rounded-[28px] p-6">
@@ -29,15 +29,23 @@ export default function PatientAdmissionActionCard({
 
       {patient?.is_discharged ? (
         <form className="space-y-4" onSubmit={onReadmitSubmit}>
-          <textarea
-            value={readmitReason}
-            onChange={(event) => onReadmitReasonChange(event.target.value)}
-            placeholder="Reason for readmission"
-            className="console-input min-h-28 w-full rounded-2xl px-4 py-3 outline-none"
-            disabled={!canManagePatient || isSubmittingReadmit}
-            required
-          />
-
+          <div className="login-field">
+            <label className="login-label" htmlFor="readmit-arrival-method">Arrival Method</label>
+            <select
+              id="readmit-arrival-method"
+              value={readmitArrivalMethod}
+              onChange={(event) => onReadmitArrivalMethodChange(event.target.value)}
+              className="login-input"
+              required
+              disabled={!canManagePatient || isSubmittingReadmit}
+            >
+              <option value="self">Self</option>
+              <option value="ambulance">Ambulance</option>
+            </select>
+          </div>
+          <p className="text-xs text-[#879196]">
+            Admission note is generated automatically from arrival method.
+          </p>
           <button
             type="submit"
             disabled={!canSubmitReadmit || isSubmittingReadmit}

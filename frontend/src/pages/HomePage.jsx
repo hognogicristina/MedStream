@@ -1,5 +1,5 @@
 import {Link} from "react-router-dom"
-import {useAuth} from "../auth/AuthContext"
+import {useAuth} from "../components/AuthContext.jsx"
 
 export default function HomePage() {
   const {isAuthenticated} = useAuth()
@@ -62,9 +62,9 @@ export default function HomePage() {
               </Link>
               <Link
                 className="console-link text-sm font-semibold"
-                to={isAuthenticated ? "/login" : "/register"}
+                to={isAuthenticated ? "/profile" : "/register"}
               >
-                {isAuthenticated ? ("Switch account") : ("New to MedStream? Register")}
+                {isAuthenticated ? ("Open profile") : ("New to MedStream? Register")}
               </Link>
             </div>
           </div>

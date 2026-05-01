@@ -8,6 +8,7 @@ from confluent_kafka import Consumer
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.alert import Alert
+from app.models.patient.patient import Patient
 from app.models.vital import Vital
 
 from app.service.metrics import streaming_metrics_store
@@ -102,6 +103,19 @@ def run():
 
                         clean_payload = {k: v for k, v in payload.items() if k in allowed_fields}
                         with SessionLocal() as db:
+                            patient_id = clean_payload.get("patient_id")
+                            if patient_id is None:
+                                print("Skipping vital event: missing patient_id")
+                                continue
+
+                            patient = db.get(Patient, patient_id)
+                            if patient is None:
+                                print(f"Skipping vital event: patient {patient_id} does not exist")
+                                continue
+                            if patient.is_discharged:
+                                print(f"Skipping vital event: patient {patient_id} is discharged")
+                                continue
+
                             vital = Vital(**clean_payload)
                             db.add(vital)
                             db.commit()

@@ -1,9 +1,9 @@
 from collections.abc import Iterable
 
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.core.errors import NotFoundError, PermissionDeniedError, ValidationError
 from app.models.doctor.doctor import Doctor
 from app.models.doctor.doctor_activity import DoctorActivity
 from app.models.patient.patient import Patient
@@ -59,20 +59,20 @@ def load_activity_or_404(db, activity_id: int) -> DoctorActivity:
     ).scalar_one_or_none()
 
     if activity is None:
-        raise HTTPException(status_code=404, detail="Activity not found.")
+        raise NotFoundError("ACTIVITY_NOT_FOUND")
 
     return activity
 
 
 def ensure_supported_activity_type(activity_type: str):
     if activity_type not in ACTIVITY_TYPES:
-        raise HTTPException(status_code=400, detail="Invalid activity type.")
+        raise ValidationError("INVALID_ACTIVITY_TYPE")
 
 
 def _unique_ids(raw_ids: list[int], label: str) -> list[int]:
     unique_ids = list(dict.fromkeys(raw_ids))
     if len(unique_ids) != len(raw_ids):
-        raise HTTPException(status_code=400, detail=f"Duplicate {label} assignment is not allowed.")
+        raise ValidationError("DUPLICATE_ASSIGNMENT", context={"label": label})
     return unique_ids
 
 
@@ -85,7 +85,7 @@ def load_patients_for_activity(db, patient_ids: list[int]) -> list[Patient]:
     ).scalars().all()
 
     if len(patients) != len(normalized_ids):
-        raise HTTPException(status_code=404, detail="One or more patients were not found.")
+        raise NotFoundError("ACTIVITY_PATIENTS_NOT_FOUND")
 
     by_id = {patient.id: patient for patient in patients}
     return [by_id[patient_id] for patient_id in normalized_ids]
@@ -99,7 +99,7 @@ def load_doctors_for_activity(db, doctor_ids: list[int]) -> list[Doctor]:
     ).scalars().all()
 
     if len(doctors) != len(normalized_ids):
-        raise HTTPException(status_code=404, detail="One or more doctors were not found.")
+        raise NotFoundError("ACTIVITY_DOCTORS_NOT_FOUND")
 
     by_id = {doctor.id: doctor for doctor in doctors}
     return [by_id[doctor_id] for doctor_id in normalized_ids]
@@ -109,7 +109,7 @@ def ensure_activity_departments_match(patients: list[Patient], doctors: list[Doc
     patient_departments = {patient.department for patient in patients}
 
     if len(patient_departments) > 1:
-        raise HTTPException(status_code=400, detail="All selected patients must belong to the same department.")
+        raise ValidationError("ACTIVITY_PATIENT_DEPARTMENTS_MISMATCH")
 
     if not patient_departments:
         return
@@ -118,19 +118,19 @@ def ensure_activity_departments_match(patients: list[Patient], doctors: list[Doc
     invalid_doctors = [doctor for doctor in doctors if doctor.specialization != department]
 
     if invalid_doctors:
-        raise HTTPException(status_code=400, detail="Doctors must belong to the same department as the selected patients.")
+        raise ValidationError("ACTIVITY_DOCTOR_DEPARTMENTS_MISMATCH")
 
 
 def ensure_activity_patients_match_doctor_department(patients: list[Patient], doctor: Doctor):
     invalid_patients = [patient for patient in patients if patient.department != doctor.specialization]
 
     if invalid_patients:
-        raise HTTPException(status_code=400, detail="Patients must belong to the current doctor's department.")
+        raise ValidationError("ACTIVITY_PATIENT_DOCTOR_DEPARTMENT_MISMATCH")
 
 
 def ensure_activity_patients_are_editable(patients: list[Patient]):
     if any(patient.is_discharged for patient in patients):
-        raise HTTPException(status_code=400, detail="Discharged patients cannot have activities modified.")
+        raise ValidationError("ACTIVITY_DISCHARGED_PATIENT_MODIFY_FORBIDDEN")
 
 
 def ensure_activity_modifier(activity: DoctorActivity, doctor_id: int):
@@ -139,7 +139,7 @@ def ensure_activity_modifier(activity: DoctorActivity, doctor_id: int):
         assigned_doctor_ids.add(activity.doctor_id)
 
     if doctor_id not in assigned_doctor_ids:
-        raise HTTPException(status_code=403, detail="Only assigned doctors can modify this activity.")
+        raise PermissionDeniedError("ACTIVITY_MODIFIER_FORBIDDEN")
 
 
 def attach_activity_relationships(activity: DoctorActivity, patients: list[Patient], doctors: list[Doctor]):

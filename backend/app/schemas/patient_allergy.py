@@ -1,16 +1,11 @@
 from datetime import datetime
-from pydantic import BaseModel, field_validator
-from app.schemas.validators import require_non_empty
+
+from pydantic import BaseModel
 
 
 class PatientAllergyCreate(BaseModel):
     allergy_name: str
     severity: str
-
-    @field_validator("allergy_name", "severity", mode="before")
-    @classmethod
-    def validate_required_fields(cls, value, info):
-        return require_non_empty(value, info.field_name.replace("_", " ").title())
 
 
 class PatientAllergyRead(BaseModel):

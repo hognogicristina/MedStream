@@ -1,7 +1,7 @@
 import {useState} from "react"
 import {Link} from "react-router-dom"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseMessage} from "../services/apiMessages"
+import {api} from "../services/authApi.js"
+import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 
 export default function RecoverAccountPage() {
   const [identifier, setIdentifier] = useState("")

@@ -1,20 +1,49 @@
-import {useEffect, useMemo, useState} from "react"
+import {useEffect, useMemo, useRef, useState} from "react"
+import {
+  Cell,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 import {api} from "../services/api.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
 
-const POLL_INTERVAL_MS = 25000
+const POLL_INTERVAL_MS = 30000
 const STATUS_POLL_INTERVAL_MS = 2500
 const PAGE_SIZE = 5
 const WEEKDAY_OPTIONS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
-const CRON_DAY_TO_FULL = {
-  MON: "MONDAY",
-  TUE: "TUESDAY",
-  WED: "WEDNESDAY",
-  THU: "THURSDAY",
-  FRI: "FRIDAY",
-  SAT: "SATURDAY",
-  SUN: "SUNDAY",
+
+const EMPTY_METRICS = {
+  avg_heart_rate: 0,
+  avg_oxygen: 0,
+  avg_temperature: 0,
+  alerts: 0,
+  patients_count: 0,
+  execution_time_ms: 0,
+  timestamp: null,
+}
+
+const EMPTY_INSIGHTS = {
+  patients_per_department: {items: [], total: 0, page: 1, page_size: PAGE_SIZE},
+  top_diagnosis: {items: [], total: 0, page: 1, page_size: PAGE_SIZE},
+  medication_distribution: [],
+  treatment_effectiveness: {effective: 0, ineffective: 0},
+}
+
+const EMPTY_SCHEDULE = {
+  type: "seconds",
+  value: 30,
+  time: "08:00",
+  days: [],
+  cron_expression: null,
+  interval_seconds: 30,
 }
 
 function formatBatchTimestamp(value) {
@@ -25,7 +54,11 @@ function formatBatchTimestamp(value) {
   return new Date(value).toLocaleString("en-GB", {timeZone: "Europe/Bucharest"})
 }
 
-function formatMetric(value, unit = "") {
+function formatMetric(value, unit = "", hasData = false) {
+  if (!hasData) {
+    return "Not available"
+  }
+
   const safeValue = Number.isFinite(value) ? value : 0
   return `${safeValue.toFixed(2)}${unit}`
 }
@@ -36,6 +69,14 @@ function MetricTile({label, value}) {
       <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">{label}</p>
       <p className="mt-2 text-lg font-semibold text-white">{value}</p>
     </div>
+  )
+}
+
+function DownloadIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 21h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/>
+    </svg>
   )
 }
 
@@ -60,113 +101,60 @@ function getStageProgress(progress, stage, isRunning) {
   return progress
 }
 
-function cronDayToLabel(day) {
-  return day.charAt(0) + day.slice(1).toLowerCase()
-}
-
-function parseScheduleFromStatus(status) {
-  if (!status?.cron_expression) {
-    const seconds = Number(status?.interval_seconds || 0)
-    if (seconds > 0 && seconds < 60) {
-      return {
-        type: "minutes",
-        value: "1",
-        time: "08:00",
-        days: [],
-        cron_expression: "",
-        summary: `Runs every ${seconds} second${seconds === 1 ? "" : "s"}`,
-      }
-    }
-
-    if (seconds >= 3600 && seconds % 3600 === 0) {
-      return {
-        type: "hours",
-        value: String(seconds / 3600),
-        time: "08:00",
-        days: [],
-        cron_expression: "",
-        summary: `Runs every ${seconds} second${seconds === 1 ? "" : "s"}`
-      }
-    }
-
-    const minutes = Math.max(1, Math.round(seconds / 60))
-    return {
-      type: "minutes",
-      value: String(minutes),
-      time: "08:00",
-      days: [],
-      cron_expression: "",
-      summary: `Runs every ${minutes} minute${minutes === 1 ? "" : "s"}`,
-    }
+function formatScheduleSummary(schedule) {
+  if (!schedule) {
+    return "No schedule configured"
   }
 
-  const cron = status.cron_expression.trim()
-  const parts = cron.split(/\s+/)
-  if (parts.length === 5) {
-    const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
-    const time = `${String(Number(hour)).padStart(2, "0")}:${String(Number(minute)).padStart(2, "0")}`
+  const scheduleType = (schedule.type || "").toLowerCase()
 
-    if (dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
-      return {
-        type: "daily",
-        value: "15",
-        time,
-        days: [],
-        cron_expression: cron,
-        summary: `Runs daily at ${time}`,
-      }
-    }
-
-    if (dayOfMonth === "*" && month === "*" && dayOfWeek !== "*") {
-      const days = dayOfWeek
-        .split(",")
-        .map((item) => item.trim().toUpperCase())
-        .map((item) => CRON_DAY_TO_FULL[item] || item)
-      return {
-        type: "weekly",
-        value: "15",
-        time,
-        days,
-        cron_expression: cron,
-        summary: `Runs on ${days.map(cronDayToLabel).join(", ")} at ${time}`,
-      }
-    }
+  if (scheduleType === "seconds") {
+    return `Runs every ${schedule.value || 1} second(s)`
+  }
+  if (scheduleType === "minutes") {
+    return `Runs every ${schedule.value || 1} minute(s)`
+  }
+  if (scheduleType === "hours") {
+    return `Runs every ${schedule.value || 1} hour(s)`
+  }
+  if (scheduleType === "daily") {
+    return `Runs daily at ${schedule.time || "08:00"}`
+  }
+  if (scheduleType === "weekly") {
+    const days = (schedule.days || []).map((day) => day.slice(0, 3)).join(", ") || "-"
+    return `Runs weekly on ${days} at ${schedule.time || "08:00"}`
   }
 
-  return {
-    type: "custom",
-    value: "15",
-    time: "08:00",
-    days: [],
-    cron_expression: cron,
-    summary: `Runs with custom cron: ${cron}`,
-  }
+  return schedule.cron_expression ? `Runs with custom schedule: ${schedule.cron_expression}` : "Custom schedule"
 }
 
 export default function BatchMetricsPage() {
   const [metrics, setMetrics] = useState(null)
   const [insights, setInsights] = useState(null)
-  const [status, setStatus] = useState(null)
   const [batchProgress, setBatchProgress] = useState({is_running: false, progress: 0, stage: "Idle", last_run: null})
   const [progressDisplay, setProgressDisplay] = useState(0)
-  const [scheduleType, setScheduleType] = useState("minutes")
-  const [scheduleValue, setScheduleValue] = useState("15")
+  const [schedule, setSchedule] = useState(EMPTY_SCHEDULE)
+  const [scheduleType, setScheduleType] = useState("seconds")
+  const [scheduleValue, setScheduleValue] = useState("30")
   const [scheduleTime, setScheduleTime] = useState("08:00")
-  const [scheduleDays, setScheduleDays] = useState(["MONDAY", "WEDNESDAY"])
-  const [customCron, setCustomCron] = useState("")
+  const [scheduleDays, setScheduleDays] = useState([])
   const [isApplyingSchedule, setIsApplyingSchedule] = useState(false)
-  const [isRunningBatch, setIsRunningBatch] = useState(false)
   const [departmentsPage, setDepartmentsPage] = useState(1)
   const [diagnosesPage, setDiagnosesPage] = useState(1)
   const [error, setError] = useState("")
+  const [isRunningBatch, setIsRunningBatch] = useState(false)
+  const lastBatchTimestampRef = useRef(null)
 
-  const syncScheduleForm = (nextStatus) => {
-    const parsed = parseScheduleFromStatus(nextStatus)
-    setScheduleType(parsed.type)
-    setScheduleValue(parsed.value)
-    setScheduleTime(parsed.time)
-    setScheduleDays(parsed.days)
-    setCustomCron(parsed.cron_expression)
+  const hasBatchData = Boolean(metrics?.timestamp)
+
+  const syncScheduleForm = (nextSchedule) => {
+    const safeSchedule = nextSchedule || EMPTY_SCHEDULE
+    const nextType = (safeSchedule.type || "seconds").toLowerCase()
+    setSchedule(safeSchedule)
+    setScheduleType(nextType)
+    setScheduleValue(String(safeSchedule.value || 1))
+    setScheduleTime(safeSchedule.time || "08:00")
+    setScheduleDays(safeSchedule.days || [])
   }
 
   useEffect(() => {
@@ -174,7 +162,7 @@ export default function BatchMetricsPage() {
 
     const loadData = async (nextDepartmentsPage = departmentsPage, nextDiagnosesPage = diagnosesPage) => {
       try {
-        const [metricsResponse, insightsResponse, statusResponse] = await Promise.all([
+        const [metricsResponse, insightsResponse, scheduleResponse] = await Promise.all([
           api.get("/metrics/batch"),
           api.get("/metrics/batch-insights", {
             params: {
@@ -183,18 +171,34 @@ export default function BatchMetricsPage() {
               diagnoses_page: nextDiagnosesPage,
             },
           }),
-          api.get("/stats/batch-status"),
+          api.get("/batch/schedule"),
         ])
 
         if (!active) {
           return
         }
 
-        setMetrics(getResponseData(metricsResponse))
-        setInsights(getResponseData(insightsResponse))
-        const nextStatus = getResponseData(statusResponse)
-        setStatus(nextStatus)
-        syncScheduleForm(nextStatus)
+        const nextMetrics = getResponseData(metricsResponse)
+        const nextInsights = getResponseData(insightsResponse)
+        const nextSchedule = getResponseData(scheduleResponse)
+
+        if (nextMetrics?.timestamp) {
+          const currentTimestamp = lastBatchTimestampRef.current
+          const incomingTimestamp = nextMetrics.timestamp
+          const shouldReplaceMetrics = !currentTimestamp || incomingTimestamp >= currentTimestamp
+
+          if (shouldReplaceMetrics) {
+            lastBatchTimestampRef.current = incomingTimestamp
+            setMetrics(nextMetrics)
+            if (nextInsights) {
+              setInsights(nextInsights)
+            }
+          }
+        } else {
+          setInsights((current) => current || nextInsights || EMPTY_INSIGHTS)
+        }
+
+        syncScheduleForm(nextSchedule)
         setError("")
       } catch (loadError) {
         if (active) {
@@ -222,7 +226,8 @@ export default function BatchMetricsPage() {
           return
         }
         setBatchProgress(getResponseData(response))
-      } catch {
+      } catch (loadError) {
+        void loadError
       }
     }
 
@@ -276,7 +281,7 @@ export default function BatchMetricsPage() {
   }, [batchProgress.is_running, batchProgress.next_run_in_seconds])
 
   const refreshData = async (nextDepartmentsPage = departmentsPage, nextDiagnosesPage = diagnosesPage) => {
-    const [metricsResponse, insightsResponse, statusResponse, batchStatusResponse] = await Promise.all([
+    const [metricsResponse, insightsResponse, batchStatusResponse, scheduleResponse] = await Promise.all([
       api.get("/metrics/batch"),
       api.get("/metrics/batch-insights", {
         params: {
@@ -285,16 +290,21 @@ export default function BatchMetricsPage() {
           diagnoses_page: nextDiagnosesPage,
         },
       }),
-      api.get("/stats/batch-status"),
       api.get("/batch/status"),
+      api.get("/batch/schedule"),
     ])
 
-    setMetrics(getResponseData(metricsResponse))
-    setInsights(getResponseData(insightsResponse))
-    const nextStatus = getResponseData(statusResponse)
-    setStatus(nextStatus)
-    syncScheduleForm(nextStatus)
+    const nextMetrics = getResponseData(metricsResponse)
+    const nextInsights = getResponseData(insightsResponse)
+
+    if (nextMetrics?.timestamp) {
+      lastBatchTimestampRef.current = nextMetrics.timestamp
+      setMetrics(nextMetrics)
+      setInsights(nextInsights)
+    }
+
     setBatchProgress(getResponseData(batchStatusResponse))
+    syncScheduleForm(getResponseData(scheduleResponse))
   }
 
   const handleApplySchedule = async () => {
@@ -307,8 +317,6 @@ export default function BatchMetricsPage() {
     } else if (scheduleType === "weekly") {
       payload.time = scheduleTime
       payload.days = scheduleDays
-    } else if (scheduleType === "custom") {
-      payload.cron_expression = customCron.trim()
     }
 
     try {
@@ -345,28 +353,36 @@ export default function BatchMetricsPage() {
     ))
   }
 
-  const scheduleSummary = useMemo(() => parseScheduleFromStatus(status).summary, [status])
-
-  const data = metrics ?? {
-    avg_heart_rate: 0,
-    avg_oxygen: 0,
-    avg_temperature: 0,
-    alerts: 0,
-    execution_time_ms: 0,
-  }
-  const patientsPerDepartment = insights?.patients_per_department ?? {items: [], total: 0, page: 1, page_size: PAGE_SIZE}
-  const topDiagnosis = insights?.top_diagnosis ?? {items: [], total: 0, page: 1, page_size: PAGE_SIZE}
+  const data = metrics || EMPTY_METRICS
+  const insightsData = insights || EMPTY_INSIGHTS
+  const patientsPerDepartment = insightsData.patients_per_department
+  const topDiagnosis = insightsData.top_diagnosis
+  const medicationDistribution = useMemo(() => insightsData.medication_distribution || [], [insightsData])
+  const treatmentEffectiveness = insightsData.treatment_effectiveness || {effective: 0, ineffective: 0}
   const progressLabel = batchProgress.is_running ? "Running" : "Idle"
   const departmentsTotalPages = Math.max(1, Math.ceil((patientsPerDepartment.total || 0) / PAGE_SIZE))
   const diagnosesTotalPages = Math.max(1, Math.ceil((topDiagnosis.total || 0) / PAGE_SIZE))
+
+  const medicationDistributionTop = useMemo(
+    () => [...medicationDistribution]
+      .sort((left, right) => right.count - left.count)
+      .slice(0, 12),
+    [medicationDistribution],
+  )
+  const effectivenessDonutData = [
+    {name: "Effective", value: Number(treatmentEffectiveness.effective) || 0, color: "#22c55e"},
+    {name: "Ineffective", value: Number(treatmentEffectiveness.ineffective) || 0, color: "#f97316"},
+  ]
+  const effectivenessTotal = effectivenessDonutData.reduce((total, item) => total + item.value, 0)
+
+  const scheduleSummary = useMemo(() => formatScheduleSummary(schedule), [schedule])
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-6">
-
-            <div className="max-w-3xl">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 max-w-full flex-1">
               <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
                 Demo View
               </p>
@@ -383,40 +399,34 @@ export default function BatchMetricsPage() {
               {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
             </div>
 
-            <div className="flex flex-col gap-3">
-              <button
-                className="console-button-primary rounded-xl px-4 py-3 text-sm font-semibold"
-                onClick={() => {
-                  const rows = [
-                    ["Metric", "Value"],
-                    ["Avg Heart Rate", data.avg_heart_rate],
-                    ["Avg Oxygen", data.avg_oxygen],
-                    ["Avg Temperature", data.avg_temperature],
-                    ["Alerts", data.alerts],
-                    ["Execution Time (ms)", data.execution_time_ms],
-                  ]
-
-                  downloadCSV("batch_metrics.csv", rows)
-                }}
-              >
-                Export Metrics
-              </button>
-
-              <button
-                className="console-button-primary rounded-xl px-4 py-3 text-sm font-semibold"
-                onClick={() => {
-                  const rows = [
-                    ["Department", "Patients"],
-                    ...patientsPerDepartment.items.map(d => [d.department, d.patients]),
-                  ]
-
-                  downloadCSV("patients_per_department.csv", rows)
-                }}
-              >
-                Export Departments
-              </button>
-            </div>
-
+            <button
+              type="button"
+              title="Download all metrics"
+              aria-label="Download all metrics"
+              className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
+              onClick={() => {
+                const rows = [
+                  ["Section", "Metric", "Value"],
+                  ["Batch Snapshot", "Avg Heart Rate", data.avg_heart_rate],
+                  ["Batch Snapshot", "Avg Oxygen", data.avg_oxygen],
+                  ["Batch Snapshot", "Avg Temperature", data.avg_temperature],
+                  ["Batch Snapshot", "Alerts", data.alerts],
+                  ["Batch Snapshot", "Execution Time (ms)", data.execution_time_ms],
+                  ["Department Insights", "Department", "Patients"],
+                  ...patientsPerDepartment.items.map((entry) => ["Department Insights", entry.department, entry.patients]),
+                  ["Diagnosis Insights", "Diagnosis", "Patients"],
+                  ...topDiagnosis.items.map((entry) => ["Diagnosis Insights", entry.name, entry.patients]),
+                  ["Medication Distribution", "Medication", "Count"],
+                  ...medicationDistributionTop.map((entry) => ["Medication Distribution", entry.name, entry.count]),
+                  ["Treatment Effectiveness", "Segment", "Count"],
+                  ["Treatment Effectiveness", "Effective", treatmentEffectiveness.effective || 0],
+                  ["Treatment Effectiveness", "Ineffective", treatmentEffectiveness.ineffective || 0],
+                ]
+                downloadCSV("batch_all_metrics.csv", rows)
+              }}
+            >
+              <DownloadIcon/>
+            </button>
           </div>
         </header>
 
@@ -425,15 +435,12 @@ export default function BatchMetricsPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Batch Control</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Scheduling</h2>
             <p className="mt-2 text-sm text-[#b6bec9]">
-              The batch job runs periodically based on the configured schedule.
-              Lower intervals provide fresher insights but increase system load, while higher intervals
-              reduce processing cost but increase latency of results.
+              Configure how often batch analytics should run. All timestamps are shown in Europe/Bucharest.
             </p>
 
             <div className="mt-6 monitor-panel rounded-2xl px-4 py-4">
               <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Current Schedule</p>
               <p className="mt-2 text-lg font-semibold text-white">{scheduleSummary}</p>
-              <p className="mt-1 text-sm text-[#b6bec9]">All timestamps are shown in Europe/Bucharest.</p>
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -449,7 +456,6 @@ export default function BatchMetricsPage() {
                   <option value="hours">Every X hours</option>
                   <option value="daily">Daily at</option>
                   <option value="weekly">Weekly</option>
-                  <option value="custom">Custom (advanced)</option>
                 </select>
               </label>
 
@@ -475,19 +481,6 @@ export default function BatchMetricsPage() {
                     type="time"
                     value={scheduleTime}
                     onChange={(event) => setScheduleTime(event.target.value)}
-                    className="mt-3 rounded-xl border border-[#4d5661] bg-[#161b22] px-3 py-2 text-sm font-semibold text-white outline-none"
-                  />
-                </label>
-              ) : null}
-
-              {scheduleType === "custom" ? (
-                <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3 sm:col-span-2">
-                  <span className="text-xs uppercase tracking-[0.2em] text-[#879196]">Cron Schedule</span>
-                  <input
-                    type="text"
-                    value={customCron}
-                    onChange={(event) => setCustomCron(event.target.value)}
-                    placeholder="*/5 * * * *"
                     className="mt-3 rounded-xl border border-[#4d5661] bg-[#161b22] px-3 py-2 text-sm font-semibold text-white outline-none"
                   />
                 </label>
@@ -594,11 +587,11 @@ export default function BatchMetricsPage() {
           <h2 className="mt-2 text-2xl font-semibold text-white">Latest Metrics</h2>
 
           <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <MetricTile label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm")}/>
-            <MetricTile label="Avg Oxygen" value={formatMetric(data.avg_oxygen, "%")}/>
-            <MetricTile label="Avg Temperature" value={formatMetric(data.avg_temperature, " C")}/>
-            <MetricTile label="Alerts Count" value={String(data.alerts ?? 0)}/>
-            <MetricTile label="Execution Time" value={formatMetric(data.execution_time_ms, " ms")}/>
+            <MetricTile label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm", hasBatchData)}/>
+            <MetricTile label="Avg Oxygen" value={formatMetric(data.avg_oxygen, "%", hasBatchData)}/>
+            <MetricTile label="Avg Temperature" value={formatMetric(data.avg_temperature, " C", hasBatchData)}/>
+            <MetricTile label="Alerts Count" value={hasBatchData ? String(data.alerts ?? 0) : "Not available"}/>
+            <MetricTile label="Execution Time" value={formatMetric(data.execution_time_ms, " ms", hasBatchData)}/>
           </div>
         </section>
 
@@ -691,56 +684,121 @@ export default function BatchMetricsPage() {
             </div>
           </div>
         </section>
+
         <section className="monitor-card rounded-[24px] p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding Batch Processing</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">How this page works</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Treatment Insights</p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Medication Distribution & Effectiveness</h2>
+          <p className="mt-2 text-sm text-[#b6bec9]">
+            Top medications by treatment count and overall outcome trend.
+          </p>
 
-          <div className="mt-4 space-y-4 text-sm text-[#b6bec9] leading-6">
+          <div className="mt-6 flex flex-col gap-6 xl:flex-row">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Medication Distribution (Top 12)</p>
+              <div className="mt-3 h-[360px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
+                {medicationDistributionTop.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={medicationDistributionTop} layout="vertical" margin={{top: 8, right: 12, left: 12, bottom: 8}}>
+                      <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" horizontal={false}/>
+                      <XAxis type="number" stroke="#879196" tick={{fontSize: 11}} allowDecimals={false}/>
+                      <YAxis type="category" dataKey="name" width={130} stroke="#879196" tick={{fontSize: 11}}/>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#111827",
+                          border: "1px solid #334155",
+                          borderRadius: "12px",
+                          color: "#fff",
+                        }}
+                      />
+                      <Bar dataKey="count" name="Treatments" fill="#22c55e" radius={[0, 8, 8, 0]}/>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-[#b6bec9]">
+                    No medication distribution data available.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="w-full xl:w-[320px]">
+              <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Overall Treatment Effectiveness</p>
+              <div className="mt-3 h-[360px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={effectivenessDonutData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={72}
+                      outerRadius={105}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      {effectivenessDonutData.map((segment) => (
+                        <Cell key={segment.name} fill={segment.color}/>
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => {
+                        const safeValue = Number(value) || 0
+                        const percentage = effectivenessTotal > 0 ? Math.round((safeValue / effectivenessTotal) * 100) : 0
+                        return [`${safeValue} (${percentage}%)`, "Count"]
+                      }}
+                      contentStyle={{
+                        backgroundColor: "#111827",
+                        border: "1px solid #334155",
+                        borderRadius: "12px",
+                        color: "#fff",
+                      }}
+                    />
+                    <text x="50%" y="46%" textAnchor="middle" className="fill-[#b6bec9] text-[11px] uppercase tracking-[0.2em]">
+                      Treatment
+                    </text>
+                    <text x="50%" y="53%" textAnchor="middle" className="fill-[#b6bec9] text-[11px] uppercase tracking-[0.2em]">
+                      Effectiveness
+                    </text>
+                    <text x="50%" y="64%" textAnchor="middle" className="fill-white text-lg font-semibold">
+                      {effectivenessTotal > 0 ? `${Math.round((effectivenessDonutData[0].value / effectivenessTotal) * 100)}%` : "0%"}
+                    </text>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="mt-2 flex items-center justify-center gap-4 text-xs text-[#b6bec9]">
+                  <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]"/>Effective</span>
+                  <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#f97316]"/>Ineffective</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="monitor-card rounded-[24px] p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">What is Batch Processing?</p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">What is Batch Processing?</h2>
+
+          <div className="mt-4 space-y-4 text-sm leading-6 text-[#b6bec9]">
             <p>
-              This page represents the <strong>batch processing layer</strong> of the system.
-              Unlike real-time streaming, where data is processed instantly, batch processing operates on
-              accumulated data over a defined time window.
+              Batch processing means the system collects data over a period of time and processes it at configured
+              intervals instead of handling every event instantly. It is designed for analytics, aggregation,
+              and stable insights rather than immediate reactions.
             </p>
 
             <p>
-              In this case, patient data such as heart rate, oxygen level, and temperature are collected continuously,
-              then periodically processed in bulk to generate more stable and reliable insights.
+              Unlike streaming, which updates in real time, batch runs periodically based on the selected schedule
+              (seconds, minutes, hours, daily, or weekly). This makes trends easier to understand and reduces
+              short-term noise in measurements.
             </p>
 
             <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="font-semibold text-white mb-2">What you are seeing:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Aggregated averages (heart rate, oxygen, temperature)</li>
-                <li>Total alerts detected during the batch window</li>
-                <li>Execution time of the batch job</li>
-                <li>Top diagnoses and patient distribution across departments</li>
+              <p className="mb-2 font-semibold text-white">What does Batch do in MedStream?</p>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Aggregates vitals collected over time windows</li>
+                <li>Computes average heart rate, oxygen, and temperature</li>
+                <li>Counts alert volume and active patient coverage</li>
+                <li>Generates department and diagnosis insights</li>
+                <li>Evaluates medication efficiency over batch windows</li>
               </ul>
             </div>
-
-            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="font-semibold text-white mb-2">Why batch processing matters:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Provides more accurate insights by smoothing real-time noise</li>
-                <li>Allows complex computations on large datasets</li>
-                <li>Supports analytics like trends, statistics, and comparisons</li>
-              </ul>
-            </div>
-
-            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="font-semibold text-white mb-2">Technical flow:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Data is continuously ingested from the streaming layer</li>
-                <li>Stored in a database (PostgreSQL)</li>
-                <li>Batch job runs at scheduled intervals</li>
-                <li>Data is processed using analytical logic (e.g., aggregation)</li>
-                <li>Results are exposed via API and displayed here</li>
-              </ul>
-            </div>
-
-            <p>
-              This design follows the classic <strong>streaming + batch architecture</strong>, where streaming handles
-              real-time alerts, and batch processing provides deeper analytical insights over time.
-            </p>
           </div>
         </section>
       </div>

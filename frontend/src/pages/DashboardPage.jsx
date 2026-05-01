@@ -1,5 +1,4 @@
 import {useCallback, useEffect, useRef, useState} from "react"
-import {Link} from "react-router-dom"
 import CountValue from "../components/CountValue.jsx"
 import {useNotifications} from "../components/NotificationProvider.jsx"
 import {api} from "../services/api.js"
@@ -11,13 +10,12 @@ import {formatPatientFullName} from "../utils/patients.js"
 export default function DashboardPage() {
   const {notifyError} = useNotifications()
   const [vitals, setVitals] = useState([])
-  const [visibleAlerts, setVisibleAlerts] = useState([])
-  const [rawAlertCount, setRawAlertCount] = useState(0)
+  const [previewAlerts, setPreviewAlerts] = useState([])
+  const [totalAlerts, setTotalAlerts] = useState(0)
   const [patients, setPatients] = useState([])
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
   const [newAlertIds, setNewAlertIds] = useState([])
   const alertAudioRef = useRef(null)
-  const alertBufferRef = useRef([])
   const alertHighlightTimeoutsRef = useRef([])
 
   const [chartData, setChartData] = useState([])
@@ -28,9 +26,15 @@ export default function DashboardPage() {
 
   const loadDashboardData = useCallback(async () => {
     try {
-      const [patientsRes] = await Promise.all([api.get("/patients?page=1&limit=100")])
+      const [patientsRes, alertsSummaryRes] = await Promise.all([
+        api.get("/patients?page=1&limit=100"),
+        api.get("/alerts/dashboard-summary"),
+      ])
 
       setPatients(getResponseData(patientsRes))
+      const summary = getResponseData(alertsSummaryRes)
+      setTotalAlerts(Number(summary?.total_alerts || 0))
+      setPreviewAlerts(Array.isArray(summary?.preview_alerts) ? summary.preview_alerts : [])
 
     } catch (error) {
       notifyError(getErrorMessage(error))
@@ -72,44 +76,30 @@ export default function DashboardPage() {
       }
 
       if (msg.type === "alert") {
-        alertBufferRef.current = [msg.data, ...alertBufferRef.current.filter((alert) => alert.id !== msg.data.id)].slice(0, 50)
-        setRawAlertCount(alertBufferRef.current.length)
+        setTotalAlerts((prev) => prev + 1)
         alertAudioRef.current.currentTime = 0
         alertAudioRef.current.play().catch(() => {
         })
+
+        if (msg.data?.severity === "high" || msg.data?.severity === "critical") {
+          setNewAlertIds((current) => [msg.data.id, ...current.filter((id) => id !== msg.data.id)].slice(0, 5))
+          const timeoutId = window.setTimeout(() => {
+            setNewAlertIds((current) => current.filter((currentId) => currentId !== msg.data.id))
+          }, 1400)
+          alertHighlightTimeoutsRef.current.push(timeoutId)
+
+          setPreviewAlerts((prev) => {
+            const next = [msg.data, ...prev.filter((alert) => alert.id !== msg.data.id)]
+            next.sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+            return next.slice(0, 6)
+          })
+        }
       }
 
     })
 
-    const intervalId = window.setInterval(() => {
-      const nextVisibleAlerts = alertBufferRef.current.slice(0, 6)
-
-      setVisibleAlerts((prev) => {
-        const nextIds = new Set(nextVisibleAlerts.map((alert) => alert.id))
-        const previousIds = new Set(prev.map((alert) => alert.id))
-        const incomingIds = nextVisibleAlerts
-          .filter((alert) => !previousIds.has(alert.id))
-          .map((alert) => alert.id)
-
-        if (incomingIds.length > 0) {
-          setNewAlertIds((current) => [...incomingIds, ...current.filter((id) => !incomingIds.includes(id))].slice(0, 5))
-
-          incomingIds.forEach((id) => {
-            const timeoutId = window.setTimeout(() => {
-              setNewAlertIds((current) => current.filter((currentId) => currentId !== id))
-            }, 1400)
-
-            alertHighlightTimeoutsRef.current.push(timeoutId)
-          })
-        }
-
-        return nextVisibleAlerts.filter((alert) => nextIds.has(alert.id))
-      })
-    }, 2500)
-
     return () => {
       socket.close()
-      window.clearInterval(intervalId)
       alertHighlightTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
       alertHighlightTimeoutsRef.current = []
     }
@@ -117,8 +107,7 @@ export default function DashboardPage() {
 
   const latestVital = vitals[0]
   const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
-  const previewAlerts = visibleAlerts.filter((alert) => Boolean(patientNameById[alert.patient_id])).slice(0, 6)
-  const alertCount = alertBufferRef.current.filter((alert) => Boolean(patientNameById[alert.patient_id])).length
+  const alertCount = totalAlerts
   const recentVitals = vitals.slice(0, 5)
 
   const currentPatientState = (() => {
@@ -174,7 +163,7 @@ export default function DashboardPage() {
               </div>
               <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Alerts</p>
-                <p className="mt-3 text-3xl font-semibold text-[#ffb3bc]"><CountValue value={alertCount}/></p>
+                <p className="mt-3 text-3xl font-semibold text-[#ffb3bc]"><CountValue tooltipLabel={`Total alerts: ${alertCount}`} value={alertCount}/></p>
               </div>
               <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Latest HR</p>
@@ -215,10 +204,10 @@ export default function DashboardPage() {
                 <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Current Patient State</p>
                 <p className="mt-2 text-base font-semibold text-white">{currentPatientState}</p>
               </div>
-              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Active Alerts</p>
-                <p className="mt-2 text-base font-semibold text-white"><CountValue value={alertCount}/></p>
-              </div>
+                <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Active Alerts</p>
+                  <p className="mt-2 text-base font-semibold text-white"><CountValue tooltipLabel={`Total alerts: ${alertCount}`} value={alertCount}/></p>
+                </div>
               <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Feed Status</p>
                 <p className="mt-2 text-base font-semibold text-white">{latestVital ? "Connected" : "Waiting for feed"}</p>
@@ -277,9 +266,9 @@ export default function DashboardPage() {
                 </div>
               </div>
               <ul className="space-y-3">
-                {alertCount === 0 && (
+                {previewAlerts.length === 0 && (
                   <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                    No active alerts at the moment. This panel updates from incoming vital events.
+                    No critical or high alerts at the moment.
                   </li>
                 )}
                 {previewAlerts.map((a) => (
@@ -301,15 +290,6 @@ export default function DashboardPage() {
                   </li>
                 ))}
               </ul>
-              {alertCount > 6 && (
-                <div className="mt-4">
-                  <Link
-                    className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
-                    to="/alerts">
-                    Show more
-                  </Link>
-                </div>
-              )}
             </div>
 
           </div>

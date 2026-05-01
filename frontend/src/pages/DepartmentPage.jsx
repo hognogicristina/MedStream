@@ -1,12 +1,12 @@
 import {useEffect, useState} from "react"
-import BackButton from "../components/BackButton"
-import CountValue from "../components/CountValue"
-import {useNotifications} from "../components/NotificationProvider"
+import BackButton from "../components/BackButton.jsx"
+import CountValue from "../components/CountValue.jsx"
+import {useNotifications} from "../components/NotificationProvider.jsx"
 import {Link, useParams} from "react-router-dom"
-import DataTable from "../components/DataTable"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData} from "../services/apiMessages"
-import {formatPatientFullName} from "../utils/patients"
+import DataTable from "../components/DataTable.jsx"
+import {api} from "../services/api.js"
+import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
+import {formatPatientFullName} from "../utils/patients.js"
 
 const SEVERITY_FILTERS = [
   {value: "all", label: "All patients"},

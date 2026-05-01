@@ -1,8 +1,8 @@
 import {useEffect, useRef, useState} from "react"
 import {NavLink, useLocation, useNavigate} from "react-router-dom"
-import {useAuth} from "../auth/AuthContext"
+import {useAuth} from "./AuthContext.jsx"
 import {getResponseData} from "../services/apiMessages.js";
-import {api} from "../services/api";
+import {api} from "../services/api.js";
 
 function DepartmentsIcon() {
   return (

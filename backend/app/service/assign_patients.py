@@ -1,17 +1,8 @@
-from app.models.doctor.doctor_activity_patient import doctor_activity_patients
+from app.repositories.patient_repository import PatientRepository
+
+
+_patient_repository = PatientRepository()
+
 
 def assign_doctor_to_patient(db, doctor_id, patient_id):
-    exists = db.execute(
-        doctor_activity_patients.select().where(
-            (doctor_activity_patients.c.doctor_id == doctor_id) &
-            (doctor_activity_patients.c.patient_id == patient_id)
-        )
-    ).first()
-
-    if not exists:
-        db.execute(
-            doctor_activity_patients.insert().values(
-                doctor_id=doctor_id,
-                patient_id=patient_id
-            )
-        )
+    _patient_repository.assign_doctor_to_patient_with_session(db, doctor_id, patient_id)

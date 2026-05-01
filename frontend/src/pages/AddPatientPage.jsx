@@ -1,13 +1,13 @@
 import {useEffect, useState} from "react"
-import BackButton from "../components/BackButton"
-import {useNotifications} from "../components/NotificationProvider"
-import {useAuth} from "../auth/AuthContext"
+import BackButton from "../components/BackButton.jsx"
+import {useNotifications} from "../components/NotificationProvider.jsx"
+import {useAuth} from "../components/AuthContext.jsx"
 import {Link, useNavigate} from "react-router-dom"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData} from "../services/apiMessages"
-import {buildPatientPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone"
-import {getCityOptions, getCountyOptions} from "../utils/addressOptions"
-import {buildEmptyPatientAddress, normalizePatientAddress} from "../utils/patientAddress"
+import {api} from "../services/patientApi.js"
+import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
+import {buildPatientPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone.js"
+import {getCityOptions, getCountyOptions} from "../utils/addressOptions.js"
+import {buildEmptyPatientAddress, normalizePatientAddress} from "../utils/patientAddress.js"
 
 const TOTAL_STEPS = 2
 

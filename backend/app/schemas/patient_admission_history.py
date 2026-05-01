@@ -1,23 +1,19 @@
 from datetime import datetime
-from pydantic import BaseModel, Field, field_validator
-from app.schemas.validators import require_non_empty
+
+from pydantic import BaseModel
 
 
 class PatientAdmissionActionCreate(BaseModel):
-    reason: str = Field(min_length=1, max_length=500)
-
-    @field_validator("reason", mode="before")
-    @classmethod
-    def validate_reason(cls, value):
-        return require_non_empty(value, "Reason")
+    arrival_method: str
 
 
 class PatientAdmissionHistoryRead(BaseModel):
     id: int
     patient_id: int
-    doctor_id: int
+    doctor_id: int | None = None
     type: str
-    reason: str
+    reason: str | None = None
+    note: str | None = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
