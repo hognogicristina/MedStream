@@ -1,75 +1,62 @@
-from pathlib import Path
-import csv
+from app.repositories import medical_repository
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "helpers"
-
-
-def load_csv_column(filename, index):
-    values = []
-    with open(DATA_DIR / filename, encoding="utf-8") as f:
-        reader = csv.reader(f)
-        next(reader, None)
-        for row in reader:
-            if len(row) > index:
-                values.append(row[index].strip())
-    return list(set(values))
-
-
-def load_drugs():
-    rows = []
-    with open(DATA_DIR / "drugs.csv", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            rows.append({
-                "medication": row["drug_name"].strip(),
-                "condition": row["medical_condition"].strip(),
-                "pregnancy_category": row["pregnancy_category"].strip()
-            })
-    return rows
-
-
-def load_conditions():
-    values = set()
-
-    with open(DATA_DIR / "drugs.csv", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            condition = (row.get("medical_condition") or "").strip()
-            if condition:
-                values.add(condition)
-
-    return sorted(values)
-
-
-def load_departments():
-    values = set()
-
-    with open(DATA_DIR / "departments.csv") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            values.add(row["Department"].strip())
-
-    return list(values)
+COUNTIES = medical_repository.get_all_counties()
+DEPARTMENTS = medical_repository.get_all_departments()
+DIAGNOSIS = medical_repository.get_all_diagnoses()
+ALLERGIES = medical_repository.get_all_allergies()
+DRUGS = medical_repository.get_all_medications()
+CONDITIONS = medical_repository.get_all_conditions()
+ACTIVITY_TYPES = medical_repository.get_all_activity_types()
+DOSAGES = medical_repository.get_all_dosages()
+FREQUENCIES = medical_repository.get_all_frequencies()
+STATUS = ["active", "improving", "stable", "worsening", "critical", "resolved", "chronic"]
+DISCHARGE = ["Recovered", "Transferred", "Stable condition"]
 
 
 def load_counties():
-    values = []
-    with open(DATA_DIR / "counties.csv", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            values.append(row["name"].strip())
-    return values
+    return medical_repository.get_all_counties()
 
 
-COUNTIES = load_counties()
-DEPARTMENTS = load_departments()
-DIAGNOSIS = load_csv_column("diagnosis.csv", 1)
-ALLERGIES = load_csv_column("allergies.csv", 4)
-DRUGS = load_drugs()
-CONDITIONS = load_conditions()
-ACTIVITY_TYPES = ["Consultation", "Surgery", "Procedure", "Transfer", "Lab test", "Imaging"]
-DOSAGES = ["250mg", "500mg", "1g", "5ml", "10ml"]
-FREQUENCIES = ["once daily", "twice daily", "every 8 hours", "every 12 hours", "as needed"]
-STATUS = ["active", "improving", "stable", "worsening", "critical", "resolved", "chronic"]
-DISCHARGE = ["Recovered", "Transferred", "Stable condition"]
+def load_departments():
+    return medical_repository.get_all_departments()
+
+
+def load_drugs():
+    return medical_repository.get_all_medications()
+
+
+def load_conditions():
+    return medical_repository.get_all_conditions()
+
+
+def load_csv_column(filename, index):
+    if filename == "diagnosis.csv":
+        return medical_repository.get_all_diagnoses()
+    if filename == "allergies.csv":
+        return medical_repository.get_all_allergies()
+    if filename == "activity_types.csv":
+        return medical_repository.get_all_activity_types()
+    if filename == "dosages.csv":
+        return medical_repository.get_all_dosages()
+    if filename == "frequencies.csv":
+        return medical_repository.get_all_frequencies()
+    raise ValueError(f"Unsupported medical history dataset: {filename}")
+
+__all__ = [
+    "ACTIVITY_TYPES",
+    "ALLERGIES",
+    "CONDITIONS",
+    "COUNTIES",
+    "DEPARTMENTS",
+    "DIAGNOSIS",
+    "DISCHARGE",
+    "DOSAGES",
+    "DRUGS",
+    "FREQUENCIES",
+    "STATUS",
+    "load_conditions",
+    "load_counties",
+    "load_csv_column",
+    "load_departments",
+    "load_drugs",
+]

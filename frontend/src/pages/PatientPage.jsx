@@ -1,14 +1,16 @@
-import {useCallback, useEffect, useRef, useState} from "react"
+import {useCallback, useEffect, useMemo, useState} from "react"
 import {Link, useParams} from "react-router-dom"
+import {Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import BackButton from "../components/BackButton.jsx"
 import DepartmentTransferDialog from "../components/DepartmentTransferDialog.jsx"
 import EditPatientDialog from "../components/EditPatientDialog.jsx"
+import VitalsChart from "../components/VitalsChart.jsx"
 import {useNotifications} from "../components/NotificationProvider.jsx"
-import {api} from "../services/api.js"
+import {api} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import {formatPatientPhoneWithCode} from "../utils/patientPhone.js"
-import {useAuth} from "../auth/AuthContext.jsx"
+import {useAuth} from "../components/AuthContext.jsx"
 
 function formatDateTime(value) {
   if (!value) {
@@ -48,44 +50,21 @@ function formatArrivalMethod(value) {
   return value || "--"
 }
 
-function PaginationControls({page, maxPage, onPrevious, onNext}) {
-  return (
-    <div className="mb-4 flex items-center justify-between gap-3">
-      <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
-        Page {page}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button
-          className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
-          onClick={onPrevious}
-          disabled={page === 1}
-          type="button"
-        >
-          Previous
-        </button>
-
-        <button
-          className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
-          onClick={onNext}
-          disabled={page >= maxPage}
-          type="button"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  )
+const MAX_VITAL_POINTS = 100
+const ALERT_COLOR_BY_TYPE = {
+  heart_rate: "#f87171",
+  oxygen: "#60a5fa",
+  temperature: "#fb923c",
 }
 
 export default function PatientPage() {
   const {notifyError, notifySuccess} = useNotifications()
   const {token} = useAuth()
   const {id} = useParams()
-  const pageSize = 5
   const [currentDoctor, setCurrentDoctor] = useState(null)
   const [patient, setPatient] = useState(null)
   const [vitals, setVitals] = useState([])
+  const [batchMetrics, setBatchMetrics] = useState(null)
   const [alerts, setAlerts] = useState([])
   const [department, setDepartment] = useState("")
   const [isUpdatingDepartment, setIsUpdatingDepartment] = useState(false)
@@ -93,23 +72,17 @@ export default function PatientPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isSavingPatient, setIsSavingPatient] = useState(false)
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
-  const [vitalsPage, setVitalsPage] = useState(1)
   const [doctors, setDoctors] = useState([])
   const [allDoctors, setAllDoctors] = useState([])
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(true)
-  const alertAudioRef = useRef(null)
   const authHeaders = token ? {Authorization: `Bearer ${token}`} : {}
-
-  if (!alertAudioRef.current) {
-    alertAudioRef.current = new Audio("/alert.mp3")
-  }
 
   useEffect(() => {
     setPatient(null)
     setVitals([])
+    setBatchMetrics(null)
     setAlerts([])
     setDepartment("")
-    setVitalsPage(1)
     setIsEditDialogOpen(false)
     setIsTransferDialogOpen(false)
   }, [id])
@@ -172,6 +145,56 @@ export default function PatientPage() {
   }, [loadPatient])
 
   useEffect(() => {
+    const loadPatientVitals = async () => {
+      try {
+        const vitalsResponse = await api.get("/vitals")
+        const allVitals = getResponseData(vitalsResponse) || []
+        const patientVitals = allVitals
+          .filter((vital) => String(vital.patient_id) === id)
+          .slice(0, MAX_VITAL_POINTS)
+          .map((vital) => ({
+            ...vital,
+            recorded_at: vital.recorded_at || new Date().toISOString(),
+          }))
+        setVitals(patientVitals)
+      } catch (error) {
+        notifyError(getErrorMessage(error))
+      }
+    }
+
+    loadPatientVitals().then(r => r)
+  }, [id, notifyError])
+
+  useEffect(() => {
+    let active = true
+
+    const loadBatchMetrics = async () => {
+      try {
+        const response = await api.get("/metrics/batch")
+        if (!active) {
+          return
+        }
+        setBatchMetrics(getResponseData(response) || null)
+      } catch (error) {
+        if (!active) {
+          return
+        }
+        notifyError(getErrorMessage(error))
+      }
+    }
+
+    loadBatchMetrics().then(r => r)
+    const intervalId = window.setInterval(() => {
+      loadBatchMetrics().then(r => r)
+    }, 30000)
+
+    return () => {
+      active = false
+      window.clearInterval(intervalId)
+    }
+  }, [notifyError])
+
+  useEffect(() => {
     const socket = createWebSocket((msg) => {
       if (String(msg.data?.patient_id) !== id) {
         return
@@ -180,17 +203,14 @@ export default function PatientPage() {
       if (msg.type === "vital") {
         const vital = {
           ...msg.data,
-          time: new Date().toLocaleTimeString(),
+          recorded_at: msg.data.recorded_at || new Date().toISOString(),
         }
 
-        setVitals((prev) => [vital, ...prev.slice(0, 20)])
+        setVitals((prev) => [vital, ...prev.filter((item) => item.recorded_at !== vital.recorded_at)].slice(0, MAX_VITAL_POINTS))
       }
 
       if (msg.type === "alert") {
         setAlerts((prev) => [msg.data, ...prev.slice(0, 10)])
-        alertAudioRef.current.currentTime = 0
-        alertAudioRef.current.play().catch(() => {
-        })
       }
     })
 
@@ -283,10 +303,6 @@ export default function PatientPage() {
   const isPatientLocked = Boolean(patient?.is_discharged)
   const canManagePatient = Boolean(isDoctorAssigned && currentDoctor)
   const canEditPatientRecord = Boolean(canManagePatient && !isPatientLocked)
-  const latestDisplayedVital = vitals[0]
-  const paginatedVitals = vitals.slice((vitalsPage - 1) * pageSize, vitalsPage * pageSize)
-  const maxVitalsPage = Math.max(1, Math.ceil(vitals.length / pageSize))
-  const previewAlerts = alerts.slice(0, 6)
   const patientFullName = patient ? `${patient.last_name} ${patient.first_name}`.trim() : ""
   const pageTitle = patientFullName || (isLoadingPatient ? "Loading patient..." : "Patient")
   const patientBirthDate = patient?.birth_date ? formatDate(patient.birth_date) : "--"
@@ -315,6 +331,41 @@ export default function PatientPage() {
     : ""
   const patientCountry = patient?.address?.country || "--"
   const patientCounty = patient?.address?.county || "--"
+  const chartData = useMemo(
+    () => [...vitals]
+      .slice(0, MAX_VITAL_POINTS)
+      .reverse()
+      .map((vital) => ({
+        time: formatDateTime(vital.recorded_at),
+        heart_rate: vital.heart_rate,
+        oxygen_saturation: vital.oxygen_saturation,
+        temperature: vital.temperature,
+        systolic_bp: vital.systolic_bp,
+        diastolic_bp: vital.diastolic_bp,
+      })),
+    [vitals],
+  )
+  const alertDistributionData = useMemo(() => {
+    const counts = alerts.reduce((accumulator, alert) => {
+      const alertType = String(alert.type || alert.alert_type || "unknown")
+      accumulator[alertType] = (accumulator[alertType] || 0) + 1
+      return accumulator
+    }, {})
+
+    return Object.entries(counts).map(([type, count]) => ({type, count}))
+  }, [alerts])
+  const averageHeartRate = Number.isFinite(batchMetrics?.avg_heart_rate) ? batchMetrics.avg_heart_rate.toFixed(1) : "--"
+  const averageOxygen = Number.isFinite(batchMetrics?.avg_oxygen) ? batchMetrics.avg_oxygen.toFixed(1) : "--"
+  const averageTemperature = Number.isFinite(batchMetrics?.avg_temperature) ? batchMetrics.avg_temperature.toFixed(1) : "--"
+  const averageBloodPressure = (() => {
+    const avgSystolic = batchMetrics?.avg_systolic_bp
+    const avgDiastolic = batchMetrics?.avg_diastolic_bp
+    if (Number.isFinite(avgSystolic) && Number.isFinite(avgDiastolic)) {
+      return `${Math.round(avgSystolic)}/${Math.round(avgDiastolic)}`
+    }
+
+    return "--"
+  })()
 
   const patientMetadata = [
     {label: "CNP", value: patient?.cnp || "--"},
@@ -458,25 +509,22 @@ export default function PatientPage() {
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="monitor-card rounded-3xl p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Heart Rate</p>
-            <p className="mt-3 text-3xl font-semibold text-[#ffb84d]">{latestDisplayedVital ? latestDisplayedVital.heart_rate : "--"}</p>
+            <p className="mt-3 text-3xl font-semibold text-[#ffb84d]">{averageHeartRate}</p>
           </div>
 
           <div className="monitor-card rounded-3xl p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">O2 Saturation</p>
-            <p
-              className="mt-3 text-3xl font-semibold text-[#9dccff]">{latestDisplayedVital ? latestDisplayedVital.oxygen_saturation : "--"}</p>
+            <p className="mt-3 text-3xl font-semibold text-[#9dccff]">{averageOxygen}</p>
           </div>
 
           <div className="monitor-card rounded-3xl p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Temperature</p>
-            <p className="mt-3 text-3xl font-semibold text-[#ffd699]">{latestDisplayedVital ? latestDisplayedVital.temperature : "--"}</p>
+            <p className="mt-3 text-3xl font-semibold text-[#ffd699]">{averageTemperature}</p>
           </div>
 
           <div className="monitor-card rounded-3xl p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Blood Pressure</p>
-            <p className="mt-3 text-3xl font-semibold text-white">
-              {latestDisplayedVital ? `${latestDisplayedVital.systolic_bp}/${latestDisplayedVital.diastolic_bp}` : "--"}
-            </p>
+            <p className="mt-3 text-3xl font-semibold text-white">{averageBloodPressure}</p>
           </div>
         </section>
 
@@ -487,55 +535,15 @@ export default function PatientPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Vitals</p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Vitals Timeline</h2>
               </div>
-              <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
-                {vitals.length} visible
-              </span>
             </div>
 
-            <PaginationControls
-              page={vitalsPage}
-              maxPage={maxVitalsPage}
-              onPrevious={() => setVitalsPage((prev) => Math.max(1, prev - 1))}
-              onNext={() => setVitalsPage((prev) => prev + 1)}
-            />
-
-            <ul className="space-y-3">
-              {vitals.length === 0 && (
-                <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                  {isLoadingPatient ? "Loading patient view..." : "Waiting for patient vitals. Data will appear here when available."}
-                </li>
-              )}
-
-              {paginatedVitals.map((v, index) => (
-                <li key={`${v.recorded_at || v.time}-${index}`} className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#879196]">{v.time}</p>
-
-                    <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
-                      <div className="monitor-panel rounded-2xl px-3 py-3">
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">HR</p>
-                        <p className="mt-2 font-semibold text-[#ffb84d]">{v.heart_rate}</p>
-                      </div>
-
-                      <div className="monitor-panel rounded-2xl px-3 py-3">
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">O2</p>
-                        <p className="mt-2 font-semibold text-[#9dccff]">{v.oxygen_saturation}</p>
-                      </div>
-
-                      <div className="monitor-panel rounded-2xl px-3 py-3">
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Temp</p>
-                        <p className="mt-2 font-semibold text-[#ffd699]">{v.temperature}</p>
-                      </div>
-
-                      <div className="monitor-panel rounded-2xl px-3 py-3">
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">BP</p>
-                        <p className="mt-2 font-semibold text-white">{v.systolic_bp}/{v.diastolic_bp}</p>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {chartData.length > 0 ? (
+              <VitalsChart data={chartData}/>
+            ) : (
+              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                No vital samples available for visualization.
+              </div>
+            )}
           </div>
           <div className="grid gap-6">
             <div className="monitor-card rounded-[28px] p-6">
@@ -546,38 +554,37 @@ export default function PatientPage() {
                 </div>
               </div>
 
-              <ul className="space-y-3">
-                {alerts.length === 0 && (
-                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                    This patient has no alerts.
-                  </li>
+              <div className="h-64 rounded-2xl border border-[#3b424b] bg-[#151b22] p-3">
+                {alertDistributionData.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-sm text-[#b6bec9]">
+                    No alerts available
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={alertDistributionData} margin={{top: 8, right: 8, left: 0, bottom: 6}}>
+                      <XAxis dataKey="type" stroke="#879196" tick={{fill: "#b6bec9", fontSize: 12}}/>
+                      <YAxis allowDecimals={false} stroke="#879196" tick={{fill: "#b6bec9", fontSize: 12}}/>
+                      <Tooltip
+                        contentStyle={{backgroundColor: "#0f141a", border: "1px solid #3b424b", borderRadius: 12}}
+                        labelStyle={{color: "#e5e7eb"}}
+                        itemStyle={{color: "#d5dbdb"}}
+                      />
+                      <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                        {alertDistributionData.map((entry) => (
+                          <Cell key={`alert-bar-${entry.type}`} fill={ALERT_COLOR_BY_TYPE[entry.type] || "#9ca3af"}/>
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 )}
-
-                {previewAlerts.map((alert) => (
-                  <li key={alert.id} className={`alert-item alert-${alert.severity}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.28em] text-white/70">{alert.severity} severity</p>
-                        <p className="mt-2 text-sm font-medium text-inherit">{alert.message}</p>
-                      </div>
-
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                        {new Date(alert.created_at || Date.now()).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-
-              {alerts.length > 3 && (
+              </div>
+              {patient?.cnp && (
                 <div className="mt-4">
                   <Link
                     className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
-                    to={patient?.cnp
-                      ? `/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`
-                      : "/alerts"}
+                    to={`/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`}
                   >
-                    More
+                    View Alerts Feed
                   </Link>
                 </div>
               )}

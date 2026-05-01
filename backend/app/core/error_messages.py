@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+GENERIC_INVALID_REQUEST = "Invalid request."
+GENERIC_NOT_FOUND = "Resource not found."
+GENERIC_UNAUTHORIZED = "Unauthorized request."
+GENERIC_FORBIDDEN = "Forbidden request."
+
+ERROR_MESSAGES = {
+    "REQUIRED_FIELD": "{field} is required.",
+    "AT_LEAST_ONE_REQUIRED": "At least one {field} must be provided.",
+    "NO_UPDATES_PROVIDED": "No updates were provided.",
+    "INVALID_DEPARTMENT": "Department is invalid.",
+    "INVALID_CNP_DIGITS": "CNP must contain exactly 13 digits.",
+    "INVALID_CNP_CHECKSUM": "CNP format is invalid.",
+    "INVALID_PHONE_FORMAT": "Phone number must use a valid international format.",
+    "INVALID_ARRIVAL_METHOD": "Arrival method must be ambulance or self.",
+    "PATIENT_NOT_FOUND": "Patient not found.",
+    "DOCTOR_NOT_ASSIGNED_TO_PATIENT": "Doctor is not assigned to this patient.",
+    "DOCTOR_MUST_BE_ASSIGNED_TO_PATIENT": "Doctor must be assigned to the patient.",
+    "DISCHARGED_PATIENT_NOT_EDITABLE": "Discharged patients cannot be modified.",
+    "CNP_IMMUTABLE": "CNP cannot be updated.",
+    "PATIENT_ALREADY_DISCHARGED": "Patient is already discharged.",
+    "PATIENT_NOT_DISCHARGED": "Patient is not currently discharged.",
+    "PATIENT_DISCHARGED": "Patient is discharged.",
+    "PATIENT_NOT_ASSIGNED": "Patient is not assigned to this doctor.",
+    "PATIENT_IDENTITY_FIELDS_UNIQUE": "Patient identity fields must be unique.",
+    "CNP_ALREADY_REGISTERED": "CNP already registered.",
+    "PHONE_ALREADY_REGISTERED": "Phone number already registered.",
+    "CONDITION_NOT_FOUND": "Condition not found.",
+    "ASSIGNMENT_NOT_FOUND": "Assignment not found.",
+    "ALLERGY_NOT_FOUND": "Allergy not found.",
+    "DIAGNOSIS_NOT_FOUND": "Diagnosis not found.",
+    "MEDICATION_NOT_FOUND": "Medication not found.",
+    "NO_ALLERGY_UPDATES": "No allergy updates were provided.",
+    "NO_DIAGNOSIS_UPDATES": "No diagnosis updates were provided.",
+    "NO_MEDICATION_UPDATES": "No medication updates were provided.",
+    "POSTAL_CODE_REQUIRED": "Postal code is required.",
+    "POSTAL_CODE_INVALID_LENGTH": "Postal code must contain exactly 6 digits.",
+    "ADDRESS_REQUIRED": "Address is required.",
+    "ADDRESS_FIELDS_INCOMPLETE": "Address fields must be complete.",
+    "INVALID_CONDITION_STATUS": "Invalid condition status.",
+    "INVALID_DIAGNOSIS_STATUS": "Invalid diagnosis status.",
+    "INVALID_DISCHARGE_TYPE": "Invalid discharge type.",
+    "INVALID_MEDICATION": "Medication is invalid.",
+    "MEDICATION_NOT_ALLOWED_PREGNANT": "Medication is not allowed for pregnant patients.",
+    "MEDICATION_NOT_ALLOWED": "Medication is not allowed for this patient.",
+    "INVALID_DOSAGE": "Dosage is invalid.",
+    "INVALID_FREQUENCY": "Frequency is invalid.",
+    "INVALID_PAGE": "Page must be at least 1.",
+    "INVALID_PAGE_SIZE": "Page size must be at least 1.",
+    "INVALID_WINDOW_MINUTES": "Window minutes must be positive.",
+    "INVALID_EMAIL_FORMAT": "Email format is invalid.",
+    "PASSWORD_TOO_SHORT": "Password must be at least 8 characters long.",
+    "PASSWORD_MISSING_UPPERCASE": "Password must contain at least one uppercase letter.",
+    "PASSWORD_MISSING_NUMBER": "Password must contain at least one number.",
+    "PASSWORDS_MISMATCH": "Passwords do not match.",
+    "MISSING_AUTH_HEADER": "Missing authorization header.",
+    "INVALID_AUTH_HEADER": "Invalid authorization header.",
+    "INVALID_TOKEN": "Invalid token.",
+    "TOKEN_EXPIRED": "Session expired. Please log in again.",
+    "DOCTOR_INACTIVE": "Doctor account is inactive.",
+    "DOCTOR_SELF_ACTION_ONLY": "Doctors can only {action} for themselves.",
+    "BIRTH_DATE_IN_FUTURE": "Birth date cannot be in the future.",
+    "EMAIL_ALREADY_REGISTERED": "Email already registered.",
+    "LICENSE_ALREADY_REGISTERED": "License number already registered.",
+    "INVALID_ACTIVITY_STATUS": "Invalid activity status.",
+    "DOCTOR_PATIENT_DEPARTMENT_MISMATCH": "Doctor can only be assigned to patients in the same department.",
+    "INVALID_SPECIALIZATION_MATCH": "Doctor specialization must match the patient's department.",
+    "DOCTOR_NOT_FOUND": "Doctor not found.",
+    "ONLY_DOCTOR_IN_DEPARTMENT": "You are the only doctor in this department. Account cannot be deleted.",
+    "LAST_ASSIGNED_DOCTOR_TRANSFER_REQUIRED": "This patient must be transferred because you are the last assigned doctor.",
+    "TRANSFER_TARGET_REQUIRED": "Transfer target doctor is required.",
+    "TRANSFER_TARGET_NOT_AVAILABLE": "Selected transfer doctor is not available for this patient.",
+    "TRANSFER_TO_SELF_NOT_ALLOWED": "Transfer target must be a different doctor.",
+    "ACTIVITY_NOT_FOUND": "Activity not found.",
+    "DOCTOR_PROFILE_DUPLICATE_FIELDS": "Doctor profile contains duplicate unique fields.",
+    "DOCTOR_IDENTITY_FIELDS_UNIQUE": "Doctor identity fields must be unique.",
+    "INVALID_OR_EXPIRED_RESET_TOKEN": "Invalid or expired reset token.",
+    "INVALID_VERIFICATION_TOKEN": "Invalid verification link.",
+    "EXPIRED_VERIFICATION_TOKEN": "Verification link expired.",
+    "INVALID_OR_EXPIRED_VERIFICATION_TOKEN": "Invalid or expired verification token.",
+    "EMAIL_ALREADY_VERIFIED": "Email is already verified.",
+    "VERIFICATION_TOKEN_EMAIL_MISMATCH": "Verification token does not match the doctor email.",
+    "INVALID_CREDENTIALS": "Invalid credentials.",
+    "INVALID_ACTIVITY_TYPE": "Invalid activity type.",
+    "DUPLICATE_ASSIGNMENT": "Duplicate {label} assignment is not allowed.",
+    "ACTIVITY_PATIENTS_NOT_FOUND": "One or more patients were not found.",
+    "ACTIVITY_DOCTORS_NOT_FOUND": "One or more doctors were not found.",
+    "ACTIVITY_PATIENT_DEPARTMENTS_MISMATCH": "All selected patients must belong to the same department.",
+    "ACTIVITY_DOCTOR_DEPARTMENTS_MISMATCH": "Doctors must belong to the same department as the selected patients.",
+    "ACTIVITY_PATIENT_DOCTOR_DEPARTMENT_MISMATCH": "Patients must belong to the current doctor's department.",
+    "ACTIVITY_DISCHARGED_PATIENT_MODIFY_FORBIDDEN": "Discharged patients cannot have activities modified.",
+    "ACTIVITY_MODIFIER_FORBIDDEN": "Only assigned doctors can modify this activity.",
+}
+
+
+def resolve_error_message(code: str, context: dict | None = None) -> str:
+    template = ERROR_MESSAGES.get(code, GENERIC_INVALID_REQUEST)
+    if not context:
+        return template
+
+    try:
+        return template.format(**context)
+    except Exception:  # noqa: BLE001
+        return template

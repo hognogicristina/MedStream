@@ -1,10 +1,10 @@
 import {Link} from "react-router-dom"
 import {useEffect, useRef, useState} from "react"
 import {useLocation, useNavigate} from "react-router-dom"
-import {useAuth} from "../auth/AuthContext"
-import {useNotifications} from "../components/NotificationProvider"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData} from "../services/apiMessages"
+import {useAuth} from "../components/AuthContext.jsx"
+import {useNotifications} from "../components/NotificationProvider.jsx"
+import {api} from "../services/authApi.js"
+import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 
 export default function LoginPage() {
   const navigate = useNavigate()

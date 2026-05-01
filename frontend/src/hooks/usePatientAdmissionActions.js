@@ -1,13 +1,13 @@
 import {useCallback, useState} from "react"
 
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
+import {api} from "../services/patientApi.js"
+import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 
 export function usePatientAdmissionActions({authHeaders = {}, patientId, onPatientChange, onHistoryRefresh, notifyError, notifySuccess}) {
   const [dischargeReason, setDischargeReason] = useState("")
   const [dischargeType, setDischargeType] = useState("")
   const [dischargeTypes, setDischargeTypes] = useState([])
-  const [readmitReason, setReadmitReason] = useState("")
+  const [readmitArrivalMethod, setReadmitArrivalMethod] = useState("self")
   const [isSubmittingDischarge, setIsSubmittingDischarge] = useState(false)
   const [isSubmittingReadmit, setIsSubmittingReadmit] = useState(false)
 
@@ -53,7 +53,7 @@ export function usePatientAdmissionActions({authHeaders = {}, patientId, onPatie
   const handleReadmitSubmit = async (event) => {
     event.preventDefault()
 
-    if (!readmitReason.trim() || isSubmittingReadmit) {
+    if (!readmitArrivalMethod || isSubmittingReadmit) {
       return
     }
 
@@ -61,12 +61,12 @@ export function usePatientAdmissionActions({authHeaders = {}, patientId, onPatie
 
     try {
       const response = await api.post(`/patients/${patientId}/readmit`, {
-        reason: readmitReason,
+        arrival_method: readmitArrivalMethod,
       }, {
         headers: authHeaders,
       })
       onPatientChange(getResponseData(response))
-      setReadmitReason("")
+      setReadmitArrivalMethod("self")
       await onHistoryRefresh?.()
       notifySuccess(getResponseMessage(response))
     } catch (error) {
@@ -83,8 +83,8 @@ export function usePatientAdmissionActions({authHeaders = {}, patientId, onPatie
     loadDischargeTypes,
     setDischargeReason,
     setDischargeType,
-    readmitReason,
-    setReadmitReason,
+    readmitArrivalMethod,
+    setReadmitArrivalMethod,
     isSubmittingDischarge,
     isSubmittingReadmit,
     handleDischargeSubmit,

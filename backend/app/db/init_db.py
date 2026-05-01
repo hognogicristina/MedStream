@@ -1,5 +1,6 @@
 from sqlalchemy import inspect
 
+from app.core.errors import ValidationError
 from app.db.base import Base
 from app.db.session import engine
 from app.models.doctor.doctor import Doctor
@@ -22,7 +23,7 @@ from app.models import (
     Vital,
 )
 from app.db.session import SessionLocal
-from app.schemas.validators import ROMANIA_COUNTRY, normalize_phone_number
+from app.validators.patient_validators import ROMANIA_COUNTRY, normalize_phone_value
 from app.service.medical_history import CONDITIONS, STATUS
 
 
@@ -99,20 +100,6 @@ def ensure_patient_columns():
         if "discharge_date" not in columns:
             connection.exec_driver_sql("ALTER TABLE patients ADD COLUMN discharge_date TIMESTAMP")
 
-        address_columns = {
-            "address_street": "VARCHAR(120)",
-            "address_number": "VARCHAR(30)",
-            "address_apartment": "VARCHAR(30)",
-            "address_city": "VARCHAR(100)",
-            "address_state": "VARCHAR(100)",
-            "address_postal_code": "VARCHAR(20)",
-            "address_country": "VARCHAR(100)",
-        }
-
-        for column_name, column_type in address_columns.items():
-            if column_name not in columns:
-                connection.exec_driver_sql(f"ALTER TABLE patients ADD COLUMN {column_name} {column_type}")
-
         if "ix_patients_phone_number" not in indexes:
             connection.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS ix_patients_phone_number ON patients (phone_number)")
 
@@ -133,8 +120,8 @@ def normalize_patient_phone_numbers():
 
         for patient in patients:
             try:
-                normalized_phone_number = normalize_phone_number(patient.phone_number)
-            except ValueError:
+                normalized_phone_number = normalize_phone_value(patient.phone_number)
+            except ValidationError:
                 normalized_phone_number = None
 
             if normalized_phone_number != patient.phone_number:
@@ -149,36 +136,40 @@ def normalize_patient_phone_numbers():
                 patient.is_discharged = False
                 did_change = True
 
-            if not patient.address_street:
-                patient.address_street = "Unknown street"
+            address = patient.address
+            if not address:
+                continue
+
+            if not address.street:
+                address.street = "Unknown street"
                 did_change = True
 
-            if not patient.address_number:
-                patient.address_number = "N/A"
+            if not address.number:
+                address.number = "N/A"
                 did_change = True
 
-            if not patient.address_city:
-                patient.address_city = "Unknown city"
+            if not address.city:
+                address.city = "Unknown city"
                 did_change = True
 
-            if not patient.address_state:
-                patient.address_state = "Unknown county"
+            if not address.county:
+                address.county = "Unknown county"
                 did_change = True
 
-            if not patient.address_postal_code:
-                patient.address_postal_code = "000000"
+            if not address.postal_code:
+                address.postal_code = "000000"
                 did_change = True
 
-            if patient.address_country != ROMANIA_COUNTRY:
-                patient.address_country = ROMANIA_COUNTRY
+            if address.country != ROMANIA_COUNTRY:
+                address.country = ROMANIA_COUNTRY
                 did_change = True
 
         doctors = db.query(Doctor).all()
 
         for doctor in doctors:
             try:
-                normalized_phone_number = normalize_phone_number(doctor.phone_number)
-            except ValueError:
+                normalized_phone_number = normalize_phone_value(doctor.phone_number)
+            except ValidationError:
                 normalized_phone_number = None
 
             if normalized_phone_number != doctor.phone_number:
@@ -259,6 +250,12 @@ def sync_conditions_from_drugs():
             db.commit()
 
 
+def ensure_alert_indexes():
+    with engine.begin() as connection:
+        connection.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_alerts_created_at_desc ON alerts (created_at DESC)")
+        connection.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_alerts_severity_created_at ON alerts (severity, created_at DESC)")
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     ensure_doctor_columns()
@@ -266,5 +263,6 @@ def init_db():
     cleanup_legacy_event_table()
     cleanup_legacy_medical_history_table()
     sync_conditions_from_drugs()
+    ensure_alert_indexes()
     normalize_doctor_defaults()
     normalize_patient_phone_numbers()

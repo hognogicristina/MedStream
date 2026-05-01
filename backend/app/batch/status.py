@@ -8,7 +8,7 @@ class BatchStatusStore:
     def __init__(self):
         self._lock = Lock()
         self._status = {
-            "interval_seconds": 300,
+            "interval_seconds": 30,
             "last_run_started_at": None,
             "last_successful_run_at": None,
             "last_run_finished_at": None,

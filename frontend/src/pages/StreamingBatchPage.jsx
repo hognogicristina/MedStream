@@ -8,9 +8,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData} from "../services/apiMessages"
-import {downloadCSV} from "../utils/downloadCSV"
+import {api} from "../services/api.js"
+import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
+import {downloadCSV} from "../utils/downloadCSV.js"
 
 const POLL_INTERVAL_MS = 4000
 const MAX_HISTORY_POINTS = 24
@@ -63,6 +63,14 @@ function ComparisonCard({title, data, differences, accentClass}) {
         ))}
       </div>
     </section>
+  )
+}
+
+function DownloadIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 21h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/>
+    </svg>
   )
 }
 
@@ -130,7 +138,7 @@ export default function StreamingBatchPage() {
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-6">
+          <div className="flex flex-wrap items-start justify-between gap-6">
 
             <div className="max-w-3xl">
               <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
@@ -155,25 +163,27 @@ export default function StreamingBatchPage() {
               {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
             </div>
 
-            <div className="flex">
-              <button
-                className="console-button-primary rounded-xl px-4 py-3 text-sm font-semibold"
-                onClick={() => {
-                  const rows = [
-                    ["Metric", "Streaming", "Batch", "Difference"],
-                    ["Heart Rate", streaming.avg_heart_rate, batch.avg_heart_rate, differences.avg_heart_rate],
-                    ["Oxygen", streaming.avg_oxygen, batch.avg_oxygen, differences.avg_oxygen],
-                    ["Temperature", streaming.avg_temperature, batch.avg_temperature, differences.avg_temperature],
-                    ["Alerts", streaming.alerts, batch.alerts, differences.alerts],
-                    ["Execution Time", streaming.execution_time_ms, batch.execution_time_ms, differences.execution_time_ms],
-                  ]
-
-                  downloadCSV("comparison.csv", rows)
-                }}
-              >
-                Export Comparison
-              </button>
-            </div>
+            <button
+              type="button"
+              title="Download all metrics"
+              aria-label="Download all metrics"
+              className="console-button-primary rounded-xl p-3 text-sm font-semibold"
+              onClick={() => {
+                const rows = [
+                  ["Section", "Metric", "Streaming", "Batch", "Difference"],
+                  ["Comparison Snapshot", "Heart Rate", streaming.avg_heart_rate, batch.avg_heart_rate, differences.avg_heart_rate],
+                  ["Comparison Snapshot", "Oxygen", streaming.avg_oxygen, batch.avg_oxygen, differences.avg_oxygen],
+                  ["Comparison Snapshot", "Temperature", streaming.avg_temperature, batch.avg_temperature, differences.avg_temperature],
+                  ["Comparison Snapshot", "Alerts", streaming.alerts, batch.alerts, differences.alerts],
+                  ["Comparison Snapshot", "Execution Time", streaming.execution_time_ms, batch.execution_time_ms, differences.execution_time_ms],
+                  ["Comparison Trend", "Time", "Streaming Avg HR", "Batch Avg HR", ""],
+                  ...history.map((point) => ["Comparison Trend", point.time, point.streaming, point.batch, ""]),
+                ]
+                downloadCSV("comparison_all_metrics.csv", rows)
+              }}
+            >
+              <DownloadIcon/>
+            </button>
 
           </div>
         </header>

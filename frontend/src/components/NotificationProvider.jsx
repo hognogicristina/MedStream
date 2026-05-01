@@ -26,20 +26,50 @@ export function NotificationProvider({children}) {
     setNotifications((current) => current.filter((notification) => notification.id !== id))
   }, [])
 
-  const showNotification = useCallback(({message, type = "success", duration = DEFAULT_NOTIFICATION_DURATION}) => {
+  const showNotification = useCallback(({
+    message,
+    type = "success",
+    duration = DEFAULT_NOTIFICATION_DURATION,
+    actionLabel = "",
+    onAction = null,
+    dedupeKey = "",
+  }) => {
     if (!message) {
       return
     }
 
-    const notificationId = `notification-${nextIdRef.current += 1}`
-    setNotifications((current) => [...current, {id: notificationId, message, type}].slice(-MAX_NOTIFICATIONS))
+    const nextDedupeKey = dedupeKey || `${type}:${message}`
+    let isDuplicate = false
+    let createdNotificationId = ""
+    setNotifications((current) => {
+      isDuplicate = current.some((notification) => notification.dedupeKey === nextDedupeKey)
+      if (isDuplicate) {
+        return current
+      }
+      createdNotificationId = `notification-${nextIdRef.current += 1}`
+      return [...current, {
+        id: createdNotificationId,
+        message,
+        type,
+        actionLabel,
+        onAction,
+        dedupeKey: nextDedupeKey,
+      }].slice(-MAX_NOTIFICATIONS)
+    })
+
+    if (isDuplicate) {
+      return
+    }
+    if (!createdNotificationId) {
+      return
+    }
 
     if (duration > 0) {
       const timeoutId = window.setTimeout(() => {
-        dismissNotification(notificationId)
+        dismissNotification(createdNotificationId)
       }, duration)
 
-      timeoutIdsRef.current.set(notificationId, timeoutId)
+      timeoutIdsRef.current.set(createdNotificationId, timeoutId)
     }
   }, [dismissNotification])
 
@@ -50,6 +80,9 @@ export function NotificationProvider({children}) {
     },
     notifyError(message, duration) {
       showNotification({message, type: "error", duration})
+    },
+    notifyWarning(message, duration, options = {}) {
+      showNotification({message, type: "warning", duration, ...options})
     },
     dismissNotification,
   }), [dismissNotification, showNotification])
@@ -65,8 +98,19 @@ export function NotificationProvider({children}) {
             role="status"
           >
             <div>
-              <p className="notification-toast-label">{notification.type === "error" ? "Error" : "Success"}</p>
+              <p className="notification-toast-label">
+                {notification.type === "error" ? "Error" : notification.type === "warning" ? "Warning" : "Success"}
+              </p>
               <p className="notification-toast-message">{notification.message}</p>
+              {notification.actionLabel && typeof notification.onAction === "function" && (
+                <button
+                  type="button"
+                  className="notification-toast-action"
+                  onClick={notification.onAction}
+                >
+                  {notification.actionLabel}
+                </button>
+              )}
             </div>
             <button
               type="button"

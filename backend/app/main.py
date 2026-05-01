@@ -27,7 +27,6 @@ from app.db.session import SessionLocal
 from app.kafka.consumer import run as run_consumer
 from app.kafka.topics import ensure_topics
 from app.service.metrics import refresh_batch_snapshot
-from threading import Thread
 from app.simulator.run_simulator import run as run_simulator
 
 background_threads_started = False
@@ -88,12 +87,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def start_simulator():
-    thread = Thread(target=run_simulator, daemon=True)
-    thread.start()
 
 
 def extract_error_message(detail) -> str:

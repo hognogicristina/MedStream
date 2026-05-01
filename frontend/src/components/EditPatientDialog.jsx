@@ -3,9 +3,9 @@ import {
   buildPatientPhoneNumber,
   normalizeRomanianPhoneNumber,
   ROMANIA_PHONE_PLACEHOLDER,
-} from "../utils/patientPhone"
-import {getCityOptions, getCountyOptions} from "../utils/addressOptions"
-import {buildPatientAddressForm, normalizePatientAddress} from "../utils/patientAddress"
+} from "../utils/patientPhone.js"
+import {getCityOptions, getCountyOptions} from "../utils/addressOptions.js"
+import {buildPatientAddressForm, normalizePatientAddress} from "../utils/patientAddress.js"
 
 const TOTAL_STEPS = 2
 

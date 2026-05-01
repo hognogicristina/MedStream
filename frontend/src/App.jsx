@@ -1,32 +1,42 @@
-import {BrowserRouter, Route, Routes} from "react-router-dom"
-import AuthenticatedLayout from "./components/AuthenticatedLayout"
-import ProtectedRoute from "./components/ProtectedRoute"
-import PublicOnlyRoute from "./components/PublicOnlyRoute"
-import AddPatientPage from "./pages/AddPatientPage"
-import AlertsPage from "./pages/AlertsPage"
-import BatchMetricsPage from "./pages/BatchMetricsPage"
-import DepartmentPage from "./pages/DepartmentPage"
-import DashboardPage from "./pages/DashboardPage"
-import ForgotPasswordPage from "./pages/ForgotPasswordPage"
-import HomePage from "./pages/HomePage"
-import LoginPage from "./pages/LoginPage"
-import PatientPage from "./pages/PatientPage"
-import PatientDiagnosisPage from "./pages/PatientDiagnosisPage"
-import PatientAdmissionHistoryPage from "./pages/PatientAdmissionHistoryPage"
-import PatientMedicalHistoryPage from "./pages/PatientMedicalHistoryPage"
-import ProfilePage from "./pages/ProfilePage"
-import RecoverAccountPage from "./pages/RecoverAccountPage"
-import RegisterPage from "./pages/RegisterPage"
-import ResetPasswordPage from "./pages/ResetPasswordPage"
-import StreamingMetricsPage from "./pages/StreamingMetricsPage"
-import StreamingBatchPage from "./pages/StreamingBatchPage"
-import VerifyEmailPage from "./pages/VerifyEmailPage"
+import {BrowserRouter, Navigate, Route, Routes} from "react-router-dom"
+import AuthenticatedLayout from "./components/AuthenticatedLayout.jsx"
+import {useAuth} from "./components/AuthContext.jsx"
+import ProtectedRoute from "./components/ProtectedRoute.jsx"
+import PublicOnlyRoute from "./components/PublicOnlyRoute.jsx"
+import AddPatientPage from "./pages/AddPatientPage.jsx"
+import AlertsPage from "./pages/AlertsPage.jsx"
+import BatchMetricsPage from "./pages/BatchMetricsPage.jsx"
+import DepartmentPage from "./pages/DepartmentPage.jsx"
+import DashboardPage from "./pages/DashboardPage.jsx"
+import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx"
+import LoginPage from "./pages/LoginPage.jsx"
+import PatientPage from "./pages/PatientPage.jsx"
+import PatientDiagnosisPage from "./pages/PatientDiagnosisPage.jsx"
+import PatientAdmissionHistoryPage from "./pages/PatientAdmissionHistoryPage.jsx"
+import PatientMedicalHistoryPage from "./pages/PatientMedicalHistoryPage.jsx"
+import ProfilePage from "./pages/ProfilePage.jsx"
+import RecoverAccountPage from "./pages/RecoverAccountPage.jsx"
+import RegisterPage from "./pages/RegisterPage.jsx"
+import ResetPasswordPage from "./pages/ResetPasswordPage.jsx"
+import StreamingMetricsPage from "./pages/StreamingMetricsPage.jsx"
+import StreamingBatchPage from "./pages/StreamingBatchPage.jsx"
+import VerifyEmailPage from "./pages/VerifyEmailPage.jsx"
+
+function RootRoute() {
+  const {isAuthenticated, isAuthResolved} = useAuth()
+
+  if (!isAuthResolved) {
+    return null
+  }
+
+  return <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace/>
+}
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage/>}/>
+        <Route path="/" element={<RootRoute/>}/>
 
         <Route
           path="/login"
@@ -98,6 +108,7 @@ function App() {
           <Route path="/patients/new" element={<AddPatientPage/>}/>
           <Route path="/profile" element={<ProfilePage/>}/>
         </Route>
+        <Route path="*" element={<RootRoute/>}/>
       </Routes>
     </BrowserRouter>
   )

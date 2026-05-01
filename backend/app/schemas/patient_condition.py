@@ -1,7 +1,6 @@
 from datetime import datetime
-from pydantic import BaseModel, field_validator
-from app.service.medical_history import STATUS
-from app.schemas.validators import require_non_empty
+
+from pydantic import BaseModel
 
 
 class PatientConditionRead(BaseModel):
@@ -35,12 +34,3 @@ class PatientConditionAssignmentRead(BaseModel):
 class ConditionUpdate(BaseModel):
     status: str | None = None
     notes: str | None = None
-
-    @field_validator("status")
-    @classmethod
-    def validate_status(cls, value):
-        if value is None:
-            return value
-        if value not in STATUS:
-            raise ValueError("Invalid condition status.")
-        return value

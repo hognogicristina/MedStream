@@ -1,13 +1,13 @@
 import {useCallback, useEffect, useState} from "react"
 import {Link, useParams} from "react-router-dom"
 
-import BackButton from "../components/BackButton"
-import PatientAdmissionActionCard from "../components/PatientAdmissionActionCard"
-import {useNotifications} from "../components/NotificationProvider"
-import {usePatientAdmissionActions} from "../hooks/usePatientAdmissionActions"
-import {useAuth} from "../auth/AuthContext"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData} from "../services/apiMessages"
+import BackButton from "../components/BackButton.jsx"
+import PatientAdmissionActionCard from "../components/PatientAdmissionActionCard.jsx"
+import {useNotifications} from "../components/NotificationProvider.jsx"
+import {usePatientAdmissionActions} from "../hooks/usePatientAdmissionActions.js"
+import {useAuth} from "../components/AuthContext.jsx"
+import {api} from "../services/patientApi.js"
+import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 
 function formatDateTime(value) {
   if (!value) {
@@ -24,8 +24,8 @@ function formatDateTime(value) {
 }
 
 function formatAdmissionType(value) {
-  if (String(value).toLowerCase() === "readmission") {
-    return "Readmission"
+  if (String(value).toLowerCase() === "admission") {
+    return "Admission"
   }
 
   return value || "--"
@@ -156,7 +156,7 @@ export default function PatientAdmissionHistoryPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-sm font-semibold text-white">{formatAdmissionType(entry.type)}</p>
-                      <p className="mt-2 text-sm text-[#c4ccd5]">{entry.reason}</p>
+                      <p className="mt-2 text-sm text-[#c4ccd5]">{entry.note || entry.reason || "--"}</p>
                     </div>
                     <span className="text-xs text-[#879196]">{formatDateTime(entry.created_at)}</span>
                   </div>
@@ -180,10 +180,10 @@ export default function PatientAdmissionHistoryPage() {
             dischargeReason={admissionActions.dischargeReason}
             dischargeType={admissionActions.dischargeType}
             dischargeTypes={admissionActions.dischargeTypes}
-            readmitReason={admissionActions.readmitReason}
+            readmitArrivalMethod={admissionActions.readmitArrivalMethod}
             onDischargeReasonChange={admissionActions.setDischargeReason}
             onDischargeTypeChange={admissionActions.setDischargeType}
-            onReadmitReasonChange={admissionActions.setReadmitReason}
+            onReadmitArrivalMethodChange={admissionActions.setReadmitArrivalMethod}
             onDischargeSubmit={admissionActions.handleDischargeSubmit}
             onReadmitSubmit={admissionActions.handleReadmitSubmit}
             isSubmittingDischarge={admissionActions.isSubmittingDischarge}

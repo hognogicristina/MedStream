@@ -6,21 +6,23 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.batch.status import batch_status_store, utc_now
 
+BATCH_INTERVAL_SECONDS = 30
+
 
 class BatchRuntimeController:
     def __init__(self):
         self._lock = threading.Lock()
-        self._interval_seconds = 300
+        self._interval_seconds = BATCH_INTERVAL_SECONDS
         self._cron_expression = None
         self._job_callback = None
         self._job_lock = threading.Lock()
         self._scheduler = BackgroundScheduler(timezone="Europe/Bucharest")
         self._started = False
 
-    def start(self, job_callback, interval_seconds: int):
+    def start(self, job_callback, interval_seconds: int | None = None):
         with self._lock:
             self._job_callback = job_callback
-            self._interval_seconds = interval_seconds
+            self._interval_seconds = max(1, int(interval_seconds or BATCH_INTERVAL_SECONDS))
             self._cron_expression = None
             if not self._started:
                 self._scheduler.start()
@@ -33,17 +35,6 @@ class BatchRuntimeController:
                 self._scheduler.shutdown(wait=False)
                 self._started = False
 
-    def configure_interval(self, interval_seconds: int):
-        with self._lock:
-            self._cron_expression = None
-            self._interval_seconds = interval_seconds
-            self._schedule_current_job()
-
-    def configure_cron(self, cron_expression: str):
-        with self._lock:
-            self._cron_expression = cron_expression
-            self._schedule_current_job()
-
     def interval_seconds(self):
         with self._lock:
             return self._interval_seconds
@@ -51,6 +42,17 @@ class BatchRuntimeController:
     def cron_expression(self):
         with self._lock:
             return self._cron_expression
+
+    def configure_interval(self, interval_seconds: int):
+        with self._lock:
+            self._cron_expression = None
+            self._interval_seconds = max(1, int(interval_seconds))
+            self._schedule_current_job()
+
+    def configure_cron(self, cron_expression: str):
+        with self._lock:
+            self._cron_expression = cron_expression
+            self._schedule_current_job()
 
     def next_run_time(self):
         with self._lock:
@@ -66,7 +68,6 @@ class BatchRuntimeController:
             if self._cron_expression
             else IntervalTrigger(seconds=self._interval_seconds, timezone="Europe/Bucharest")
         )
-
         self._scheduler.add_job(
             self._run_job,
             trigger=trigger,

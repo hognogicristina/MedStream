@@ -1,11 +1,11 @@
 import {useEffect, useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
+import {api} from "../services/authApi.js"
+import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {
   buildPatientPhoneNumber,
   ROMANIA_PHONE_PLACEHOLDER,
-} from "../utils/patientPhone"
+} from "../utils/patientPhone.js"
 
 export default function RegisterPage() {
   const navigate = useNavigate()
@@ -119,7 +119,7 @@ export default function RegisterPage() {
 
       navigate("/login", {
         state: {
-          message: getResponseMessage(response) || "Account created. Please verify your email.",
+          message: getResponseMessage(response),
         },
       })
     } catch (error) {

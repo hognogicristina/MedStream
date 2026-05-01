@@ -1,9 +1,9 @@
 import {useCallback, useEffect, useState} from "react"
 import {useParams} from "react-router-dom"
-import BackButton from "../components/BackButton"
-import {useNotifications} from "../components/NotificationProvider"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages"
+import BackButton from "../components/BackButton.jsx"
+import {useNotifications} from "../components/NotificationProvider.jsx"
+import {api} from "../services/patientApi.js"
+import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 
 function formatDateTime(value) {
   if (!value) {

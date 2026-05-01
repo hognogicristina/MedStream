@@ -1,11 +1,12 @@
 import {
-  LineChart,
-  Line,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid
+  Line,
+  LineChart,
 } from "recharts"
 
 export default function VitalsChart({data}) {
@@ -13,23 +14,6 @@ export default function VitalsChart({data}) {
     <div className="w-full h-[320px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
-          <defs>
-            <linearGradient id="hrGlow" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f97316" stopOpacity={0.8}/>
-              <stop offset="100%" stopColor="#f97316" stopOpacity={0}/>
-            </linearGradient>
-
-            <linearGradient id="o2Glow" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.8}/>
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/>
-            </linearGradient>
-
-            <linearGradient id="tempGlow" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22c55e" stopOpacity={0.8}/>
-              <stop offset="100%" stopColor="#22c55e" stopOpacity={0}/>
-            </linearGradient>
-          </defs>
-
           <CartesianGrid
             stroke="#1f2937"
             strokeDasharray="3 3"
@@ -53,13 +37,15 @@ export default function VitalsChart({data}) {
               backgroundColor: "#0f172a",
               border: "1px solid #334155",
               borderRadius: "12px",
-              color: "#fff"
+              color: "#fff",
             }}
           />
+          <Legend wrapperStyle={{fontSize: "12px"}}/>
 
           <Line
             type="monotone"
             dataKey="heart_rate"
+            name="Heart Rate"
             stroke="#f97316"
             strokeWidth={3}
             dot={false}
@@ -71,6 +57,7 @@ export default function VitalsChart({data}) {
           <Line
             type="monotone"
             dataKey="oxygen_saturation"
+            name="Oxygen Saturation"
             stroke="#3b82f6"
             strokeWidth={3}
             dot={false}
@@ -81,8 +68,31 @@ export default function VitalsChart({data}) {
           <Line
             type="monotone"
             dataKey="temperature"
+            name="Temperature"
             stroke="#22c55e"
             strokeWidth={3}
+            dot={false}
+            isAnimationActive={true}
+            animationDuration={300}
+          />
+
+          <Line
+            type="monotone"
+            dataKey="systolic_bp"
+            name="Systolic BP"
+            stroke="#a78bfa"
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive={true}
+            animationDuration={300}
+          />
+
+          <Line
+            type="monotone"
+            dataKey="diastolic_bp"
+            name="Diastolic BP"
+            stroke="#fda4af"
+            strokeWidth={2}
             dot={false}
             isAnimationActive={true}
             animationDuration={300}

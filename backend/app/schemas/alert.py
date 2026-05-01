@@ -12,3 +12,8 @@ class AlertRead(BaseModel):
     severity: str
     created_at: datetime
     model_config = {"from_attributes": True}
+
+
+class AlertDashboardSummary(BaseModel):
+    total_alerts: int
+    preview_alerts: list[AlertRead]

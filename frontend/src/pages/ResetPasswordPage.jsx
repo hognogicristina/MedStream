@@ -1,8 +1,8 @@
 import {useMemo, useState} from "react"
 import {Link, useNavigate, useSearchParams} from "react-router-dom"
-import {useNotifications} from "../components/NotificationProvider"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseMessage} from "../services/apiMessages"
+import {useNotifications} from "../components/NotificationProvider.jsx"
+import {api} from "../services/authApi.js"
+import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate()

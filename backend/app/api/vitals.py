@@ -15,5 +15,5 @@ def list_vitals():
         vitals = db.execute(select(Vital).order_by(Vital.recorded_at.desc())).scalars().all()
         return success_response(
             "Vitals retrieved successfully.",
-            [VitalRead.model_validate(vital).model_dump(mode="json") for vital in vitals],
+            [VitalRead.model_validate(vital, from_attributes=True).model_dump(mode="json") for vital in vitals],
         )

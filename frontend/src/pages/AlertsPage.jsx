@@ -1,13 +1,13 @@
-import {useEffect, useRef, useState} from "react"
+import {useEffect, useState} from "react"
 import {Link, useSearchParams} from "react-router-dom"
-import BackButton from "../components/BackButton"
-import CountValue from "../components/CountValue"
-import DataTable from "../components/DataTable"
-import {useNotifications} from "../components/NotificationProvider"
-import {api} from "../services/api"
-import {getErrorMessage, getResponseData} from "../services/apiMessages"
-import {createWebSocket} from "../services/ws"
-import {formatPatientFullName} from "../utils/patients"
+import BackButton from "../components/BackButton.jsx"
+import CountValue from "../components/CountValue.jsx"
+import DataTable from "../components/DataTable.jsx"
+import {useNotifications} from "../components/NotificationProvider.jsx"
+import {api} from "../services/api.js"
+import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
+import {createWebSocket} from "../services/ws.js"
+import {formatPatientFullName} from "../utils/patients.js"
 
 const SEVERITY_ORDER = {
   critical: 0,
@@ -21,11 +21,6 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState([])
   const [patients, setPatients] = useState([])
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(true)
-  const alertAudioRef = useRef(null)
-
-  if (!alertAudioRef.current) {
-    alertAudioRef.current = new Audio("/alert.mp3")
-  }
 
   useEffect(() => {
     const loadAlerts = async () => {
@@ -53,9 +48,6 @@ export default function AlertsPage() {
       }
 
       setAlerts((prev) => [msg.data, ...prev.filter((alert) => alert.id !== msg.data.id)])
-      alertAudioRef.current.currentTime = 0
-      alertAudioRef.current.play().catch(() => {
-      })
     })
 
     return () => socket.close()
