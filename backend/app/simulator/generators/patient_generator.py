@@ -53,10 +53,24 @@ def choose_medication_profile(drugs: list[dict], is_pregnant: bool) -> dict | No
     if not valid_drugs:
         return None
 
-    selected = random.choice(valid_drugs)
+    medications_by_condition: dict[str, set[str]] = {}
+    for drug in valid_drugs:
+        condition = (drug.get("condition") or "").strip()
+        medication = (drug.get("medication") or "").strip()
+        if not condition or not medication:
+            continue
+        medications_by_condition.setdefault(condition, set()).add(medication)
+
+    if not medications_by_condition:
+        return None
+
+    selected_condition = random.choice(sorted(medications_by_condition.keys()))
+    medication_options = sorted(medications_by_condition[selected_condition])
+    selected_medication = medication_options[0]
     return {
-        "medication_name": selected["medication"],
-        "condition_name": selected["condition"],
+        "medication_name": selected_medication,
+        "condition_name": selected_condition,
+        "medication_options": medication_options,
     }
 
 

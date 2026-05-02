@@ -233,6 +233,10 @@ class PatientRepository:
 
             medications_payload = []
             for medication in medications:
+                doctor_name = None
+                doctor = db.get(Doctor, medication.doctor_id)
+                if doctor is not None:
+                    doctor_name = f"{doctor.last_name} {doctor.first_name}".strip()
                 medications_payload.append(
                     {
                         "id": medication.id,
@@ -240,6 +244,9 @@ class PatientRepository:
                         "dosage": medication.dosage,
                         "frequency": medication.frequency,
                         "prescribed_at": medication.created_at,
+                        "notes": medication.notes,
+                        "last_updated_note": medication.last_updated_note,
+                        "modified_by": doctor_name,
                         "reasoning": self._build_treatment_reasoning_payload(
                             medication=medication,
                             alerts=alerts,

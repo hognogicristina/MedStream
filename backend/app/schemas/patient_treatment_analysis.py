@@ -21,6 +21,9 @@ class TreatmentMedicationRead(BaseModel):
     dosage: str
     frequency: str
     prescribed_at: datetime
+    notes: str | None = None
+    last_updated_note: str | None = None
+    modified_by: str | None = None
     reasoning: TreatmentMedicationReasoningRead
 
 

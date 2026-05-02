@@ -1066,13 +1066,6 @@ export default function ProfilePage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Account Deactivation</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Deactivate Doctor Account</h2>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteModal(false)}
-                  className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold"
-                >
-                  Cancel
-                </button>
               </div>
 
               <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
@@ -1110,14 +1103,6 @@ export default function ProfilePage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patient Assignment</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Transfer Assigned Patient</h2>
                 </div>
-                <button
-                  type="button"
-                  onClick={closeTransferDialog}
-                  disabled={isTransferringPatient}
-                  className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold"
-                >
-                  Cancel
-                </button>
               </div>
 
               {!showTransferActivityConfirmation ? (
@@ -1215,13 +1200,6 @@ export default function ProfilePage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patient Assignment</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">Remove Assigned Patient</h2>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setPatientPendingRemoval(null)}
-                  className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold"
-                >
-                  Cancel
-                </button>
               </div>
 
               <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">

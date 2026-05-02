@@ -27,6 +27,12 @@ def build_consumer():
 
 def create_alerts(db, vital):
     alerts = []
+    if vital is None or getattr(vital, "patient_id", None) is None:
+        return alerts
+
+    patient = db.get(Patient, vital.patient_id)
+    if patient is None:
+        return alerts
 
     if vital.heart_rate > settings.heart_rate_alert_threshold:
         alerts.append(

@@ -13,7 +13,12 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 @router.get("", response_model=ApiResponse[list[AlertRead]])
 def list_alerts(cnp: str | None = Query(default=None)):
     with SessionLocal() as db:
-        query = select(Alert).order_by(Alert.created_at.desc())
+        query = (
+            select(Alert)
+            .join(Patient, Patient.id == Alert.patient_id)
+            .where(Alert.patient_id.is_not(None))
+            .order_by(Alert.created_at.desc())
+        )
 
         if cnp:
             query = (
@@ -35,6 +40,7 @@ def list_patient_alerts(patient_id: int):
     with SessionLocal() as db:
         alerts = db.execute(
             select(Alert)
+            .join(Patient, Patient.id == Alert.patient_id)
             .where(Alert.patient_id == patient_id)
             .order_by(Alert.created_at.desc())
         ).scalars().all()
@@ -47,9 +53,15 @@ def list_patient_alerts(patient_id: int):
 @router.get("/dashboard-summary", response_model=ApiResponse[AlertDashboardSummary])
 def dashboard_alert_summary():
     with SessionLocal() as db:
-        total_alerts = db.execute(select(func.count(Alert.id))).scalar_one()
+        total_alerts = db.execute(
+            select(func.count(Alert.id))
+            .select_from(Alert)
+            .join(Patient, Patient.id == Alert.patient_id)
+            .where(Alert.patient_id.is_not(None))
+        ).scalar_one()
         preview_query = (
             select(Alert)
+            .join(Patient, Patient.id == Alert.patient_id)
             .where(Alert.severity.in_(("high", "critical")))
             .order_by(Alert.created_at.desc())
             .limit(6)

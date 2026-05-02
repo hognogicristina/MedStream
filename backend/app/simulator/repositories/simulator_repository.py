@@ -27,6 +27,37 @@ from app.validators.doctor_validators import validate_activity_creation
 
 
 class SimulatorRepository:
+    DIAGNOSIS_ALLOWED_STATUSES = {"active", "resolved", "chronic", "inactive"}
+    CONDITION_ALLOWED_STATUSES = {"active", "improving", "stable", "worsening", "critical", "resolved", "chronic"}
+
+    DIAGNOSIS_STATUS_FALLBACKS = {
+        "improving": "active",
+        "stable": "active",
+        "worsening": "active",
+        "critical": "active",
+        "monitoring": "active",
+    }
+    CONDITION_STATUS_FALLBACKS = {
+        "inactive": "stable",
+        "monitoring": "stable",
+    }
+
+    @staticmethod
+    def _normalize_status(value: str | None) -> str:
+        return str(value or "").strip().lower()
+
+    def _sanitize_diagnosis_status(self, value: str | None) -> str:
+        normalized = self._normalize_status(value)
+        if normalized in self.DIAGNOSIS_ALLOWED_STATUSES:
+            return normalized
+        return self.DIAGNOSIS_STATUS_FALLBACKS.get(normalized, "active")
+
+    def _sanitize_condition_status(self, value: str | None) -> str:
+        normalized = self._normalize_status(value)
+        if normalized in self.CONDITION_ALLOWED_STATUSES:
+            return normalized
+        return self.CONDITION_STATUS_FALLBACKS.get(normalized, "active")
+
     @contextmanager
     def session_scope(self):
         db = SessionLocal()
@@ -52,6 +83,9 @@ class SimulatorRepository:
 
     def get_random_doctor_for_department(self, db, department: str) -> Doctor | None:
         return db.query(Doctor).filter(Doctor.specialization == department).order_by(func.random()).first()
+
+    def get_doctor(self, db, doctor_id: int) -> Doctor | None:
+        return db.get(Doctor, doctor_id)
 
     def is_phone_available(self, db, phone_number: str) -> bool:
         existing = db.execute(select(Patient).where(Patient.phone_number == phone_number)).scalar_one_or_none()
@@ -164,12 +198,13 @@ class SimulatorRepository:
         status: str,
         created_at: datetime,
     ) -> None:
+        normalized_status = self._sanitize_diagnosis_status(status)
         db.add(
             PatientDiagnosis(
                 patient_id=patient_id,
                 doctor_id=doctor_id,
                 diagnosis=diagnosis,
-                status=status,
+                status=normalized_status,
                 created_at=created_at,
                 updated_at=created_at,
             )
@@ -178,9 +213,10 @@ class SimulatorRepository:
     def get_or_create_condition(self, db, name: str, status: str) -> PatientCondition:
         condition = db.execute(select(PatientCondition).where(PatientCondition.name == name)).scalar_one_or_none()
         if condition is not None:
+            condition.status = self._sanitize_condition_status(condition.status)
             return condition
 
-        condition = PatientCondition(name=name, status=status)
+        condition = PatientCondition(name=name, status=self._sanitize_condition_status(status))
         db.add(condition)
         db.flush()
         return condition
@@ -204,12 +240,13 @@ class SimulatorRepository:
         status: str,
         diagnosed_at: datetime,
     ) -> None:
+        normalized_status = self._sanitize_condition_status(status)
         db.add(
             PatientConditionAssignment(
                 patient_id=patient_id,
                 condition_id=condition_id,
                 doctor_id=doctor_id,
-                status=status,
+                status=normalized_status,
                 diagnosed_at=diagnosed_at,
                 created_at=diagnosed_at,
             )
@@ -225,17 +262,67 @@ class SimulatorRepository:
         dosage: str,
         frequency: str,
         created_at: datetime,
-    ) -> None:
-        db.add(
-            PatientMedication(
-                patient_id=patient_id,
-                doctor_id=doctor_id,
-                name=name,
-                dosage=dosage,
-                frequency=frequency,
-                created_at=created_at,
+    ) -> PatientMedication | None:
+        existing = db.execute(
+            select(PatientMedication).where(
+                PatientMedication.patient_id == patient_id,
+                func.lower(PatientMedication.name) == name.strip().lower(),
+                func.lower(PatientMedication.dosage) == dosage.strip().lower(),
+                func.lower(PatientMedication.frequency) == frequency.strip().lower(),
             )
+        ).scalar_one_or_none()
+        if existing is not None:
+            return None
+
+        medication = PatientMedication(
+            patient_id=patient_id,
+            doctor_id=doctor_id,
+            name=name,
+            dosage=dosage,
+            frequency=frequency,
+            created_at=created_at,
         )
+        db.add(medication)
+        db.flush()
+        return medication
+
+    def get_patient_medications(self, db, *, patient_id: int) -> list[PatientMedication]:
+        return db.execute(
+            select(PatientMedication)
+            .where(PatientMedication.patient_id == patient_id)
+            .order_by(PatientMedication.created_at.desc(), PatientMedication.id.desc())
+        ).scalars().all()
+
+    def get_latest_medication_by_name(self, db, *, patient_id: int, name: str) -> PatientMedication | None:
+        return db.execute(
+            select(PatientMedication)
+            .where(
+                PatientMedication.patient_id == patient_id,
+                func.lower(PatientMedication.name) == name.strip().lower(),
+            )
+            .order_by(PatientMedication.created_at.desc(), PatientMedication.id.desc())
+        ).scalar_one_or_none()
+
+    def update_patient_medication_plan(
+        self,
+        db,
+        *,
+        medication: PatientMedication,
+        doctor_id: int,
+        dosage: str,
+        frequency: str,
+        updated_at: datetime,
+        note: str | None = None,
+        notes: str | None = None,
+    ) -> PatientMedication:
+        medication.doctor_id = doctor_id
+        medication.dosage = dosage
+        medication.frequency = frequency
+        medication.updated_at = updated_at
+        medication.last_updated_note = note
+        if notes is not None:
+            medication.notes = notes
+        return medication
 
     def create_patient_allergy(
         self,
@@ -343,17 +430,67 @@ class SimulatorRepository:
         message: str,
         severity: str,
         created_at: datetime | None = None,
-    ) -> None:
-        db.add(
-            Alert(
-                patient_id=patient_id,
-                vital_id=vital_id,
-                alert_type=alert_type,
-                message=message,
-                severity=severity,
-                created_at=created_at or now_utc(),
-            )
+    ) -> Alert | None:
+        if patient_id is None:
+            return None
+
+        patient = db.get(Patient, patient_id)
+        if patient is None:
+            return None
+
+        alert = Alert(
+            patient_id=patient_id,
+            vital_id=vital_id,
+            alert_type=alert_type,
+            message=message,
+            severity=severity,
+            created_at=created_at or now_utc(),
         )
+        db.add(alert)
+        db.flush()
+        return alert
+
+    def cleanup_invalid_alerts(self, db) -> int:
+        invalid_alert_ids = db.execute(
+            select(Alert.id)
+            .outerjoin(Patient, Patient.id == Alert.patient_id)
+            .where((Alert.patient_id.is_(None)) | (Patient.id.is_(None)))
+        ).scalars().all()
+        if not invalid_alert_ids:
+            return 0
+
+        deleted = (
+            db.query(Alert)
+            .filter(Alert.id.in_(invalid_alert_ids))
+            .delete(synchronize_session=False)
+        )
+        return int(deleted or 0)
+
+    def normalize_medical_statuses(self, db) -> int:
+        updated = 0
+
+        diagnoses = db.query(PatientDiagnosis).all()
+        for diagnosis in diagnoses:
+            normalized = self._sanitize_diagnosis_status(diagnosis.status)
+            if diagnosis.status != normalized:
+                diagnosis.status = normalized
+                updated += 1
+
+        conditions = db.query(PatientCondition).all()
+        for condition in conditions:
+            normalized = self._sanitize_condition_status(condition.status)
+            if condition.status != normalized:
+                condition.status = normalized
+                updated += 1
+
+        assignments = db.query(PatientConditionAssignment).all()
+        for assignment in assignments:
+            normalized = self._sanitize_condition_status(assignment.status)
+            if assignment.status != normalized:
+                assignment.status = normalized
+                updated += 1
+
+        return updated
 
     def remove_patient_assignments(self, db, patient_id: int) -> None:
         db.execute(doctor_activity_patients.delete().where(doctor_activity_patients.c.patient_id == patient_id))
