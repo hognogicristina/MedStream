@@ -1,43 +1,42 @@
 import {useEffect, useState} from "react"
 import {Link, useNavigate, useSearchParams} from "react-router-dom"
-import {resendVerificationEmail, verifyEmailToken} from "../services/authApi.js"
+import {verifyRecoverAccountToken} from "../services/authApi.js"
 import {getErrorMessage} from "../services/apiMessages.js"
-import {VERIFICATION_LINK_EXPIRED_MESSAGE} from "../services/appMessages.js"
 import {useNotifications} from "../components/useNotifications.js"
 
-export default function VerifyEmailPage() {
+export default function RecoverAccountVerifyPage() {
   const navigate = useNavigate()
   const {notifySuccess, notifyError} = useNotifications()
   const [searchParams] = useSearchParams()
-  const token = searchParams.get("token")
+  const token = searchParams.get("token") || ""
   const [isLoading, setIsLoading] = useState(true)
-  const [showResendButton, setShowResendButton] = useState(false)
-  const [isResending, setIsResending] = useState(false)
   const [resultMessage, setResultMessage] = useState("")
 
   useEffect(() => {
     let active = true
 
-    const verify = async () => {
-      try {
-        await verifyEmailToken(token)
+    const verifyRecovery = async () => {
+      if (!token) {
+        setResultMessage("Invalid link.")
+        setIsLoading(false)
+        return
+      }
 
+      try {
+        await verifyRecoverAccountToken(token)
         if (!active) {
           return
         }
-
         setResultMessage("Email verified successfully.")
         notifySuccess("Email verified successfully.", {duration: 5000})
-        setShowResendButton(false)
       } catch (error) {
         if (!active) {
           return
         }
-
         const nextMessage = getErrorMessage(error)
+        const message = nextMessage.toLowerCase().includes("expired") ? "Verification link expired." : "Invalid link."
+        setResultMessage(message)
         notifyError(nextMessage, {duration: 5000})
-        setResultMessage(nextMessage === VERIFICATION_LINK_EXPIRED_MESSAGE ? "Verification link expired." : "Invalid link.")
-        setShowResendButton(nextMessage === VERIFICATION_LINK_EXPIRED_MESSAGE)
       } finally {
         if (active) {
           setIsLoading(false)
@@ -45,29 +44,12 @@ export default function VerifyEmailPage() {
       }
     }
 
-    verify()
+    verifyRecovery()
 
     return () => {
       active = false
     }
-  }, [navigate, notifyError, notifySuccess, token])
-
-  const handleResend = async () => {
-    if (isResending || !showResendButton) {
-      return
-    }
-
-    setIsResending(true)
-    try {
-      const response = await resendVerificationEmail({token})
-      setShowResendButton(false)
-      notifySuccess(getResponseMessage(response), {duration: 5000})
-    } catch (error) {
-      notifyError(getErrorMessage(error), {duration: 5000})
-    } finally {
-      setIsResending(false)
-    }
-  }
+  }, [token])
 
   return (
     <div className="app-shell login-page login-page-centered">
@@ -80,8 +62,8 @@ export default function VerifyEmailPage() {
                 {"Back home"}
               </Link>
             </div>
-            <h1 className="login-title">{"Email Verification"}</h1>
-            <p className="login-subtitle">{"Confirm your doctor account email using the secure verification link."}</p>
+            <h1 className="login-title">{"Account Recovery"}</h1>
+            <p className="login-subtitle">{"Validate your recovery link to reactivate your account."}</p>
           </aside>
 
           <div className="auth-divider" aria-hidden="true"/>
@@ -89,26 +71,14 @@ export default function VerifyEmailPage() {
 
           <div className="login-panel">
             <div className="login-header">
-              <p className="login-brand">{"Verification"}</p>
-              <h1 className="login-title">{"Verify Email"}</h1>
-              <p className="login-subtitle">{"Your verification request is being processed."}</p>
+              <p className="login-brand">{"Recovery"}</p>
+              <h1 className="login-title">{"Verify Recovery Link"}</h1>
+              <p className="login-subtitle">{"Your recovery verification request is being processed."}</p>
             </div>
-
             <div className="login-form">
               {isLoading && <p className="login-subtitle">Loading...</p>}
               {!isLoading && resultMessage && <p className="login-subtitle">{resultMessage}</p>}
-
               <div className="auth-actions">
-                {showResendButton && (
-                  <button
-                    type="button"
-                    className="login-button"
-                    disabled={isResending}
-                    onClick={handleResend}
-                  >
-                    {isResending ? "Sending..." : "Resend verification email"}
-                  </button>
-                )}
                 <button
                   type="button"
                   className="login-button"

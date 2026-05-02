@@ -26,6 +26,10 @@ def build_password_reset_link(token: str):
     return _build_frontend_link("/reset-password", token)
 
 
+def build_account_recovery_link(token: str):
+    return _build_frontend_link("/recover-account/verify", token)
+
+
 def _render_html_email(title: str, message: str, action_label: str, action_url: str):
     return f"""\
 <!doctype html>
@@ -120,4 +124,18 @@ def send_email_change_verification_email(email: str, first_name: str, token: str
         "Confirm your MedStream email change",
         f"{message}\n\nVerify Email: {action_url}",
         _render_html_email("Confirm Email Change", message, "Verify Email", action_url),
+    )
+
+
+def send_account_recovery_email(email: str, first_name: str, token: str):
+    action_url = build_account_recovery_link(token)
+    message = (
+        f"Hello Dr. {first_name}, we received a request to recover access to your MedStream account. "
+        "Use this secure link to continue to login."
+    )
+    send_email(
+        email,
+        "Recover your MedStream account",
+        f"{message}\n\nRecover Account: {action_url}",
+        _render_html_email("Recover Your Account", message, "Recover Account", action_url),
     )

@@ -3,8 +3,8 @@ import {Link, useSearchParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
 import CountValue from "../components/CountValue.jsx"
 import DataTable from "../components/DataTable.jsx"
-import {useNotifications} from "../components/NotificationProvider.jsx"
-import {api} from "../services/api.js"
+import {useNotifications} from "../components/useNotifications.js"
+import {getAlerts, listPatients} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import {formatPatientFullName} from "../utils/patients.js"
@@ -26,8 +26,8 @@ export default function AlertsPage() {
     const loadAlerts = async () => {
       try {
         const [alertsResponse, patientsResponse] = await Promise.all([
-          api.get("/alerts"),
-          api.get("/patients?page=1&limit=100"),
+          getAlerts(),
+          listPatients({page: 1, limit: 100}),
         ])
         setAlerts(getResponseData(alertsResponse))
         setPatients(getResponseData(patientsResponse))

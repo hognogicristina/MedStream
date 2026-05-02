@@ -1,9 +1,12 @@
 import {api} from "./api.js"
 
-export {api}
 
 export function listPatients(params) {
   return api.get("/patients", {params})
+}
+
+export function searchPatientsByCnp(cnp) {
+  return api.get("/patients/search", {params: {cnp}})
 }
 
 export function createPatient(payload) {
@@ -12,6 +15,10 @@ export function createPatient(payload) {
 
 export function getPatient(patientId) {
   return api.get(`/patients/${patientId}`)
+}
+
+export function getPatientTreatmentAnalysis(patientId) {
+  return api.get(`/patients/${patientId}/treatment-analysis`)
 }
 
 export function updatePatient(patientId, payload, headers) {
@@ -132,4 +139,66 @@ export function getConditionStatusOptions() {
 
 export function getActivityOptions() {
   return api.get("/options/activities")
+}
+
+export function getDepartments() {
+  return api.get("/departments")
+}
+
+export function getVitals() {
+  return api.get("/vitals")
+}
+
+export function getBatchMetrics() {
+  return api.get("/metrics/batch")
+}
+
+export function getStreamingMetrics() {
+  return api.get("/metrics/streaming")
+}
+
+export function getStreamingAlerts(page, pageSize) {
+  return api.get("/metrics/streaming-alerts", {
+    params: {page, page_size: pageSize},
+  })
+}
+
+export function getMetricsComparison() {
+  return api.get("/metrics/comparison")
+}
+
+export function getBatchInsights(params) {
+  return api.get("/metrics/batch-insights", {params})
+}
+
+export function getAlerts() {
+  return api.get("/alerts")
+}
+
+export function getAlertDashboardSummary() {
+  return api.get("/alerts/dashboard-summary")
+}
+
+export function getStats() {
+  return api.get("/stats")
+}
+
+export function getBatchStatusStats() {
+  return api.get("/stats/batch-status")
+}
+
+export function getBatchSchedule() {
+  return api.get("/batch/schedule")
+}
+
+export function updateBatchSchedule(payload) {
+  return api.post("/batch/schedule", payload)
+}
+
+export function runBatchNow() {
+  return api.post("/batch/run")
+}
+
+export function getBatchStatus() {
+  return api.get("/batch/status")
 }

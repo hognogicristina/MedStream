@@ -10,8 +10,14 @@ class PatientService:
     def list_patients(self, condition_id: int | None = None):
         return self.repository.list_patients(condition_id)
 
+    def search_patients_by_cnp(self, cnp: str):
+        return self.repository.search_patients_by_cnp(cnp)
+
     def get_patient(self, patient_id: int):
         return self.repository.get_patient(patient_id)
+
+    def get_patient_treatment_analysis(self, patient_id: int):
+        return self.repository.get_patient_treatment_analysis(patient_id)
 
     def get_patient_doctors(self, patient_id: int):
         return self.repository.get_patient_doctors(patient_id)

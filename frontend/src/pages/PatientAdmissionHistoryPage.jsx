@@ -2,11 +2,12 @@ import {useCallback, useEffect, useState} from "react"
 import {Link, useParams} from "react-router-dom"
 
 import BackButton from "../components/BackButton.jsx"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import PatientAdmissionActionCard from "../components/PatientAdmissionActionCard.jsx"
-import {useNotifications} from "../components/NotificationProvider.jsx"
+import {useNotifications} from "../components/useNotifications.js"
 import {usePatientAdmissionActions} from "../hooks/usePatientAdmissionActions.js"
 import {useAuth} from "../components/AuthContext.jsx"
-import {api} from "../services/patientApi.js"
+import {getPatient, getPatientAdmissionHistory} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 
 function formatDateTime(value) {
@@ -47,8 +48,8 @@ export default function PatientAdmissionHistoryPage() {
 
     try {
       const [patientResponse, historyResponse] = await Promise.all([
-        api.get(`/patients/${id}`),
-        api.get(`/patients/${id}/admission-history?page=${nextPage}&page_size=${pageSize}`),
+        getPatient(id),
+        getPatientAdmissionHistory(id, nextPage, pageSize),
       ])
 
       setPatient(getResponseData(patientResponse))
@@ -107,6 +108,7 @@ export default function PatientAdmissionHistoryPage() {
           </div>
         </header>
 
+        {isLoading ? <LoadingSpinner/> : (
         <section className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
           <div className="monitor-card rounded-[28px] p-6">
             <div className="mb-5 flex items-center justify-between gap-3">
@@ -190,6 +192,7 @@ export default function PatientAdmissionHistoryPage() {
             isSubmittingReadmit={admissionActions.isSubmittingReadmit}
           />
         </section>
+        )}
       </div>
     </div>
   )

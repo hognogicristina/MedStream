@@ -69,8 +69,8 @@ def get_batch_insights_endpoint(
         {
             "patients_per_department": insights["patients_per_department"],
             "top_diagnosis": insights["top_diagnosis"],
-            "medication_distribution": insights["medication_distribution"],
             "treatment_effectiveness": insights["treatment_effectiveness"],
+            "medication_effectiveness": insights["medication_effectiveness"],
         },
     )
 

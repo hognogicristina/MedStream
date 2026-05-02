@@ -5,8 +5,17 @@ import BackButton from "../components/BackButton.jsx"
 import DepartmentTransferDialog from "../components/DepartmentTransferDialog.jsx"
 import EditPatientDialog from "../components/EditPatientDialog.jsx"
 import VitalsChart from "../components/VitalsChart.jsx"
-import {useNotifications} from "../components/NotificationProvider.jsx"
-import {api} from "../services/patientApi.js"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import {useNotifications} from "../components/useNotifications.js"
+import {
+  getBatchMetrics,
+  getPatient,
+  getPatientDoctors,
+  getVitals,
+  updatePatient,
+  updatePatientDepartment,
+} from "../services/patientApi.js"
+import {assignPatientToDoctor, getCurrentDoctor, listDoctors, removePatientFromDoctor} from "../services/doctorApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import {formatPatientPhoneWithCode} from "../utils/patientPhone.js"
@@ -91,9 +100,7 @@ export default function PatientPage() {
     const fetchMe = async () => {
       if (!token) return
       try {
-        const res = await api.get("/doctors/me", {
-          headers: {Authorization: `Bearer ${token}`}
-        })
+        const res = await getCurrentDoctor({Authorization: `Bearer ${token}`})
         setCurrentDoctor(getResponseData(res))
       } catch (error) {
         console.error("Failed to load current doctor", error)
@@ -107,13 +114,13 @@ export default function PatientPage() {
     setIsLoadingDoctors(true)
 
     try {
-      const response = await api.get(`/patients/${id}`)
+      const response = await getPatient(id)
       const patientData = getResponseData(response)
       setPatient(patientData)
       setDepartment(patientData.department)
       const [patientDoctorsResult, doctorsResult] = await Promise.allSettled([
-        api.get(`/patients/${id}/doctors`),
-        api.get("/doctors"),
+        getPatientDoctors(id),
+        listDoctors(),
       ])
 
       if (patientDoctorsResult.status === "fulfilled") {
@@ -147,7 +154,7 @@ export default function PatientPage() {
   useEffect(() => {
     const loadPatientVitals = async () => {
       try {
-        const vitalsResponse = await api.get("/vitals")
+        const vitalsResponse = await getVitals()
         const allVitals = getResponseData(vitalsResponse) || []
         const patientVitals = allVitals
           .filter((vital) => String(vital.patient_id) === id)
@@ -170,7 +177,7 @@ export default function PatientPage() {
 
     const loadBatchMetrics = async () => {
       try {
-        const response = await api.get("/metrics/batch")
+        const response = await getBatchMetrics()
         if (!active) {
           return
         }
@@ -223,12 +230,10 @@ export default function PatientPage() {
     setIsUpdatingDepartment(true)
 
     try {
-      const response = await api.patch(`/patients/${id}/department`, {
+      const response = await updatePatientDepartment(id, {
         department: nextDepartment,
         reason,
-      }, {
-        headers: authHeaders,
-      })
+      }, authHeaders)
 
       const patientData = getResponseData(response)
       setDepartment(patientData.department)
@@ -238,7 +243,7 @@ export default function PatientPage() {
 
       if (nextDoctorId) {
         try {
-          await api.post(`/doctors/${nextDoctorId}/patients/${id}`, null, {headers: authHeaders})
+          await assignPatientToDoctor(nextDoctorId, id, authHeaders)
         } catch (e) {
           notifyError(getErrorMessage(e))
         }
@@ -248,14 +253,14 @@ export default function PatientPage() {
       await Promise.allSettled(
         oldDepartmentDocs.map(async (doc) => {
           try {
-            await api.delete(`/doctors/${doc.id}/patients/${id}`, {headers: authHeaders})
+            await removePatientFromDoctor(doc.id, id, authHeaders)
           } catch (e) {
             notifyError(getErrorMessage(e))
           }
         })
       )
 
-      const doctorsResponse = await api.get(`/patients/${id}/doctors`)
+      const doctorsResponse = await getPatientDoctors(id)
       setDoctors(getResponseData(doctorsResponse) || [])
     } catch (error) {
       notifyError(getErrorMessage(error))
@@ -268,9 +273,7 @@ export default function PatientPage() {
     setIsSavingPatient(true)
 
     try {
-      const response = await api.patch(`/patients/${id}`, payload, {
-        headers: authHeaders,
-      })
+      const response = await updatePatient(id, payload, authHeaders)
       const patientData = getResponseData(response)
       setPatient(patientData)
       setDepartment(patientData.department)
@@ -287,11 +290,9 @@ export default function PatientPage() {
     if (!currentDoctor || !patient || currentDoctor.specialization !== patient.department) return
 
     try {
-      const assignResponse = await api.post(`/doctors/${currentDoctor.id}/patients/${patient.id}`, null, {
-        headers: authHeaders,
-      })
+      const assignResponse = await assignPatientToDoctor(currentDoctor.id, patient.id, authHeaders)
       notifySuccess(getResponseMessage(assignResponse))
-      const response = await api.get(`/patients/${id}/doctors`)
+      const response = await getPatientDoctors(id)
       setDoctors(getResponseData(response) || [])
     } catch (error) {
       notifyError(getErrorMessage(error))
@@ -380,6 +381,16 @@ export default function PatientPage() {
     {label: "Address", value: patientStreetAddress || "--", isWide: true},
   ]
 
+  if (isLoadingPatient) {
+    return (
+      <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+          <LoadingSpinner/>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -461,6 +472,13 @@ export default function PatientPage() {
                   className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#b8f5c8] transition hover:text-white"
                 >
                   Admission history
+                </Link>
+
+                <Link
+                  to={`/patients/${id}/analysis`}
+                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#c084fc] transition hover:border-[#a855f7] hover:text-[#d8b4fe]"
+                >
+                  TREATMENT ANALYSIS
                 </Link>
               </div>
 

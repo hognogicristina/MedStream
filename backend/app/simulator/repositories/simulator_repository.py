@@ -248,7 +248,20 @@ class SimulatorRepository:
     def get_patient(self, db, patient_id: int) -> Patient | None:
         return db.get(Patient, patient_id)
 
-    def mark_patient_discharged(self, patient: Patient, reason: str, discharged_at: datetime | None = None) -> None:
+    def cancel_incoming_patient_activities(self, db, patient_id: int) -> None:
+        activities = (
+            db.query(DoctorActivity)
+            .filter(
+                DoctorActivity.patient_id == patient_id,
+                DoctorActivity.status == "incoming",
+            )
+            .all()
+        )
+        for activity in activities:
+            activity.status = "canceled"
+
+    def mark_patient_discharged(self, db, patient: Patient, reason: str, discharged_at: datetime | None = None) -> None:
+        self.cancel_incoming_patient_activities(db, patient.id)
         patient.is_discharged = True
         patient.discharge_date = discharged_at or now_utc()
         patient.discharge_reason = reason
@@ -268,6 +281,16 @@ class SimulatorRepository:
             )
             .count()
         )
+
+    def doctor_has_incoming_activities(self, db, doctor_id: int) -> bool:
+        return (
+            db.query(DoctorActivity)
+            .filter(
+                DoctorActivity.doctor_id == doctor_id,
+                DoctorActivity.status == "incoming",
+            )
+            .count()
+        ) > 0
 
     def get_assigned_doctors_for_patient_department(self, db, patient_id: int, department: str) -> list[Doctor]:
         links = db.execute(

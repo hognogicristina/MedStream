@@ -1,14 +1,28 @@
-/* eslint-disable react-refresh/only-export-components */
-import {createContext, useCallback, useContext, useEffect, useMemo, useRef, useState} from "react"
+import {createContext, useCallback, useEffect, useMemo, useRef, useState} from "react"
 
-const NotificationContext = createContext(null)
-const DEFAULT_NOTIFICATION_DURATION = 4000
+export const NotificationContext = createContext(null)
+const DEFAULT_NOTIFICATION_DURATION = 5000
 const MAX_NOTIFICATIONS = 4
+
+function resolveDurationOptions(durationOrOptions) {
+  if (typeof durationOrOptions === "number") {
+    return {duration: durationOrOptions}
+  }
+  if (durationOrOptions && typeof durationOrOptions === "object") {
+    return durationOrOptions
+  }
+  return {}
+}
 
 export function NotificationProvider({children}) {
   const [notifications, setNotifications] = useState([])
+  const notificationsRef = useRef([])
   const timeoutIdsRef = useRef(new Map())
   const nextIdRef = useRef(0)
+
+  useEffect(() => {
+    notificationsRef.current = notifications
+  }, [notifications])
 
   useEffect(() => () => {
     timeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
@@ -39,16 +53,21 @@ export function NotificationProvider({children}) {
     }
 
     const nextDedupeKey = dedupeKey || `${type}:${message}`
-    let isDuplicate = false
-    let createdNotificationId = ""
-    setNotifications((current) => {
-      isDuplicate = current.some((notification) => notification.dedupeKey === nextDedupeKey)
-      if (isDuplicate) {
-        return current
+    const existingNotification = notificationsRef.current.find((notification) => notification.dedupeKey === nextDedupeKey)
+
+    if (existingNotification) {
+      const existingTimeoutId = timeoutIdsRef.current.get(existingNotification.id)
+      if (existingTimeoutId) {
+        window.clearTimeout(existingTimeoutId)
+        timeoutIdsRef.current.delete(existingNotification.id)
       }
-      createdNotificationId = `notification-${nextIdRef.current += 1}`
-      return [...current, {
-        id: createdNotificationId,
+    }
+
+    const id = `notification-${nextIdRef.current += 1}`
+    setNotifications((current) => {
+      const filtered = current.filter((notification) => notification.dedupeKey !== nextDedupeKey)
+      return [...filtered, {
+        id,
         message,
         type,
         actionLabel,
@@ -57,32 +76,25 @@ export function NotificationProvider({children}) {
       }].slice(-MAX_NOTIFICATIONS)
     })
 
-    if (isDuplicate) {
-      return
-    }
-    if (!createdNotificationId) {
-      return
-    }
-
     if (duration > 0) {
       const timeoutId = window.setTimeout(() => {
-        dismissNotification(createdNotificationId)
+        dismissNotification(id)
       }, duration)
 
-      timeoutIdsRef.current.set(createdNotificationId, timeoutId)
+      timeoutIdsRef.current.set(id, timeoutId)
     }
   }, [dismissNotification])
 
   const contextValue = useMemo(() => ({
     notify: showNotification,
-    notifySuccess(message, duration) {
-      showNotification({message, type: "success", duration})
+    notifySuccess(message, options) {
+      showNotification({message, type: "success", ...resolveDurationOptions(options), duration: 5000})
     },
-    notifyError(message, duration) {
-      showNotification({message, type: "error", duration})
+    notifyError(message, options) {
+      showNotification({message, type: "error", ...resolveDurationOptions(options), duration: 5000})
     },
-    notifyWarning(message, duration, options = {}) {
-      showNotification({message, type: "warning", duration, ...options})
+    notifyWarning(message, options = {}) {
+      showNotification({message, type: "warning", ...resolveDurationOptions(options), duration: 5000})
     },
     dismissNotification,
   }), [dismissNotification, showNotification])
@@ -125,14 +137,4 @@ export function NotificationProvider({children}) {
       </div>
     </NotificationContext.Provider>
   )
-}
-
-export function useNotifications() {
-  const context = useContext(NotificationContext)
-
-  if (!context) {
-    throw new Error("useNotifications must be used within a NotificationProvider")
-  }
-
-  return context
 }

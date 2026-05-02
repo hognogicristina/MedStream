@@ -1,12 +1,12 @@
 import {useState} from "react"
 import {Link} from "react-router-dom"
-import {api} from "../services/authApi.js"
+import {requestAccountRecovery} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
+import {useNotifications} from "../components/useNotifications.js"
 
 export default function RecoverAccountPage() {
+  const {notifySuccess, notifyError} = useNotifications()
   const [identifier, setIdentifier] = useState("")
-  const [message, setMessage] = useState("")
-  const [isError, setIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const canRecoverAccount = identifier.trim().length > 0
 
@@ -15,19 +15,15 @@ export default function RecoverAccountPage() {
     if (!canRecoverAccount || isSubmitting) {
       return
     }
-    setMessage("")
-    setIsError(false)
     setIsSubmitting(true)
 
     try {
-      const response = await api.post("/doctors/account-recovery/request", {
+      const response = await requestAccountRecovery({
         identifier,
       })
-      setMessage(getResponseMessage(response))
-      setIsError(false)
+      notifySuccess(getResponseMessage(response), {duration: 5000})
     } catch (error) {
-      setMessage(getErrorMessage(error))
-      setIsError(true)
+      notifyError(getErrorMessage(error), {duration: 5000})
     } finally {
       setIsSubmitting(false)
     }
@@ -82,12 +78,6 @@ export default function RecoverAccountPage() {
                   required
                 />
               </div>
-
-              {message && (
-                <p className={isError ? "login-error" : "login-success"}>
-                  {message}
-                </p>
-              )}
 
               <div className="auth-actions">
                 <button

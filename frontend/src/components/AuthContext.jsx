@@ -1,6 +1,5 @@
-/* eslint-disable react-refresh/only-export-components */
 import {createContext, useContext, useEffect, useMemo, useState} from "react"
-import {api} from "../services/api.js"
+import {getCurrentDoctor} from "../services/doctorApi.js"
 
 const AUTH_STORAGE_KEY = "medstream_token"
 
@@ -25,9 +24,7 @@ export function AuthProvider({children}) {
 
     const validateToken = async () => {
       try {
-        await api.get("/doctors/me", {
-          headers: {Authorization: `Bearer ${token}`},
-        })
+        await getCurrentDoctor({Authorization: `Bearer ${token}`})
         if (!active) {
           return
         }

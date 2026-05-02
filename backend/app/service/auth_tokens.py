@@ -24,7 +24,7 @@ def _b64url_decode(value: str) -> bytes:
     try:
         padding = "=" * (-len(value) % 4)
         return base64.urlsafe_b64decode(value + padding)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise AuthorizationError("INVALID_TOKEN") from error
 
 
@@ -58,7 +58,7 @@ def parse_access_token(token: str) -> int:
 
     try:
         payload = json.loads(_b64url_decode(payload_segment).decode("utf-8"))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise AuthorizationError("INVALID_TOKEN") from error
 
     if payload.get("sub") != "doctor":

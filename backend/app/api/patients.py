@@ -33,6 +33,7 @@ from app.schemas.patient_diagnosis import (
     PatientDiagnosisUpdate,
 )
 from app.schemas.patient_medication import MedicationUpdate, PatientMedicationCreate, PatientMedicationRead
+from app.schemas.patient_treatment_analysis import PatientSearchResultRead, PatientTreatmentAnalysisRead
 from app.service.medical_history import (
     ACTIVITY_TYPES,
     ALLERGIES,
@@ -89,7 +90,24 @@ def list_patients(condition_id: int | None = Query(default=None, ge=1)):
     try:
         patients = patient_service.list_patients(condition_id)
         return success_response("Patients retrieved successfully.", serialize_many(patients, PatientRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
+        raise_http_from_error(error)
+
+
+@router.get("/search", response_model=ApiResponse[list[PatientSearchResultRead]])
+def search_patients(cnp: str = Query(default="", min_length=1, max_length=32)):
+    try:
+        patients = patient_service.search_patients_by_cnp(cnp)
+        payload = [
+            {
+                "id": patient.id,
+                "cnp": patient.cnp,
+                "full_name": f"{patient.last_name} {patient.first_name}".strip(),
+            }
+            for patient in patients
+        ]
+        return success_response("Patient search completed successfully.", payload)
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -98,7 +116,16 @@ def get_patient(id: int):
     try:
         patient = patient_service.get_patient(id)
         return success_response("Patient retrieved successfully.", serialize(patient, PatientRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
+        raise_http_from_error(error)
+
+
+@router.get("/{id}/treatment-analysis", response_model=ApiResponse[PatientTreatmentAnalysisRead])
+def get_patient_treatment_analysis(id: int):
+    try:
+        analysis = patient_service.get_patient_treatment_analysis(id)
+        return success_response("Patient treatment analysis retrieved successfully.", analysis)
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -107,7 +134,7 @@ def get_patient_doctors(id: int):
     try:
         doctors = patient_service.get_patient_doctors(id)
         return success_response("Patient doctors retrieved successfully.", serialize_many(doctors, DoctorRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -119,7 +146,7 @@ def create_patient(payload: PatientCreate, authorization: str | None = Header(de
     try:
         patient = patient_service.create_patient(payload.model_dump(), current_doctor.id if current_doctor else None)
         return success_response("Patient created successfully.", serialize(patient, PatientRead), status_code=201)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -129,7 +156,7 @@ def update_patient(id: int, payload: PatientUpdate, authorization: str | None = 
     try:
         patient = patient_service.update_patient(id, current_doctor.id, payload.model_dump(exclude_unset=True))
         return success_response("Patient updated successfully.", serialize(patient, PatientRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -139,7 +166,7 @@ def update_patient_department(id: int, payload: PatientDepartmentUpdate, authori
     try:
         patient = patient_service.update_patient_department(id, current_doctor.id, payload.department, payload.reason)
         return success_response("Patient department updated successfully.", serialize(patient, PatientRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -149,7 +176,7 @@ def discharge_patient(id: int, payload: PatientDischargeUpdate, authorization: s
     try:
         patient = patient_service.discharge_patient(id, current_doctor.id, payload.type, payload.reason)
         return success_response("Patient discharged successfully.", serialize(patient, PatientRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -164,7 +191,7 @@ def readmit_patient(id: int, payload: PatientAdmissionActionCreate, authorizatio
             payload.arrival_method,
         )
         return success_response("Patient readmitted successfully.", serialize(patient, PatientRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -179,7 +206,7 @@ def transfer_patient(id: int, payload: PatientTransferRequest, authorization: st
             payload.to_doctor_id,
         )
         return success_response("Patient transferred successfully.", serialize(patient, PatientRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -195,7 +222,7 @@ def get_patient_admission_history(
             "Patient admission history retrieved successfully.",
             build_paginated_payload(entries, total, page, page_size, PatientAdmissionHistoryRead),
         )
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -204,7 +231,7 @@ def get_patient_conditions(id: int):
     try:
         rows = patient_service.get_patient_conditions(id)
         return success_response("Patient conditions retrieved successfully.", serialize_condition_rows(rows))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -214,7 +241,7 @@ def assign_patient_condition(id: int, payload: PatientConditionAssignmentCreate,
     try:
         rows = patient_service.assign_patient_condition(id, payload.condition_id, current_doctor.id)
         return success_response("Patient condition assigned successfully.", serialize_condition_rows(rows))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -224,7 +251,7 @@ def update_condition_assignment(assignment_id: int, payload: ConditionUpdate, au
     try:
         assignment = patient_service.update_condition_assignment(assignment_id, current_doctor.id, payload.status, payload.notes)
         return success_response("Condition updated successfully.", serialize(assignment, PatientConditionAssignmentRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -236,7 +263,7 @@ def get_patient_allergies(id: int, page: int = Query(1, ge=1), page_size: int = 
             "Patient allergies retrieved successfully.",
             build_paginated_payload(allergies, total, page, page_size, PatientAllergyRead),
         )
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -246,7 +273,7 @@ def create_patient_allergy(id: int, payload: PatientAllergyCreate, authorization
     try:
         allergy = patient_service.create_patient_allergy(id, current_doctor.id, payload.allergy_name, payload.severity)
         return success_response("Patient allergy added successfully.", serialize(allergy, PatientAllergyRead), status_code=201)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -258,7 +285,7 @@ def get_patient_diagnosis(id: int, page: int = Query(1, ge=1), page_size: int = 
             "Patient diagnosis retrieved successfully.",
             build_paginated_payload(diagnosis_entries, total, page, page_size, PatientDiagnosisRead),
         )
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -272,7 +299,7 @@ def create_patient_diagnosis(id: int, payload: PatientDiagnosisCreate, authoriza
             serialize(diagnosis_entry, PatientDiagnosisRead),
             status_code=201,
         )
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -282,7 +309,7 @@ def update_patient_diagnosis(diagnosis_id: int, payload: PatientDiagnosisUpdate,
     try:
         diagnosis = patient_service.update_patient_diagnosis(diagnosis_id, current_doctor.id, payload.status, payload.note)
         return success_response("Diagnosis updated successfully.", serialize(diagnosis, PatientDiagnosisRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -299,7 +326,7 @@ def administer_medication(id: int, payload: PatientMedicationCreate, authorizati
             payload.notes,
         )
         return success_response("Medication administered successfully.", serialize(medication, PatientMedicationRead), status_code=201)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -308,7 +335,7 @@ def get_patient_medications(id: int):
     try:
         meds = patient_service.get_patient_medications(id)
         return success_response("Patient medications retrieved successfully.", serialize_many(meds, PatientMedicationRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -317,7 +344,7 @@ def get_patient_activities(id: int):
     try:
         activities = patient_service.get_patient_activities(id)
         return success_response("Patient activities retrieved successfully.", serialize_activities(activities))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -333,7 +360,7 @@ def update_medication(medication_id: int, payload: MedicationUpdate, authorizati
             payload.note,
         )
         return success_response("Medication updated successfully.", serialize(medication, PatientMedicationRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -343,7 +370,7 @@ def update_patient_allergy(allergy_id: int, payload: PatientAllergyUpdate, autho
     try:
         allergy = patient_service.update_patient_allergy(allergy_id, current_doctor.id, payload.severity)
         return success_response("Allergy updated successfully.", serialize(allergy, PatientAllergyRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -373,7 +400,7 @@ def get_condition_options():
     try:
         conditions = patient_service.get_condition_options()
         return success_response("Condition options", serialize_many(conditions, PatientConditionRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 

@@ -1,4 +1,3 @@
-from datetime import timedelta
 from threading import Lock
 
 from app.utils.datetime import now_utc, to_utc
@@ -98,7 +97,3 @@ batch_status_store = BatchStatusStore()
 
 def utc_now():
     return now_utc()
-
-
-def next_run_from(reference_time, interval_seconds):
-    return reference_time + timedelta(seconds=interval_seconds)

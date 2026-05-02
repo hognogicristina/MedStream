@@ -1,6 +1,5 @@
 import {api} from "./api.js"
 
-export {api}
 
 export function loginDoctor(payload) {
   return api.post("/doctors/login", payload)
@@ -23,7 +22,11 @@ export function verifyEmailToken(token) {
 }
 
 export function requestAccountRecovery(payload) {
-  return api.post("/doctors/account-recovery/request", payload)
+  return api.post("/auth/recover-account", payload)
+}
+
+export function verifyRecoverAccountToken(token) {
+  return api.get("/auth/recover-account/verify", {params: {token}})
 }
 
 export function resendVerificationEmail({headers, token} = {}) {

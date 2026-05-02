@@ -1,6 +1,6 @@
 import {useCallback, useState} from "react"
 
-import {api} from "../services/patientApi.js"
+import {dischargePatient, getDischargeTypes, readmitPatient} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 
 export function usePatientAdmissionActions({authHeaders = {}, patientId, onPatientChange, onHistoryRefresh, notifyError, notifySuccess}) {
@@ -13,7 +13,7 @@ export function usePatientAdmissionActions({authHeaders = {}, patientId, onPatie
 
   const loadDischargeTypes = useCallback(async () => {
     try {
-      const response = await api.get("/discharge-types")
+      const response = await getDischargeTypes()
       const nextTypes = getResponseData(response) || []
       setDischargeTypes(nextTypes)
       setDischargeType((current) => current || nextTypes[0] || "")
@@ -32,12 +32,10 @@ export function usePatientAdmissionActions({authHeaders = {}, patientId, onPatie
     setIsSubmittingDischarge(true)
 
     try {
-      const response = await api.patch(`/patients/${patientId}/discharge`, {
+      const response = await dischargePatient(patientId, {
         type: dischargeType,
         reason: dischargeReason,
-      }, {
-        headers: authHeaders,
-      })
+      }, authHeaders)
       onPatientChange(getResponseData(response))
       setDischargeReason("")
       setDischargeType((current) => current)
@@ -60,11 +58,9 @@ export function usePatientAdmissionActions({authHeaders = {}, patientId, onPatie
     setIsSubmittingReadmit(true)
 
     try {
-      const response = await api.post(`/patients/${patientId}/readmit`, {
+      const response = await readmitPatient(patientId, {
         arrival_method: readmitArrivalMethod,
-      }, {
-        headers: authHeaders,
-      })
+      }, authHeaders)
       onPatientChange(getResponseData(response))
       setReadmitArrivalMethod("self")
       await onHistoryRefresh?.()

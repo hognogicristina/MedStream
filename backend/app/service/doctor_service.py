@@ -37,6 +37,9 @@ class DoctorService:
     def request_account_recovery(self, payload):
         return self.repository.request_account_recovery(payload)
 
+    def verify_account_recovery(self, token: str):
+        return self.repository.verify_account_recovery(token)
+
     def confirm_password_reset(self, payload):
         return self.repository.confirm_password_reset(payload)
 

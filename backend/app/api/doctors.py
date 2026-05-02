@@ -43,7 +43,7 @@ def serialize_many(models, schema):
 def get_current_doctor(authorization: str | None):
     try:
         return doctor_service.get_current_doctor(authorization)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -52,7 +52,7 @@ def list_doctors():
     try:
         doctors = doctor_service.list_doctors()
         return success_response("Doctors retrieved successfully.", serialize_many(doctors, DoctorRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -74,7 +74,7 @@ def get_doctor_activities(doctor_id: int):
             "Doctor activities retrieved successfully.",
             [serialize_activity(activity) for activity in activities],
         )
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -84,7 +84,7 @@ def create_doctor_activity(doctor_id: int, payload: DoctorActivityCreate, author
     try:
         activity = doctor_service.create_doctor_activity(doctor_id, payload, current_doctor.id)
         return success_response("Doctor activity added successfully.", serialize_activity(activity), status_code=201)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -100,7 +100,7 @@ def update_doctor_activity(
         activity, updated_fields = doctor_service.update_doctor_activity(doctor_id, activity_id, payload, current_doctor.id)
         message = "Doctor activity updated successfully." if not updated_fields else f"Doctor activity updated successfully. Updated: {', '.join(updated_fields)}."
         return success_response(message, serialize_activity(activity))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -110,7 +110,7 @@ def update_current_doctor(payload: DoctorUpdate, authorization: str | None = Hea
     try:
         doctor = doctor_service.update_current_doctor(current_doctor.id, payload)
         return success_response("Doctor profile updated successfully.", serialize(doctor, DoctorRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -131,7 +131,7 @@ def update_current_doctor_email(
                 raw_token,
             )
         return success_response("Doctor email update requested successfully.", serialize(doctor, DoctorRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -145,7 +145,7 @@ def request_password_reset(payload: PasswordResetRequest):
             expires_at=expires_at,
         )
         return success_response(response.message, response.model_dump(mode="json"))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -159,7 +159,31 @@ def request_account_recovery(payload: PasswordResetRequest):
             expires_at=expires_at,
         )
         return success_response(response.message, response.model_dump(mode="json"))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
+        raise_http_from_error(error)
+
+
+@auth_router.post("/auth/recover-account", response_model=ApiResponse[AccountRecoveryRequestResponse])
+def auth_recover_account(payload: PasswordResetRequest):
+    try:
+        expires_at = doctor_service.request_account_recovery(payload)
+        response = AccountRecoveryRequestResponse(
+            message="If the account exists, recovery instructions were sent successfully.",
+            recovery_token="",
+            expires_at=expires_at,
+        )
+        return success_response(response.message, response.model_dump(mode="json"))
+    except Exception as error:
+        raise_http_from_error(error)
+
+
+@auth_router.get("/auth/recover-account/verify", response_model=ApiResponse[EmailVerificationResponse])
+def verify_recover_account(token: str | None = Query(default=None)):
+    try:
+        doctor_service.verify_account_recovery(token or "")
+        response = EmailVerificationResponse(message="Account recovered successfully.")
+        return success_response(response.message, response.model_dump(mode="json"))
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -169,7 +193,7 @@ def confirm_password_reset(payload: PasswordResetConfirm):
         doctor_service.confirm_password_reset(payload)
         response = PasswordResetConfirmResponse(message="Password reset successful.")
         return success_response(response.message, response.model_dump(mode="json"))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -178,7 +202,7 @@ def get_doctor_activity_patients(doctor_id: int):
     try:
         patients = doctor_service.get_doctor_patients(doctor_id)
         return success_response("Doctor patients retrieved successfully.", serialize_many(patients, PatientRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -187,7 +211,7 @@ def get_available_doctors(department: str = Query(...), exclude_doctor_id: int =
     try:
         doctors = doctor_service.get_available_doctors_by_department(department, exclude_doctor_id)
         return success_response("Available doctors retrieved successfully.", serialize_many(doctors, DoctorRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -197,7 +221,7 @@ def delete_doctor(doctor_id: int, authorization: str | None = Header(default=Non
     try:
         doctor = doctor_service.delete_doctor(doctor_id, current_doctor.id)
         return success_response("Doctor account deactivated successfully.", serialize(doctor, DoctorRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -207,7 +231,7 @@ def assign_patient_to_doctor(doctor_id: int, patient_id: int, authorization: str
     try:
         patients = doctor_service.assign_patient_to_doctor(doctor_id, patient_id, current_doctor.id)
         return success_response("Patient assigned to doctor successfully.", serialize_many(patients, PatientRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -217,7 +241,7 @@ def remove_patient_from_doctor(doctor_id: int, patient_id: int):
         patients, removed = doctor_service.remove_patient_from_doctor(doctor_id, patient_id)
         message = "Patient removed from doctor successfully." if removed else "Doctor patients retrieved successfully."
         return success_response(message, serialize_many(patients, PatientRead))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -226,7 +250,7 @@ def create_doctor(payload: DoctorCreate):
     try:
         doctor = doctor_service.register_doctor(payload)
         return success_response("Doctor account created successfully.", serialize(doctor, DoctorRead), status_code=201)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -236,7 +260,7 @@ def login(payload: LoginRequest):
         token = doctor_service.login_doctor(payload)
         response = LoginResponse(token=token)
         return success_response("Login successful.", response.model_dump(mode="json"))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -250,7 +274,7 @@ def register(payload: DoctorCreate):
     try:
         doctor = doctor_service.register_doctor(payload)
         return success_response("Doctor account created successfully. Please verify your email.", serialize(doctor, DoctorRead), status_code=201)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -260,7 +284,7 @@ def verify_email(token: str | None = Query(default=None)):
         doctor_service.verify_email(token)
         response = EmailVerificationResponse(message="Email verified successfully.")
         return success_response(response.message, response.model_dump(mode="json"))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 
@@ -274,7 +298,7 @@ def resend_verification_email(
         doctor_service.resend_verification_email(current_doctor.id if current_doctor else None, token)
         response = EmailVerificationResponse(message="Verification email sent.")
         return success_response(response.message, response.model_dump(mode="json"))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         raise_http_from_error(error)
 
 

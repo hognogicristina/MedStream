@@ -32,5 +32,5 @@ class BatchScheduler:
             time.sleep(self.config.batch_interval_seconds)
             try:
                 self.batch_service.run_batch_analytics_job()
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 print("Batch scheduler error:", error)

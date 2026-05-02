@@ -1,8 +1,9 @@
 import {useCallback, useEffect, useState} from "react"
 import {useParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
-import {useNotifications} from "../components/NotificationProvider.jsx"
-import {api} from "../services/patientApi.js"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import {useNotifications} from "../components/useNotifications.js"
+import {createPatientDiagnosis, getPatient, getPatientDiagnosis} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 
 function formatDateTime(value) {
@@ -39,8 +40,8 @@ export default function PatientDiagnosisPage() {
 
     try {
       const [patientResponse, diagnosisResponse] = await Promise.all([
-        api.get(`/patients/${id}`),
-        api.get(`/patients/${id}/diagnosis?page=${page}&page_size=${pageSize}`),
+        getPatient(id),
+        getPatientDiagnosis(id, page, pageSize),
       ])
 
       setPatient(getResponseData(patientResponse))
@@ -73,7 +74,7 @@ export default function PatientDiagnosisPage() {
     setIsSubmitting(true)
 
     try {
-      await api.post(`/patients/${id}/diagnosis`, {
+      const response = await createPatientDiagnosis(id, {
         diagnosis: form.diagnosis,
         notes: form.notes.trim() || null,
       })
@@ -114,6 +115,7 @@ export default function PatientDiagnosisPage() {
           </div>
         </header>
 
+        {isLoading ? <LoadingSpinner/> : (
         <section className="grid gap-6 xl:grid-cols-[0.95fr_1.25fr]">
           <div className="monitor-card rounded-[28px] p-6">
             <div className="mb-5">
@@ -210,6 +212,7 @@ export default function PatientDiagnosisPage() {
             </ul>
           </div>
         </section>
+        )}
       </div>
     </div>
   )

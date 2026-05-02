@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from app.core.errors import NotFoundError, ValidationError
 from passlib.context import CryptContext
-from sqlalchemy import or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -22,11 +22,19 @@ from app.api.activity_utils import (
 from app.db.session import SessionLocal
 from app.models.doctor.doctor import Doctor
 from app.models.doctor.doctor_activity import DoctorActivity
+from app.models.doctor.doctor_account_recovery import DoctorAccountRecovery
 from app.models.doctor.doctor_email_verification import DoctorEmailVerification
 from app.models.doctor.doctor_password_reset import DoctorPasswordReset
 from app.models.patient import Patient
-from app.repositories.auth_repository import TOKEN_TTL, create_email_verification_token, create_password_reset_token, hash_token
+from app.repositories.auth_repository import (
+    TOKEN_TTL,
+    create_account_recovery_token,
+    create_email_verification_token,
+    create_password_reset_token,
+    hash_token,
+)
 from app.repositories.notification_repository import (
+    send_account_recovery_email,
     send_email_change_verification_email,
     send_password_reset_email,
     send_registration_verification_email,
@@ -47,6 +55,7 @@ from app.validators.doctor_validators import (
     validate_doctor_email,
     validate_doctor_identifier_match,
     validate_doctor_patient_department_match,
+    validate_doctor_has_no_incoming_activities,
     validate_doctor_self_action,
     validate_doctor_status,
     validate_doctor_uniqueness,
@@ -67,6 +76,7 @@ class DoctorRepository:
                 select(DoctorEmailVerification)
                 .where(DoctorEmailVerification.doctor_id == doctor_id)
                 .order_by(DoctorEmailVerification.created_at.desc(), DoctorEmailVerification.id.desc())
+                .limit(1)
             ).scalar_one_or_none()
             if verification is None:
                 return False
@@ -93,11 +103,36 @@ class DoctorRepository:
             if doctor is None:
                 raise NotFoundError("DOCTOR_NOT_FOUND")
 
+            status_priority = case(
+                (DoctorActivity.status == "incoming", 1),
+                (DoctorActivity.status == "completed", 2),
+                (DoctorActivity.status == "canceled", 3),
+                else_=4,
+            )
+            incoming_sort = case(
+                (DoctorActivity.status == "incoming", func.coalesce(DoctorActivity.scheduled_at, DoctorActivity.created_at)),
+                else_=None,
+            )
+            completed_sort = case(
+                (DoctorActivity.status == "completed", DoctorActivity.created_at),
+                else_=None,
+            )
+            canceled_sort = case(
+                (DoctorActivity.status == "canceled", DoctorActivity.created_at),
+                else_=None,
+            )
+
             return db.execute(
                 select(DoctorActivity)
                 .options(selectinload(DoctorActivity.patients), selectinload(DoctorActivity.doctors))
                 .where(DoctorActivity.doctor_id == doctor_id)
-                .order_by(DoctorActivity.scheduled_at.asc(), DoctorActivity.id.asc())
+                .order_by(
+                    status_priority.asc(),
+                    incoming_sort.asc(),
+                    completed_sort.desc(),
+                    canceled_sort.desc(),
+                    DoctorActivity.id.asc(),
+                )
             ).scalars().all()
 
     def create_doctor_activity(self, doctor_id: int, payload, current_doctor_id: int):
@@ -283,9 +318,35 @@ class DoctorRepository:
             if doctor is None:
                 return expires_at
 
-            raw_token, reset = create_password_reset_token(db, doctor)
-            send_password_reset_email(doctor.email, doctor.first_name, raw_token)
-            return reset.expires_at
+            raw_token, recovery = create_account_recovery_token(db, doctor)
+            send_account_recovery_email(doctor.email, doctor.first_name, raw_token)
+            return recovery.expires_at
+
+    def verify_account_recovery(self, token: str) -> None:
+        with SessionLocal() as db:
+            if not token:
+                raise ValidationError("INVALID_OR_EXPIRED_RESET_TOKEN")
+
+            recovery = db.execute(
+                select(DoctorAccountRecovery).where(
+                    DoctorAccountRecovery.token_hash == hash_token(token),
+                    DoctorAccountRecovery.used_at.is_(None),
+                )
+            ).scalar_one_or_none()
+
+            if recovery is None or to_utc(recovery.expires_at) < now_utc():
+                raise ValidationError("INVALID_OR_EXPIRED_RESET_TOKEN")
+
+            doctor = db.get(Doctor, recovery.doctor_id)
+            if doctor is None:
+                raise NotFoundError("DOCTOR_NOT_FOUND")
+
+            if not doctor.is_active:
+                doctor.is_active = True
+                doctor.deleted_at = None
+
+            recovery.used_at = now_utc()
+            db.commit()
 
     def confirm_password_reset(self, payload):
         token, new_password = validate_password_reset_payload(payload)
@@ -336,6 +397,7 @@ class DoctorRepository:
     def delete_doctor(self, doctor_id: int, current_doctor_id: int):
         with SessionLocal() as db:
             validate_doctor_self_action(current_doctor_id, doctor_id, "delete account")
+            validate_doctor_has_no_incoming_activities(db, doctor_id)
             doctor = db.execute(
                 select(Doctor)
                 .options(selectinload(Doctor.patients).joinedload(Patient.address))
@@ -402,6 +464,7 @@ class DoctorRepository:
 
     def remove_patient_from_doctor(self, doctor_id: int, patient_id: int):
         with SessionLocal() as db:
+            validate_doctor_has_no_incoming_activities(db, doctor_id)
             doctor = db.execute(
                 select(Doctor)
                 .options(selectinload(Doctor.patients).joinedload(Patient.address))

@@ -1,15 +1,13 @@
 import {useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
-import {useNotifications} from "../components/NotificationProvider.jsx"
-import {api} from "../services/authApi.js"
+import {useNotifications} from "../components/useNotifications.js"
+import {requestPasswordReset} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate()
   const {notifySuccess, notifyError} = useNotifications()
   const [email, setEmail] = useState("")
-  const [message, setMessage] = useState("")
-  const [isError, setIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const canRequestReset = email.trim().length > 0
 
@@ -18,21 +16,16 @@ export default function ForgotPasswordPage() {
     if (!canRequestReset || isSubmitting) {
       return
     }
-    setMessage("")
-    setIsError(false)
     setIsSubmitting(true)
 
     try {
-      const response = await api.post("/auth/forgot-password", {
+      const response = await requestPasswordReset({
         identifier: email.trim(),
       })
 
-      setMessage(getResponseMessage(response))
-      notifySuccess(getResponseMessage(response))
+      notifySuccess(getResponseMessage(response), {duration: 5000})
     } catch (error) {
-      setIsError(true)
-      setMessage(getErrorMessage(error))
-      notifyError(getErrorMessage(error))
+      notifyError(getErrorMessage(error), {duration: 5000})
     } finally {
       setIsSubmitting(false)
     }
@@ -87,12 +80,6 @@ export default function ForgotPasswordPage() {
                   required
                 />
               </div>
-
-              {message && (
-                <p className={isError ? "login-error" : "login-success"}>
-                  {message}
-                </p>
-              )}
 
               <div className="auth-actions">
                 <button

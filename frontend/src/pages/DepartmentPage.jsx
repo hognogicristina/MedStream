@@ -1,10 +1,10 @@
 import {useEffect, useState} from "react"
 import BackButton from "../components/BackButton.jsx"
 import CountValue from "../components/CountValue.jsx"
-import {useNotifications} from "../components/NotificationProvider.jsx"
+import {useNotifications} from "../components/useNotifications.js"
 import {Link, useParams} from "react-router-dom"
 import DataTable from "../components/DataTable.jsx"
-import {api} from "../services/api.js"
+import {getAlerts, getBatchStatusStats, getDepartments, getStats, listPatients} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {formatPatientFullName} from "../utils/patients.js"
 
@@ -31,7 +31,7 @@ export default function DepartmentPage() {
   useEffect(() => {
     const loadDepartments = async () => {
       try {
-        const res = await api.get("/departments")
+        const res = await getDepartments()
         setDepartments(getResponseData(res))
       } catch (error) {
         notifyError(getErrorMessage(error))
@@ -47,10 +47,10 @@ export default function DepartmentPage() {
 
       try {
         const [patientsRes, statsRes, alertsRes, batchStatusRes] = await Promise.all([
-          api.get("/patients?page=1&limit=100"),
-          api.get("/stats"),
-          api.get("/alerts"),
-          api.get("/stats/batch-status"),
+          listPatients({page: 1, limit: 100}),
+          getStats(),
+          getAlerts(),
+          getBatchStatusStats(),
         ])
 
         const filteredPatients = getResponseData(patientsRes).filter((patient) => patient.department === departmentName)

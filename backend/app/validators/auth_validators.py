@@ -4,7 +4,6 @@ import re
 
 from app.core.errors import ValidationError
 from app.validators.common_validators import require_non_empty
-from app.validators.patient_validators import normalize_phone_lookup
 
 
 def validate_email_address(value: str | None) -> str:
@@ -42,12 +41,6 @@ def validate_login_identifier(value: str | None) -> str:
 
 def validate_token_value(value: str | None) -> str:
     return require_non_empty(value, "Token")
-
-
-def normalize_login_identifier(value: str | None) -> str:
-    identifier = validate_login_identifier(value)
-    phone_lookup = normalize_phone_lookup(identifier)
-    return phone_lookup or identifier.strip().lower()
 
 
 def validate_license_number(value: str | None) -> str:

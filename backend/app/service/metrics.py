@@ -1,8 +1,6 @@
 from app.repositories.metrics_repository import (
     WINDOW_DELTA,
     WINDOW_MINUTES,
-    comparison_window_start,
-    compute_batch_metrics,
     get_batch_insights_repo,
     get_latest_batch_analytics,
     get_latest_batch_metrics,
@@ -23,8 +21,6 @@ def get_batch_insights_service(db, *, departments_page: int, diagnoses_page: int
 __all__ = [
     "WINDOW_DELTA",
     "WINDOW_MINUTES",
-    "comparison_window_start",
-    "compute_batch_metrics",
     "get_batch_insights_service",
     "get_latest_batch_analytics",
     "get_latest_batch_metrics",

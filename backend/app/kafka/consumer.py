@@ -15,10 +15,6 @@ from app.service.metrics import streaming_metrics_store
 from app.utils.datetime import to_utc
 from app.websocket.manager import manager
 
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-
-
 def build_consumer():
     return Consumer(
         {
@@ -71,7 +67,12 @@ def create_alerts(db, vital):
     return alerts
 
 
-def run():
+def schedule_broadcast(app_loop: asyncio.AbstractEventLoop, message: dict):
+    future = asyncio.run_coroutine_threadsafe(manager.broadcast(message), app_loop)
+    future.add_done_callback(lambda f: f.exception())
+
+
+def run(app_loop: asyncio.AbstractEventLoop):
     while True:
         consumer = None
         while True:
@@ -125,42 +126,40 @@ def run():
                             db.commit()
                             streaming_metrics_store.record_vital(vital, len(alerts))
 
-                            loop.run_until_complete(
-                                manager.broadcast(
-                                    {
-                                        "type": "vital",
-                                        "data": {
-                                            "patient_id": vital.patient_id,
-                                            "heart_rate": vital.heart_rate,
-                                            "oxygen_saturation": vital.oxygen_saturation,
-                                            "temperature": vital.temperature,
-                                            "systolic_bp": vital.systolic_bp,
-                                            "diastolic_bp": vital.diastolic_bp,
-                                            "recorded_at": to_utc(vital.recorded_at).isoformat(),
-                                        },
-                                    }
-                                )
+                            schedule_broadcast(
+                                app_loop,
+                                {
+                                    "type": "vital",
+                                    "data": {
+                                        "patient_id": vital.patient_id,
+                                        "heart_rate": vital.heart_rate,
+                                        "oxygen_saturation": vital.oxygen_saturation,
+                                        "temperature": vital.temperature,
+                                        "systolic_bp": vital.systolic_bp,
+                                        "diastolic_bp": vital.diastolic_bp,
+                                        "recorded_at": to_utc(vital.recorded_at).isoformat(),
+                                    },
+                                },
                             )
 
                             for alert in alerts:
                                 db.refresh(alert)
                                 streaming_metrics_store.record_alert(alert)
 
-                                loop.run_until_complete(
-                                    manager.broadcast(
-                                        {
-                                            "type": "alert",
-                                            "data": {
-                                                "id": alert.id,
-                                                "patient_id": alert.patient_id,
-                                                "vital_id": alert.vital_id,
-                                                "alert_type": alert.alert_type,
-                                                "message": alert.message,
-                                                "severity": alert.severity,
-                                                "created_at": to_utc(alert.created_at).isoformat(),
-                                            },
-                                        }
-                                    )
+                                schedule_broadcast(
+                                    app_loop,
+                                    {
+                                        "type": "alert",
+                                        "data": {
+                                            "id": alert.id,
+                                            "patient_id": alert.patient_id,
+                                            "vital_id": alert.vital_id,
+                                            "alert_type": alert.alert_type,
+                                            "message": alert.message,
+                                            "severity": alert.severity,
+                                            "created_at": to_utc(alert.created_at).isoformat(),
+                                        },
+                                    },
                                 )
                     except Exception:
                         traceback.print_exc()
@@ -175,4 +174,4 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    raise SystemExit("Run consumer via FastAPI startup lifecycle.")
