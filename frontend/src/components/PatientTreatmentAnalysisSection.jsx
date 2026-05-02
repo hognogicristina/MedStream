@@ -230,6 +230,13 @@ export default function PatientTreatmentAnalysisSection({
     })
   }, [analysis, treatmentOutcomeHistory])
 
+  const latestTreatment = useMemo(() => {
+    if (!medicationHistory.length) {
+      return null
+    }
+    return medicationHistory[medicationHistory.length - 1]
+  }, [medicationHistory])
+
   const formatDate = (value) => {
     const date = new Date(value)
     if (!Number.isFinite(date.getTime())) {
@@ -293,26 +300,26 @@ export default function PatientTreatmentAnalysisSection({
           </div>
 
           <div>
-            <h3 className="text-xl font-semibold text-white">Treatment History & Clinical Reasoning</h3>
+            <h3 className="text-xl font-semibold text-white">Treatment Summary & Clinical Reasoning</h3>
             <div className="mt-4 space-y-4">
-              {medicationHistory.length ? medicationHistory.map((item, index) => (
-                <div key={`${item.medication_name}-${item.created_at}-${index}`} className="monitor-panel rounded-2xl px-4 py-4">
+              {latestTreatment ? (
+                <div className="monitor-panel rounded-2xl px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-white">Medication: {item.medication_name || "--"}</p>
-                    <p className="text-xs text-[#b6bec9]">Date: {formatDate(item.created_at)}</p>
+                    <p className="text-sm font-semibold text-white">Medication: {latestTreatment.medication_name || "--"}</p>
+                    <p className="text-xs text-[#b6bec9]">Date: {formatDate(latestTreatment.created_at)}</p>
                   </div>
-                  <p className="mt-2 text-sm text-[#d5dbdb]">Dosage: {item.dosage || "--"}</p>
-                  <p className="mt-1 text-sm text-[#d5dbdb]">Frequency: {item.frequency || "--"}</p>
+                  <p className="mt-2 text-sm text-[#d5dbdb]">Dosage: {latestTreatment.dosage || "--"}</p>
+                  <p className="mt-1 text-sm text-[#d5dbdb]">Frequency: {latestTreatment.frequency || "--"}</p>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Reason</p>
-                      <p className="mt-2 text-sm text-white">{item.reasonText}</p>
+                      <p className="mt-2 text-sm text-white">{latestTreatment.reasonText}</p>
                     </div>
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Outcome</p>
-                      <p className={`mt-2 text-sm font-semibold ${item.outcome === "Effective" ? "text-[#22c55e]" : "text-[#ef4444]"}`}>
-                        {item.outcome}
+                      <p className={`mt-2 text-sm font-semibold ${latestTreatment.outcome === "Effective" ? "text-[#22c55e]" : "text-[#ef4444]"}`}>
+                        {latestTreatment.outcome}
                       </p>
                     </div>
                   </div>
@@ -320,20 +327,20 @@ export default function PatientTreatmentAnalysisSection({
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Alerts</p>
-                      <p className="mt-2 text-sm text-white">{item.related_alerts.length ? item.related_alerts.join(", ") : "No linked alerts"}</p>
+                      <p className="mt-2 text-sm text-white">{latestTreatment.related_alerts.length ? latestTreatment.related_alerts.join(", ") : "No linked alerts"}</p>
                     </div>
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Diagnosis</p>
-                      <p className="mt-2 text-sm text-white">{item.related_diagnoses.length ? item.related_diagnoses.join(", ") : "No linked diagnosis"}</p>
+                      <p className="mt-2 text-sm text-white">{latestTreatment.related_diagnoses.length ? latestTreatment.related_diagnoses.join(", ") : "No linked diagnosis"}</p>
                     </div>
                   </div>
 
                   <div className="mt-3 rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Conditions</p>
-                    <p className="mt-2 text-sm text-white">{item.related_conditions.length ? item.related_conditions.join(", ") : "No linked conditions"}</p>
+                    <p className="mt-2 text-sm text-white">{latestTreatment.related_conditions.length ? latestTreatment.related_conditions.join(", ") : "No linked conditions"}</p>
                   </div>
                 </div>
-              )) : (
+              ) : (
                 <div className="monitor-panel rounded-2xl px-4 py-4 text-sm text-[#b6bec9]">
                   No treatment history available.
                 </div>

@@ -30,6 +30,20 @@ def list_alerts(cnp: str | None = Query(default=None)):
         )
 
 
+@router.get("/patients/{patient_id}", response_model=ApiResponse[list[AlertRead]])
+def list_patient_alerts(patient_id: int):
+    with SessionLocal() as db:
+        alerts = db.execute(
+            select(Alert)
+            .where(Alert.patient_id == patient_id)
+            .order_by(Alert.created_at.desc())
+        ).scalars().all()
+        return success_response(
+            "Patient alerts retrieved successfully.",
+            [AlertRead.model_validate(alert).model_dump(mode="json") for alert in alerts],
+        )
+
+
 @router.get("/dashboard-summary", response_model=ApiResponse[AlertDashboardSummary])
 def dashboard_alert_summary():
     with SessionLocal() as db:

@@ -175,6 +175,10 @@ export function getAlerts() {
   return api.get("/alerts")
 }
 
+export function getPatientAlerts(patientId) {
+  return api.get(`/alerts/patients/${patientId}`)
+}
+
 export function getAlertDashboardSummary() {
   return api.get("/alerts/dashboard-summary")
 }
