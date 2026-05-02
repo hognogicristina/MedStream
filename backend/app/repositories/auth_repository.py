@@ -5,6 +5,7 @@ from datetime import timedelta
 from sqlalchemy import select
 
 from app.models.doctor.doctor_email_verification import DoctorEmailVerification
+from app.models.doctor.doctor_account_recovery import DoctorAccountRecovery
 from app.models.doctor.doctor_password_reset import DoctorPasswordReset
 from app.utils.datetime import now_utc, to_utc
 from app.validators.auth_validators import validate_email_address
@@ -64,3 +65,27 @@ def create_email_verification_token(db, doctor, target_email: str):
     db.commit()
     db.refresh(verification)
     return raw_token, verification
+
+
+def create_account_recovery_token(db, doctor):
+    now = now_utc()
+    active_tokens = db.execute(
+        select(DoctorAccountRecovery).where(
+            DoctorAccountRecovery.doctor_id == doctor.id,
+            DoctorAccountRecovery.used_at.is_(None),
+        )
+    ).scalars().all()
+
+    for active_token in active_tokens:
+        active_token.used_at = to_utc(now)
+
+    raw_token = secrets.token_urlsafe(32)
+    recovery = DoctorAccountRecovery(
+        doctor_id=doctor.id,
+        token_hash=hash_token(raw_token),
+        expires_at=to_utc(now + TOKEN_TTL),
+    )
+    db.add(recovery)
+    db.commit()
+    db.refresh(recovery)
+    return raw_token, recovery

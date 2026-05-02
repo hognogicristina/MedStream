@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from time import perf_counter
 import threading
+import asyncio
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -56,14 +57,14 @@ def execute_batch_job():
         batch_status_store.mark_failure(finished_at, error, batch_runtime_controller.next_run_time(), duration_ms)
 
 
-def start_background_threads():
+def start_background_threads(app: FastAPI):
     global background_threads_started
 
     with background_threads_lock:
         if background_threads_started:
             return
 
-        threading.Thread(target=run_consumer, daemon=True, name="medstream-consumer").start()
+        threading.Thread(target=run_consumer, args=(app.state.loop,), daemon=True, name="medstream-consumer").start()
         threading.Thread(target=run_simulator, daemon=True, name="medstream-simulator").start()
         batch_runtime_controller.start(execute_batch_job, settings.batch_interval_seconds)
         background_threads_started = True
@@ -71,9 +72,10 @@ def start_background_threads():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.loop = asyncio.get_running_loop()
     init_db()
     ensure_topics()
-    start_background_threads()
+    start_background_threads(app)
     yield
     batch_runtime_controller.shutdown()
 

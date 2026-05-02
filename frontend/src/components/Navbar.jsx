@@ -2,7 +2,7 @@ import {useEffect, useRef, useState} from "react"
 import {NavLink, useLocation, useNavigate} from "react-router-dom"
 import {useAuth} from "./AuthContext.jsx"
 import {getResponseData} from "../services/apiMessages.js";
-import {api} from "../services/api.js";
+import {getDepartments} from "../services/patientApi.js";
 
 function DepartmentsIcon() {
   return (
@@ -102,7 +102,7 @@ export default function Navbar() {
   useEffect(() => {
     const loadDepartments = async () => {
       try {
-        const res = await api.get("/departments")
+        const res = await getDepartments()
         setDepartments(getResponseData(res))
       } catch {
       }

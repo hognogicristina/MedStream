@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react"
-import {api} from "../services/api.js"
+import {getDepartments} from "../services/patientApi.js"
 import {getResponseData} from "../services/apiMessages.js";
 
 export default function DepartmentTransferDialog({
@@ -28,7 +28,7 @@ export default function DepartmentTransferDialog({
 
     const loadDepartments = async () => {
       try {
-        const res = await api.get("/departments")
+        const res = await getDepartments()
         setDepartments(getResponseData(res))
       } catch {
       }

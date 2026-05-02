@@ -1,5 +1,9 @@
 import {useEffect, useState} from "react"
 import {
+  getStreamingAlerts,
+  getStreamingMetrics,
+} from "../services/patientApi.js"
+import {
   CartesianGrid,
   Line,
   LineChart,
@@ -8,9 +12,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import {api} from "../services/api.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
+import {useNotifications} from "../components/useNotifications.js"
+import BackButton from "../components/BackButton.jsx"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const POLL_INTERVAL_MS = 2500
 const MAX_POINTS = 20
@@ -52,25 +58,24 @@ function formatAlertTime(value) {
 }
 
 export default function StreamingMetricsPage() {
+  const {notifyError} = useNotifications()
   const [metrics, setMetrics] = useState(null)
   const [alertsPage, setAlertsPage] = useState(1)
   const [recentAlerts, setRecentAlerts] = useState({items: [], total: 0, page: 1, page_size: ALERTS_PAGE_SIZE})
   const [history, setHistory] = useState([])
-  const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     let active = true
 
     const loadData = async () => {
+      if (metrics === null) {
+        setIsLoading(true)
+      }
       try {
         const [metricsResponse, alertsResponse] = await Promise.all([
-          api.get("/metrics/streaming"),
-          api.get("/metrics/streaming-alerts", {
-            params: {
-              page: alertsPage,
-              page_size: ALERTS_PAGE_SIZE,
-            },
-          }),
+          getStreamingMetrics(),
+          getStreamingAlerts(alertsPage, ALERTS_PAGE_SIZE),
         ])
 
         if (!active) {
@@ -88,7 +93,6 @@ export default function StreamingMetricsPage() {
 
         setMetrics(nextMetrics)
         setRecentAlerts(nextAlerts)
-        setError("")
         setHistory((current) => [
           ...current.slice(-(MAX_POINTS - 1)),
           {
@@ -98,7 +102,11 @@ export default function StreamingMetricsPage() {
         ])
       } catch (loadError) {
         if (active) {
-          setError(getErrorMessage(loadError))
+          notifyError(getErrorMessage(loadError), {duration: 5000})
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false)
         }
       }
     }
@@ -110,7 +118,7 @@ export default function StreamingMetricsPage() {
       active = false
       window.clearInterval(intervalId)
     }
-  }, [alertsPage])
+  }, [alertsPage, metrics, notifyError])
 
   const data = metrics ?? {
     avg_heart_rate: 0,
@@ -125,8 +133,42 @@ export default function StreamingMetricsPage() {
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="max-w-3xl">
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                title="Download all metrics"
+                aria-label="Download all metrics"
+                className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
+                onClick={() => {
+                  const rows = [
+                    ["Section", "Metric", "Value"],
+                    ["Streaming Snapshot", "Avg Heart Rate", data.avg_heart_rate],
+                    ["Streaming Snapshot", "Avg Oxygen", data.avg_oxygen],
+                    ["Streaming Snapshot", "Avg Temperature", data.avg_temperature],
+                    ["Streaming Snapshot", "Alerts Count", data.alerts],
+                    ["Streaming Snapshot", "Execution Time (ms)", data.execution_time_ms],
+                    ["Recent Alerts", "Alert ID", "Patient ID", "Type", "Severity", "Message", "Created At"],
+                    ...(recentAlerts.items || []).map((alert) => [
+                      "Recent Alerts",
+                      alert.id,
+                      alert.patient_id,
+                      alert.alert_type,
+                      alert.severity,
+                      alert.message,
+                      alert.created_at,
+                    ]),
+                    ["Heart Rate Trend", "Time", "Avg Heart Rate"],
+                    ...history.map((point) => ["Heart Rate Trend", point.time, point.heart_rate]),
+                  ]
+                  downloadCSV("streaming_all_metrics.csv", rows)
+                }}
+              >
+                <DownloadIcon/>
+              </button>
+              <BackButton fallbackTo="/dashboard"/>
+            </div>
+            <div className="w-full">
               <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Streaming Metrics</h1>
               <p className="mt-3 w-full text-sm text-[#b6bec9]">
@@ -135,43 +177,12 @@ export default function StreamingMetricsPage() {
                 This allows fast reaction, but values may fluctuate and are not always perfectly accurate.
                 Data is refreshed every ~2.5 seconds using polling, simulating a real-time monitoring system.
               </p>
-              {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
             </div>
-            <button
-              type="button"
-              title="Download all metrics"
-              aria-label="Download all metrics"
-              className="console-button-primary rounded-xl p-3 text-sm font-semibold"
-              onClick={() => {
-                const rows = [
-                  ["Section", "Metric", "Value"],
-                  ["Streaming Snapshot", "Avg Heart Rate", data.avg_heart_rate],
-                  ["Streaming Snapshot", "Avg Oxygen", data.avg_oxygen],
-                  ["Streaming Snapshot", "Avg Temperature", data.avg_temperature],
-                  ["Streaming Snapshot", "Alerts Count", data.alerts],
-                  ["Streaming Snapshot", "Execution Time (ms)", data.execution_time_ms],
-                  ["Recent Alerts", "Alert ID", "Patient ID", "Type", "Severity", "Message", "Created At"],
-                  ...(recentAlerts.items || []).map((alert) => [
-                    "Recent Alerts",
-                    alert.id,
-                    alert.patient_id,
-                    alert.alert_type,
-                    alert.severity,
-                    alert.message,
-                    alert.created_at,
-                  ]),
-                  ["Heart Rate Trend", "Time", "Avg Heart Rate"],
-                  ...history.map((point) => ["Heart Rate Trend", point.time, point.heart_rate]),
-                ]
-                downloadCSV("streaming_all_metrics.csv", rows)
-              }}
-            >
-              <DownloadIcon/>
-            </button>
           </div>
         </header>
 
         <section className="monitor-card rounded-[24px] p-6">
+          {isLoading ? <LoadingSpinner/> : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <MetricTile label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm")}/>
             <MetricTile label="Avg Oxygen" value={formatMetric(data.avg_oxygen, "%")}/>
@@ -179,8 +190,11 @@ export default function StreamingMetricsPage() {
             <MetricTile label="Alerts Count" value={String(data.alerts ?? 0)}/>
             <MetricTile label="Execution Time" value={formatMetric(data.execution_time_ms, " ms")}/>
           </div>
+          )}
         </section>
 
+        {!isLoading && (
+        <>
         <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="monitor-card rounded-[24px] p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Live Trend</p>
@@ -324,6 +338,8 @@ export default function StreamingMetricsPage() {
             </p>
           </div>
         </section>
+        </>
+        )}
       </div>
     </div>
   )

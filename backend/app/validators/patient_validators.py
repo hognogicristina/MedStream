@@ -6,8 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
-from app.models.doctor.doctor_activity import DoctorActivity
-from app.models.doctor.doctor_activity_doctor import doctor_activity_doctors
 from app.models.patient.patient import Patient
 from app.service.medical_history import DEPARTMENTS
 from app.validators.common_validators import (
@@ -106,30 +104,6 @@ def get_patient_or_raise(db: Session, patient_id: int) -> Patient:
     if patient is None:
         raise NotFoundError("PATIENT_NOT_FOUND")
     return patient
-
-
-def validate_patient_access(db: Session, doctor_id: int, patient_id: int) -> None:
-    is_assigned = db.execute(
-        select(Patient.id)
-        .join(Patient.doctors.property.secondary, Patient.doctors.property.secondary.c.patient_id == Patient.id)
-        .where(Patient.doctors.property.secondary.c.doctor_id == doctor_id, Patient.id == patient_id)
-    ).scalar_one_or_none()
-
-    if is_assigned is not None:
-        return
-
-    has_activity = db.execute(
-        select(DoctorActivity.id)
-        .join(Patient.activities.property.secondary, Patient.activities.property.secondary.c.activity_id == DoctorActivity.id)
-        .join(doctor_activity_doctors, doctor_activity_doctors.c.doctor_activity_id == DoctorActivity.id)
-        .where(
-            doctor_activity_doctors.c.doctor_id == doctor_id,
-            Patient.activities.property.secondary.c.patient_id == patient_id,
-        )
-    ).scalar_one_or_none()
-
-    if has_activity is None:
-        raise PermissionDeniedError("DOCTOR_NOT_ASSIGNED_TO_PATIENT")
 
 
 def validate_patient_assignment(db: Session, doctor_id: int, patient_id: int) -> None:

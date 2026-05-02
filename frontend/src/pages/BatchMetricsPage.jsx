@@ -1,19 +1,18 @@
 import {useEffect, useMemo, useRef, useState} from "react"
+import {Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {
-  Cell,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
-import {api} from "../services/api.js"
+  getBatchInsights,
+  getBatchMetrics,
+  getBatchSchedule,
+  getBatchStatus,
+  runBatchNow,
+  updateBatchSchedule,
+} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
+import {useNotifications} from "../components/useNotifications.js"
+import BackButton from "../components/BackButton.jsx"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const POLL_INTERVAL_MS = 30000
 const STATUS_POLL_INTERVAL_MS = 2500
@@ -33,8 +32,8 @@ const EMPTY_METRICS = {
 const EMPTY_INSIGHTS = {
   patients_per_department: {items: [], total: 0, page: 1, page_size: PAGE_SIZE},
   top_diagnosis: {items: [], total: 0, page: 1, page_size: PAGE_SIZE},
-  medication_distribution: [],
   treatment_effectiveness: {effective: 0, ineffective: 0},
+  medication_effectiveness: [],
 }
 
 const EMPTY_SCHEDULE = {
@@ -129,6 +128,7 @@ function formatScheduleSummary(schedule) {
 }
 
 export default function BatchMetricsPage() {
+  const {notifyError, notifySuccess} = useNotifications()
   const [metrics, setMetrics] = useState(null)
   const [insights, setInsights] = useState(null)
   const [batchProgress, setBatchProgress] = useState({is_running: false, progress: 0, stage: "Idle", last_run: null})
@@ -141,9 +141,12 @@ export default function BatchMetricsPage() {
   const [isApplyingSchedule, setIsApplyingSchedule] = useState(false)
   const [departmentsPage, setDepartmentsPage] = useState(1)
   const [diagnosesPage, setDiagnosesPage] = useState(1)
-  const [error, setError] = useState("")
   const [isRunningBatch, setIsRunningBatch] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [treatmentMode, setTreatmentMode] = useState("medication")
+  const [selectedMedication, setSelectedMedication] = useState("")
   const lastBatchTimestampRef = useRef(null)
+  const hasLoadedInitialDataRef = useRef(false)
 
   const hasBatchData = Boolean(metrics?.timestamp)
 
@@ -161,17 +164,18 @@ export default function BatchMetricsPage() {
     let active = true
 
     const loadData = async (nextDepartmentsPage = departmentsPage, nextDiagnosesPage = diagnosesPage) => {
+      if (!hasLoadedInitialDataRef.current) {
+        setIsLoading(true)
+      }
       try {
         const [metricsResponse, insightsResponse, scheduleResponse] = await Promise.all([
-          api.get("/metrics/batch"),
-          api.get("/metrics/batch-insights", {
-            params: {
-              page_size: PAGE_SIZE,
-              departments_page: nextDepartmentsPage,
-              diagnoses_page: nextDiagnosesPage,
-            },
+          getBatchMetrics(),
+          getBatchInsights({
+            page_size: PAGE_SIZE,
+            departments_page: nextDepartmentsPage,
+            diagnoses_page: nextDiagnosesPage,
           }),
-          api.get("/batch/schedule"),
+          getBatchSchedule(),
         ])
 
         if (!active) {
@@ -199,10 +203,14 @@ export default function BatchMetricsPage() {
         }
 
         syncScheduleForm(nextSchedule)
-        setError("")
       } catch (loadError) {
         if (active) {
-          setError(getErrorMessage(loadError))
+          notifyError(getErrorMessage(loadError), {duration: 5000})
+        }
+      } finally {
+        if (active) {
+          hasLoadedInitialDataRef.current = true
+          setIsLoading(false)
         }
       }
     }
@@ -214,14 +222,14 @@ export default function BatchMetricsPage() {
       active = false
       window.clearInterval(intervalId)
     }
-  }, [departmentsPage, diagnosesPage])
+  }, [departmentsPage, diagnosesPage, notifyError])
 
   useEffect(() => {
     let active = true
 
     const loadBatchProgress = async () => {
       try {
-        const response = await api.get("/batch/status")
+        const response = await getBatchStatus()
         if (!active) {
           return
         }
@@ -282,16 +290,14 @@ export default function BatchMetricsPage() {
 
   const refreshData = async (nextDepartmentsPage = departmentsPage, nextDiagnosesPage = diagnosesPage) => {
     const [metricsResponse, insightsResponse, batchStatusResponse, scheduleResponse] = await Promise.all([
-      api.get("/metrics/batch"),
-      api.get("/metrics/batch-insights", {
-        params: {
-          page_size: PAGE_SIZE,
-          departments_page: nextDepartmentsPage,
-          diagnoses_page: nextDiagnosesPage,
-        },
+      getBatchMetrics(),
+      getBatchInsights({
+        page_size: PAGE_SIZE,
+        departments_page: nextDepartmentsPage,
+        diagnoses_page: nextDiagnosesPage,
       }),
-      api.get("/batch/status"),
-      api.get("/batch/schedule"),
+      getBatchStatus(),
+      getBatchSchedule(),
     ])
 
     const nextMetrics = getResponseData(metricsResponse)
@@ -321,11 +327,11 @@ export default function BatchMetricsPage() {
 
     try {
       setIsApplyingSchedule(true)
-      await api.post("/batch/schedule", payload)
+      await updateBatchSchedule(payload)
       await refreshData()
-      setError("")
+      notifySuccess("Batch schedule updated.", {duration: 5000})
     } catch (scheduleError) {
-      setError(getErrorMessage(scheduleError))
+      notifyError(getErrorMessage(scheduleError), {duration: 5000})
     } finally {
       setIsApplyingSchedule(false)
     }
@@ -334,12 +340,12 @@ export default function BatchMetricsPage() {
   const handleRunBatchNow = async () => {
     try {
       setIsRunningBatch(true)
-      await api.post("/batch/run")
+      await runBatchNow()
       await new Promise((resolve) => window.setTimeout(resolve, 800))
       await refreshData()
-      setError("")
+      notifySuccess("Batch run started successfully.", {duration: 5000})
     } catch (runError) {
-      setError(getErrorMessage(runError))
+      notifyError(getErrorMessage(runError), {duration: 5000})
     } finally {
       setIsRunningBatch(false)
     }
@@ -357,32 +363,155 @@ export default function BatchMetricsPage() {
   const insightsData = insights || EMPTY_INSIGHTS
   const patientsPerDepartment = insightsData.patients_per_department
   const topDiagnosis = insightsData.top_diagnosis
-  const medicationDistribution = useMemo(() => insightsData.medication_distribution || [], [insightsData])
   const treatmentEffectiveness = insightsData.treatment_effectiveness || {effective: 0, ineffective: 0}
+  const medicationEffectiveness = insightsData.medication_effectiveness || []
   const progressLabel = batchProgress.is_running ? "Running" : "Idle"
   const departmentsTotalPages = Math.max(1, Math.ceil((patientsPerDepartment.total || 0) / PAGE_SIZE))
   const diagnosesTotalPages = Math.max(1, Math.ceil((topDiagnosis.total || 0) / PAGE_SIZE))
+  const totalTreatments = treatmentEffectiveness.effective + treatmentEffectiveness.ineffective
+  const overallEffectivenessData = totalTreatments > 0
+    ? [
+      {
+        name: "Effective",
+        value: treatmentEffectiveness.effective,
+        rawValue: treatmentEffectiveness.effective,
+        color: "#22c55e",
+      },
+      {
+        name: "Ineffective",
+        value: treatmentEffectiveness.ineffective,
+        rawValue: treatmentEffectiveness.ineffective,
+        color: "#ef4444",
+      },
+    ]
+    : []
 
-  const medicationDistributionTop = useMemo(
-    () => [...medicationDistribution]
-      .sort((left, right) => right.count - left.count)
-      .slice(0, 12),
-    [medicationDistribution],
-  )
-  const effectivenessDonutData = [
-    {name: "Effective", value: Number(treatmentEffectiveness.effective) || 0, color: "#22c55e"},
-    {name: "Ineffective", value: Number(treatmentEffectiveness.ineffective) || 0, color: "#f97316"},
+  useEffect(() => {
+    if (!medicationEffectiveness.length) {
+      setSelectedMedication("")
+      return
+    }
+
+    setSelectedMedication((current) => (
+      current && medicationEffectiveness.some((item) => item.name === current)
+        ? current
+        : medicationEffectiveness[0].name
+    ))
+  }, [medicationEffectiveness])
+
+  const selectedMedicationEffectiveness = medicationEffectiveness.find((item) => item.name === selectedMedication) || null
+  const medicationBarData = [
+    {
+      label: "Effective",
+      count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.effective : 0,
+      fill: "#22c55e",
+    },
+    {
+      label: "Ineffective",
+      count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.ineffective : 0,
+      fill: "#ef4444",
+    },
   ]
-  const effectivenessTotal = effectivenessDonutData.reduce((total, item) => total + item.value, 0)
 
   const scheduleSummary = useMemo(() => formatScheduleSummary(schedule), [schedule])
+  const effectivePercentage = totalTreatments ? (treatmentEffectiveness.effective / totalTreatments) * 100 : 0
+  const ineffectivePercentage = totalTreatments ? (treatmentEffectiveness.ineffective / totalTreatments) * 100 : 0
+
+  const handleExportAllMetrics = () => {
+    const rows = [
+      ["Section", "Metric", "Value"],
+      ["Batch Snapshot", "Avg Heart Rate", data.avg_heart_rate],
+      ["Batch Snapshot", "Avg Oxygen", data.avg_oxygen],
+      ["Batch Snapshot", "Avg Temperature", data.avg_temperature],
+      ["Batch Snapshot", "Alerts", data.alerts],
+      ["Batch Snapshot", "Execution Time (ms)", data.execution_time_ms],
+      ["Department Insights", "Department", "Patients"],
+      ...patientsPerDepartment.items.map((entry) => ["Department Insights", entry.department, entry.patients]),
+      ["Diagnosis Insights", "Diagnosis", "Patients"],
+      ...topDiagnosis.items.map((entry) => ["Diagnosis Insights", entry.name, entry.patients]),
+      ["OVERALL_TREATMENT_EFFECTIVENESS", "total_treatments", totalTreatments],
+      ["OVERALL_TREATMENT_EFFECTIVENESS", "effective_count", treatmentEffectiveness.effective],
+      ["OVERALL_TREATMENT_EFFECTIVENESS", "ineffective_count", treatmentEffectiveness.ineffective],
+      ["OVERALL_TREATMENT_EFFECTIVENESS", "effective_percentage", effectivePercentage.toFixed(2)],
+      ["OVERALL_TREATMENT_EFFECTIVENESS", "ineffective_percentage", ineffectivePercentage.toFixed(2)],
+      ["Medication Effectiveness", "Medication", "Effective", "Ineffective", "Total"],
+      ...medicationEffectiveness.map((item) => [
+        "Medication Effectiveness",
+        item.name,
+        item.effective,
+        item.ineffective,
+        item.total,
+      ]),
+    ]
+    downloadCSV("batch_all_metrics.csv", rows)
+  }
+
+  const handleExportSelectedMedication = () => {
+    if (!selectedMedicationEffectiveness) {
+      return
+    }
+
+    const medicationTotal = selectedMedicationEffectiveness.total || 0
+    const medicationEffectivePercentage = medicationTotal ? (selectedMedicationEffectiveness.effective / medicationTotal) * 100 : 0
+    const medicationIneffectivePercentage = medicationTotal ? (selectedMedicationEffectiveness.ineffective / medicationTotal) * 100 : 0
+
+    const rows = [
+      ["MEDICATION_SUMMARY"],
+      ["Field", "Value"],
+      ["medication_name", selectedMedicationEffectiveness.name],
+      ["total_patients", selectedMedicationEffectiveness.total_patients ?? 0],
+      ["total_treatments", medicationTotal],
+      ["effective_count", selectedMedicationEffectiveness.effective],
+      ["ineffective_count", selectedMedicationEffectiveness.ineffective],
+      ["effective_percentage", medicationEffectivePercentage.toFixed(2)],
+      ["ineffective_percentage", medicationIneffectivePercentage.toFixed(2)],
+      [],
+      ["DOSAGE_BREAKDOWN"],
+      ["dosage", "frequency", "count"],
+      ...((selectedMedicationEffectiveness.dosage_breakdown || []).map((entry) => [
+        entry.dosage,
+        entry.frequency,
+        entry.count,
+      ])),
+      [],
+      ["REASONING_SUMMARY"],
+      ["metric", "count"],
+      ["alert_triggered_count", selectedMedicationEffectiveness.alert_triggered_count ?? 0],
+      ["diagnosis_triggered_count", selectedMedicationEffectiveness.diagnosis_triggered_count ?? 0],
+      ["condition_triggered_count", selectedMedicationEffectiveness.condition_triggered_count ?? 0],
+    ]
+
+    downloadCSV(`${selectedMedicationEffectiveness.name.toLowerCase().replace(/\s+/g, "_")}_summary.csv`, rows)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+          <LoadingSpinner/>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 max-w-full flex-1">
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                title="Download all metrics"
+                aria-label="Download all metrics"
+                className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
+                onClick={handleExportAllMetrics}
+              >
+                <DownloadIcon/>
+              </button>
+              <BackButton fallbackTo="/dashboard"/>
+            </div>
+            <div className="w-full">
               <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
                 Demo View
               </p>
@@ -396,37 +525,7 @@ export default function BatchMetricsPage() {
                 Batch processing analyzes large volumes of historical data, providing more stable and accurate insights.
               </p>
 
-              {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
             </div>
-
-            <button
-              type="button"
-              title="Download all metrics"
-              aria-label="Download all metrics"
-              className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
-              onClick={() => {
-                const rows = [
-                  ["Section", "Metric", "Value"],
-                  ["Batch Snapshot", "Avg Heart Rate", data.avg_heart_rate],
-                  ["Batch Snapshot", "Avg Oxygen", data.avg_oxygen],
-                  ["Batch Snapshot", "Avg Temperature", data.avg_temperature],
-                  ["Batch Snapshot", "Alerts", data.alerts],
-                  ["Batch Snapshot", "Execution Time (ms)", data.execution_time_ms],
-                  ["Department Insights", "Department", "Patients"],
-                  ...patientsPerDepartment.items.map((entry) => ["Department Insights", entry.department, entry.patients]),
-                  ["Diagnosis Insights", "Diagnosis", "Patients"],
-                  ...topDiagnosis.items.map((entry) => ["Diagnosis Insights", entry.name, entry.patients]),
-                  ["Medication Distribution", "Medication", "Count"],
-                  ...medicationDistributionTop.map((entry) => ["Medication Distribution", entry.name, entry.count]),
-                  ["Treatment Effectiveness", "Segment", "Count"],
-                  ["Treatment Effectiveness", "Effective", treatmentEffectiveness.effective || 0],
-                  ["Treatment Effectiveness", "Ineffective", treatmentEffectiveness.ineffective || 0],
-                ]
-                downloadCSV("batch_all_metrics.csv", rows)
-              }}
-            >
-              <DownloadIcon/>
-            </button>
           </div>
         </header>
 
@@ -686,65 +785,77 @@ export default function BatchMetricsPage() {
         </section>
 
         <section className="monitor-card rounded-[24px] p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Treatment Insights</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Medication Distribution & Effectiveness</h2>
-          <p className="mt-2 text-sm text-[#b6bec9]">
-            Top medications by treatment count and overall outcome trend.
-          </p>
-
-          <div className="mt-6 flex flex-col gap-6 xl:flex-row">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Medication Distribution (Top 12)</p>
-              <div className="mt-3 h-[360px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
-                {medicationDistributionTop.length ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={medicationDistributionTop} layout="vertical" margin={{top: 8, right: 12, left: 12, bottom: 8}}>
-                      <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" horizontal={false}/>
-                      <XAxis type="number" stroke="#879196" tick={{fontSize: 11}} allowDecimals={false}/>
-                      <YAxis type="category" dataKey="name" width={130} stroke="#879196" tick={{fontSize: 11}}/>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#111827",
-                          border: "1px solid #334155",
-                          borderRadius: "12px",
-                          color: "#fff",
-                        }}
-                      />
-                      <Bar dataKey="count" name="Treatments" fill="#22c55e" radius={[0, 8, 8, 0]}/>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-[#b6bec9]">
-                    No medication distribution data available.
-                  </div>
-                )}
-              </div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Treatment Analysis</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Treatment Effectiveness</h2>
             </div>
+            {treatmentMode === "medication" && selectedMedication ? (
+              <button
+                type="button"
+                title="Export selected medication data"
+                aria-label="Export selected medication data"
+                className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
+                onClick={handleExportSelectedMedication}
+              >
+                <DownloadIcon/>
+              </button>
+            ) : null}
+          </div>
 
-            <div className="w-full xl:w-[320px]">
-              <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Overall Treatment Effectiveness</p>
-              <div className="mt-3 h-[360px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
+          <div className="mt-5 inline-flex rounded-xl border border-[#2a3441] bg-[#11161c] p-1">
+            <button
+              type="button"
+              onClick={() => setTreatmentMode("medication")}
+              className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                treatmentMode === "medication"
+                  ? "bg-[#232f3e] text-white"
+                  : "text-[#b6bec9] hover:text-white"
+              }`}
+            >
+              Medication
+            </button>
+            <button
+              type="button"
+              onClick={() => setTreatmentMode("overall")}
+              className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                treatmentMode === "overall"
+                  ? "bg-[#232f3e] text-white"
+                  : "text-[#b6bec9] hover:text-white"
+              }`}
+            >
+              Overall
+            </button>
+          </div>
+
+          {treatmentMode === "medication" ? (
+            <div className="mt-6 space-y-5">
+              <div className="monitor-panel rounded-2xl p-4">
+                <label htmlFor="medication-select" className="text-xs uppercase tracking-[0.2em] text-[#879196]">
+                  Select medication
+                </label>
+                <select
+                  id="medication-select"
+                  className="mt-3 w-full rounded-xl border border-[#4d5661] bg-[#161b22] px-3 py-2 text-sm font-semibold text-white outline-none"
+                  value={selectedMedication}
+                  onChange={(event) => setSelectedMedication(event.target.value)}
+                  disabled={!medicationEffectiveness.length}
+                >
+                  {medicationEffectiveness.length
+                    ? medicationEffectiveness.map((item) => (
+                      <option key={item.name} value={item.name}>{item.name}</option>
+                    ))
+                    : <option value="">No medication data available</option>}
+                </select>
+              </div>
+
+              <div className="h-[280px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={effectivenessDonutData}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={72}
-                      outerRadius={105}
-                      paddingAngle={2}
-                      stroke="none"
-                    >
-                      {effectivenessDonutData.map((segment) => (
-                        <Cell key={segment.name} fill={segment.color}/>
-                      ))}
-                    </Pie>
+                  <BarChart data={medicationBarData} margin={{top: 8, right: 10, left: 0, bottom: 8}}>
+                    <CartesianGrid stroke="#1f2937" strokeDasharray="3 3"/>
+                    <XAxis dataKey="label" stroke="#879196" tick={{fontSize: 11}}/>
+                    <YAxis allowDecimals={false} stroke="#879196" tick={{fontSize: 11}}/>
                     <Tooltip
-                      formatter={(value) => {
-                        const safeValue = Number(value) || 0
-                        const percentage = effectivenessTotal > 0 ? Math.round((safeValue / effectivenessTotal) * 100) : 0
-                        return [`${safeValue} (${percentage}%)`, "Count"]
-                      }}
                       contentStyle={{
                         backgroundColor: "#111827",
                         border: "1px solid #334155",
@@ -752,53 +863,128 @@ export default function BatchMetricsPage() {
                         color: "#fff",
                       }}
                     />
-                    <text x="50%" y="46%" textAnchor="middle" className="fill-[#b6bec9] text-[11px] uppercase tracking-[0.2em]">
-                      Treatment
-                    </text>
-                    <text x="50%" y="53%" textAnchor="middle" className="fill-[#b6bec9] text-[11px] uppercase tracking-[0.2em]">
-                      Effectiveness
-                    </text>
-                    <text x="50%" y="64%" textAnchor="middle" className="fill-white text-lg font-semibold">
-                      {effectivenessTotal > 0 ? `${Math.round((effectivenessDonutData[0].value / effectivenessTotal) * 100)}%` : "0%"}
-                    </text>
-                  </PieChart>
+                    <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                      {medicationBarData.map((item) => (
+                        <Cell key={item.label} fill={item.fill}/>
+                      ))}
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
-                <div className="mt-2 flex items-center justify-center gap-4 text-xs text-[#b6bec9]">
-                  <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]"/>Effective</span>
-                  <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#f97316]"/>Ineffective</span>
-                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="mt-6 rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
+              <div className="h-[300px]">
+                {totalTreatments > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={overallEffectivenessData}
+                        dataKey="value"
+                        nameKey="name"
+                        outerRadius={112}
+                        startAngle={90}
+                        endAngle={-270}
+                        paddingAngle={4}
+                        stroke="#0b1220"
+                        strokeWidth={2}
+                      >
+                        {overallEffectivenessData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color}/>
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#111827",
+                          border: "1px solid #334155",
+                          borderRadius: "12px",
+                          color: "#fff",
+                        }}
+                        formatter={(_value, _name, payload) => [payload?.payload?.rawValue ?? 0, payload?.payload?.name || ""]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-[#b6bec9]">
+                    No treatment data available yet.
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 flex items-center justify-center gap-5 text-sm text-[#b6bec9]">
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]"/>
+                  Effective
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#ef4444]"/>
+                  Ineffective
+                </span>
+              </div>
+              <p className="mt-3 text-center text-sm text-[#b6bec9]">
+                Effective treatments represent cases where patient conditions improved or stabilized.
+                Ineffective treatments represent cases where conditions did not improve or worsened.
+              </p>
+            </div>
+          )}
         </section>
 
         <section className="monitor-card rounded-[24px] p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">What is Batch Processing?</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">What is Batch Processing?</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding Batch Processing</p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">How Batch Processing Works</h2>
 
-          <div className="mt-4 space-y-4 text-sm leading-6 text-[#b6bec9]">
+          <div className="mt-4 space-y-4 text-sm text-[#b6bec9] leading-6">
             <p>
-              Batch processing means the system collects data over a period of time and processes it at configured
-              intervals instead of handling every event instantly. It is designed for analytics, aggregation,
-              and stable insights rather than immediate reactions.
+              This page represents the batch processing layer of the system. Data is collected over time and processed in intervals rather than instantly.
             </p>
 
             <p>
-              Unlike streaming, which updates in real time, batch runs periodically based on the selected schedule
-              (seconds, minutes, hours, daily, or weekly). This makes trends easier to understand and reduces
-              short-term noise in measurements.
+              Instead of reacting to each event individually, batch processing aggregates data across multiple patients and time windows to generate more stable and reliable insights.
             </p>
 
             <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="mb-2 font-semibold text-white">What does Batch do in MedStream?</p>
-              <ul className="list-disc space-y-1 pl-5">
-                <li>Aggregates vitals collected over time windows</li>
-                <li>Computes average heart rate, oxygen, and temperature</li>
-                <li>Counts alert volume and active patient coverage</li>
-                <li>Generates department and diagnosis insights</li>
-                <li>Evaluates medication efficiency over batch windows</li>
+              <p className="font-semibold text-white mb-2">What you are seeing:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Aggregated metrics computed over a time window</li>
+                <li>Stable averages across multiple patients</li>
+                <li>Reduced noise compared to real-time values</li>
+                <li>Summary insights derived from historical data</li>
               </ul>
             </div>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Why batch processing matters:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Provides more accurate and consistent results</li>
+                <li>Enables long-term trend analysis</li>
+                <li>Helps evaluate treatment effectiveness</li>
+                <li>Supports reporting and decision-making</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Technical flow:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Data is collected over time (streaming layer)</li>
+                <li>Events are accumulated into a dataset</li>
+                <li>Batch jobs process the dataset periodically</li>
+                <li>Metrics and insights are computed</li>
+                <li>Results are exposed via API and visualized</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+              <p className="font-semibold text-white mb-2">Trade-offs:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Higher latency (results are delayed)</li>
+                <li>More stable and reliable outputs</li>
+                <li>Better suited for analytics than monitoring</li>
+                <li>Requires scheduled execution</li>
+              </ul>
+            </div>
+
+            <p>
+              This layer complements streaming processing: batch provides accuracy and deeper insights, while streaming provides speed and real-time visibility.
+            </p>
           </div>
         </section>
       </div>

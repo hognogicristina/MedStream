@@ -79,6 +79,23 @@ class TopDiagnosisRead(BaseModel):
     patients: int
 
 
+class TreatmentEffectivenessRead(BaseModel):
+    effective: int
+    ineffective: int
+
+
+class MedicationEffectivenessRead(BaseModel):
+    name: str
+    effective: int
+    ineffective: int
+    total: int
+    total_patients: int
+    alert_triggered_count: int
+    diagnosis_triggered_count: int
+    condition_triggered_count: int
+    dosage_breakdown: list[dict[str, str | int]]
+
+
 class PaginatedPatientsPerDepartmentRead(BaseModel):
     items: list[PatientsPerDepartmentRead]
     total: int
@@ -93,21 +110,11 @@ class PaginatedTopDiagnosisRead(BaseModel):
     page_size: int
 
 
-class TreatmentEfficiencyRead(BaseModel):
-    name: str
-    count: int
-
-
-class TreatmentEffectivenessRead(BaseModel):
-    effective: int
-    ineffective: int
-
-
 class BatchInsightsRead(BaseModel):
     patients_per_department: PaginatedPatientsPerDepartmentRead
     top_diagnosis: PaginatedTopDiagnosisRead
-    medication_distribution: list[TreatmentEfficiencyRead]
     treatment_effectiveness: TreatmentEffectivenessRead
+    medication_effectiveness: list[MedicationEffectivenessRead]
 
 
 class PaginatedStreamingAlertsRead(BaseModel):

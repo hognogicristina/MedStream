@@ -1,7 +1,9 @@
 import {useEffect, useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
-import {api} from "../services/authApi.js"
+import {registerDoctor} from "../services/authApi.js"
+import {getDepartments} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
+import {useNotifications} from "../components/useNotifications.js"
 import {
   buildPatientPhoneNumber,
   ROMANIA_PHONE_PLACEHOLDER,
@@ -9,6 +11,7 @@ import {
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const {notifyError} = useNotifications()
 
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({
@@ -22,22 +25,20 @@ export default function RegisterPage() {
     password: "",
     confirm_password: "",
   })
-  const [message, setMessage] = useState("")
-  const [isError, setIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [departments, setDepartments] = useState([])
 
   useEffect(() => {
     const loadDepartments = async () => {
       try {
-        const res = await api.get("/departments")
+        const res = await getDepartments()
         setDepartments(getResponseData(res))
       } catch (error) {
-        console.error("Failed to load departments", error)
+        notifyError(getErrorMessage(error), {duration: 5000})
       }
     }
     loadDepartments()
-  }, [])
+  }, [notifyError])
 
   const normalizedPhoneNumber = buildPatientPhoneNumber(form.phone_number)
 
@@ -82,14 +83,10 @@ export default function RegisterPage() {
       return
     }
 
-    setMessage("")
-    setIsError(false)
     setStep((current) => Math.min(current + 1, 3))
   }
 
   const handlePreviousStep = () => {
-    setMessage("")
-    setIsError(false)
     setStep((current) => Math.max(current - 1, 1))
   }
 
@@ -100,12 +97,10 @@ export default function RegisterPage() {
       return
     }
 
-    setMessage("")
-    setIsError(false)
     setIsSubmitting(true)
 
     try {
-      const response = await api.post("/register", {
+      const response = await registerDoctor({
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         birth_date: form.birth_date,
@@ -123,15 +118,14 @@ export default function RegisterPage() {
         },
       })
     } catch (error) {
-      setIsError(true)
-      setMessage(getErrorMessage(error))
+      notifyError(getErrorMessage(error), {duration: 5000})
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="app-shell login-page register-page">
+    <div className="app-shell login-page login-page-centered register-page">
       <div className="login-card monitor-card">
         <div className="login-layout">
           <aside className="login-aside">
@@ -373,12 +367,6 @@ export default function RegisterPage() {
                     />
                   </div>
                 </div>
-              )}
-
-              {message && (
-                <p className={isError ? "login-error" : "login-success"}>
-                  {message}
-                </p>
               )}
 
               <div className="auth-actions">

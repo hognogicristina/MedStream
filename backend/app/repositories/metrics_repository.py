@@ -2,6 +2,7 @@ from collections import Counter, deque
 from datetime import timedelta
 from threading import Lock
 from time import perf_counter
+from bisect import bisect_left
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -9,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.batch.status import batch_status_store, utc_now
 from app.models.alert import Alert
 from app.models.batch_analytics import BatchAnalytics
-from app.models.batch_treatment_analytics import BatchTreatmentAnalytics
 from app.models.patient.patient import Patient
 from app.models.patient.patient_condition_assignment import PatientConditionAssignment
 from app.models.patient.patient_diagnosis import PatientDiagnosis
@@ -21,43 +21,6 @@ from app.validators.metrics_validators import validate_metric_value
 
 WINDOW_MINUTES = 5
 WINDOW_DELTA = timedelta(minutes=WINDOW_MINUTES)
-EFFICIENT_STATUSES = {"improving", "stable", "resolved"}
-INEFFICIENT_STATUSES = {"worsening", "critical"}
-
-
-def comparison_window_start():
-    return utc_now() - WINDOW_DELTA
-
-
-def compute_batch_metrics(db: Session):
-    started_at = perf_counter()
-    window_start = comparison_window_start()
-
-    vitals_result = db.execute(
-        select(
-            func.avg(Vital.heart_rate),
-            func.avg(Vital.oxygen_saturation),
-            func.avg(Vital.temperature),
-            func.count(func.distinct(Vital.patient_id)),
-        ).where(Vital.recorded_at >= window_start)
-    ).one()
-
-    total_alerts = db.execute(
-        select(func.count(Alert.id)).where(Alert.created_at >= window_start)
-    ).scalar_one()
-
-    execution_time_ms = round((perf_counter() - started_at) * 1000, 2)
-
-    return {
-        "avg_heart_rate": validate_metric_value(vitals_result[0]),
-        "avg_oxygen": validate_metric_value(vitals_result[1]),
-        "avg_temperature": validate_metric_value(vitals_result[2]),
-        "total_alerts": int(total_alerts or 0),
-        "active_patients": int(vitals_result[3] or 0),
-        "execution_time_ms": execution_time_ms,
-    }
-
-
 def _empty_metrics():
     return {
         "avg_heart_rate": 0.0,
@@ -176,52 +139,6 @@ def paginate_items(items, page: int, page_size: int):
     }
 
 
-def _compute_treatment_efficiency_counts(db: Session) -> tuple[list[dict], list[dict]]:
-    latest_condition_status = (
-        select(
-            PatientConditionAssignment.patient_id.label("patient_id"),
-            PatientConditionAssignment.status.label("status"),
-            func.row_number()
-            .over(
-                partition_by=PatientConditionAssignment.patient_id,
-                order_by=PatientConditionAssignment.created_at.desc(),
-            )
-            .label("rank"),
-        )
-        .subquery()
-    )
-
-    rows = db.execute(
-        select(
-            PatientMedication.name,
-            latest_condition_status.c.status,
-            func.count(PatientMedication.id).label("count"),
-        )
-        .join(
-            latest_condition_status,
-            latest_condition_status.c.patient_id == PatientMedication.patient_id,
-        )
-        .where(latest_condition_status.c.rank == 1)
-        .group_by(PatientMedication.name, latest_condition_status.c.status)
-    ).all()
-
-    efficient_counts: Counter[str] = Counter()
-    inefficient_counts: Counter[str] = Counter()
-
-    for treatment_name, status, count in rows:
-        normalized_status = (status or "").strip().lower()
-        if normalized_status in EFFICIENT_STATUSES:
-            efficient_counts[treatment_name] += int(count or 0)
-        elif normalized_status in INEFFICIENT_STATUSES:
-            inefficient_counts[treatment_name] += int(count or 0)
-
-    def to_sorted_list(counter: Counter[str]) -> list[dict]:
-        items = sorted(counter.items(), key=lambda item: (-item[1], item[0]))
-        return [{"name": name, "count": value} for name, value in items if value > 0]
-
-    return to_sorted_list(efficient_counts), to_sorted_list(inefficient_counts)
-
-
 def refresh_batch_snapshot(db: Session, execution_time_ms: float):
     metrics_row = db.execute(
         select(
@@ -251,30 +168,6 @@ def refresh_batch_snapshot(db: Session, execution_time_ms: float):
         patients_count=int(metrics_row[4] or 0),
     )
     db.add(batch_row)
-    db.flush()
-
-    efficient_treatments, inefficient_treatments = _compute_treatment_efficiency_counts(db)
-
-    treatment_rows = [
-        BatchTreatmentAnalytics(
-            batch_analytics_id=batch_row.id,
-            efficiency_type="efficient",
-            treatment_name=item["name"],
-            count=item["count"],
-        )
-        for item in efficient_treatments
-    ]
-    treatment_rows.extend(
-        BatchTreatmentAnalytics(
-            batch_analytics_id=batch_row.id,
-            efficiency_type="inefficient",
-            treatment_name=item["name"],
-            count=item["count"],
-        )
-        for item in inefficient_treatments
-    )
-    if treatment_rows:
-        db.add_all(treatment_rows)
 
     db.commit()
 
@@ -288,8 +181,6 @@ def refresh_batch_snapshot(db: Session, execution_time_ms: float):
         "active_patients": batch_row.patients_count,
         "execution_time_ms": round(float(execution_time_ms or 0), 2),
         "timestamp": snapshot_timestamp,
-        "efficient_treatments": efficient_treatments,
-        "inefficient_treatments": inefficient_treatments,
     }
 
 
@@ -321,40 +212,6 @@ def get_latest_batch_metrics(db: Session) -> dict:
     }
 
 
-def get_latest_treatment_efficiency(db: Session, batch_analytics_id: int) -> dict:
-    rows = db.execute(
-        select(
-            BatchTreatmentAnalytics.efficiency_type,
-            BatchTreatmentAnalytics.treatment_name,
-            BatchTreatmentAnalytics.count,
-        )
-        .where(BatchTreatmentAnalytics.batch_analytics_id == batch_analytics_id)
-        .order_by(
-            BatchTreatmentAnalytics.efficiency_type.asc(),
-            BatchTreatmentAnalytics.count.desc(),
-            BatchTreatmentAnalytics.treatment_name.asc(),
-        )
-    ).all()
-
-    efficient_treatments = []
-    inefficient_treatments = []
-
-    for efficiency_type, treatment_name, count in rows:
-        payload = {
-            "name": treatment_name,
-            "count": int(count or 0),
-        }
-        if efficiency_type == "efficient":
-            efficient_treatments.append(payload)
-        elif efficiency_type == "inefficient":
-            inefficient_treatments.append(payload)
-
-    return {
-        "efficient_treatments": efficient_treatments,
-        "inefficient_treatments": inefficient_treatments,
-    }
-
-
 def get_batch_insights_repo(db: Session, *, departments_page: int, diagnoses_page: int, page_size: int) -> dict:
     department_rows = db.execute(
         select(Patient.department, func.count(PatientStats.patient_id))
@@ -371,31 +228,88 @@ def get_batch_insights_repo(db: Session, *, departments_page: int, diagnoses_pag
         .order_by(desc("patient_count"), PatientDiagnosis.diagnosis.asc())
     ).all()
 
-    latest = get_latest_batch_analytics(db)
-    treatment_payload = {
-        "efficient_treatments": [],
-        "inefficient_treatments": [],
-    }
-    if latest is not None:
-        treatment_payload = get_latest_treatment_efficiency(db, latest.id)
-    medication_distribution_map: Counter[str] = Counter()
-    for entry in treatment_payload["efficient_treatments"]:
-        medication_distribution_map[entry["name"]] += int(entry["count"] or 0)
-    for entry in treatment_payload["inefficient_treatments"]:
-        medication_distribution_map[entry["name"]] += int(entry["count"] or 0)
-
-    medication_distribution = [
-        {"name": name, "count": count}
-        for name, count in sorted(
-            medication_distribution_map.items(),
-            key=lambda item: (-item[1], item[0]),
+    medications = db.execute(
+        select(
+            PatientMedication.id,
+            PatientMedication.name,
+            PatientMedication.patient_id,
+            PatientMedication.dosage,
+            PatientMedication.frequency,
+            PatientMedication.created_at,
         )
-        if count > 0
-    ]
-    treatment_effectiveness = {
-        "effective": int(sum(item["count"] for item in treatment_payload["efficient_treatments"])),
-        "ineffective": int(sum(item["count"] for item in treatment_payload["inefficient_treatments"])),
-    }
+    ).all()
+
+    alerts = db.execute(
+        select(
+            Alert.patient_id,
+            Alert.created_at,
+        )
+    ).all()
+    diagnosis_rows = db.execute(
+        select(PatientDiagnosis.patient_id)
+    ).all()
+    condition_rows = db.execute(
+        select(PatientConditionAssignment.patient_id)
+    ).all()
+
+    alerts_by_patient: dict[int, list] = {}
+    for patient_id, created_at in alerts:
+        alerts_by_patient.setdefault(patient_id, []).append(created_at)
+
+    for patient_id in alerts_by_patient:
+        alerts_by_patient[patient_id].sort()
+
+    diagnoses_by_patient = {patient_id for (patient_id,) in diagnosis_rows}
+    conditions_by_patient = {patient_id for (patient_id,) in condition_rows}
+
+    medication_effectiveness: dict[str, dict] = {}
+    treatment_effective_total = 0
+    treatment_ineffective_total = 0
+    window = timedelta(hours=72)
+
+    for _medication_id, medication_name, patient_id, dosage, frequency, prescribed_at in medications:
+        if not medication_name or prescribed_at is None:
+            continue
+
+        patient_alerts = alerts_by_patient.get(patient_id, [])
+        is_effective = True
+        if patient_alerts:
+            first_index = bisect_left(patient_alerts, prescribed_at)
+            if first_index < len(patient_alerts):
+                next_alert_time = patient_alerts[first_index]
+                if prescribed_at <= next_alert_time <= prescribed_at + window:
+                    is_effective = False
+
+        if medication_name not in medication_effectiveness:
+            medication_effectiveness[medication_name] = {
+                "effective": 0,
+                "ineffective": 0,
+                "patients": set(),
+                "alert_triggered_count": 0,
+                "diagnosis_triggered_count": 0,
+                "condition_triggered_count": 0,
+                "dosage_breakdown": {},
+            }
+
+        entry = medication_effectiveness[medication_name]
+        entry["patients"].add(patient_id)
+
+        dosage_key = (dosage or "--", frequency or "--")
+        entry["dosage_breakdown"][dosage_key] = entry["dosage_breakdown"].get(dosage_key, 0) + 1
+
+        if not is_effective:
+            entry["alert_triggered_count"] += 1
+        if patient_id in diagnoses_by_patient:
+            entry["diagnosis_triggered_count"] += 1
+        if patient_id in conditions_by_patient:
+            entry["condition_triggered_count"] += 1
+
+        if is_effective:
+            entry["effective"] += 1
+            treatment_effective_total += 1
+        else:
+            entry["ineffective"] += 1
+            treatment_ineffective_total += 1
 
     return {
         "patients_per_department": paginate_items(
@@ -417,8 +331,34 @@ def get_batch_insights_repo(db: Session, *, departments_page: int, diagnoses_pag
             diagnoses_page,
             page_size,
         ),
-        "medication_distribution": medication_distribution,
-        "treatment_effectiveness": treatment_effectiveness,
+        "treatment_effectiveness": {
+            "effective": treatment_effective_total,
+            "ineffective": treatment_ineffective_total,
+        },
+        "medication_effectiveness": sorted(
+            [
+                {
+                    "name": name,
+                    "effective": values["effective"],
+                    "ineffective": values["ineffective"],
+                    "total": values["effective"] + values["ineffective"],
+                    "total_patients": len(values["patients"]),
+                    "alert_triggered_count": values["alert_triggered_count"],
+                    "diagnosis_triggered_count": values["diagnosis_triggered_count"],
+                    "condition_triggered_count": values["condition_triggered_count"],
+                    "dosage_breakdown": [
+                        {
+                            "dosage": dosage,
+                            "frequency": frequency,
+                            "count": count,
+                        }
+                        for (dosage, frequency), count in values["dosage_breakdown"].items()
+                    ],
+                }
+                for name, values in medication_effectiveness.items()
+            ],
+            key=lambda item: (-item["total"], item["name"]),
+        ),
     }
 
 

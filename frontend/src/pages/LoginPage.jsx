@@ -1,23 +1,31 @@
 import {Link} from "react-router-dom"
 import {useEffect, useRef, useState} from "react"
-import {useLocation, useNavigate} from "react-router-dom"
+import {useLocation, useNavigate, useSearchParams} from "react-router-dom"
 import {useAuth} from "../components/AuthContext.jsx"
-import {useNotifications} from "../components/NotificationProvider.jsx"
-import {api} from "../services/authApi.js"
+import {useNotifications} from "../components/useNotifications.js"
+import {loginDoctor} from "../services/authApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const {login} = useAuth()
-  const {notifySuccess} = useNotifications()
+  const {notifySuccess, notifyError} = useNotifications()
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
-  const [feedback, setFeedback] = useState("")
-  const [feedbackIsError, setFeedbackIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const handledLocationKeyRef = useRef("")
   const isLoginValid = identifier.trim().length > 0 && password.trim().length > 0
+
+  useEffect(() => {
+    if (searchParams.get("recovered") !== "1") {
+      return
+    }
+
+    notifySuccess("Account recovery verified. Please sign in.", {duration: 5000})
+    navigate("/login", {replace: true})
+  }, [navigate, notifySuccess, searchParams])
 
   useEffect(() => {
     if (!location.state?.message) {
@@ -38,12 +46,10 @@ export default function LoginPage() {
     if (!isLoginValid || isSubmitting) {
       return
     }
-    setFeedback("")
-    setFeedbackIsError(false)
     setIsSubmitting(true)
 
     try {
-      const response = await api.post("/doctors/login", {
+      const response = await loginDoctor({
         identifier,
         password,
       })
@@ -51,8 +57,7 @@ export default function LoginPage() {
       login(getResponseData(response).token)
       navigate("/dashboard")
     } catch (error) {
-      setFeedbackIsError(true)
-      setFeedback(getErrorMessage(error))
+      notifyError(getErrorMessage(error), {duration: 5000})
     } finally {
       setIsSubmitting(false)
     }
@@ -129,12 +134,6 @@ export default function LoginPage() {
                   {"Recover account"}
                 </Link>
               </div>
-
-              {feedback && (
-                <p className={feedbackIsError ? "login-error" : "login-success"}>
-                  {feedback}
-                </p>
-              )}
 
               <button
                 type="submit"

@@ -1,6 +1,5 @@
 import {api} from "./api.js"
 
-export {api}
 
 export function getCurrentDoctor(headers) {
   return api.get("/doctors/me", {headers})

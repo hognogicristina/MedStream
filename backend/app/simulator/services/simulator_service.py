@@ -75,7 +75,6 @@ class SimulatorService:
             if random.random() < self.config.patient_spawn_probability:
                 patient_data = self._create_patient(db, self.counter)
                 if patient_data is not None:
-                    # Ensure new patients are committed before any Kafka vital event can be emitted.
                     db.commit()
                     self.active_patients.append(patient_data)
                     self.counter += 1
@@ -280,7 +279,7 @@ class SimulatorService:
         if maybe_random_discharge(self.config.random_discharge_probability):
             reason = pick_discharge_reason()
             discharged_at = now_utc()
-            self.repository.mark_patient_discharged(patient, reason, discharged_at)
+            self.repository.mark_patient_discharged(db, patient, reason, discharged_at)
             doctor_id = self.repository.get_first_assigned_doctor_id(db, patient.id)
             if doctor_id is not None:
                 self.repository.create_admission_history(
@@ -402,9 +401,13 @@ class SimulatorService:
 
         has_pending = self.repository.count_incoming_activities(db, patient.id) > 0
         if try_discharge_patient(has_pending):
-            self.repository.mark_patient_discharged(patient, "Recovered", now_utc())
+            self.repository.mark_patient_discharged(db, patient, "Recovered", now_utc())
 
     def _transfer_patient(self, db, patient) -> None:
+        assigned_doctors = self.repository.get_assigned_doctors_for_patient_department(db, patient.id, patient.department)
+        if any(self.repository.doctor_has_incoming_activities(db, doctor.id) for doctor in assigned_doctors):
+            return
+
         departments = medical_repository.get_all_departments()
         candidate_departments = [dept for dept in departments if dept != patient.department]
         if not candidate_departments:

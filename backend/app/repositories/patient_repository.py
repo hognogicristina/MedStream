@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.db.session import SessionLocal
+from app.models.alert import Alert
 from app.models.doctor.doctor import Doctor
 from app.models.doctor.doctor_activity import DoctorActivity
 from app.models.doctor.doctor_activity_patient import doctor_activity_patients
@@ -69,6 +70,19 @@ class PatientRepository:
         if arrival_method == "ambulance":
             return "Arrived by ambulance"
         return "Arrived by themselves"
+
+    @staticmethod
+    def _cancel_incoming_patient_activities(db, patient_id: int) -> None:
+        activities = (
+            db.query(DoctorActivity)
+            .filter(
+                DoctorActivity.patient_id == patient_id,
+                DoctorActivity.status == "incoming",
+            )
+            .all()
+        )
+        for activity in activities:
+            activity.status = "canceled"
 
     def assign_doctor_to_patient_with_session(self, db, doctor_id: int, patient_id: int) -> None:
         exists = db.execute(
@@ -137,9 +151,166 @@ class PatientRepository:
 
             return db.execute(patient_query.order_by(desc(Patient.id))).scalars().all()
 
+    def search_patients_by_cnp(self, cnp: str, limit: int = 10) -> list[Patient]:
+        normalized_cnp = (cnp or "").strip()
+        if not normalized_cnp:
+            return []
+
+        with SessionLocal() as db:
+            return db.execute(
+                select(Patient)
+                .options(joinedload(Patient.address))
+                .where(Patient.cnp.like(f"%{normalized_cnp}%"))
+                .order_by(Patient.cnp.asc(), Patient.id.asc())
+                .limit(max(1, min(limit, 20)))
+            ).scalars().all()
+
     def get_patient(self, patient_id: int) -> Patient:
         with SessionLocal() as db:
             return self._load_patient_with_address(db, patient_id)
+
+    @staticmethod
+    def _build_treatment_reasoning_payload(
+        *,
+        medication: PatientMedication,
+        alerts: list[Alert],
+        diagnosis_labels: list[str],
+        condition_labels: list[str],
+    ) -> dict:
+        medication_time = medication.created_at
+        closest_alerts = sorted(
+            alerts,
+            key=lambda item: abs((item.created_at - medication_time).total_seconds()),
+        )[:3]
+
+        alert_labels = [f"{item.alert_type}: {item.message}" for item in closest_alerts]
+
+        if not alert_labels and alerts:
+            recent_alerts = sorted(alerts, key=lambda item: item.created_at, reverse=True)[:3]
+            alert_labels = [f"{item.alert_type}: {item.message}" for item in recent_alerts]
+
+        return {
+            "alerts": alert_labels,
+            "diagnoses": diagnosis_labels,
+            "conditions": condition_labels,
+        }
+
+    def get_patient_treatment_analysis(self, patient_id: int) -> dict:
+        with SessionLocal() as db:
+            get_patient_or_raise(db, patient_id)
+
+            medications = db.execute(
+                select(PatientMedication)
+                .where(PatientMedication.patient_id == patient_id)
+                .order_by(PatientMedication.created_at.asc(), PatientMedication.id.asc())
+            ).scalars().all()
+
+            diagnoses = db.execute(
+                select(PatientDiagnosis)
+                .where(PatientDiagnosis.patient_id == patient_id)
+                .order_by(PatientDiagnosis.created_at.asc(), PatientDiagnosis.id.asc())
+            ).scalars().all()
+
+            condition_rows = db.execute(
+                select(PatientCondition, PatientConditionAssignment)
+                .join(PatientConditionAssignment, PatientConditionAssignment.condition_id == PatientCondition.id)
+                .where(PatientConditionAssignment.patient_id == patient_id)
+                .order_by(PatientConditionAssignment.created_at.asc(), PatientCondition.id.asc())
+            ).all()
+
+            alerts = db.execute(
+                select(Alert)
+                .where(Alert.patient_id == patient_id)
+                .order_by(Alert.created_at.asc(), Alert.id.asc())
+            ).scalars().all()
+
+            diagnosis_labels = [entry.diagnosis for entry in diagnoses if entry.diagnosis]
+            condition_labels = [
+                f"{condition.name} ({assignment.status})"
+                for condition, assignment in condition_rows
+                if condition.name
+            ]
+
+            medications_payload = []
+            for medication in medications:
+                medications_payload.append(
+                    {
+                        "id": medication.id,
+                        "name": medication.name,
+                        "dosage": medication.dosage,
+                        "frequency": medication.frequency,
+                        "prescribed_at": medication.created_at,
+                        "reasoning": self._build_treatment_reasoning_payload(
+                            medication=medication,
+                            alerts=alerts,
+                            diagnosis_labels=diagnosis_labels,
+                            condition_labels=condition_labels,
+                        ),
+                    }
+                )
+
+            diagnoses_payload = [
+                {
+                    "id": diagnosis.id,
+                    "diagnosis": diagnosis.diagnosis,
+                    "status": diagnosis.status,
+                    "notes": diagnosis.notes,
+                    "created_at": diagnosis.created_at,
+                }
+                for diagnosis in diagnoses
+            ]
+
+            alerts_payload = [
+                {
+                    "id": alert.id,
+                    "alert_type": alert.alert_type,
+                    "message": alert.message,
+                    "severity": alert.severity,
+                    "created_at": alert.created_at,
+                }
+                for alert in alerts
+            ]
+
+            timeline_events = []
+            for medication in medications:
+                timeline_events.append(
+                    {
+                        "timestamp": medication.created_at,
+                        "event_type": "medication",
+                        "title": medication.name,
+                        "details": f"{medication.dosage}, {medication.frequency}",
+                        "related_medication_id": medication.id,
+                    }
+                )
+
+            for alert in alerts:
+                timeline_events.append(
+                    {
+                        "timestamp": alert.created_at,
+                        "event_type": "alert",
+                        "title": alert.alert_type,
+                        "details": alert.message,
+                        "related_medication_id": None,
+                    }
+                )
+
+            if medications:
+                first_medication = medications[0].created_at - timedelta(days=30)
+                last_medication = medications[-1].created_at + timedelta(days=30)
+                timeline_events = [
+                    event
+                    for event in timeline_events
+                    if first_medication <= event["timestamp"] <= last_medication or event["event_type"] == "medication"
+                ]
+
+            timeline_events.sort(key=lambda event: (event["timestamp"], event["event_type"]))
+
+            return {
+                "medications": medications_payload,
+                "diagnoses": diagnoses_payload,
+                "alerts": alerts_payload,
+                "timeline": timeline_events,
+            }
 
     def get_patient_doctors(self, patient_id: int) -> list[Doctor]:
         with SessionLocal() as db:
@@ -239,6 +410,7 @@ class PatientRepository:
 
             normalized_type = validate_discharge_type(discharge_type)
             normalized_reason = validate_required_text(reason, "Reason")
+            self._cancel_incoming_patient_activities(db, patient.id)
 
             patient.is_discharged = True
             patient.discharge_reason = normalized_reason
@@ -331,6 +503,31 @@ class PatientRepository:
                 raise ValidationError("TRANSFER_TARGET_NOT_AVAILABLE")
 
             validate_doctor_patient_specialization(replacement_doctor, patient)
+
+            incoming_activities = (
+                db.query(DoctorActivity)
+                .filter(
+                    DoctorActivity.patient_id == patient.id,
+                    DoctorActivity.status == "incoming",
+                )
+                .all()
+            )
+
+            for activity in incoming_activities:
+                activity.status = "canceled"
+
+                migrated_activity = DoctorActivity(
+                    doctor_id=replacement_doctor.id,
+                    patient_id=patient.id,
+                    type=activity.type,
+                    title=activity.title,
+                    description=activity.description,
+                    status="incoming",
+                    scheduled_at=activity.scheduled_at,
+                )
+                migrated_activity.patients = [patient]
+                migrated_activity.doctors = [replacement_doctor]
+                db.add(migrated_activity)
 
             if not any(doctor.id == replacement_doctor.id for doctor in patient.doctors):
                 patient.doctors.append(replacement_doctor)

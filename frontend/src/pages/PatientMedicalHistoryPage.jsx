@@ -1,10 +1,35 @@
 import {useCallback, useEffect, useMemo, useState} from "react"
 import {useParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import DataTable from "../components/DataTable.jsx"
-import {useNotifications} from "../components/NotificationProvider.jsx"
+import {useNotifications} from "../components/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
-import {api} from "../services/patientApi.js"
+import {getCurrentDoctor} from "../services/doctorApi.js"
+import {
+  administerMedication,
+  assignPatientCondition,
+  createPatientAllergy,
+  createPatientDiagnosis,
+  getAllergyOptions,
+  getConditionOptions,
+  getConditionStatusOptions,
+  getDiagnosisOptions,
+  getDosageOptions,
+  getFrequencyOptions,
+  getMedicationOptions,
+  getPatient,
+  getPatientAllergies,
+  getPatientConditions,
+  getPatientDiagnosis,
+  getPatientDoctors,
+  getPatientMedicationOptions,
+  getPatientMedications,
+  updateMedication,
+  updatePatientAllergy,
+  updatePatientCondition,
+  updatePatientDiagnosis,
+} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 
 function formatDateTime(value) {
@@ -103,9 +128,7 @@ export default function PatientMedicalHistoryPage() {
       if (!token) return
 
       try {
-        const res = await api.get("/doctors/me", {
-          headers: {Authorization: `Bearer ${token}`},
-        })
+        const res = await getCurrentDoctor({Authorization: `Bearer ${token}`})
         setCurrentDoctor(getResponseData(res))
       } catch (error) {
         console.error("Failed to load current doctor", error)
@@ -132,19 +155,23 @@ export default function PatientMedicalHistoryPage() {
         dosageOptRes,
         frequencyOptRes,
         conditionStatusRes,
+        diagnosisOptionsRes,
+        medicationOptionsRes,
       ] = await Promise.all([
-        api.get(`/patients/${id}`),
-        api.get(`/patients/${id}/diagnosis?page=1&page_size=100`),
-        api.get(`/patients/${id}/medications`),
-        api.get(`/patients/${id}/allergies?page=1&page_size=100`),
-        api.get(`/patients/${id}/conditions`),
-        api.get("/conditions"),
-        api.get(`/patients/${id}/doctors`),
-        api.get("/options/allergies"),
-        api.get(`/medications/patients/${id}/options`),
-        api.get("/medications/dosages"),
-        api.get("/medications/frequencies"),
-        api.get("/options/condition-statuses"),
+        getPatient(id),
+        getPatientDiagnosis(id, 1, 100),
+        getPatientMedications(id),
+        getPatientAllergies(id, 1, 100),
+        getPatientConditions(id),
+        getConditionOptions(),
+        getPatientDoctors(id),
+        getAllergyOptions(),
+        getPatientMedicationOptions(id),
+        getDosageOptions(),
+        getFrequencyOptions(),
+        getConditionStatusOptions(),
+        getDiagnosisOptions(),
+        getMedicationOptions(),
       ])
 
       setPatient(getResponseData(patientRes))
@@ -160,6 +187,8 @@ export default function PatientMedicalHistoryPage() {
       setDosageOptions(getResponseData(dosageOptRes) || [])
       setFrequencyOptions(getResponseData(frequencyOptRes) || [])
       setConditionStatusOptions(getResponseData(conditionStatusRes) || [])
+      void diagnosisOptionsRes
+      void medicationOptionsRes
     } catch (error) {
       notifyError(getErrorMessage(error))
     } finally {
@@ -277,16 +306,12 @@ export default function PatientMedicalHistoryPage() {
       let response
 
       if (type === "diagnosis") {
-        response = await api.post(`/patients/${id}/diagnosis`, diagnosisForm, {
-          headers: authHeaders,
-        })
+        response = await createPatientDiagnosis(id, diagnosisForm, authHeaders)
         setDiagnosisForm({diagnosis: "", notes: "", status: ""})
       }
 
       if (type === "medication") {
-        response = await api.post(`/patients/${id}/medication`, normalizeMedicationForm(medicationForm), {
-          headers: authHeaders,
-        })
+        response = await administerMedication(id, normalizeMedicationForm(medicationForm), authHeaders)
         setMedicationForm({name: "", dosage: "", frequency: ""})
       }
 
@@ -301,9 +326,7 @@ export default function PatientMedicalHistoryPage() {
           payload.note = appendDoctorNote(trimValue(editDiagnosisForm.note))
         }
 
-        response = await api.patch(`/patients/diagnosis/${editItem.id}`, payload, {
-          headers: authHeaders,
-        })
+        response = await updatePatientDiagnosis(editItem.id, payload, authHeaders)
         setEditDiagnosisForm({diagnosis: "", notes: "", status: "", note: ""})
       }
 
@@ -319,37 +342,29 @@ export default function PatientMedicalHistoryPage() {
           payload.frequency = normalized.frequency
         }
 
-        response = await api.patch(`/patients/medications/${editItem.id}`, payload, {
-          headers: authHeaders,
-        })
+        response = await updateMedication(editItem.id, payload, authHeaders)
         setEditMedicationForm({dosage: "", frequency: "", note: ""})
       }
 
       if (type === "allergy") {
-        response = await api.post(`/patients/${id}/allergies`, {
+        response = await createPatientAllergy(id, {
           allergy_name: allergyForm.name,
           severity: allergyForm.severity,
-        }, {
-          headers: authHeaders,
-        })
+        }, authHeaders)
         setAllergyForm({name: "", severity: "mild"})
       }
 
       if (type === "edit_allergy") {
-        response = await api.patch(`/patients/allergies/${editItem.id}`, {
+        response = await updatePatientAllergy(editItem.id, {
           severity: trimValue(editAllergyForm.severity),
-        }, {
-          headers: authHeaders,
-        })
+        }, authHeaders)
         setEditAllergyForm({name: "", severity: "mild"})
       }
 
       if (type === "condition") {
-        response = await api.post(`/patients/${id}/conditions`, {
+        response = await assignPatientCondition(id, {
           condition_id: Number(conditionId),
-        }, {
-          headers: authHeaders,
-        })
+        }, authHeaders)
         setConditionId("")
         setConditionSearch("")
       }
@@ -364,9 +379,7 @@ export default function PatientMedicalHistoryPage() {
           payload.status = normalized.status
         }
 
-        response = await api.patch(`/patients/condition/${editItem.id}`, payload, {
-          headers: authHeaders,
-        })
+        response = await updatePatientCondition(editItem.id, payload, authHeaders)
         setEditConditionForm({status: "", notes: ""})
       }
 
@@ -422,6 +435,16 @@ export default function PatientMedicalHistoryPage() {
       })
       setShowDialog("edit_condition")
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="app-shell min-h-screen px-4 py-6 text-slate-100">
+        <div className="mx-auto max-w-6xl flex flex-col gap-6">
+          <LoadingSpinner/>
+        </div>
+      </div>
+    )
   }
 
   return (

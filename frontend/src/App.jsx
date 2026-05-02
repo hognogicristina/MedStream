@@ -1,8 +1,12 @@
-import {BrowserRouter, Navigate, Route, Routes} from "react-router-dom"
+import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate} from "react-router-dom"
+import {useEffect} from "react"
 import AuthenticatedLayout from "./components/AuthenticatedLayout.jsx"
 import {useAuth} from "./components/AuthContext.jsx"
 import ProtectedRoute from "./components/ProtectedRoute.jsx"
 import PublicOnlyRoute from "./components/PublicOnlyRoute.jsx"
+import LoadingSpinner from "./components/LoadingSpinner.jsx"
+import {useNotifications} from "./components/useNotifications.js"
+import {registerAuthFailureHandler} from "./services/api.js"
 import AddPatientPage from "./pages/AddPatientPage.jsx"
 import AlertsPage from "./pages/AlertsPage.jsx"
 import BatchMetricsPage from "./pages/BatchMetricsPage.jsx"
@@ -14,8 +18,10 @@ import PatientPage from "./pages/PatientPage.jsx"
 import PatientDiagnosisPage from "./pages/PatientDiagnosisPage.jsx"
 import PatientAdmissionHistoryPage from "./pages/PatientAdmissionHistoryPage.jsx"
 import PatientMedicalHistoryPage from "./pages/PatientMedicalHistoryPage.jsx"
+import PatientTreatmentAnalysisPage from "./pages/PatientTreatmentAnalysisPage.jsx"
 import ProfilePage from "./pages/ProfilePage.jsx"
 import RecoverAccountPage from "./pages/RecoverAccountPage.jsx"
+import RecoverAccountVerifyPage from "./pages/RecoverAccountVerifyPage.jsx"
 import RegisterPage from "./pages/RegisterPage.jsx"
 import ResetPasswordPage from "./pages/ResetPasswordPage.jsx"
 import StreamingMetricsPage from "./pages/StreamingMetricsPage.jsx"
@@ -26,15 +32,39 @@ function RootRoute() {
   const {isAuthenticated, isAuthResolved} = useAuth()
 
   if (!isAuthResolved) {
-    return null
+    return <LoadingSpinner/>
   }
 
   return <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace/>
 }
 
+function ApiAuthBridge() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const {logout} = useAuth()
+  const {notifyError} = useNotifications()
+
+  useEffect(() => {
+    registerAuthFailureHandler(() => {
+      notifyError("Session expired. Please log in again.")
+      logout()
+      if (location.pathname !== "/login") {
+        navigate("/login", {replace: true, state: {message: "Session expired. Please log in again."}})
+      }
+    })
+
+    return () => {
+      registerAuthFailureHandler(null)
+    }
+  }, [location.pathname, logout, navigate, notifyError])
+
+  return null
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <ApiAuthBridge/>
       <Routes>
         <Route path="/" element={<RootRoute/>}/>
 
@@ -89,6 +119,11 @@ function App() {
         />
 
         <Route
+          path="/recover-account/verify"
+          element={<RecoverAccountVerifyPage/>}
+        />
+
+        <Route
           element={
             <ProtectedRoute>
               <AuthenticatedLayout/>
@@ -101,6 +136,7 @@ function App() {
           <Route path="/patients/:id/diagnosis" element={<PatientDiagnosisPage/>}/>
           <Route path="/patients/:id/medical-history" element={<PatientMedicalHistoryPage/>}/>
           <Route path="/patients/:id/admission-history" element={<PatientAdmissionHistoryPage/>}/>
+          <Route path="/patients/:id/analysis" element={<PatientTreatmentAnalysisPage/>}/>
           <Route path="/alerts" element={<AlertsPage/>}/>
           <Route path="/metrics/streaming" element={<StreamingMetricsPage/>}/>
           <Route path="/metrics/batch" element={<BatchMetricsPage/>}/>

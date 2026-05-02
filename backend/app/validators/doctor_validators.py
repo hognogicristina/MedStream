@@ -5,6 +5,7 @@ from datetime import date
 from sqlalchemy import or_, select
 
 from app.core.errors import AuthorizationError, PermissionDeniedError, ValidationError
+from app.models.doctor.doctor_activity import DoctorActivity
 from app.models.doctor.doctor_activity_patient import doctor_activity_patients
 from app.service.auth_tokens import parse_access_token
 from app.validators.auth_validators import (
@@ -54,10 +55,6 @@ def normalize_email(value: str | None) -> str:
 
 def normalize_phone_number(value: str | None) -> str | None:
     return normalize_phone_value(value)
-
-
-def validate_phone_number(value: str | None) -> str | None:
-    return normalize_phone_number(value)
 
 
 def validate_birth_date(value: date | None) -> date | None:
@@ -228,3 +225,12 @@ def validate_activity_creation(db, doctor, patient) -> None:
 
     if not assigned:
         raise ValidationError("PATIENT_NOT_ASSIGNED")
+
+
+def validate_doctor_has_no_incoming_activities(db, doctor_id: int) -> None:
+    incoming_count = db.query(DoctorActivity).filter(
+        DoctorActivity.doctor_id == doctor_id,
+        DoctorActivity.status == "incoming",
+    ).count()
+    if incoming_count > 0:
+        raise ValidationError("DOCTOR_HAS_INCOMING_ACTIVITIES")

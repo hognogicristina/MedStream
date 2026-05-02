@@ -1,13 +1,29 @@
-import {useEffect, useMemo, useState, useRef} from "react"
+import {useCallback, useEffect, useMemo, useState, useRef} from "react"
 import {Link, useNavigate} from "react-router-dom"
 import ActivityList from "../components/ActivityList.jsx"
 import BackButton from "../components/BackButton.jsx"
 import CountValue from "../components/CountValue.jsx"
 import DataTable from "../components/DataTable.jsx"
 import ActivityDialog from "../components/ActivityDialog.jsx"
-import {useNotifications} from "../components/NotificationProvider.jsx"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import {useNotifications} from "../components/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
-import {api} from "../services/doctorApi.js"
+import {resendVerificationEmail} from "../services/authApi.js"
+import {
+  assignPatientToDoctor,
+  createDoctorActivity,
+  deactivateDoctor,
+  getAvailableDoctors,
+  getCurrentDoctor,
+  getDoctorActivities,
+  getDoctorPatients,
+  listDoctors,
+  removePatientFromDoctor,
+  updateCurrentDoctor,
+  updateCurrentDoctorEmail,
+  updateDoctorActivity,
+} from "../services/doctorApi.js"
+import {getActivityOptions, getDepartments, getPatientActivities, getPatientDoctors, listPatients, searchPatientsByCnp, transferPatient} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {formatPatientFullName} from "../utils/patients.js"
 import {buildPatientPhoneNumber, normalizeRomanianPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone.js"
@@ -51,7 +67,59 @@ function normalizeActivity(activity, patientOptions = [], doctorOptions = []) {
   }
 }
 
+function toEpoch(value) {
+  const time = value ? new Date(value).getTime() : Number.NaN
+  return Number.isFinite(time) ? time : 0
+}
+
+function sortActivitiesByStatus(items) {
+  const statusRank = {
+    incoming: 1,
+    completed: 2,
+    canceled: 3,
+  }
+
+  return [...items].sort((left, right) => {
+    const leftRank = statusRank[left.status] ?? 99
+    const rightRank = statusRank[right.status] ?? 99
+
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank
+    }
+
+    if (left.status === "incoming") {
+      const leftTime = toEpoch(left.scheduled_at || left.created_at)
+      const rightTime = toEpoch(right.scheduled_at || right.created_at)
+      if (leftTime !== rightTime) {
+        return leftTime - rightTime
+      }
+      return (left.id || 0) - (right.id || 0)
+    }
+
+    if (left.status === "completed") {
+      const leftTime = toEpoch(left.completed_at || left.updated_at || left.created_at)
+      const rightTime = toEpoch(right.completed_at || right.updated_at || right.created_at)
+      if (leftTime !== rightTime) {
+        return rightTime - leftTime
+      }
+      return (right.id || 0) - (left.id || 0)
+    }
+
+    if (left.status === "canceled") {
+      const leftTime = toEpoch(left.canceled_at || left.updated_at || left.created_at)
+      const rightTime = toEpoch(right.canceled_at || right.updated_at || right.created_at)
+      if (leftTime !== rightTime) {
+        return rightTime - leftTime
+      }
+      return (right.id || 0) - (left.id || 0)
+    }
+
+    return (left.id || 0) - (right.id || 0)
+  })
+}
+
 export default function ProfilePage() {
+  const EMAIL_VERIFICATION_STATUS_POLL_MS = 30000
   const navigate = useNavigate()
   const {notifyError, notifySuccess} = useNotifications()
   const {token, logout} = useAuth()
@@ -80,6 +148,8 @@ export default function ProfilePage() {
   const [removingPatientId, setRemovingPatientId] = useState(null)
   const [isTransferringPatient, setIsTransferringPatient] = useState(false)
   const [isLoadingTransferDoctors, setIsLoadingTransferDoctors] = useState(false)
+  const [isCheckingTransferActivities, setIsCheckingTransferActivities] = useState(false)
+  const [showTransferActivityConfirmation, setShowTransferActivityConfirmation] = useState(false)
   const [patientPendingRemoval, setPatientPendingRemoval] = useState(null)
   const [patientPendingTransfer, setPatientPendingTransfer] = useState(null)
   const [transferDoctorOptions, setTransferDoctorOptions] = useState([])
@@ -106,6 +176,7 @@ export default function ProfilePage() {
     Authorization: `Bearer ${token}`,
   }), [token])
   const hasAssignedPatients = assignedPatients.length > 0
+  const hasIncomingActivities = activities.some((activity) => activity.status === "incoming")
   const isOnlyDoctorInDepartment = Boolean(
     doctor
     && allDoctors.filter((item) => item.is_active && item.specialization === doctor.specialization).length <= 1,
@@ -119,7 +190,7 @@ export default function ProfilePage() {
 
     const entries = await Promise.all(patientsList.map(async (patient) => {
       try {
-        const response = await api.get(`/patients/${patient.id}/doctors`)
+        const response = await getPatientDoctors(patient.id)
         const doctorsList = getResponseData(response) || []
         return [patient.id, doctorsList.length]
       } catch {
@@ -129,6 +200,41 @@ export default function ProfilePage() {
 
     setPatientDoctorCounts(Object.fromEntries(entries))
   }
+
+  const refreshAssignedPatients = async (doctorId) => {
+    if (!doctorId) {
+      setAssignedPatients([])
+      setPatientDoctorCounts({})
+      return []
+    }
+
+    const assignedPatientsResponse = await getDoctorPatients(doctorId)
+    const nextAssignedPatients = getResponseData(assignedPatientsResponse) || []
+    setAssignedPatients(nextAssignedPatients)
+    await loadAssignedDoctorCounts(nextAssignedPatients)
+    return nextAssignedPatients
+  }
+
+  const refetchActivities = async (doctorId) => {
+    if (!doctorId) {
+      setActivities([])
+      return []
+    }
+
+    const activitiesResponse = await getDoctorActivities(doctorId)
+    const nextActivities = (getResponseData(activitiesResponse) || []).map((activity) =>
+      normalizeActivity(activity, patients, allDoctors),
+    )
+    setActivities(sortActivitiesByStatus(nextActivities))
+    return nextActivities
+  }
+
+  const refetchDoctorProfile = useCallback(async () => {
+    const response = await getCurrentDoctor(authHeaders)
+    const doctorData = getResponseData(response)
+    setDoctor((current) => ({...(current || {}), ...doctorData}))
+    return doctorData
+  }, [authHeaders])
 
   useEffect(() => {
     const loadWorkspace = async () => {
@@ -140,17 +246,15 @@ export default function ProfilePage() {
       setIsLoading(true)
 
       try {
-        const doctorResponse = await api.get("/doctors/me", {
-          headers: authHeaders,
-        })
+        const doctorResponse = await getCurrentDoctor(authHeaders)
         const currentDoctor = getResponseData(doctorResponse)
         const [assignedPatientsResponse, patientsResponse, activitiesResponse, doctorsResponse, departmentsResponse, activityTypesResponse] = await Promise.all([
-          api.get(`/doctors/${currentDoctor.id}/patients`),
-          api.get("/patients?page=1&limit=100"),
-          api.get(`/doctors/${currentDoctor.id}/activities`),
-          api.get("/doctors"),
-          api.get("/departments"),
-          api.get("/options/activities"),
+          getDoctorPatients(currentDoctor.id),
+          listPatients({page: 1, limit: 100}),
+          getDoctorActivities(currentDoctor.id),
+          listDoctors(),
+          getDepartments(),
+          getActivityOptions(),
         ])
 
         const assignedPatientsData = getResponseData(assignedPatientsResponse) || []
@@ -161,7 +265,7 @@ export default function ProfilePage() {
         setDoctor(currentDoctor)
         setAssignedPatients(assignedPatientsData)
         setPatients(patientsData)
-        setActivities(normalizedActivities)
+        setActivities(sortActivitiesByStatus(normalizedActivities))
         setAllDoctors(doctorsData)
         setDepartments(getResponseData(departmentsResponse) || [])
         setActivityTypes(getResponseData(activityTypesResponse) || [])
@@ -209,6 +313,7 @@ export default function ProfilePage() {
   const initialPhoneNumber = normalizeRomanianPhoneNumber(doctor?.phone_number)
   const isProfileDirty = Object.keys(initialProfileForm).some((key) => form[key] !== initialProfileForm[key]) || normalizedPhoneNumber !== initialPhoneNumber
   const displayedEmail = doctor?.pending_email || doctor?.email || ""
+  const isEmailUnverified = doctor?.email_confirmed === false
   const isPendingEmail = Boolean(doctor?.pending_email) || doctor?.email_confirmed === false
   const isEmailDirty = emailInput.trim() && emailInput.trim() !== displayedEmail
   const shouldShowResendVerification = Boolean(doctor?.email_confirmed === false && doctor?.email_verification_expired === true)
@@ -244,6 +349,24 @@ export default function ProfilePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    if (!doctor || doctor.email_confirmed) {
+      return
+    }
+
+    const pollId = window.setInterval(async () => {
+      try {
+        await refetchDoctorProfile()
+      } catch {
+        
+      }
+    }, EMAIL_VERIFICATION_STATUS_POLL_MS)
+
+    return () => {
+      window.clearInterval(pollId)
+    }
+  }, [doctor, refetchDoctorProfile])
+
   const handleActivitySubmit = async (payload) => {
     if (!doctor || isSubmittingActivity) {
       return
@@ -253,14 +376,10 @@ export default function ProfilePage() {
 
     try {
       const response = activityDialogMode === "edit" && selectedActivity
-        ? await api.patch(`/doctors/${doctor.id}/activities/${selectedActivity.id}`, payload, {
-          headers: authHeaders,
-        })
-        : await api.post(`/doctors/${doctor.id}/activities`, payload, {
-          headers: authHeaders,
-        })
+        ? await updateDoctorActivity(doctor.id, selectedActivity.id, payload, authHeaders)
+        : await createDoctorActivity(doctor.id, payload, authHeaders)
       const nextActivity = normalizeActivity(getResponseData(response), patients, allDoctors)
-      setActivities((current) => [...current.filter((item) => item.id !== nextActivity.id), nextActivity].sort((left, right) => new Date(left.scheduled_at) - new Date(right.scheduled_at)))
+      setActivities((current) => sortActivitiesByStatus([...current.filter((item) => item.id !== nextActivity.id), nextActivity]))
       setIsActivityDialogOpen(false)
       setSelectedActivity(null)
       setActivityPendingCancellation(null)
@@ -290,13 +409,11 @@ export default function ProfilePage() {
     setIsSubmittingActivity(true)
 
     try {
-      const response = await api.patch(`/doctors/${doctor.id}/activities/${activityPendingCancellation.id}`, {
+      const response = await updateDoctorActivity(doctor.id, activityPendingCancellation.id, {
         status: "canceled",
-      }, {
-        headers: authHeaders,
-      })
+      }, authHeaders)
       const nextActivity = normalizeActivity(getResponseData(response), patients, allDoctors)
-      setActivities((current) => [...current.filter((item) => item.id !== nextActivity.id), nextActivity].sort((left, right) => new Date(left.scheduled_at) - new Date(right.scheduled_at)))
+      setActivities((current) => sortActivitiesByStatus([...current.filter((item) => item.id !== nextActivity.id), nextActivity]))
       setActivityPendingCancellation(null)
       notifySuccess(getResponseMessage(response))
     } catch (error) {
@@ -332,9 +449,7 @@ export default function ProfilePage() {
         phone_number: normalizedPhoneNumber || null,
       }
 
-      const response = await api.patch("/doctors/me", payload, {
-        headers: authHeaders,
-      })
+      const response = await updateCurrentDoctor(payload, authHeaders)
 
       const doctorData = getResponseData(response)
       setDoctor(doctorData)
@@ -357,9 +472,7 @@ export default function ProfilePage() {
     setIsSavingEmail(true)
 
     try {
-      const response = await api.patch("/doctors/me/email", {email: emailInput.trim()}, {
-        headers: authHeaders,
-      })
+      const response = await updateCurrentDoctorEmail({email: emailInput.trim()}, authHeaders)
       const doctorData = getResponseData(response)
       setDoctor(doctorData)
       setEmailInput(doctorData.pending_email || doctorData.email || "")
@@ -378,9 +491,8 @@ export default function ProfilePage() {
 
     setIsResendingVerification(true)
     try {
-      const response = await api.post("/auth/resend-verification", null, {
-        headers: authHeaders,
-      })
+      const response = await resendVerificationEmail({headers: authHeaders})
+      await refetchDoctorProfile()
       notifySuccess(getResponseMessage(response))
     } catch (error) {
       notifyError(getErrorMessage(error))
@@ -398,9 +510,13 @@ export default function ProfilePage() {
     setIsAssigningPatient(true)
 
     try {
-      const response = await api.post(`/doctors/${doctor.id}/patients/${selectedPatient.id}`, null, {
-        headers: authHeaders,
-      })
+      if (selectedPatient?.cnp) {
+        try {
+          await searchPatientsByCnp(selectedPatient.cnp)
+        } catch {
+        }
+      }
+      const response = await assignPatientToDoctor(doctor.id, selectedPatient.id, authHeaders)
       const nextAssignedPatients = getResponseData(response) || []
       setAssignedPatients(nextAssignedPatients)
       await loadAssignedDoctorCounts(nextAssignedPatients)
@@ -421,12 +537,11 @@ export default function ProfilePage() {
     setRemovingPatientId(patientId)
 
     try {
-      const response = await api.delete(`/doctors/${doctor.id}/patients/${patientId}`, {
-        headers: authHeaders,
-      })
+      const response = await removePatientFromDoctor(doctor.id, patientId, authHeaders)
       const nextAssignedPatients = getResponseData(response) || []
       setAssignedPatients(nextAssignedPatients)
       await loadAssignedDoctorCounts(nextAssignedPatients)
+      await refetchActivities(doctor.id)
       setPatientPendingRemoval(null)
       notifySuccess(getResponseMessage(response))
     } catch (error) {
@@ -441,19 +556,14 @@ export default function ProfilePage() {
       return
     }
 
+    setShowTransferActivityConfirmation(false)
     setPatientPendingTransfer(patient)
     setSelectedTransferDoctorId("")
     setTransferDoctorOptions([])
     setIsLoadingTransferDoctors(true)
 
     try {
-      const response = await api.get("/doctors/available", {
-        params: {
-          department: patient.department,
-          exclude_doctor_id: doctor.id,
-        },
-        headers: authHeaders,
-      })
+      const response = await getAvailableDoctors(patient.department, doctor.id, authHeaders)
       setTransferDoctorOptions(getResponseData(response) || [])
     } catch (error) {
       setPatientPendingTransfer(null)
@@ -463,36 +573,69 @@ export default function ProfilePage() {
     }
   }
 
-  const handleTransferPatient = async () => {
+  const closeTransferDialog = () => {
+    setPatientPendingTransfer(null)
+    setSelectedTransferDoctorId("")
+    setTransferDoctorOptions([])
+    setShowTransferActivityConfirmation(false)
+    setIsCheckingTransferActivities(false)
+  }
+
+  const executePatientTransfer = async () => {
     if (!doctor || !patientPendingTransfer || !selectedTransferDoctorId || isTransferringPatient) {
       return
     }
 
     setIsTransferringPatient(true)
     try {
-      const response = await api.post(
-        `/patients/${patientPendingTransfer.id}/transfer`,
+      const response = await transferPatient(
+        patientPendingTransfer.id,
         {
           from_doctor_id: doctor.id,
           to_doctor_id: Number(selectedTransferDoctorId),
         },
-        {
-          headers: authHeaders,
-        },
+        authHeaders,
       )
-      const updatedPatient = getResponseData(response)
-      const nextAssignedPatients = assignedPatients.map((patient) => (
-        patient.id === updatedPatient.id ? updatedPatient : patient
-      ))
-      setAssignedPatients(nextAssignedPatients)
-      await loadAssignedDoctorCounts(nextAssignedPatients)
-      setPatientPendingTransfer(null)
+      await refreshAssignedPatients(doctor.id)
+      await refetchActivities(doctor.id)
+      closeTransferDialog()
       notifySuccess(getResponseMessage(response))
     } catch (error) {
       notifyError(getErrorMessage(error))
     } finally {
       setIsTransferringPatient(false)
     }
+  }
+
+  const handleTransferPatient = async () => {
+    if (!patientPendingTransfer || !selectedTransferDoctorId || isTransferringPatient || isCheckingTransferActivities) {
+      return
+    }
+
+    setIsCheckingTransferActivities(true)
+    try {
+      const activitiesResponse = await getPatientActivities(patientPendingTransfer.id)
+      const patientActivities = getResponseData(activitiesResponse) || []
+      const hasIncomingActivities = patientActivities.some((activity) => activity.status === "incoming")
+
+      if (hasIncomingActivities) {
+        setShowTransferActivityConfirmation(true)
+        return
+      }
+
+      await executePatientTransfer()
+    } catch (error) {
+      notifyError(getErrorMessage(error))
+    } finally {
+      setIsCheckingTransferActivities(false)
+    }
+  }
+
+  const handleConfirmTransferPatient = async () => {
+    if (isTransferringPatient) {
+      return
+    }
+    await executePatientTransfer()
   }
 
   const handleDeleteAccount = async () => {
@@ -503,9 +646,7 @@ export default function ProfilePage() {
     setIsDeletingAccount(true)
 
     try {
-      const response = await api.delete(`/doctors/${doctor.id}`, {
-        headers: authHeaders,
-      })
+      const response = await deactivateDoctor(doctor.id, authHeaders)
       setDoctor(getResponseData(response))
       setAssignedPatients([])
       setPatientDoctorCounts({})
@@ -558,9 +699,7 @@ export default function ProfilePage() {
 
         {isLoading ? (
           <section className="monitor-card rounded-[28px] p-6">
-            <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-              Loading doctor workspace...
-            </div>
+            <LoadingSpinner/>
           </section>
         ) : doctor ? (
           <section className="grid gap-6">
@@ -815,10 +954,10 @@ export default function ProfilePage() {
               </section>
 
 
-              <section className="monitor-card rounded-[28px] p-6">
+              <section className={`monitor-card rounded-[28px] p-6 ${isEmailUnverified ? "border border-[#a33a45] bg-[#2a1d23]" : ""}`}>
                 <div className="mb-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Email</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Account Email</h2>
+                  <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${isEmailUnverified ? "text-[#ff7a7a]" : "text-[#ff9900]"}`}>Email</p>
+                  <h2 className={`mt-2 text-2xl font-semibold ${isEmailUnverified ? "text-[#ffd1d6]" : "text-white"}`}>Account Email</h2>
                 </div>
 
                 <form className="space-y-4" onSubmit={handleEmailUpdate}>
@@ -836,12 +975,22 @@ export default function ProfilePage() {
                   </div>
 
                   {isPendingEmail && (
-                    <p className="text-sm text-[#ffb3bc]">
+                    <p className="text-sm text-[#ff9fa9]">
                       Email not confirmed yet. Current confirmed login email remains {doctor.email}.
                     </p>
                   )}
 
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-3">
+                    {shouldShowResendVerification && (
+                      <button
+                        type="button"
+                        onClick={handleResendVerification}
+                        disabled={isResendingVerification}
+                        className="rounded-2xl border border-[#facc15] bg-[#facc15] px-5 py-3 text-sm font-semibold text-[#1f2937] transition hover:border-[#eab308] hover:bg-[#eab308] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                      >
+                        {isResendingVerification ? "Resending..." : "Resend Verification Email"}
+                      </button>
+                    )}
                     <button
                       type="submit"
                       disabled={!isEmailDirty || isSavingEmail}
@@ -851,19 +1000,6 @@ export default function ProfilePage() {
                     </button>
                   </div>
                 </form>
-
-                {shouldShowResendVerification && (
-                  <div className="mt-4 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleResendVerification}
-                      disabled={isResendingVerification}
-                      className="console-button-secondary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
-                    >
-                      {isResendingVerification ? "Resending..." : "Resend Verification Email"}
-                    </button>
-                  </div>
-                )}
               </section>
 
               <section className="monitor-card rounded-[28px] p-6">
@@ -882,19 +1018,29 @@ export default function ProfilePage() {
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isOnlyDoctorInDepartment) {
-                        setShowDeleteModal(true)
-                      }
-                    }}
-                    disabled={isDeletingAccount || isOnlyDoctorInDepartment}
-                    title={isOnlyDoctorInDepartment ? "You are the only doctor in this department. Account cannot be deleted." : ""}
-                    className="w-full rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
-                  >
-                    {isDeletingAccount ? "Deactivating..." : "Delete Account"}
-                  </button>
+                  <div className="relative w-full group">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isOnlyDoctorInDepartment && !hasIncomingActivities) {
+                          setShowDeleteModal(true)
+                        }
+                      }}
+                      disabled={isDeletingAccount || isOnlyDoctorInDepartment || hasIncomingActivities}
+                      title={isOnlyDoctorInDepartment ? "You are the only doctor in this department. Account cannot be deleted." : ""}
+                      className="w-full rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                    >
+                      {isDeletingAccount ? "Deactivating..." : "Delete Account"}
+                    </button>
+                    {hasIncomingActivities && (
+                      <span
+                        className="pointer-events-none absolute bottom-[120%] left-1/2 z-20 -translate-x-1/2 rounded-md bg-[#111827] px-2.5 py-1.5 text-xs text-white opacity-0 transition-opacity duration-200 whitespace-nowrap group-hover:opacity-100"
+                        role="tooltip"
+                      >
+                        This account has incoming activities yet
+                      </span>
+                    )}
+                  </div>
                   {isOnlyDoctorInDepartment && (
                     <p className="text-xs text-[#ffb3bc]">
                       You are the only doctor in this department. Account cannot be deleted.
@@ -966,7 +1112,7 @@ export default function ProfilePage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setPatientPendingTransfer(null)}
+                  onClick={closeTransferDialog}
                   disabled={isTransferringPatient}
                   className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold"
                 >
@@ -974,55 +1120,89 @@ export default function ProfilePage() {
                 </button>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                <p className="text-sm text-[#d5dbdb]">
-                  Select another doctor from {patientPendingTransfer.department} to transfer {formatPatientFullName(patientPendingTransfer)}.
-                </p>
-                <p className="mt-2 text-sm text-[#879196]">CNP: {patientPendingTransfer.cnp}</p>
-              </div>
+              {!showTransferActivityConfirmation ? (
+                <>
+                  <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+                    <p className="text-sm text-[#d5dbdb]">
+                      Select another doctor from {patientPendingTransfer.department} to transfer {formatPatientFullName(patientPendingTransfer)}.
+                    </p>
+                    <p className="mt-2 text-sm text-[#879196]">CNP: {patientPendingTransfer.cnp}</p>
+                  </div>
 
-              <div className="mt-5">
-                <label className="login-label" htmlFor="transfer-doctor">Available Doctors</label>
-                <select
-                  id="transfer-doctor"
-                  value={selectedTransferDoctorId}
-                  onChange={(event) => setSelectedTransferDoctorId(event.target.value)}
-                  disabled={isLoadingTransferDoctors || isTransferringPatient || transferDoctorOptions.length === 0}
-                  className="login-input mt-2"
-                >
-                  <option value="">
-                    {isLoadingTransferDoctors
-                      ? "Loading doctors..."
-                      : transferDoctorOptions.length > 0
-                        ? "Select a doctor"
-                        : "No available doctors"}
-                  </option>
-                  {transferDoctorOptions.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      Dr. {item.first_name} {item.last_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="mt-5">
+                    <label className="login-label" htmlFor="transfer-doctor">Available Doctors</label>
+                    <select
+                      id="transfer-doctor"
+                      value={selectedTransferDoctorId}
+                      onChange={(event) => setSelectedTransferDoctorId(event.target.value)}
+                      disabled={isLoadingTransferDoctors || isTransferringPatient || transferDoctorOptions.length === 0}
+                      className="login-input mt-2"
+                    >
+                      <option value="">
+                        {isLoadingTransferDoctors
+                          ? "Loading doctors..."
+                          : transferDoctorOptions.length > 0
+                            ? "Select a doctor"
+                            : "No available doctors"}
+                      </option>
+                      {transferDoctorOptions.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          Dr. {item.first_name} {item.last_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPatientPendingTransfer(null)}
-                  disabled={isTransferringPatient}
-                  className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleTransferPatient}
-                  disabled={!selectedTransferDoctorId || isTransferringPatient || transferDoctorOptions.length === 0}
-                  className="rounded-2xl border border-[#34506b] bg-[#1d2f3f] px-4 py-3 text-sm font-semibold text-[#cce6ff] transition hover:bg-[#22394d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
-                >
-                  {isTransferringPatient ? "Transferring..." : "Confirm Transfer"}
-                </button>
-              </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={closeTransferDialog}
+                      disabled={isTransferringPatient}
+                      className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleTransferPatient}
+                      disabled={!selectedTransferDoctorId || isTransferringPatient || isCheckingTransferActivities || transferDoctorOptions.length === 0}
+                      className="rounded-2xl border border-[#34506b] bg-[#1d2f3f] px-4 py-3 text-sm font-semibold text-[#cce6ff] transition hover:bg-[#22394d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                    >
+                      {isTransferringPatient ? "Transferring..." : (isCheckingTransferActivities ? "Checking..." : "Transfer")}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+                    <p className="text-sm text-[#d5dbdb]">
+                      Are you sure you want to transfer this patient?
+                    </p>
+                    <p className="mt-2 text-sm text-[#879196]">
+                      Existing activities will be canceled and reassigned.
+                    </p>
+                  </div>
+
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowTransferActivityConfirmation(false)}
+                      disabled={isTransferringPatient}
+                      className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmTransferPatient}
+                      disabled={isTransferringPatient}
+                      className="rounded-2xl border border-[#34506b] bg-[#1d2f3f] px-4 py-3 text-sm font-semibold text-[#cce6ff] transition hover:bg-[#22394d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                    >
+                      {isTransferringPatient ? "Transferring..." : "Confirm Transfer"}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -1062,7 +1242,8 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => handleRemovePatient(patientPendingRemoval.id)}
-                  disabled={removingPatientId === patientPendingRemoval.id}
+                  disabled={hasIncomingActivities || removingPatientId === patientPendingRemoval.id}
+                  title={hasIncomingActivities ? "Cannot modify patients while there are incoming activities." : ""}
                   className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                 >
                   {removingPatientId === patientPendingRemoval.id ? "Removing..." : "Yes, Remove Patient"}

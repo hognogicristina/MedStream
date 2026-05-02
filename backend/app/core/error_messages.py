@@ -72,6 +72,7 @@ ERROR_MESSAGES = {
     "TRANSFER_TARGET_REQUIRED": "Transfer target doctor is required.",
     "TRANSFER_TARGET_NOT_AVAILABLE": "Selected transfer doctor is not available for this patient.",
     "TRANSFER_TO_SELF_NOT_ALLOWED": "Transfer target must be a different doctor.",
+    "DOCTOR_HAS_INCOMING_ACTIVITIES": "Cannot modify patients while there are incoming activities.",
     "ACTIVITY_NOT_FOUND": "Activity not found.",
     "DOCTOR_PROFILE_DUPLICATE_FIELDS": "Doctor profile contains duplicate unique fields.",
     "DOCTOR_IDENTITY_FIELDS_UNIQUE": "Doctor identity fields must be unique.",
@@ -101,5 +102,5 @@ def resolve_error_message(code: str, context: dict | None = None) -> str:
 
     try:
         return template.format(**context)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return template

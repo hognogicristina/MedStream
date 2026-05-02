@@ -1,13 +1,15 @@
 import {useCallback, useEffect, useRef, useState} from "react"
+import {useNavigate} from "react-router-dom"
 import CountValue from "../components/CountValue.jsx"
-import {useNotifications} from "../components/NotificationProvider.jsx"
-import {api} from "../services/api.js"
+import {useNotifications} from "../components/useNotifications.js"
+import {getAlertDashboardSummary, listPatients} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import VitalsChart from "../components/VitalsChart.jsx"
 import {formatPatientFullName} from "../utils/patients.js"
 
 export default function DashboardPage() {
+  const navigate = useNavigate()
   const {notifyError} = useNotifications()
   const [vitals, setVitals] = useState([])
   const [previewAlerts, setPreviewAlerts] = useState([])
@@ -27,8 +29,8 @@ export default function DashboardPage() {
   const loadDashboardData = useCallback(async () => {
     try {
       const [patientsRes, alertsSummaryRes] = await Promise.all([
-        api.get("/patients?page=1&limit=100"),
-        api.get("/alerts/dashboard-summary"),
+        listPatients({page: 1, limit: 100}),
+        getAlertDashboardSummary(),
       ])
 
       setPatients(getResponseData(patientsRes))
@@ -163,7 +165,7 @@ export default function DashboardPage() {
               </div>
               <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Alerts</p>
-                <p className="mt-3 text-3xl font-semibold text-[#ffb3bc]"><CountValue tooltipLabel={`Total alerts: ${alertCount}`} value={alertCount}/></p>
+                <p className="mt-3 text-3xl font-semibold text-[#ffb3bc]"><CountValue tooltipLabel={String(alertCount)} value={alertCount}/></p>
               </div>
               <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Latest HR</p>
@@ -206,7 +208,7 @@ export default function DashboardPage() {
               </div>
                 <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Active Alerts</p>
-                  <p className="mt-2 text-base font-semibold text-white"><CountValue tooltipLabel={`Total alerts: ${alertCount}`} value={alertCount}/></p>
+                  <p className="mt-2 text-base font-semibold text-white"><CountValue tooltipLabel={String(alertCount)} value={alertCount}/></p>
                 </div>
               <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Feed Status</p>
@@ -290,6 +292,15 @@ export default function DashboardPage() {
                   </li>
                 ))}
               </ul>
+              <div className="mt-5">
+                <button
+                  type="button"
+                  onClick={() => navigate("/alerts")}
+                  className="console-button-secondary w-full rounded-2xl px-4 py-3 text-sm font-semibold"
+                >
+                  See more
+                </button>
+              </div>
             </div>
 
           </div>

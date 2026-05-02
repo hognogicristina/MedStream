@@ -8,9 +8,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import {api} from "../services/api.js"
+import {getMetricsComparison} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
+import {useNotifications} from "../components/useNotifications.js"
+import BackButton from "../components/BackButton.jsx"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const POLL_INTERVAL_MS = 4000
 const MAX_HISTORY_POINTS = 24
@@ -75,16 +78,20 @@ function DownloadIcon() {
 }
 
 export default function StreamingBatchPage() {
+  const {notifyError} = useNotifications()
   const [comparison, setComparison] = useState(null)
   const [history, setHistory] = useState([])
-  const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     let active = true
 
     const loadComparison = async () => {
+      if (comparison === null) {
+        setIsLoading(true)
+      }
       try {
-        const response = await api.get("/metrics/comparison")
+        const response = await getMetricsComparison()
         const data = getResponseData(response)
 
         if (!active) {
@@ -92,7 +99,6 @@ export default function StreamingBatchPage() {
         }
 
         setComparison(data)
-        setError("")
         setHistory((current) => [
           ...current.slice(-(MAX_HISTORY_POINTS - 1)),
           {
@@ -103,7 +109,11 @@ export default function StreamingBatchPage() {
         ])
       } catch (loadError) {
         if (active) {
-          setError(getErrorMessage(loadError))
+          notifyError(getErrorMessage(loadError), {duration: 5000})
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false)
         }
       }
     }
@@ -115,7 +125,7 @@ export default function StreamingBatchPage() {
       active = false
       window.clearInterval(intervalId)
     }
-  }, [])
+  }, [comparison, notifyError])
 
   const streaming = comparison?.streaming ?? {
     avg_heart_rate: 0,
@@ -138,9 +148,33 @@ export default function StreamingBatchPage() {
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-wrap items-start justify-between gap-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                title="Download all metrics"
+                aria-label="Download all metrics"
+                className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
+                onClick={() => {
+                  const rows = [
+                    ["Section", "Metric", "Streaming", "Batch", "Difference"],
+                    ["Comparison Snapshot", "Heart Rate", streaming.avg_heart_rate, batch.avg_heart_rate, differences.avg_heart_rate],
+                    ["Comparison Snapshot", "Oxygen", streaming.avg_oxygen, batch.avg_oxygen, differences.avg_oxygen],
+                    ["Comparison Snapshot", "Temperature", streaming.avg_temperature, batch.avg_temperature, differences.avg_temperature],
+                    ["Comparison Snapshot", "Alerts", streaming.alerts, batch.alerts, differences.alerts],
+                    ["Comparison Snapshot", "Execution Time", streaming.execution_time_ms, batch.execution_time_ms, differences.execution_time_ms],
+                    ["Comparison Trend", "Time", "Streaming Avg HR", "Batch Avg HR", ""],
+                    ...history.map((point) => ["Comparison Trend", point.time, point.streaming, point.batch, ""]),
+                  ]
+                  downloadCSV("comparison_all_metrics.csv", rows)
+                }}
+              >
+                <DownloadIcon/>
+              </button>
+              <BackButton fallbackTo="/dashboard"/>
+            </div>
 
-            <div className="max-w-3xl">
+            <div className="w-full">
               <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
                 Demo View
               </p>
@@ -160,40 +194,18 @@ export default function StreamingBatchPage() {
                 Positive values indicate that streaming is higher, while negative values indicate that batch results are higher.
               </p>
 
-              {error ? <p className="mt-3 text-sm text-[#ffb3bc]">{error}</p> : null}
             </div>
-
-            <button
-              type="button"
-              title="Download all metrics"
-              aria-label="Download all metrics"
-              className="console-button-primary rounded-xl p-3 text-sm font-semibold"
-              onClick={() => {
-                const rows = [
-                  ["Section", "Metric", "Streaming", "Batch", "Difference"],
-                  ["Comparison Snapshot", "Heart Rate", streaming.avg_heart_rate, batch.avg_heart_rate, differences.avg_heart_rate],
-                  ["Comparison Snapshot", "Oxygen", streaming.avg_oxygen, batch.avg_oxygen, differences.avg_oxygen],
-                  ["Comparison Snapshot", "Temperature", streaming.avg_temperature, batch.avg_temperature, differences.avg_temperature],
-                  ["Comparison Snapshot", "Alerts", streaming.alerts, batch.alerts, differences.alerts],
-                  ["Comparison Snapshot", "Execution Time", streaming.execution_time_ms, batch.execution_time_ms, differences.execution_time_ms],
-                  ["Comparison Trend", "Time", "Streaming Avg HR", "Batch Avg HR", ""],
-                  ...history.map((point) => ["Comparison Trend", point.time, point.streaming, point.batch, ""]),
-                ]
-                downloadCSV("comparison_all_metrics.csv", rows)
-              }}
-            >
-              <DownloadIcon/>
-            </button>
-
           </div>
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <ComparisonCard title="Streaming" data={streaming} differences={differences} accentClass="text-[#ff9900]"/>
-          <ComparisonCard title="Batch" data={batch} differences={differences} accentClass="text-[#9dccff]"/>
-        </section>
+        {isLoading ? <LoadingSpinner/> : (
+          <>
+            <section className="grid gap-6 lg:grid-cols-2">
+              <ComparisonCard title="Streaming" data={streaming} differences={differences} accentClass="text-[#ff9900]"/>
+              <ComparisonCard title="Batch" data={batch} differences={differences} accentClass="text-[#9dccff]"/>
+            </section>
 
-        <section className="monitor-card rounded-[24px] p-6">
+            <section className="monitor-card rounded-[24px] p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Avg Heart Rate Trend</p>
@@ -230,8 +242,8 @@ export default function StreamingBatchPage() {
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </section>
-        <section className="monitor-card rounded-[24px] p-6">
+            </section>
+            <section className="monitor-card rounded-[24px] p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding the Comparison</p>
           <h2 className="mt-2 text-2xl font-semibold text-white">Streaming vs Batch Processing</h2>
 
@@ -275,7 +287,9 @@ export default function StreamingBatchPage() {
               </p>
             </div>
           </div>
-        </section>
+            </section>
+          </>
+        )}
       </div>
     </div>
   )

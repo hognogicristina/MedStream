@@ -1,9 +1,10 @@
 import {useEffect, useState} from "react"
 import BackButton from "../components/BackButton.jsx"
-import {useNotifications} from "../components/NotificationProvider.jsx"
+import {useNotifications} from "../components/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {Link, useNavigate} from "react-router-dom"
-import {api} from "../services/patientApi.js"
+import {createPatient} from "../services/patientApi.js"
+import {assignPatientToDoctor, getCurrentDoctor} from "../services/doctorApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {buildPatientPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone.js"
 import {getCityOptions, getCountyOptions} from "../utils/addressOptions.js"
@@ -88,7 +89,7 @@ export default function AddPatientPage() {
     setIsSubmitting(true)
 
     try {
-      const response = await api.post("/patients", {
+      const response = await createPatient({
         ...form,
         department: currentDoctor?.specialization || "ER",
         phone_number: normalizedPhoneNumber,
@@ -98,9 +99,7 @@ export default function AddPatientPage() {
 
       if (currentDoctor?.id) {
         try {
-          await api.post(`/doctors/${currentDoctor.id}/patients/${patientData.id}`, null, {
-            headers: token ? {Authorization: `Bearer ${token}`} : {}
-          })
+          await assignPatientToDoctor(currentDoctor.id, patientData.id, token ? {Authorization: `Bearer ${token}`} : {})
         } catch (assignError) {
           console.error("Failed to assign patient to doctor", assignError)
         }
@@ -118,9 +117,7 @@ export default function AddPatientPage() {
     const fetchMe = async () => {
       if (!token) return
       try {
-        const res = await api.get("/doctors/me", {
-          headers: {Authorization: `Bearer ${token}`}
-        })
+        const res = await getCurrentDoctor({Authorization: `Bearer ${token}`})
         setCurrentDoctor(getResponseData(res))
       } catch (error) {
         console.error("Failed to load current doctor", error)

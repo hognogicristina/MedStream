@@ -1,7 +1,7 @@
 import {useMemo, useState} from "react"
 import {Link, useNavigate, useSearchParams} from "react-router-dom"
-import {useNotifications} from "../components/NotificationProvider.jsx"
-import {api} from "../services/authApi.js"
+import {useNotifications} from "../components/useNotifications.js"
+import {resetPassword} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 
 export default function ResetPasswordPage() {
@@ -11,8 +11,6 @@ export default function ResetPasswordPage() {
   const token = useMemo(() => searchParams.get("token") || "", [searchParams])
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [message, setMessage] = useState("")
-  const [isError, setIsError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const canResetPassword = token.trim().length > 0 && newPassword.trim().length > 0 && confirmPassword.trim().length > 0
 
@@ -21,27 +19,23 @@ export default function ResetPasswordPage() {
     if (!canResetPassword || isSubmitting) {
       return
     }
-    setMessage("")
-    setIsError(false)
     setIsSubmitting(true)
 
     try {
-      const response = await api.post("/auth/reset-password", {
+      const response = await resetPassword({
         token,
         new_password: newPassword,
         confirm_password: confirmPassword,
       })
 
-      notifySuccess(getResponseMessage(response))
+      notifySuccess(getResponseMessage(response), {duration: 5000})
       navigate("/login", {
         state: {
           message: getResponseMessage(response),
         },
       })
     } catch (error) {
-      setIsError(true)
-      setMessage(getErrorMessage(error))
-      notifyError(getErrorMessage(error))
+      notifyError(getErrorMessage(error), {duration: 5000})
     } finally {
       setIsSubmitting(false)
     }
@@ -114,12 +108,6 @@ export default function ResetPasswordPage() {
                   required
                 />
               </div>
-
-              {message && (
-                <p className={isError ? "login-error" : "login-success"}>
-                  {message}
-                </p>
-              )}
 
               <div className="auth-actions">
                 <button
