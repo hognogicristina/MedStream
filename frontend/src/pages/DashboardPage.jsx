@@ -3,17 +3,78 @@ import {useNavigate} from "react-router-dom"
 import CountValue from "../components/CountValue.jsx"
 import {useNotifications} from "../components/useNotifications.js"
 import {getAlertDashboardSummary, listPatients} from "../services/patientApi.js"
+import {listDoctors} from "../services/doctorApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import VitalsChart from "../components/VitalsChart.jsx"
 import {formatPatientFullName} from "../utils/patients.js"
 
+const MAX_PREVIEW_ALERTS = 6
+const MAX_ALERTS = 60
+const isCriticalHighAlert = (alert) => alert?.severity === "critical" || alert?.severity === "high"
+
+const toAlertTimestamp = (alert) => {
+  const time = new Date(alert?.created_at || 0).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+const normalizeCriticalHighAlerts = (alerts) => {
+  if (!Array.isArray(alerts)) {
+    return []
+  }
+  return alerts
+    .filter((alert) => Number.isInteger(alert?.patient_id) && isCriticalHighAlert(alert))
+    .sort((left, right) => toAlertTimestamp(right) - toAlertTimestamp(left))
+}
+
+const mergeAlertPreviews = (incomingAlerts, previousAlerts) => {
+  const incoming = normalizeCriticalHighAlerts(incomingAlerts)
+  const previous = normalizeCriticalHighAlerts(previousAlerts)
+  if (!incoming.length) {
+    return previous
+  }
+
+  const mostRecentIncoming = toAlertTimestamp(incoming[0])
+  const mostRecentPrevious = previous.length ? toAlertTimestamp(previous[0]) : 0
+  if (mostRecentIncoming < mostRecentPrevious) {
+    return previous
+  }
+
+  const mergedById = new Map()
+  ;[...incoming, ...previous].forEach((alert) => {
+    if (!alert?.id) {
+      return
+    }
+    const current = mergedById.get(alert.id)
+    if (!current || toAlertTimestamp(alert) > toAlertTimestamp(current)) {
+      mergedById.set(alert.id, alert)
+    }
+  })
+
+  return Array.from(mergedById.values())
+    .sort((left, right) => toAlertTimestamp(right) - toAlertTimestamp(left))
+}
+
+const areSameAlerts = (left, right) => {
+  if (left === right) {
+    return true
+  }
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+    return false
+  }
+  return left.every((item, index) => {
+    const other = right[index]
+    return item?.id === other?.id && toAlertTimestamp(item) === toAlertTimestamp(other)
+  })
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const {notifyError} = useNotifications()
   const [vitals, setVitals] = useState([])
-  const [previewAlerts, setPreviewAlerts] = useState([])
+  const [previewAlerts, setPreviewAlerts] = useState(null)
   const [totalAlerts, setTotalAlerts] = useState(0)
+  const [doctorCount, setDoctorCount] = useState(0)
   const [patients, setPatients] = useState([])
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
   const [newAlertIds, setNewAlertIds] = useState([])
@@ -21,6 +82,21 @@ export default function DashboardPage() {
   const alertHighlightTimeoutsRef = useRef([])
 
   const [chartData, setChartData] = useState([])
+
+  const upsertPreviewAlerts = useCallback((incomingAlerts) => {
+    setPreviewAlerts((prev) => {
+      const next = mergeAlertPreviews(incomingAlerts, prev)
+      const existing = Array.isArray(prev) ? prev : []
+      const merged = [
+        ...next,
+        ...existing.filter((current) => !next.some((incoming) => incoming.id === current.id)),
+      ]
+        .sort((left, right) => toAlertTimestamp(right) - toAlertTimestamp(left))
+        .slice(0, MAX_ALERTS)
+
+      return areSameAlerts(existing, merged) ? prev : merged
+    })
+  }, [])
 
   if (!alertAudioRef.current) {
     alertAudioRef.current = new Audio("/alert.mp3")
@@ -36,18 +112,35 @@ export default function DashboardPage() {
       setPatients(getResponseData(patientsRes))
       const summary = getResponseData(alertsSummaryRes)
       setTotalAlerts(Number(summary?.total_alerts || 0))
-      setPreviewAlerts(Array.isArray(summary?.preview_alerts) ? summary.preview_alerts : [])
+      upsertPreviewAlerts(summary?.preview_alerts)
 
     } catch (error) {
       notifyError(getErrorMessage(error))
     } finally {
       setIsLoadingDashboard(false)
     }
-  }, [notifyError])
+  }, [notifyError, upsertPreviewAlerts])
 
   useEffect(() => {
     loadDashboardData()
+    const intervalId = window.setInterval(() => {
+      loadDashboardData()
+    }, 10000)
+    return () => window.clearInterval(intervalId)
   }, [loadDashboardData])
+
+  useEffect(() => {
+    const loadDoctors = async () => {
+      try {
+        const response = await listDoctors()
+        const data = getResponseData(response) || []
+        setDoctorCount(Array.isArray(data) ? data.length : 0)
+      } catch {
+      }
+    }
+
+    loadDoctors().then(() => {})
+  }, [])
 
   useEffect(() => {
     const socket = createWebSocket((msg) => {
@@ -93,11 +186,7 @@ export default function DashboardPage() {
           }, 1400)
           alertHighlightTimeoutsRef.current.push(timeoutId)
 
-          setPreviewAlerts((prev) => {
-            const next = [msg.data, ...prev.filter((alert) => alert.id !== msg.data.id)]
-            next.sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
-            return next.slice(0, 6)
-          })
+          upsertPreviewAlerts([msg.data])
         }
       }
 
@@ -108,14 +197,13 @@ export default function DashboardPage() {
       alertHighlightTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
       alertHighlightTimeoutsRef.current = []
     }
-  }, [])
+  }, [upsertPreviewAlerts])
 
   const latestVital = vitals[0]
   const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
   const validPatientIds = new Set(patients.map((patient) => patient.id))
-  const visiblePreviewAlerts = previewAlerts.filter(
-    (alert) => Number.isInteger(alert.patient_id) && validPatientIds.has(alert.patient_id),
-  )
+  const visiblePreviewAlerts = (previewAlerts || []).filter((alert) => validPatientIds.has(alert.patient_id))
+  const limitedVisiblePreviewAlerts = visiblePreviewAlerts.slice(0, MAX_PREVIEW_ALERTS)
   const alertCount = totalAlerts
   const recentVitals = vitals.slice(0, 5)
 
@@ -148,6 +236,14 @@ export default function DashboardPage() {
   const oxygenDelta = recentVitals.length >= 2 ? recentVitals[0].oxygen_saturation - recentVitals[recentVitals.length - 1].oxygen_saturation : 0
   const temperatureDelta = recentVitals.length >= 2 ? recentVitals[0].temperature - recentVitals[recentVitals.length - 1].temperature : 0
   const formatDelta = (value) => value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1)
+  const handleAlertClick = (alert) => {
+    const cnp = patientCnpById[alert?.patient_id]
+    if (!cnp) {
+      return
+    }
+    const patientName = patientNameById[alert.patient_id] || ""
+    navigate(`/alerts?cnp=${encodeURIComponent(cnp)}&patient=${encodeURIComponent(patientName)}`)
+  }
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -175,8 +271,8 @@ export default function DashboardPage() {
                 <p className="mt-3 text-3xl font-semibold text-[#ffb3bc]"><CountValue tooltipLabel={String(alertCount)} value={alertCount}/></p>
               </div>
               <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Latest HR</p>
-                <p className="mt-3 text-3xl font-semibold text-[#ffb84d]">{latestVital ? latestVital.heart_rate : "--"}</p>
+                <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Doctors</p>
+                <p className="mt-3 text-3xl font-semibold text-[#ffb84d]"><CountValue value={doctorCount}/></p>
               </div>
             </div>
           </div>
@@ -275,15 +371,21 @@ export default function DashboardPage() {
                 </div>
               </div>
               <ul className="space-y-3">
-                {visiblePreviewAlerts.length === 0 && (
+                {previewAlerts === null && (
+                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                    Loading alerts...
+                  </li>
+                )}
+                {previewAlerts !== null && limitedVisiblePreviewAlerts.length === 0 && (
                   <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
                     No critical or high alerts at the moment.
                   </li>
                 )}
-                {visiblePreviewAlerts.map((a) => (
+                {previewAlerts !== null && limitedVisiblePreviewAlerts.map((a) => (
                   <li
                     key={a.id}
-                    className={`alert-item alert-${a.severity} ${newAlertIds.includes(a.id) ? "alert-new" : ""}`}
+                    onClick={() => handleAlertClick(a)}
+                    className={`alert-item alert-${a.severity} ${newAlertIds.includes(a.id) ? "alert-new" : ""} hover:border-[#ff9900] transition-all duration-200 cursor-pointer`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>

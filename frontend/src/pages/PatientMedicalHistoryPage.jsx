@@ -48,6 +48,8 @@ function trimValue(value) {
   return String(value || "").trim()
 }
 
+const normalize = (value) => String(value || "").trim().toLowerCase()
+
 function normalizeMedicationForm(form) {
   return {
     name: trimValue(form.name),
@@ -87,24 +89,24 @@ const INITIAL_FORMS = {
 
 const STATUS_COLORS = {
   diagnosis: {
-    active: "#22C55E",
-    resolved: "#3B82F6",
-    chronic: "#F59E0B",
-    inactive: "#6B7280",
+    active: "#BBF7D0",
+    resolved: "#BFDBFE",
+    chronic: "#FDE68A",
+    inactive: "#E5E7EB",
   },
   allergy: {
-    mild: "#22C55E",
-    moderate: "#F59E0B",
-    severe: "#EF4444",
+    mild: "#BBF7D0",
+    moderate: "#FDE68A",
+    severe: "#FCA5A5",
   },
   condition: {
-    active: "#22C55E",
-    improving: "#4ADE80",
-    stable: "#3B82F6",
-    worsening: "#F59E0B",
-    critical: "#EF4444",
-    resolved: "#60A5FA",
-    chronic: "#A855F7",
+    active: "#BBF7D0",
+    improving: "#86EFAC",
+    stable: "#BFDBFE",
+    worsening: "#FDE68A",
+    critical: "#FCA5A5",
+    resolved: "#BAE6FD",
+    chronic: "#E9D5FF",
   },
 }
 
@@ -315,6 +317,38 @@ export default function PatientMedicalHistoryPage() {
     ["status"],
   ) && Boolean(currentConditionValues.notes)
 
+  const selectedConditionName = useMemo(() => {
+    if (!conditionId) {
+      return ""
+    }
+    const selected = conditionOptions.find((condition) => String(condition.id) === String(conditionId))
+    return selected?.name || ""
+  }, [conditionId, conditionOptions])
+
+  const isDuplicateMedication = useMemo(() => {
+    const name = normalize(medicationForm.name)
+    if (!name) {
+      return false
+    }
+    return medications.some((item) => normalize(item.name) === name)
+  }, [medicationForm.name, medications])
+
+  const isDuplicateAllergy = useMemo(() => {
+    const name = normalize(allergyForm.name)
+    if (!name) {
+      return false
+    }
+    return allergies.some((item) => normalize(item.allergy_name) === name)
+  }, [allergies, allergyForm.name])
+
+  const isDuplicateCondition = useMemo(() => {
+    const name = normalize(selectedConditionName)
+    if (!name) {
+      return false
+    }
+    return patientConditions.some((item) => normalize(item.name) === name)
+  }, [patientConditions, selectedConditionName])
+
   const appendDoctorNote = (note) => {
     const doctorName = currentDoctor
       ? `${currentDoctor.first_name} ${currentDoctor.last_name}`
@@ -330,6 +364,15 @@ export default function PatientMedicalHistoryPage() {
 
   const handleSubmit = async (type) => {
     if (!currentDoctor || isSubmitting) {
+      return
+    }
+    if (type === "medication" && isDuplicateMedication) {
+      return
+    }
+    if (type === "allergy" && isDuplicateAllergy) {
+      return
+    }
+    if (type === "condition" && isDuplicateCondition) {
       return
     }
 
@@ -745,7 +788,7 @@ export default function PatientMedicalHistoryPage() {
                       <label className="login-label" htmlFor="medication-name">Medication</label>
                       <select
                         id="medication-name"
-                        className="login-input"
+                        className={`login-input ${isDuplicateMedication ? "border-red-500" : ""}`}
                         value={medicationForm.name}
                         onChange={(event) => setMedicationForm({...medicationForm, name: event.target.value})}
                       >
@@ -796,7 +839,7 @@ export default function PatientMedicalHistoryPage() {
                       <label className="login-label" htmlFor="allergy-name">Allergy</label>
                       <select
                         id="allergy-name"
-                        className="login-input"
+                        className={`login-input ${isDuplicateAllergy ? "border-red-500" : ""}`}
                         value={allergyForm.name}
                         onChange={(event) => setAllergyForm({...allergyForm, name: event.target.value})}
                       >
@@ -837,7 +880,7 @@ export default function PatientMedicalHistoryPage() {
                     <div className="login-field">
                       <label className="login-label" htmlFor="condition-select">Condition</label>
                       <select
-                        className="login-input"
+                        className={`login-input ${isDuplicateCondition ? "border-red-500" : ""}`}
                         id="condition-select"
                         value={conditionId}
                         onChange={(event) => setConditionId(event.target.value)}
@@ -971,24 +1014,41 @@ export default function PatientMedicalHistoryPage() {
                 )}
 
                 <div className="flex justify-end gap-3">
-                  <button
-                    type="submit"
-                    disabled={
-                      isSubmitting
-                      || !canMutateRecords
-                      || (showDialog === "edit_diagnosis" && (!trimValue(editDiagnosisForm.status) || !trimValue(editDiagnosisForm.note)))
-                      || (showDialog === "medication" && !canSubmitAddMedication)
-                      || (showDialog === "edit_medication" && !canSubmitEditMedication)
-                      || (showDialog === "edit_allergy" && !canSubmitAllergy)
-                      || (showDialog === "edit_condition" && !canSubmitCondition)
-                      || (showDialog === "condition" && !conditionId)
-                      || (showDialog === "diagnosis" && (!trimValue(diagnosisForm.diagnosis) || !trimValue(diagnosisForm.status)))
-                      || (showDialog === "allergy" && (!trimValue(allergyForm.name) || !trimValue(allergyForm.severity)))
-                    }
-                    className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
-                  >
-                    {isSubmitting ? "Saving..." : "Submit"}
-                  </button>
+                  <div className="group relative inline-flex">
+                    <button
+                      type="submit"
+                      disabled={
+                        isSubmitting
+                        || !canMutateRecords
+                        || (showDialog === "edit_diagnosis" && (!trimValue(editDiagnosisForm.status) || !trimValue(editDiagnosisForm.note)))
+                        || (showDialog === "medication" && (!canSubmitAddMedication || isDuplicateMedication))
+                        || (showDialog === "edit_medication" && !canSubmitEditMedication)
+                        || (showDialog === "edit_allergy" && !canSubmitAllergy)
+                        || (showDialog === "edit_condition" && !canSubmitCondition)
+                        || (showDialog === "condition" && (!conditionId || isDuplicateCondition))
+                        || (showDialog === "diagnosis" && (!trimValue(diagnosisForm.diagnosis) || !trimValue(diagnosisForm.status)))
+                        || (showDialog === "allergy" && ((!trimValue(allergyForm.name) || !trimValue(allergyForm.severity)) || isDuplicateAllergy))
+                      }
+                      className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                    >
+                      {isSubmitting ? "Saving..." : "Submit"}
+                    </button>
+                    {showDialog === "medication" && isDuplicateMedication ? (
+                      <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                        This medication already exists for this patient
+                      </span>
+                    ) : null}
+                    {showDialog === "condition" && isDuplicateCondition ? (
+                      <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                        This condition already exists for this patient
+                      </span>
+                    ) : null}
+                    {showDialog === "allergy" && isDuplicateAllergy ? (
+                      <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                        This allergy already exists for this patient
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </form>
             </div>

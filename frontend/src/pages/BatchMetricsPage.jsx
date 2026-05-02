@@ -862,6 +862,8 @@ export default function BatchMetricsPage() {
                         borderRadius: "12px",
                         color: "#fff",
                       }}
+                      labelStyle={{color: "#ffffff"}}
+                      itemStyle={{color: "#ffffff"}}
                     />
                     <Bar dataKey="count" radius={[8, 8, 0, 0]}>
                       {medicationBarData.map((item) => (
@@ -871,6 +873,14 @@ export default function BatchMetricsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+              <p className="mt-3 text-center text-sm text-[#b6bec9]">
+                This chart shows how effective the selected medication has been across all treated patients. The count
+                represents how many treatment instances resulted in an effective or ineffective outcome.
+              </p>
+              <p className="mt-2 text-center text-xs text-[#879196]">
+                Effective treatments indicate improvement or stabilization in patient condition, while ineffective
+                treatments indicate no improvement or worsening after medication.
+              </p>
             </div>
           ) : (
             <div className="mt-6 rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">

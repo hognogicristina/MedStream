@@ -63,6 +63,8 @@ MAX_ALERTS_PER_PATIENT_PER_HOUR = 18
 MAX_ALERTS_PER_PATIENT_PER_CYCLE = 2
 MAX_DOSAGE_MULTIPLIER = 4
 TREATMENT_ESCALATION_NOTE = "Treatment not working, patient got worse. Dose/frequency adjusted after persistent alerts."
+DIAGNOSIS_ALLOWED_STATUSES = ("active", "resolved", "chronic", "inactive")
+CONDITION_ALLOWED_STATUSES = ("active", "improving", "stable", "worsening", "critical", "resolved", "chronic")
 
 
 class SimulatorService:
@@ -88,6 +90,7 @@ class SimulatorService:
 
         with self.repository.session_scope() as db:
             self.repository.cleanup_invalid_alerts(db)
+            self.repository.normalize_medical_statuses(db)
             if self.repository.get_doctor_count(db) > 0:
                 return
 
@@ -98,6 +101,7 @@ class SimulatorService:
     def run_cycle(self) -> None:
         with self.repository.session_scope() as db:
             self.repository.cleanup_invalid_alerts(db)
+            self.repository.normalize_medical_statuses(db)
             activities_created_in_cycle: set[int] = set()
 
             if random.random() < self.config.patient_spawn_probability:
@@ -296,7 +300,7 @@ class SimulatorService:
                 patient_id=patient_id,
                 doctor_id=doctor_id,
                 diagnosis=diagnosis,
-                status=random.choice(["active", "improving", "stable", "worsening", "chronic"]),
+                status=random.choice(DIAGNOSIS_ALLOWED_STATUSES),
                 created_at=diagnosed_at,
             )
 
@@ -305,7 +309,7 @@ class SimulatorService:
             condition = self.repository.get_or_create_condition(
                 db,
                 name=label,
-                status=random.choice(["active", "stable", "worsening", "chronic"]),
+                status=random.choice(CONDITION_ALLOWED_STATUSES),
             )
             if self.repository.has_condition_assignment(db, patient_id=patient_id, condition_id=condition.id):
                 continue
@@ -317,7 +321,7 @@ class SimulatorService:
                 patient_id=patient_id,
                 condition_id=condition.id,
                 doctor_id=doctor_id,
-                status=random.choice(["active", "monitoring", "stable", "chronic"]),
+                status=random.choice(CONDITION_ALLOWED_STATUSES),
                 diagnosed_at=diagnosed_at,
             )
 

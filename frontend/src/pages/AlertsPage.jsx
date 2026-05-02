@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react"
-import {Link, useSearchParams} from "react-router-dom"
+import {Link, useLocation, useSearchParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
 import CountValue from "../components/CountValue.jsx"
 import DataTable from "../components/DataTable.jsx"
@@ -17,6 +17,7 @@ const SEVERITY_ORDER = {
 
 export default function AlertsPage() {
   const {notifyError} = useNotifications()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [alerts, setAlerts] = useState([])
   const [patients, setPatients] = useState([])
@@ -60,14 +61,15 @@ export default function AlertsPage() {
   const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
   const patientCnpById = Object.fromEntries(patients.map((patient) => [patient.id, patient.cnp]))
   const patientByCnp = Object.fromEntries(patients.map((patient) => [patient.cnp, patient]))
-  const scopedCnp = searchParams.get("cnp") || ""
-  const scopedPatientName = searchParams.get("patient") || ""
+  const params = new URLSearchParams(location.search)
+  const scopedCnp = params.get("cnp") || ""
+  const scopedPatientName = params.get("patient") || ""
   const scopedPatient = scopedCnp ? patientByCnp[scopedCnp] : null
   const validPatientIds = new Set(patients.map((patient) => patient.id))
   const validAlerts = alerts.filter(
     (alert) => Number.isInteger(alert.patient_id) && validPatientIds.has(alert.patient_id) && Boolean(patientNameById[alert.patient_id]),
   )
-  const visibleAlerts = scopedCnp && scopedPatient ? validAlerts.filter((alert) => patientCnpById[alert.patient_id] === scopedCnp) : validAlerts
+  const visibleAlerts = scopedCnp ? validAlerts.filter((alert) => patientCnpById[alert.patient_id] === scopedCnp) : validAlerts
   const severityCounts = {
     critical: visibleAlerts.filter((alert) => alert.severity === "critical").length,
     high: visibleAlerts.filter((alert) => alert.severity === "high").length,
@@ -87,7 +89,7 @@ export default function AlertsPage() {
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Alerts</h1>
               <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">Live alert queue with filters, sort order, and paging.</p>
-              {scopedCnp && scopedPatient && (
+              {scopedCnp && (
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
                     Patient: {scopedPatient ? (
