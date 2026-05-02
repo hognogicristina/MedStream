@@ -72,13 +72,23 @@ class SimulatorRepository:
     def assign_doctor_to_patient(self, db, doctor_id: int, patient_id: int) -> None:
         assign_doctor_to_patient(db, doctor_id, patient_id)
 
-    def create_encounter(self, db, *, patient_id: int, doctor_id: int | None, encounter_type: str, chief_complaint: str) -> None:
+    def create_encounter(
+        self,
+        db,
+        *,
+        patient_id: int,
+        doctor_id: int | None,
+        encounter_type: str,
+        chief_complaint: str,
+        created_at: datetime | None = None,
+    ) -> None:
         db.add(
             Encounter(
                 patient_id=patient_id,
                 doctor_id=doctor_id,
                 encounter_type=encounter_type,
                 chief_complaint=chief_complaint,
+                created_at=created_at or now_utc(),
             )
         )
 
@@ -115,6 +125,7 @@ class SimulatorRepository:
         description: str,
         status: str,
         scheduled_at: datetime | None,
+        created_at: datetime | None = None,
     ) -> DoctorActivity | None:
         doctor = db.get(Doctor, doctor_id)
         patient = db.get(Patient, patient_id)
@@ -138,6 +149,7 @@ class SimulatorRepository:
             description=description,
             status=status,
             scheduled_at=scheduled_at or now_utc(),
+            created_at=created_at or now_utc(),
         )
         db.add(activity)
         return activity
@@ -305,13 +317,13 @@ class SimulatorRepository:
 
         return valid_doctors
 
-    def create_vital(self, db, patient_id: int, vitals: dict) -> Vital:
-        vital = Vital(patient_id=patient_id, **vitals)
+    def create_vital(self, db, patient_id: int, vitals: dict, *, recorded_at: datetime | None = None) -> Vital:
+        vital = Vital(patient_id=patient_id, recorded_at=recorded_at or now_utc(), **vitals)
         db.add(vital)
         db.flush()
         return vital
 
-    def create_vital_safe(self, db, patient_id: int, vitals: dict) -> Vital | None:
+    def create_vital_safe(self, db, patient_id: int, vitals: dict, *, recorded_at: datetime | None = None) -> Vital | None:
         patient = db.get(Patient, patient_id)
         if patient is None:
             print(f"Skipping vital creation: patient {patient_id} does not exist")
@@ -319,9 +331,19 @@ class SimulatorRepository:
         if patient.is_discharged:
             print(f"Skipping vital creation: patient {patient_id} is discharged")
             return None
-        return self.create_vital(db, patient_id, vitals)
+        return self.create_vital(db, patient_id, vitals, recorded_at=recorded_at)
 
-    def create_alert(self, db, *, patient_id: int, vital_id: int, alert_type: str, message: str, severity: str) -> None:
+    def create_alert(
+        self,
+        db,
+        *,
+        patient_id: int,
+        vital_id: int,
+        alert_type: str,
+        message: str,
+        severity: str,
+        created_at: datetime | None = None,
+    ) -> None:
         db.add(
             Alert(
                 patient_id=patient_id,
@@ -329,6 +351,7 @@ class SimulatorRepository:
                 alert_type=alert_type,
                 message=message,
                 severity=severity,
+                created_at=created_at or now_utc(),
             )
         )
 

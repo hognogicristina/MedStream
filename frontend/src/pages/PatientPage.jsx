@@ -10,6 +10,7 @@ import {useNotifications} from "../components/useNotifications.js"
 import {
   getBatchMetrics,
   getPatient,
+  getPatientAlerts,
   getPatientDoctors,
   getVitals,
   updatePatient,
@@ -60,10 +61,10 @@ function formatArrivalMethod(value) {
 }
 
 const MAX_VITAL_POINTS = 100
-const ALERT_COLOR_BY_TYPE = {
-  heart_rate: "#f87171",
-  oxygen: "#60a5fa",
-  temperature: "#fb923c",
+const ALERT_COLOR_BY_SEVERITY = {
+  Critical: "#ef4444",
+  High: "#f97316",
+  Normal: "#3b82f6",
 }
 
 export default function PatientPage() {
@@ -74,7 +75,7 @@ export default function PatientPage() {
   const [patient, setPatient] = useState(null)
   const [vitals, setVitals] = useState([])
   const [batchMetrics, setBatchMetrics] = useState(null)
-  const [alerts, setAlerts] = useState([])
+  const [alerts, setAlerts] = useState(null)
   const [department, setDepartment] = useState("")
   const [isUpdatingDepartment, setIsUpdatingDepartment] = useState(false)
   const [isLoadingPatient, setIsLoadingPatient] = useState(true)
@@ -90,7 +91,7 @@ export default function PatientPage() {
     setPatient(null)
     setVitals([])
     setBatchMetrics(null)
-    setAlerts([])
+    setAlerts(null)
     setDepartment("")
     setIsEditDialogOpen(false)
     setIsTransferDialogOpen(false)
@@ -175,6 +176,35 @@ export default function PatientPage() {
   useEffect(() => {
     let active = true
 
+    const loadPatientAlerts = async () => {
+      try {
+        const response = await getPatientAlerts(id)
+        if (!active) {
+          return
+        }
+        const nextAlerts = (getResponseData(response) || []).filter(
+          (alert) => String(alert.patient_id) === String(id),
+        )
+        setAlerts(nextAlerts)
+      } catch (error) {
+        if (!active) {
+          return
+        }
+        setAlerts([])
+        notifyError(getErrorMessage(error))
+      }
+    }
+
+    loadPatientAlerts().then(r => r)
+
+    return () => {
+      active = false
+    }
+  }, [id, notifyError])
+
+  useEffect(() => {
+    let active = true
+
     const loadBatchMetrics = async () => {
       try {
         const response = await getBatchMetrics()
@@ -217,7 +247,10 @@ export default function PatientPage() {
       }
 
       if (msg.type === "alert") {
-        setAlerts((prev) => [msg.data, ...prev.slice(0, 10)])
+        setAlerts((prev) => {
+          const currentAlerts = Array.isArray(prev) ? prev : []
+          return [msg.data, ...currentAlerts.filter((alert) => alert.id !== msg.data.id)].slice(0, 25)
+        })
       }
     })
 
@@ -347,13 +380,27 @@ export default function PatientPage() {
     [vitals],
   )
   const alertDistributionData = useMemo(() => {
-    const counts = alerts.reduce((accumulator, alert) => {
-      const alertType = String(alert.type || alert.alert_type || "unknown")
-      accumulator[alertType] = (accumulator[alertType] || 0) + 1
-      return accumulator
-    }, {})
+    if (!Array.isArray(alerts)) {
+      return []
+    }
 
-    return Object.entries(counts).map(([type, count]) => ({type, count}))
+    const counts = alerts.reduce((accumulator, alert) => {
+      const severity = String(alert.severity || "").trim().toLowerCase()
+      if (severity === "critical") {
+        accumulator.critical += 1
+      } else if (severity === "high") {
+        accumulator.high += 1
+      } else {
+        accumulator.normal += 1
+      }
+      return accumulator
+    }, {critical: 0, high: 0, normal: 0})
+
+    return [
+      {name: "Critical", count: counts.critical},
+      {name: "High", count: counts.high},
+      {name: "Normal", count: counts.normal},
+    ]
   }, [alerts])
   const averageHeartRate = Number.isFinite(batchMetrics?.avg_heart_rate) ? batchMetrics.avg_heart_rate.toFixed(1) : "--"
   const averageOxygen = Number.isFinite(batchMetrics?.avg_oxygen) ? batchMetrics.avg_oxygen.toFixed(1) : "--"
@@ -573,14 +620,18 @@ export default function PatientPage() {
               </div>
 
               <div className="h-64 rounded-2xl border border-[#3b424b] bg-[#151b22] p-3">
-                {alertDistributionData.length === 0 ? (
+                {alerts === null ? (
+                  <div className="flex h-full items-center justify-center text-sm text-[#b6bec9]">
+                    Loading alerts...
+                  </div>
+                ) : alertDistributionData.length === 0 ? (
                   <div className="flex h-full items-center justify-center text-sm text-[#b6bec9]">
                     No alerts available
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={alertDistributionData} margin={{top: 8, right: 8, left: 0, bottom: 6}}>
-                      <XAxis dataKey="type" stroke="#879196" tick={{fill: "#b6bec9", fontSize: 12}}/>
+                      <XAxis dataKey="name" stroke="#879196" tick={{fill: "#b6bec9", fontSize: 12}}/>
                       <YAxis allowDecimals={false} stroke="#879196" tick={{fill: "#b6bec9", fontSize: 12}}/>
                       <Tooltip
                         contentStyle={{backgroundColor: "#0f141a", border: "1px solid #3b424b", borderRadius: 12}}
@@ -589,7 +640,7 @@ export default function PatientPage() {
                       />
                       <Bar dataKey="count" radius={[8, 8, 0, 0]}>
                         {alertDistributionData.map((entry) => (
-                          <Cell key={`alert-bar-${entry.type}`} fill={ALERT_COLOR_BY_TYPE[entry.type] || "#9ca3af"}/>
+                          <Cell key={`alert-bar-${entry.name}`} fill={ALERT_COLOR_BY_SEVERITY[entry.name] || "#9ca3af"}/>
                         ))}
                       </Bar>
                     </BarChart>

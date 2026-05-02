@@ -5,23 +5,25 @@ from datetime import timedelta
 from app.utils.datetime import now_utc
 
 
-def create_critical_flow() -> dict:
+def create_critical_flow(reference_time=None) -> dict:
+    base_time = reference_time or now_utc()
     return {
         "type": "SURGERY",
         "title": "Emergency surgery",
         "description": "Critical condition requires immediate intervention",
         "status": "incoming",
-        "scheduled_at": now_utc() + timedelta(minutes=10),
+        "scheduled_at": base_time + timedelta(minutes=10),
     }
 
 
-def create_warning_flow() -> dict:
+def create_warning_flow(reference_time=None) -> dict:
+    base_time = reference_time or now_utc()
     return {
         "type": "PROCEDURE",
         "title": "Further investigation",
         "description": "Patient shows abnormal vitals",
         "status": "incoming",
-        "scheduled_at": now_utc() + timedelta(hours=2),
+        "scheduled_at": base_time + timedelta(hours=2),
     }
 
 

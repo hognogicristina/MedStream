@@ -1,34 +1,79 @@
 from __future__ import annotations
 
-import random
 from datetime import datetime, timedelta
 
 
-DISCHARGE_REASONS = ["Recovered", "Transferred", "Stable condition"]
+MIN_ADMISSION_DURATION = timedelta(days=3)
+STABILITY_HOURS = 6
+MIN_EFFECTIVE_EVALUATIONS = 5
 
 
-def handle_stable_flow(
+def derive_outcome_from_alert_evolution(
     *,
-    patient_id: int,
-    now: datetime,
-    patient_last_normal_time: dict[int, datetime],
-    threshold_hours: int = 6,
-) -> bool:
-    if patient_id not in patient_last_normal_time:
-        patient_last_normal_time[patient_id] = now
+    before_count: int,
+    after_count: int,
+    before_severity_score: int,
+    after_severity_score: int,
+) -> str:
+    alerts_decreased = after_count < before_count
+    alerts_worsened = after_count > before_count
+    severity_improved = after_severity_score < before_severity_score
+    severity_worsened = after_severity_score > before_severity_score
+    alerts_persisted = after_count > 0 and after_count == before_count
+
+    if alerts_decreased or severity_improved:
+        return "effective"
+
+    if alerts_worsened or severity_worsened or alerts_persisted:
+        return "ineffective"
+
+    return "effective"
+
+
+def is_stable_window_effective(outcome_history: list[dict], *, now: datetime) -> bool:
+    if not outcome_history:
         return False
 
-    elapsed = now - patient_last_normal_time[patient_id]
-    return elapsed > timedelta(hours=threshold_hours)
+    recent_by_time = [
+        item for item in outcome_history
+        if isinstance(item.get("timestamp"), datetime) and now - item["timestamp"] <= timedelta(hours=STABILITY_HOURS)
+    ]
+    recent_by_count = outcome_history[-MIN_EFFECTIVE_EVALUATIONS:]
+
+    time_window_effective = bool(recent_by_time) and all(item.get("outcome") == "effective" for item in recent_by_time)
+    count_window_effective = (
+        len(recent_by_count) >= MIN_EFFECTIVE_EVALUATIONS
+        and all(item.get("outcome") == "effective" for item in recent_by_count)
+    )
+
+    return time_window_effective or count_window_effective
 
 
-def try_discharge_patient(has_pending_activities: bool) -> bool:
-    return not has_pending_activities
+def is_patient_discharge_eligible(
+    *,
+    now: datetime,
+    admission_date: datetime | None,
+    outcome_history: list[dict],
+    has_incoming_activities: bool,
+    patient_state: str,
+) -> bool:
+    if admission_date is None:
+        return False
 
+    if now - admission_date < MIN_ADMISSION_DURATION:
+        return False
 
-def maybe_random_discharge(probability: float) -> bool:
-    return random.random() < probability
+    if has_incoming_activities:
+        return False
 
+    if patient_state != "stable":
+        return False
 
-def pick_discharge_reason() -> str:
-    return random.choice(DISCHARGE_REASONS)
+    last_evaluations = outcome_history[-MIN_EFFECTIVE_EVALUATIONS:]
+    if len(last_evaluations) < MIN_EFFECTIVE_EVALUATIONS:
+        return False
+
+    if any(item.get("outcome") != "effective" for item in last_evaluations):
+        return False
+
+    return is_stable_window_effective(outcome_history, now=now)

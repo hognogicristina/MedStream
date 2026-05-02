@@ -6,7 +6,8 @@ from datetime import timedelta
 from app.utils.datetime import now_utc
 
 
-def generate_activity(type_name: str, source: str) -> dict:
+def generate_activity(type_name: str, source: str, reference_time=None) -> dict:
+    base_time = reference_time or now_utc()
     if type_name == "Consultation":
         title = f"Consultation - {source}"
         description = f"Patient evaluated due to {source}"
@@ -31,5 +32,5 @@ def generate_activity(type_name: str, source: str) -> dict:
         "title": title,
         "description": description,
         "status": "incoming",
-        "scheduled_at": now_utc() + timedelta(hours=random.randint(1, 24)),
+        "scheduled_at": base_time + timedelta(hours=random.randint(1, 24)),
     }
