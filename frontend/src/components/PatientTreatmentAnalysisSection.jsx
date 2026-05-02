@@ -21,6 +21,14 @@ const toTimestamp = (value) => {
 
 const getSeverityScore = (severity) => ALERT_SEVERITY_SCORE[String(severity || "").trim().toLowerCase()] || 1
 
+function formatDate(value) {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) {
+    return "--"
+  }
+  return new Intl.DateTimeFormat("en-GB", {day: "2-digit", month: "short", year: "numeric"}).format(date)
+}
+
 const deriveOutcomeFromAlertEvolution = ({beforeCount, afterCount, beforeSeverityScore, afterSeverityScore}) => {
   const alertsDecreased = afterCount < beforeCount
   const alertsWorsened = afterCount > beforeCount
@@ -47,6 +55,7 @@ export default function PatientTreatmentAnalysisSection({
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [analysis, setAnalysis] = useState(null)
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(true)
+  const [showFullAlertHistory, setShowFullAlertHistory] = useState(false)
 
   const loadAnalysis = useCallback(async (patientId) => {
     setIsLoadingAnalysis(true)
@@ -65,6 +74,7 @@ export default function PatientTreatmentAnalysisSection({
     if (!selectedPatientId) {
       return
     }
+    setShowFullAlertHistory(false)
 
     const loadInitial = async () => {
       try {
@@ -130,7 +140,7 @@ export default function PatientTreatmentAnalysisSection({
     })
   }, [analysis])
 
-  const timelineData = useMemo(() => {
+  const timelineOutcomeHistory = useMemo(() => {
     const alerts = (analysis?.alerts || [])
       .map((alert) => ({
         time: toTimestamp(alert.created_at),
@@ -143,8 +153,20 @@ export default function PatientTreatmentAnalysisSection({
       const now = Date.now()
       const before = now - TIMELINE_BUCKET_MS
       return [
-        {time: new Date(before).toISOString().slice(0, 16), effective: 1, ineffective: 0},
-        {time: new Date(now).toISOString().slice(0, 16), effective: 1, ineffective: 0},
+        {
+          time: new Date(before).toISOString().slice(0, 16),
+          bucketStart: before,
+          outcome: "Effective",
+          effective: 1,
+          ineffective: 0,
+        },
+        {
+          time: new Date(now).toISOString().slice(0, 16),
+          bucketStart: now,
+          outcome: "Effective",
+          effective: 1,
+          ineffective: 0,
+        },
       ]
     }
 
@@ -189,23 +211,43 @@ export default function PatientTreatmentAnalysisSection({
 
       return {
         time: new Date(bucketStart).toISOString().slice(0, 16),
+        bucketStart,
+        bucketEnd: bucketStart + TIMELINE_BUCKET_MS,
+        alertCount: currentBucketStats.count,
+        severityScore: currentBucketStats.severityScore,
+        outcome,
         effective: outcome === "Effective" ? 1 : 0,
         ineffective: outcome === "Ineffective" ? 1 : 0,
       }
     })
   }, [analysis])
 
+  const timelineData = useMemo(
+    () => timelineOutcomeHistory.map((entry) => ({
+      time: entry.time,
+      effective: entry.effective,
+      ineffective: entry.ineffective,
+    })),
+    [timelineOutcomeHistory],
+  )
+
   const medicationHistory = useMemo(() => {
     const medications = analysis?.medications || []
-    const treatmentOutcomeByMedicationId = new Map(
-      treatmentOutcomeHistory.map((entry) => [entry.medication.id, entry.outcome]),
+    const timelineByBucket = new Map(
+      timelineOutcomeHistory.map((entry) => [entry.bucketStart, entry.outcome]),
     )
 
     return medications.map((medication) => {
       const relatedAlerts = medication.reasoning?.alerts || []
       const relatedDiagnoses = medication.reasoning?.diagnoses || []
       const relatedConditions = medication.reasoning?.conditions || []
-      const outcome = treatmentOutcomeByMedicationId.get(medication.id) || (relatedAlerts.length ? "Ineffective" : "Effective")
+      const medicationTime = toTimestamp(medication.prescribed_at)
+      const medicationBucket = medicationTime == null
+        ? null
+        : Math.floor(medicationTime / TIMELINE_BUCKET_MS) * TIMELINE_BUCKET_MS
+      const timelineOutcome = medicationBucket == null ? null : timelineByBucket.get(medicationBucket)
+      const fallbackOutcome = treatmentOutcomeHistory.find((entry) => entry.medication.id === medication.id)?.outcome
+      const outcome = timelineOutcome || fallbackOutcome || (relatedAlerts.length ? "Ineffective" : "Effective")
 
       let reasonText = "Prescribed based on current clinical assessment."
       if (relatedAlerts.length && relatedDiagnoses.length) {
@@ -221,6 +263,8 @@ export default function PatientTreatmentAnalysisSection({
         dosage: medication.dosage,
         frequency: medication.frequency,
         created_at: medication.prescribed_at,
+        notes: medication.notes || "",
+        modified_by: medication.modified_by || "",
         related_alerts: relatedAlerts,
         related_diagnoses: relatedDiagnoses,
         related_conditions: relatedConditions,
@@ -228,7 +272,7 @@ export default function PatientTreatmentAnalysisSection({
         reasonText,
       }
     })
-  }, [analysis, treatmentOutcomeHistory])
+  }, [analysis, timelineOutcomeHistory, treatmentOutcomeHistory])
 
   const latestTreatment = useMemo(() => {
     if (!medicationHistory.length) {
@@ -237,13 +281,52 @@ export default function PatientTreatmentAnalysisSection({
     return medicationHistory[medicationHistory.length - 1]
   }, [medicationHistory])
 
-  const formatDate = (value) => {
-    const date = new Date(value)
-    if (!Number.isFinite(date.getTime())) {
-      return "--"
+  const latestTimelineOutcome = useMemo(() => {
+    if (!timelineOutcomeHistory.length) {
+      return "Effective"
     }
-    return new Intl.DateTimeFormat("en-GB", {day: "2-digit", month: "short", year: "numeric"}).format(date)
-  }
+    return timelineOutcomeHistory[timelineOutcomeHistory.length - 1].outcome || "Effective"
+  }, [timelineOutcomeHistory])
+
+  const latestAlertSummary = useMemo(() => {
+    const alerts = [...(analysis?.alerts || [])]
+      .map((alert) => ({...alert, time: toTimestamp(alert.created_at)}))
+      .filter((alert) => alert.time !== null)
+      .sort((left, right) => right.time - left.time)
+
+    const extractNumericValue = (input) => {
+      const match = String(input || "").match(/(-?\d+(?:\.\d+)?)/)
+      if (!match) {
+        return null
+      }
+      const value = Number(match[1])
+      return Number.isFinite(value) ? value : null
+    }
+
+    const getLatestByType = (type) => alerts.find((alert) => alert.alert_type === type) || null
+    const heartRateAlert = getLatestByType("heart_rate")
+    const oxygenAlert = getLatestByType("oxygen_saturation")
+    const temperatureAlert = getLatestByType("temperature")
+
+    const heartRate = extractNumericValue(heartRateAlert?.message)
+    const oxygen = extractNumericValue(oxygenAlert?.message)
+    const temperature = extractNumericValue(temperatureAlert?.message)
+
+    return {
+      heartRate,
+      oxygen,
+      temperature,
+      summary: "Patient shows persistent abnormal vitals with elevated heart rate, low oxygen saturation, and high temperature.",
+    }
+  }, [analysis])
+
+  const fullAlertHistory = useMemo(() => {
+    return (analysis?.alerts || [])
+      .map((alert) => ({...alert, time: toTimestamp(alert.created_at)}))
+      .filter((alert) => alert.time !== null)
+      .sort((left, right) => right.time - left.time)
+      .map((alert) => `${alert.alert_type}: ${alert.message} (${formatDate(alert.created_at)})`)
+  }, [analysis])
 
   return (
     <section className="monitor-card rounded-[24px] p-6">
@@ -310,6 +393,12 @@ export default function PatientTreatmentAnalysisSection({
                   </div>
                   <p className="mt-2 text-sm text-[#d5dbdb]">Dosage: {latestTreatment.dosage || "--"}</p>
                   <p className="mt-1 text-sm text-[#d5dbdb]">Frequency: {latestTreatment.frequency || "--"}</p>
+                  {latestTreatment.notes ? (
+                    <p className="mt-1 text-sm text-[#d5dbdb]">Notes: {latestTreatment.notes}</p>
+                  ) : null}
+                  {latestTreatment.modified_by ? (
+                    <p className="mt-1 text-sm text-[#d5dbdb]">Modified by doctor: {latestTreatment.modified_by}</p>
+                  ) : null}
 
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
@@ -318,16 +407,56 @@ export default function PatientTreatmentAnalysisSection({
                     </div>
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Outcome</p>
-                      <p className={`mt-2 text-sm font-semibold ${latestTreatment.outcome === "Effective" ? "text-[#22c55e]" : "text-[#ef4444]"}`}>
-                        {latestTreatment.outcome}
+                      <p className={`mt-2 text-sm font-semibold ${latestTimelineOutcome === "Effective" ? "text-[#22c55e]" : "text-[#ef4444]"}`}>
+                        {latestTimelineOutcome}
                       </p>
                     </div>
                   </div>
 
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Alerts</p>
-                      <p className="mt-2 text-sm text-white">{latestTreatment.related_alerts.length ? latestTreatment.related_alerts.join(", ") : "No linked alerts"}</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Latest Alert Summary</p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                        <div className="rounded-lg border border-[#2a3441] bg-[#11161c] px-3 py-2">
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-[#9aa5b1]">Heart Rate</p>
+                          <p className={`mt-1 text-sm font-semibold ${latestAlertSummary.heartRate != null && latestAlertSummary.heartRate > 120 ? "text-[#ef4444]" : "text-white"}`}>
+                            {latestAlertSummary.heartRate != null ? `${latestAlertSummary.heartRate} bpm` : "--"}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-[#2a3441] bg-[#11161c] px-3 py-2">
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-[#9aa5b1]">Oxygen</p>
+                          <p className={`mt-1 text-sm font-semibold ${latestAlertSummary.oxygen != null && latestAlertSummary.oxygen < 90 ? "text-[#f97316]" : "text-white"}`}>
+                            {latestAlertSummary.oxygen != null ? `${latestAlertSummary.oxygen}%` : "--"}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-[#2a3441] bg-[#11161c] px-3 py-2">
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-[#9aa5b1]">Temperature</p>
+                          <p className={`mt-1 text-sm font-semibold ${latestAlertSummary.temperature != null && latestAlertSummary.temperature > 39 ? "text-[#ef4444]" : "text-white"}`}>
+                            {latestAlertSummary.temperature != null ? `${latestAlertSummary.temperature}°C` : "--"}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-3 text-sm text-[#d5dbdb]">{latestAlertSummary.summary}</p>
+                      {fullAlertHistory.length ? (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={() => setShowFullAlertHistory((current) => !current)}
+                            className="text-xs font-semibold uppercase tracking-[0.14em] text-[#9dccff] transition hover:text-[#c5e4ff]"
+                          >
+                            {showFullAlertHistory ? "Hide full history" : "View full history"}
+                          </button>
+                          {showFullAlertHistory ? (
+                            <div className="mt-2 space-y-1">
+                              {fullAlertHistory.map((alert) => (
+                                <p key={alert} className="text-sm text-white">{alert}</p>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm text-white">No linked alerts</p>
+                      )}
                     </div>
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Diagnosis</p>

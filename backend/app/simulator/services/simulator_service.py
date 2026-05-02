@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import math
 import random
+import re
 from datetime import datetime, timedelta
 
 from passlib.context import CryptContext
@@ -17,7 +20,6 @@ from app.simulator.generators.patient_generator import (
     generate_patient_profile,
     generate_phone_candidate,
 )
-from app.simulator.generators.vitals_generator import generate_vitals
 from app.simulator.logic.activity_logic import (
     create_critical_flow,
     create_warning_flow,
@@ -51,12 +53,16 @@ ACTIVITY_STEP_HOURS_RANGE = (6, 48)
 MEDICATION_STEP_DAYS_RANGE = (5, 28)
 HISTORICAL_VITAL_SAMPLES_RANGE = (48, 180)
 MAX_OUTCOME_HISTORY = 400
+TREATMENT_EVALUATION_WINDOW_CYCLES = 6
+TREATMENT_FAILURE_ALERT_CYCLES = 2
+TREATMENT_MIN_SUCCESS_NORMAL_CYCLES = 2
+STABILITY_DURATION_REQUIRED = timedelta(days=3)
+MAX_TREATMENT_MEDICATIONS = 6
 ALERT_COOLDOWN_MINUTES_RANGE = (5, 15)
-ALERT_PROBABILITY_BY_SEVERITY = {
-    "critical": 0.04,
-    "high": 0.12,
-    "normal": 0.25,
-}
+MAX_ALERTS_PER_PATIENT_PER_HOUR = 18
+MAX_ALERTS_PER_PATIENT_PER_CYCLE = 2
+MAX_DOSAGE_MULTIPLIER = 4
+TREATMENT_ESCALATION_NOTE = "Treatment not working, patient got worse. Dose/frequency adjusted after persistent alerts."
 
 
 class SimulatorService:
@@ -81,6 +87,7 @@ class SimulatorService:
             return
 
         with self.repository.session_scope() as db:
+            self.repository.cleanup_invalid_alerts(db)
             if self.repository.get_doctor_count(db) > 0:
                 return
 
@@ -90,6 +97,7 @@ class SimulatorService:
 
     def run_cycle(self) -> None:
         with self.repository.session_scope() as db:
+            self.repository.cleanup_invalid_alerts(db)
             activities_created_in_cycle: set[int] = set()
 
             if random.random() < self.config.patient_spawn_probability:
@@ -98,6 +106,9 @@ class SimulatorService:
                     db.commit()
                     self.active_patients.append(patient_data)
                     self.counter += 1
+
+            if not self.active_patients:
+                return
 
             next_active_patients: list[dict] = []
             for patient_data in self.active_patients:
@@ -126,6 +137,14 @@ class SimulatorService:
         address_payload = generate_address(counties)
         medication_profile = choose_medication_profile(drugs, identity["is_pregnant"])
         if medication_profile is None:
+            return None
+        medication_plan = self._build_medication_plan(
+            drugs=drugs,
+            condition_name=medication_profile["condition_name"],
+            is_pregnant=identity["is_pregnant"],
+            preferred_medication=medication_profile["medication_name"],
+        )
+        if not medication_plan:
             return None
 
         now = now_utc()
@@ -203,6 +222,17 @@ class SimulatorService:
             frequencies=frequencies,
         )
 
+        treatment_state = self._initialize_treatment_state(
+            patient_id=patient.id,
+            condition_name=medication_profile["condition_name"],
+            medication_plan=medication_plan,
+        )
+        clinical_state = self._initial_clinical_state(
+            patient_id=patient.id,
+            segment=segment,
+            condition_name=medication_profile["condition_name"],
+        )
+
         patient_data = {
             "id": patient.id,
             "condition": medication_profile["condition_name"],
@@ -213,9 +243,15 @@ class SimulatorService:
             "timeline_cursor": admission_date,
             "patient_outcome_history": [],
             "last_alert_evaluation": {"count": 0, "severity_score": 0},
-            "alert_cooldown_minutes": random.randint(*ALERT_COOLDOWN_MINUTES_RANGE),
+            "last_alert_state": None,
             "last_alert_timestamp": None,
-            "last_alert_by_type": {},
+            "recent_alert_timestamps": [],
+            "alert_cooldown_minutes": random.randint(*ALERT_COOLDOWN_MINUTES_RANGE),
+            "medication_dosage": self._default_dosage_for_patient(dosages, patient.id),
+            "medication_frequency": self._default_frequency_for_patient(frequencies, patient.id),
+            "treatment_state": treatment_state,
+            "clinical_state": clinical_state,
+            "stability_started_at": None,
         }
 
         self._seed_historical_activities(db, patient, patient_data)
@@ -403,8 +439,7 @@ class SimulatorService:
             if recorded_at >= now:
                 break
 
-            progress = (index + 1) / max(vital_count, 1)
-            vitals = self._generate_vitals_for_segment(patient_data["segment"], progress)
+            vitals = self._generate_vitals_for_patient(patient_data)
             vital = self.repository.create_vital_safe(db, patient.id, vitals, recorded_at=recorded_at)
             if vital is None:
                 break
@@ -419,7 +454,27 @@ class SimulatorService:
                 emit_events=False,
                 include_buffer=False,
             )
+            state = evaluate_patient_state(vitals)
             self._record_outcome_evaluation(patient_data, recorded_at=recorded_at, alert_stats=alert_stats)
+            self._update_stability_tracking(
+                patient_data=patient_data,
+                alert_stats=alert_stats,
+                current_state=state,
+                event_time=recorded_at,
+            )
+            self._update_treatment_lifecycle(
+                db,
+                patient=patient,
+                patient_data=patient_data,
+                alert_stats=alert_stats,
+                current_state=state,
+                event_time=recorded_at,
+                allow_discharge=False,
+            )
+            self._apply_treatment_effect_to_clinical_state(
+                patient_data,
+                has_escalated_alert=bool(alert_stats.get("high_or_critical_count")),
+            )
 
         patient_data["timeline_cursor"] = min(self._clamp_to_now(cursor), now - timedelta(minutes=1))
 
@@ -441,11 +496,7 @@ class SimulatorService:
         event_time = self._clamp_to_now(timeline_cursor)
         patient_data["timeline_cursor"] = event_time
 
-        progress_total = max(1.0, (now_utc() - patient_data["admission_date"]).total_seconds())
-        progress_done = max(0.0, (event_time - patient_data["admission_date"]).total_seconds())
-        progress_ratio = min(1.0, progress_done / progress_total)
-
-        vitals = self._generate_vitals_for_segment(patient_data.get("segment", "active"), progress_ratio)
+        vitals = self._generate_vitals_for_patient(patient_data)
         vital = self.repository.create_vital_safe(db, patient.id, vitals, recorded_at=event_time)
         if vital is None:
             return False
@@ -469,6 +520,27 @@ class SimulatorService:
             recorded_at=event_time,
         )
         self._record_outcome_evaluation(patient_data, recorded_at=event_time, alert_stats=alert_stats)
+        self._update_stability_tracking(
+            patient_data=patient_data,
+            alert_stats=alert_stats,
+            current_state=new_state,
+            event_time=event_time,
+        )
+        discharged_for_transfer = self._update_treatment_lifecycle(
+            db,
+            patient=patient,
+            patient_data=patient_data,
+            alert_stats=alert_stats,
+            current_state=new_state,
+            event_time=event_time,
+            allow_discharge=True,
+        )
+        self._apply_treatment_effect_to_clinical_state(
+            patient_data,
+            has_escalated_alert=bool(alert_stats.get("high_or_critical_count")),
+        )
+        if discharged_for_transfer:
+            return False
 
         if self.buffers.should_stream_patient_vitals(patient.id):
             self.producer.send_vital(
@@ -556,6 +628,17 @@ class SimulatorService:
             self.buffers.mark_activity_created(patient.id, activities_created_in_cycle)
 
     def _handle_stable_flow(self, db, patient, patient_data: dict, *, current_state: str, event_time: datetime) -> None:
+        stability_started_at = patient_data.get("stability_started_at")
+        if not isinstance(stability_started_at, datetime):
+            return
+        if event_time - stability_started_at < STABILITY_DURATION_REQUIRED:
+            return
+
+        treatment_state = patient_data.get("treatment_state") or {}
+        active_medication = treatment_state.get("active_medication_name")
+        if active_medication and treatment_state.get("status") != "effective":
+            return
+
         has_pending = self.repository.count_incoming_activities(db, patient.id) > 0
         outcome_history = patient_data.get("patient_outcome_history", [])
         admission_date = patient_data.get("admission_date")
@@ -628,25 +711,85 @@ class SimulatorService:
         emit_events: bool = True,
         include_buffer: bool = True,
     ) -> dict:
+        patient = self.repository.get_patient(db, patient_id)
+        if patient is None or getattr(patient, "id", None) is None:
+            return {
+                "count": 0,
+                "severity_score": 0,
+                "high_or_critical_count": 0,
+                "highest_severity": "normal",
+            }
+
         count = 0
         severity_score = 0
+        high_or_critical_count = 0
+        highest_severity = "normal"
+        generated_in_cycle = 0
 
-        def maybe_create_alert(*, alert_type: str, value: int, severity: str, message: str) -> bool:
-            probability = ALERT_PROBABILITY_BY_SEVERITY.get(severity, 0.1)
-            if random.random() >= probability:
-                return False
+        previous_state = patient_data.get("last_alert_state")
 
-            cooldown_minutes = int(patient_data.get("alert_cooldown_minutes", 10))
-            cooldown = timedelta(minutes=max(1, cooldown_minutes))
-            last_alert_timestamp = patient_data.get("last_alert_timestamp")
-            if isinstance(last_alert_timestamp, datetime) and recorded_at - last_alert_timestamp < cooldown:
-                return False
+        is_critical = vitals["oxygen_saturation"] < 90
+        is_high = vitals["heart_rate"] > 120 or vitals["temperature"] > 38
 
-            dedupe_key = f"{alert_type}:{value}"
-            last_by_type = patient_data.setdefault("last_alert_by_type", {})
-            last_seen = last_by_type.get(alert_type)
-            if last_seen == dedupe_key:
-                return False
+        if is_critical:
+            current_state = "critical"
+        elif is_high:
+            current_state = "high"
+        else:
+            current_state = "normal"
+
+        if current_state == previous_state:
+            return {
+                "count": 0,
+                "severity_score": 0,
+                "high_or_critical_count": 0,
+                "highest_severity": "normal",
+            }
+
+        recent_alert_timestamps = [
+            ts
+            for ts in (patient_data.get("recent_alert_timestamps") or [])
+            if isinstance(ts, datetime) and recorded_at - ts <= timedelta(hours=1)
+        ]
+        patient_data["recent_alert_timestamps"] = recent_alert_timestamps
+
+        if len(recent_alert_timestamps) >= MAX_ALERTS_PER_PATIENT_PER_HOUR:
+            return {
+                "count": 0,
+                "severity_score": 0,
+                "high_or_critical_count": 0,
+                "highest_severity": "normal",
+            }
+
+        cooldown_minutes = int(patient_data.get("alert_cooldown_minutes", ALERT_COOLDOWN_MINUTES_RANGE[0]))
+        cooldown = timedelta(minutes=max(1, cooldown_minutes))
+        last_alert_timestamp = patient_data.get("last_alert_timestamp")
+        if isinstance(last_alert_timestamp, datetime) and recorded_at - last_alert_timestamp < cooldown:
+            return {
+                "count": 0,
+                "severity_score": 0,
+                "high_or_critical_count": 0,
+                "highest_severity": "normal",
+            }
+
+        def create_alert(*, alert_type: str, value: int, severity: str, message: str) -> None:
+            nonlocal count, severity_score, high_or_critical_count, highest_severity, generated_in_cycle
+            if generated_in_cycle >= MAX_ALERTS_PER_PATIENT_PER_CYCLE:
+                return
+            if len(recent_alert_timestamps) >= MAX_ALERTS_PER_PATIENT_PER_HOUR:
+                return
+
+            created_alert = self.repository.create_alert(
+                db,
+                patient_id=patient_id,
+                vital_id=vital_id,
+                alert_type=alert_type,
+                message=message,
+                severity=severity,
+                created_at=recorded_at,
+            )
+            if created_alert is None:
+                return
 
             if emit_events:
                 self.producer.send_alert(
@@ -658,65 +801,66 @@ class SimulatorService:
                         "severity": severity,
                     }
                 )
-            self.repository.create_alert(
-                db,
-                patient_id=patient_id,
-                vital_id=vital_id,
-                alert_type=alert_type,
-                message=message,
-                severity=severity,
-                created_at=recorded_at,
-            )
+
             if include_buffer:
                 self.buffers.append_alert_sample(patient_id, alert_type)
-
+            generated_in_cycle += 1
+            recent_alert_timestamps.append(recorded_at)
             patient_data["last_alert_timestamp"] = recorded_at
-            last_by_type[alert_type] = dedupe_key
-            return True
 
-        if vitals["heart_rate"] > 120 and maybe_create_alert(
-            alert_type="heart_rate",
-            value=vitals["heart_rate"],
-            severity="high",
-            message=f"High heart rate detected: {vitals['heart_rate']} bpm",
-        ):
-            count += 1
-            severity_score += ALERT_SEVERITY_SCORE["high"]
+            if severity in {"high", "critical"}:
+                count += 1
+                severity_score += ALERT_SEVERITY_SCORE.get(severity, 0)
+                high_or_critical_count += 1
+            if ALERT_SEVERITY_SCORE.get(severity, 0) > ALERT_SEVERITY_SCORE.get(highest_severity, 0):
+                highest_severity = severity
 
-        if vitals["oxygen_saturation"] < 90 and maybe_create_alert(
-            alert_type="oxygen",
-            value=vitals["oxygen_saturation"],
-            severity="critical",
-            message=f"Low oxygen saturation detected: {vitals['oxygen_saturation']}%",
-        ):
-            count += 1
-            severity_score += ALERT_SEVERITY_SCORE["critical"]
+        if current_state in {"high", "critical"} and vitals["heart_rate"] > 120:
+            create_alert(
+                alert_type="heart_rate",
+                value=vitals["heart_rate"],
+                severity="high",
+                message=f"High heart rate detected: {vitals['heart_rate']} bpm",
+            )
 
-        if vitals["temperature"] > 38 and maybe_create_alert(
-            alert_type="temperature",
-            value=vitals["temperature"],
-            severity="high",
-            message=f"Elevated temperature detected: {vitals['temperature']}°C",
-        ):
-            count += 1
-            severity_score += ALERT_SEVERITY_SCORE["high"]
+        if current_state == "critical" and vitals["oxygen_saturation"] < 90:
+            create_alert(
+                alert_type="oxygen",
+                value=vitals["oxygen_saturation"],
+                severity="critical",
+                message=f"Low oxygen saturation detected: {vitals['oxygen_saturation']}%",
+            )
 
-        if count == 0 and maybe_create_alert(
-            alert_type="status",
-            value=vitals["heart_rate"],
-            severity="normal",
-            message=(
-                "Vitals within normal ranges: "
-                f"HR {vitals['heart_rate']} bpm, "
-                f"SpO2 {vitals['oxygen_saturation']}%, "
-                f"Temp {vitals['temperature']}°C"
-            ),
-        ):
-            pass
+        if current_state in {"high", "critical"} and vitals["temperature"] > 38:
+            create_alert(
+                alert_type="temperature",
+                value=vitals["temperature"],
+                severity="high",
+                message=f"Elevated temperature detected: {vitals['temperature']}°C",
+            )
+
+        if current_state == "normal" and previous_state in {"high", "critical"}:
+            create_alert(
+                alert_type="status",
+                value=vitals["heart_rate"],
+                severity="normal",
+                message=(
+                    "Vitals within normal ranges: "
+                    f"HR {vitals['heart_rate']} bpm, "
+                    f"SpO2 {vitals['oxygen_saturation']}%, "
+                    f"Temp {vitals['temperature']}°C"
+                ),
+            )
+
+        patient_data["recent_alert_timestamps"] = recent_alert_timestamps
+        if generated_in_cycle > 0:
+            patient_data["last_alert_state"] = current_state
 
         return {
             "count": count,
             "severity_score": severity_score,
+            "high_or_critical_count": high_or_critical_count,
+            "highest_severity": highest_severity,
         }
 
     def _record_outcome_evaluation(self, patient_data: dict, *, recorded_at: datetime, alert_stats: dict) -> None:
@@ -742,6 +886,644 @@ class SimulatorService:
             "count": int(alert_stats.get("count", 0)),
             "severity_score": int(alert_stats.get("severity_score", 0)),
         }
+
+    def _build_medication_plan(
+        self,
+        *,
+        drugs: list[dict],
+        condition_name: str,
+        is_pregnant: bool,
+        preferred_medication: str | None,
+    ) -> list[str]:
+        allowed_categories = {"A", "B"} if is_pregnant else {"A", "B", "C", "D", "N"}
+        condition_key = (condition_name or "").strip().lower()
+
+        condition_matches: set[str] = set()
+        fallback_matches: set[str] = set()
+        for drug in drugs:
+            medication = (drug.get("medication") or "").strip()
+            category = (drug.get("pregnancy_category") or "").strip()
+            if not medication or category not in allowed_categories:
+                continue
+            fallback_matches.add(medication)
+            if (drug.get("condition") or "").strip().lower() == condition_key:
+                condition_matches.add(medication)
+
+        ordered_medications = sorted(condition_matches or fallback_matches)
+        preferred = (preferred_medication or "").strip()
+        if preferred:
+            ordered_medications = [preferred, *[item for item in ordered_medications if item != preferred]]
+
+        return ordered_medications[:MAX_TREATMENT_MEDICATIONS]
+
+    @staticmethod
+    def _default_dosage_for_patient(dosages: list[str], patient_id: int) -> str:
+        if not dosages:
+            return "1x standard dose"
+        dosage = dosages[patient_id % len(dosages)]
+        return f"1x {dosage}"
+
+    @staticmethod
+    def _default_frequency_for_patient(frequencies: list[str], patient_id: int) -> str:
+        if not frequencies:
+            return "Daily"
+        return frequencies[(patient_id * 3) % len(frequencies)]
+
+    @staticmethod
+    def _initialize_treatment_state(*, patient_id: int, condition_name: str, medication_plan: list[str]) -> dict:
+        return {
+            "patient_id": patient_id,
+            "condition_name": condition_name,
+            "medication_plan": medication_plan,
+            "active_medication_index": None,
+            "active_medication_name": None,
+            "active_started_at": None,
+            "cycles_on_medication": 0,
+            "abnormal_cycles_on_medication": 0,
+            "normal_cycles_on_medication": 0,
+            "evaluation_window_cycles": TREATMENT_EVALUATION_WINDOW_CYCLES,
+            "status": "pending",
+            "effect_profile": None,
+            "history": [],
+        }
+
+    @staticmethod
+    def _normalize_medication_name(value: str | None) -> str:
+        return (value or "").strip().lower()
+
+    @staticmethod
+    def _increase_dosage(dosage: str) -> str:
+        text = (dosage or "").strip()
+        if not text:
+            return "2x standard dose"
+
+        match = re.match(r"^\s*(\d+)\s*x\s*(.+)\s*$", text, re.IGNORECASE)
+        if match:
+            current = max(1, int(match.group(1)))
+            next_value = min(MAX_DOSAGE_MULTIPLIER, current + 1)
+            return f"{next_value}x {match.group(2).strip()}"
+
+        return f"2x {text}"
+
+    @staticmethod
+    def _increase_frequency(frequency: str) -> str:
+        text = (frequency or "").strip()
+        if not text:
+            return "Every 12 hours"
+
+        normalized = text.lower().replace(" ", "")
+        if normalized.startswith("every") and normalized.endswith("h"):
+            hours_text = normalized[5:-1]
+            if hours_text.isdigit():
+                hours = max(4, int(hours_text))
+                if hours > 4:
+                    return f"Every {max(4, hours - 4)}h"
+                return "Every 4h"
+
+        mapped = {
+            "daily": "Every 12h",
+            "every 24h": "Every 12h",
+            "every 12h": "Every 8h",
+            "every 8h": "Every 6h",
+            "every 6h": "Every 4h",
+            "weekly": "Daily",
+        }
+        return mapped.get(text.lower(), f"{text} (increased)")
+
+    def _plan_medication_adjustment(self, *, dosage: str, frequency: str) -> tuple[str, str]:
+        if random.random() < 0.5:
+            return self._increase_dosage(dosage), frequency
+        return dosage, self._increase_frequency(frequency)
+
+    def _choose_replacement_medication(self, db, *, patient, patient_data: dict) -> tuple[int, str] | None:
+        treatment = patient_data.get("treatment_state") or {}
+        medication_plan = treatment.get("medication_plan") or []
+        if not medication_plan:
+            return None
+
+        used_names = {
+            self._normalize_medication_name(entry.get("medication"))
+            for entry in (treatment.get("history") or [])
+            if isinstance(entry, dict)
+        }
+        for medication in self.repository.get_patient_medications(db, patient_id=patient.id):
+            used_names.add(self._normalize_medication_name(medication.name))
+
+        candidates: list[tuple[int, str]] = []
+        for index, medication_name in enumerate(medication_plan):
+            normalized = self._normalize_medication_name(medication_name)
+            if normalized and normalized not in used_names:
+                candidates.append((index, medication_name))
+
+        if not candidates:
+            return None
+        return random.choice(candidates)
+
+    def _initial_clinical_state(self, *, patient_id: int, segment: str, condition_name: str) -> dict:
+        base_severity_by_segment = {
+            "discharge_candidate": 26.0,
+            "active": 54.0,
+            "critical": 82.0,
+        }
+        base = base_severity_by_segment.get(segment, 54.0)
+        offset = self._deterministic_centered_value(patient_id, condition_name, "baseline", amplitude=6.0)
+        phase = self._deterministic_fraction(patient_id, condition_name, "phase") * 20.0
+        return {
+            "severity_index": self._clamp_float(base + offset, 5.0, 98.0),
+            "cycle_index": 0,
+            "oscillation_phase": phase,
+        }
+
+    def _update_stability_tracking(self, *, patient_data: dict, alert_stats: dict, current_state: str, event_time: datetime) -> None:
+        has_high_or_critical = bool(alert_stats.get("high_or_critical_count"))
+        if current_state == "stable" and not has_high_or_critical:
+            if not isinstance(patient_data.get("stability_started_at"), datetime):
+                patient_data["stability_started_at"] = event_time
+            return
+        patient_data["stability_started_at"] = None
+
+    def _update_treatment_lifecycle(
+        self,
+        db,
+        *,
+        patient,
+        patient_data: dict,
+        alert_stats: dict,
+        current_state: str,
+        event_time: datetime,
+        allow_discharge: bool,
+    ) -> bool:
+        treatment = patient_data.get("treatment_state")
+        if not isinstance(treatment, dict):
+            return False
+
+        has_high_or_critical = bool(alert_stats.get("high_or_critical_count"))
+
+        if treatment.get("active_medication_name") is None and has_high_or_critical:
+            started = self._start_treatment(
+                db,
+                patient=patient,
+                patient_data=patient_data,
+                medication_index=0,
+                event_time=event_time,
+            )
+            if not started:
+                treatment["status"] = "exhausted"
+                if allow_discharge:
+                    self._discharge_as_transferred(db, patient, event_time=event_time)
+                    return True
+                return False
+
+        if treatment.get("active_medication_name") is None:
+            return False
+
+        treatment["cycles_on_medication"] = int(treatment.get("cycles_on_medication", 0)) + 1
+        if has_high_or_critical:
+            treatment["abnormal_cycles_on_medication"] = int(treatment.get("abnormal_cycles_on_medication", 0)) + 1
+        else:
+            treatment["normal_cycles_on_medication"] = int(treatment.get("normal_cycles_on_medication", 0)) + 1
+
+        if current_state == "stable" and not has_high_or_critical:
+            treatment["status"] = "effective"
+
+        cycles_on_medication = int(treatment.get("cycles_on_medication", 0))
+        evaluation_window = max(1, int(treatment.get("evaluation_window_cycles", TREATMENT_EVALUATION_WINDOW_CYCLES)))
+        if cycles_on_medication < evaluation_window:
+            return False
+
+        abnormal_cycles = int(treatment.get("abnormal_cycles_on_medication", 0))
+        if abnormal_cycles >= TREATMENT_FAILURE_ALERT_CYCLES:
+            treatment["status"] = "ineffective"
+            assigned_doctor_id = self.repository.get_first_assigned_doctor_id(db, patient.id)
+            if assigned_doctor_id is None:
+                return False
+            current_dosage = str(patient_data.get("medication_dosage") or "1x standard dose")
+            current_frequency = str(patient_data.get("medication_frequency") or "Daily")
+
+            if random.random() < 0.5:
+                next_dosage, next_frequency = self._plan_medication_adjustment(
+                    dosage=current_dosage,
+                    frequency=current_frequency,
+                )
+                adjusted = self._adjust_existing_treatment(
+                    db,
+                    patient=patient,
+                    patient_data=patient_data,
+                    doctor_id=assigned_doctor_id,
+                    event_time=event_time,
+                    next_dosage=next_dosage,
+                    next_frequency=next_frequency,
+                )
+                if adjusted:
+                    treatment["status"] = "adjusted"
+                    treatment["cycles_on_medication"] = 0
+                    treatment["abnormal_cycles_on_medication"] = 0
+                    treatment["normal_cycles_on_medication"] = 0
+                    return False
+
+            replacement = self._choose_replacement_medication(db, patient=patient, patient_data=patient_data)
+            if replacement is not None:
+                next_index, _ = replacement
+                switched = self._start_treatment(
+                    db,
+                    patient=patient,
+                    patient_data=patient_data,
+                    medication_index=next_index,
+                    event_time=event_time,
+                    doctor_id=assigned_doctor_id,
+                    escalation_note=TREATMENT_ESCALATION_NOTE,
+                )
+                if switched:
+                    return False
+
+            treatment["status"] = "exhausted"
+            if allow_discharge:
+                self._discharge_as_transferred(db, patient, event_time=event_time)
+                return True
+            return False
+
+        normal_cycles = int(treatment.get("normal_cycles_on_medication", 0))
+        if normal_cycles >= TREATMENT_MIN_SUCCESS_NORMAL_CYCLES and current_state == "stable":
+            treatment["status"] = "effective"
+
+        return False
+
+    def _start_treatment(
+        self,
+        db,
+        *,
+        patient,
+        patient_data: dict,
+        medication_index: int,
+        event_time: datetime,
+        doctor_id: int | None = None,
+        escalation_note: str | None = None,
+    ) -> bool:
+        treatment = patient_data.get("treatment_state")
+        if not isinstance(treatment, dict):
+            return False
+
+        medication_plan = treatment.get("medication_plan") or []
+        if medication_index < 0 or medication_index >= len(medication_plan):
+            return False
+
+        resolved_doctor_id = doctor_id if doctor_id is not None else self.repository.get_first_assigned_doctor_id(db, patient.id)
+        if resolved_doctor_id is None:
+            return False
+
+        medication_name = medication_plan[medication_index]
+        profile = self._build_effect_profile(
+            patient_id=int(patient.id),
+            condition_name=str(patient_data.get("condition") or treatment.get("condition_name") or ""),
+            medication_name=medication_name,
+            line_index=medication_index,
+            current_severity=float((patient_data.get("clinical_state") or {}).get("severity_index", 50.0)),
+        )
+
+        treatment["active_medication_index"] = medication_index
+        treatment["active_medication_name"] = medication_name
+        treatment["active_started_at"] = event_time
+        treatment["cycles_on_medication"] = 0
+        treatment["abnormal_cycles_on_medication"] = 0
+        treatment["normal_cycles_on_medication"] = 0
+        treatment["status"] = "active"
+        treatment["effect_profile"] = profile
+
+        treatment_history = treatment.setdefault("history", [])
+        treatment_history.append(
+            {
+                "medication": medication_name,
+                "started_at": event_time,
+                "effective_probability": profile["effectiveness_probability"],
+                "effective": profile["effective"],
+            }
+        )
+
+        dosage = str(patient_data.get("medication_dosage") or "1x standard dose")
+        frequency = str(patient_data.get("medication_frequency") or "Daily")
+        existing_same_medication = self.repository.get_latest_medication_by_name(
+            db,
+            patient_id=patient.id,
+            name=medication_name,
+        )
+        if existing_same_medication is not None:
+            next_dosage, next_frequency = self._plan_medication_adjustment(
+                dosage=dosage,
+                frequency=frequency,
+            )
+            escalation_actor_note = None
+            escalation_notes = None
+            if escalation_note:
+                escalation_actor_note = (
+                    f"{escalation_note} Modified by doctor: "
+                    f"{self._doctor_display_name(db, resolved_doctor_id)}"
+                )
+                escalation_notes = escalation_note
+            self.repository.update_patient_medication_plan(
+                db,
+                medication=existing_same_medication,
+                doctor_id=resolved_doctor_id,
+                dosage=next_dosage,
+                frequency=next_frequency,
+                updated_at=event_time,
+                note=escalation_actor_note,
+                notes=escalation_notes,
+            )
+            patient_data["medication_dosage"] = next_dosage
+            patient_data["medication_frequency"] = next_frequency
+        else:
+            self.repository.create_patient_medication(
+                db,
+                patient_id=patient.id,
+                doctor_id=resolved_doctor_id,
+                name=medication_name,
+                dosage=dosage,
+                frequency=frequency,
+                created_at=event_time,
+            )
+            if escalation_note:
+                latest = self.repository.get_latest_medication_by_name(
+                    db,
+                    patient_id=patient.id,
+                    name=medication_name,
+                )
+                if latest is not None:
+                    self.repository.update_patient_medication_plan(
+                        db,
+                        medication=latest,
+                        doctor_id=resolved_doctor_id,
+                        dosage=latest.dosage,
+                        frequency=latest.frequency,
+                        updated_at=event_time,
+                        note=(
+                            f"{escalation_note} Modified by doctor: "
+                            f"{self._doctor_display_name(db, resolved_doctor_id)}"
+                        ),
+                        notes=escalation_note,
+                    )
+
+        return True
+
+    def _adjust_existing_treatment(
+        self,
+        db,
+        *,
+        patient,
+        patient_data: dict,
+        doctor_id: int,
+        event_time: datetime,
+        next_dosage: str,
+        next_frequency: str,
+    ) -> bool:
+        treatment = patient_data.get("treatment_state") or {}
+        active_medication = str(treatment.get("active_medication_name") or "").strip()
+        if not active_medication:
+            return False
+
+        current_dosage = str(patient_data.get("medication_dosage") or "1x standard dose")
+        current_frequency = str(patient_data.get("medication_frequency") or "Daily")
+        if next_dosage == current_dosage and next_frequency == current_frequency:
+            return False
+
+        latest = self.repository.get_latest_medication_by_name(
+            db,
+            patient_id=patient.id,
+            name=active_medication,
+        )
+        if latest is not None:
+            self.repository.update_patient_medication_plan(
+                db,
+                medication=latest,
+                doctor_id=doctor_id,
+                dosage=next_dosage,
+                frequency=next_frequency,
+                updated_at=event_time,
+                note=f"{TREATMENT_ESCALATION_NOTE} Modified by doctor: {self._doctor_display_name(db, doctor_id)}",
+                notes=TREATMENT_ESCALATION_NOTE,
+            )
+        else:
+            created = self.repository.create_patient_medication(
+                db,
+                patient_id=patient.id,
+                doctor_id=doctor_id,
+                name=active_medication,
+                dosage=next_dosage,
+                frequency=next_frequency,
+                created_at=event_time,
+            )
+            if created is None:
+                return False
+            self.repository.update_patient_medication_plan(
+                db,
+                medication=created,
+                doctor_id=doctor_id,
+                dosage=next_dosage,
+                frequency=next_frequency,
+                updated_at=event_time,
+                note=f"{TREATMENT_ESCALATION_NOTE} Modified by doctor: {self._doctor_display_name(db, doctor_id)}",
+                notes=TREATMENT_ESCALATION_NOTE,
+            )
+
+        patient_data["medication_dosage"] = next_dosage
+        patient_data["medication_frequency"] = next_frequency
+        return True
+
+    def _doctor_display_name(self, db, doctor_id: int) -> str:
+        doctor = self.repository.get_doctor(db, doctor_id)
+        if doctor is None:
+            return "--"
+        return f"{doctor.last_name} {doctor.first_name}".strip()
+
+    def _build_effect_profile(
+        self,
+        *,
+        patient_id: int,
+        condition_name: str,
+        medication_name: str,
+        line_index: int,
+        current_severity: float,
+    ) -> dict:
+        line_penalty = min(0.24, line_index * 0.06)
+        severity_penalty = min(0.18, max(0.0, (current_severity - 50.0) / 220.0))
+        medication_bias = self._deterministic_centered_value(
+            patient_id,
+            condition_name,
+            medication_name,
+            "bias",
+            amplitude=0.10,
+        )
+
+        effectiveness_probability = self._clamp_float(
+            0.72 - line_penalty - severity_penalty + medication_bias,
+            0.25,
+            0.90,
+        )
+        response_score = self._deterministic_fraction(
+            patient_id,
+            condition_name,
+            medication_name,
+            line_index,
+            "response",
+        )
+        effective = response_score <= effectiveness_probability
+
+        improvement_factor = 1.8 + self._deterministic_fraction(
+            patient_id,
+            condition_name,
+            medication_name,
+            line_index,
+            "improvement",
+        ) * 2.8
+        failure_factor = 0.8 + self._deterministic_fraction(
+            patient_id,
+            condition_name,
+            medication_name,
+            line_index,
+            "failure",
+        ) * 1.8
+        onset_cycles = 2 + int(
+            self._deterministic_fraction(patient_id, medication_name, line_index, "onset") * 3
+        )
+
+        return {
+            "effective": effective,
+            "effectiveness_probability": effectiveness_probability,
+            "improvement_factor": improvement_factor,
+            "failure_factor": failure_factor,
+            "onset_cycles": onset_cycles,
+        }
+
+    def _apply_treatment_effect_to_clinical_state(self, patient_data: dict, *, has_escalated_alert: bool) -> None:
+        clinical_state = patient_data.get("clinical_state")
+        treatment_state = patient_data.get("treatment_state")
+        if not isinstance(clinical_state, dict):
+            return
+
+        severity = float(clinical_state.get("severity_index", 50.0))
+        if not isinstance(treatment_state, dict) or treatment_state.get("active_medication_name") is None:
+            severity += 1.0 if has_escalated_alert else 0.25
+            clinical_state["severity_index"] = self._clamp_float(severity, 5.0, 98.0)
+            return
+
+        profile = treatment_state.get("effect_profile") or {}
+        cycles_on_medication = int(treatment_state.get("cycles_on_medication", 0))
+        onset_cycles = int(profile.get("onset_cycles", 2))
+        improvement_factor = float(profile.get("improvement_factor", 2.0))
+        failure_factor = float(profile.get("failure_factor", 1.2))
+        effective = bool(profile.get("effective"))
+
+        if effective:
+            if cycles_on_medication >= onset_cycles:
+                severity -= improvement_factor
+            else:
+                severity -= improvement_factor * 0.35
+        else:
+            if cycles_on_medication >= onset_cycles:
+                severity += failure_factor
+            else:
+                severity += failure_factor * 0.6
+
+        if has_escalated_alert:
+            severity += 0.35
+        else:
+            severity -= 0.25
+
+        clinical_state["severity_index"] = self._clamp_float(severity, 5.0, 98.0)
+
+    def _discharge_as_transferred(self, db, patient, *, event_time: datetime) -> None:
+        reason = "Transferred to another hospital"
+        self.repository.mark_patient_discharged(db, patient, reason, event_time)
+
+        doctor_id = self.repository.get_first_assigned_doctor_id(db, patient.id)
+        if doctor_id is not None:
+            self.repository.create_admission_history(
+                db,
+                patient_id=patient.id,
+                doctor_id=doctor_id,
+                entry_type="discharge",
+                reason=reason,
+                note=None,
+                created_at=event_time,
+            )
+
+    def _generate_vitals_for_patient(self, patient_data: dict) -> dict:
+        clinical_state = patient_data.get("clinical_state") or {}
+        patient_id = int(patient_data.get("id", 0))
+        severity = float(clinical_state.get("severity_index", 50.0))
+        cycle_index = int(clinical_state.get("cycle_index", 0))
+        phase = float(clinical_state.get("oscillation_phase", 0.0))
+        wave = math.sin((cycle_index + phase) / 5.0)
+
+        heart_rate = int(
+            round(
+                72.0
+                + (severity * 0.74)
+                + (wave * 2.2)
+                + self._deterministic_centered_value(patient_id, cycle_index, "hr", amplitude=4.0)
+            )
+        )
+        oxygen_saturation = int(
+            round(
+                99.0
+                - (severity * 0.17)
+                + (wave * 0.8)
+                + self._deterministic_centered_value(patient_id, cycle_index, "spo2", amplitude=1.0)
+            )
+        )
+        temperature = int(
+            round(
+                36.0
+                + (severity * 0.04)
+                + (wave * 0.3)
+                + self._deterministic_centered_value(patient_id, cycle_index, "temp", amplitude=0.7)
+            )
+        )
+        systolic_bp = int(
+            round(
+                108.0
+                + (severity * 0.62)
+                + (wave * 3.0)
+                + self._deterministic_centered_value(patient_id, cycle_index, "sys", amplitude=5.0)
+            )
+        )
+        diastolic_bp = int(
+            round(
+                66.0
+                + (severity * 0.38)
+                + (wave * 2.0)
+                + self._deterministic_centered_value(patient_id, cycle_index, "dia", amplitude=4.0)
+            )
+        )
+
+        clinical_state["cycle_index"] = cycle_index + 1
+        patient_data["clinical_state"] = clinical_state
+
+        return {
+            "heart_rate": self._clamp_int(heart_rate, 55, 170),
+            "oxygen_saturation": self._clamp_int(oxygen_saturation, 75, 100),
+            "temperature": self._clamp_int(temperature, 35, 41),
+            "systolic_bp": self._clamp_int(systolic_bp, 90, 190),
+            "diastolic_bp": self._clamp_int(diastolic_bp, 55, 120),
+        }
+
+    @staticmethod
+    def _deterministic_fraction(*parts: object) -> float:
+        key = "|".join(str(part) for part in parts)
+        digest = hashlib.sha256(key.encode("utf-8")).digest()
+        value = int.from_bytes(digest[:8], "big")
+        return value / float(2**64 - 1)
+
+    @classmethod
+    def _deterministic_centered_value(cls, *parts: object, amplitude: float) -> float:
+        return (cls._deterministic_fraction(*parts) - 0.5) * 2.0 * amplitude
+
+    @staticmethod
+    def _clamp_float(value: float, min_value: float, max_value: float) -> float:
+        return max(min_value, min(max_value, value))
+
+    @staticmethod
+    def _clamp_int(value: int, min_value: int, max_value: int) -> int:
+        return max(min_value, min(max_value, value))
 
     def _can_create_patient_activity(self, db, patient_id: int, activities_created_in_cycle: set[int]) -> bool:
         incoming_count = self.repository.count_incoming_activities(db, patient_id)
@@ -836,42 +1618,6 @@ class SimulatorService:
         minimum_admission = base_time + timedelta(days=1)
         admission = max(tentative_admission, minimum_admission)
         return self._clamp_to_now(admission)
-
-    def _generate_vitals_for_segment(self, segment: str, progress: float) -> dict:
-        vitals = generate_vitals()
-
-        if segment == "discharge_candidate":
-            stabilization = min(1.0, max(0.0, progress))
-            vitals["heart_rate"] = random.randint(76, 96)
-            vitals["oxygen_saturation"] = random.randint(95, 99)
-            vitals["temperature"] = random.randint(36, 37)
-            vitals["systolic_bp"] = random.randint(112, 128)
-            vitals["diastolic_bp"] = random.randint(72, 84)
-            if stabilization < 0.25 and random.random() < 0.2:
-                vitals["heart_rate"] = random.randint(102, 118)
-
-        elif segment == "critical":
-            vitals["heart_rate"] = random.randint(122, 145)
-            vitals["oxygen_saturation"] = random.randint(84, 91)
-            vitals["temperature"] = random.randint(38, 40)
-            vitals["systolic_bp"] = random.randint(140, 170)
-            vitals["diastolic_bp"] = random.randint(90, 110)
-
-        else:
-            if random.random() < 0.55:
-                vitals["heart_rate"] = random.randint(78, 105)
-                vitals["oxygen_saturation"] = random.randint(92, 98)
-                vitals["temperature"] = random.randint(36, 38)
-                vitals["systolic_bp"] = random.randint(115, 140)
-                vitals["diastolic_bp"] = random.randint(74, 92)
-            else:
-                vitals["heart_rate"] = random.randint(108, 130)
-                vitals["oxygen_saturation"] = random.randint(88, 94)
-                vitals["temperature"] = random.randint(37, 39)
-                vitals["systolic_bp"] = random.randint(130, 160)
-                vitals["diastolic_bp"] = random.randint(84, 104)
-
-        return vitals
 
     @staticmethod
     def _advance_time(current: datetime, min_delta: timedelta, max_delta: timedelta) -> datetime:

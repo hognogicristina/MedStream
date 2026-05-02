@@ -185,7 +185,7 @@ export default function PatientPage() {
         const nextAlerts = (getResponseData(response) || []).filter(
           (alert) => String(alert.patient_id) === String(id),
         )
-        setAlerts(nextAlerts)
+        setAlerts(() => nextAlerts)
       } catch (error) {
         if (!active) {
           return
@@ -249,7 +249,10 @@ export default function PatientPage() {
       if (msg.type === "alert") {
         setAlerts((prev) => {
           const currentAlerts = Array.isArray(prev) ? prev : []
-          return [msg.data, ...currentAlerts.filter((alert) => alert.id !== msg.data.id)].slice(0, 25)
+          const filtered = currentAlerts.filter(
+            (alert) => String(alert.patient_id) === String(id),
+          )
+          return [msg.data, ...filtered].slice(0, 25)
         })
       }
     })
@@ -380,11 +383,15 @@ export default function PatientPage() {
     [vitals],
   )
   const alertDistributionData = useMemo(() => {
-    if (!Array.isArray(alerts)) {
+    if (!alerts) {
       return []
     }
 
-    const counts = alerts.reduce((accumulator, alert) => {
+    const scopedAlerts = alerts.filter(
+      (alert) => String(alert.patient_id) === String(id),
+    )
+
+    const counts = scopedAlerts.reduce((accumulator, alert) => {
       const severity = String(alert.severity || "").trim().toLowerCase()
       if (severity === "critical") {
         accumulator.critical += 1
@@ -401,7 +408,7 @@ export default function PatientPage() {
       {name: "High", count: counts.high},
       {name: "Normal", count: counts.normal},
     ]
-  }, [alerts])
+  }, [alerts, id])
   const averageHeartRate = Number.isFinite(batchMetrics?.avg_heart_rate) ? batchMetrics.avg_heart_rate.toFixed(1) : "--"
   const averageOxygen = Number.isFinite(batchMetrics?.avg_oxygen) ? batchMetrics.avg_oxygen.toFixed(1) : "--"
   const averageTemperature = Number.isFinite(batchMetrics?.avg_temperature) ? batchMetrics.avg_temperature.toFixed(1) : "--"

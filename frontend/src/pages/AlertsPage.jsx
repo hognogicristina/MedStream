@@ -29,7 +29,8 @@ export default function AlertsPage() {
           getAlerts(),
           listPatients({page: 1, limit: 100}),
         ])
-        setAlerts(getResponseData(alertsResponse))
+        const nextAlerts = Array.isArray(getResponseData(alertsResponse)) ? getResponseData(alertsResponse) : []
+        setAlerts(nextAlerts)
         setPatients(getResponseData(patientsResponse))
       } catch (error) {
         notifyError(getErrorMessage(error))
@@ -47,6 +48,9 @@ export default function AlertsPage() {
         return
       }
 
+      if (!msg.data?.patient_id) {
+        return
+      }
       setAlerts((prev) => [msg.data, ...prev.filter((alert) => alert.id !== msg.data.id)])
     })
 
@@ -59,7 +63,10 @@ export default function AlertsPage() {
   const scopedCnp = searchParams.get("cnp") || ""
   const scopedPatientName = searchParams.get("patient") || ""
   const scopedPatient = scopedCnp ? patientByCnp[scopedCnp] : null
-  const validAlerts = alerts.filter((alert) => Boolean(patientNameById[alert.patient_id]))
+  const validPatientIds = new Set(patients.map((patient) => patient.id))
+  const validAlerts = alerts.filter(
+    (alert) => Number.isInteger(alert.patient_id) && validPatientIds.has(alert.patient_id) && Boolean(patientNameById[alert.patient_id]),
+  )
   const visibleAlerts = scopedCnp && scopedPatient ? validAlerts.filter((alert) => patientCnpById[alert.patient_id] === scopedCnp) : validAlerts
   const severityCounts = {
     critical: visibleAlerts.filter((alert) => alert.severity === "critical").length,

@@ -78,6 +78,9 @@ export default function DashboardPage() {
       }
 
       if (msg.type === "alert") {
+        if (!msg.data?.patient_id) {
+          return
+        }
         setTotalAlerts((prev) => prev + 1)
         alertAudioRef.current.currentTime = 0
         alertAudioRef.current.play().catch(() => {
@@ -109,6 +112,10 @@ export default function DashboardPage() {
 
   const latestVital = vitals[0]
   const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
+  const validPatientIds = new Set(patients.map((patient) => patient.id))
+  const visiblePreviewAlerts = previewAlerts.filter(
+    (alert) => Number.isInteger(alert.patient_id) && validPatientIds.has(alert.patient_id),
+  )
   const alertCount = totalAlerts
   const recentVitals = vitals.slice(0, 5)
 
@@ -268,12 +275,12 @@ export default function DashboardPage() {
                 </div>
               </div>
               <ul className="space-y-3">
-                {previewAlerts.length === 0 && (
+                {visiblePreviewAlerts.length === 0 && (
                   <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
                     No critical or high alerts at the moment.
                   </li>
                 )}
-                {previewAlerts.map((a) => (
+                {visiblePreviewAlerts.map((a) => (
                   <li
                     key={a.id}
                     className={`alert-item alert-${a.severity} ${newAlertIds.includes(a.id) ? "alert-new" : ""}`}
@@ -282,7 +289,7 @@ export default function DashboardPage() {
                       <div>
                         <p className="text-xs uppercase tracking-[0.28em] text-white/70">{a.severity} severity</p>
                         <p className="mt-2 text-sm font-medium text-inherit">
-                          {(patientNameById[a.patient_id] || "Unknown patient")} - {a.message}
+                          {patientNameById[a.patient_id]} - {a.message}
                         </p>
                       </div>
                       <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">

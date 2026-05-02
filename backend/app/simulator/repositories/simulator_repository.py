@@ -53,6 +53,9 @@ class SimulatorRepository:
     def get_random_doctor_for_department(self, db, department: str) -> Doctor | None:
         return db.query(Doctor).filter(Doctor.specialization == department).order_by(func.random()).first()
 
+    def get_doctor(self, db, doctor_id: int) -> Doctor | None:
+        return db.get(Doctor, doctor_id)
+
     def is_phone_available(self, db, phone_number: str) -> bool:
         existing = db.execute(select(Patient).where(Patient.phone_number == phone_number)).scalar_one_or_none()
         return existing is None
@@ -225,17 +228,67 @@ class SimulatorRepository:
         dosage: str,
         frequency: str,
         created_at: datetime,
-    ) -> None:
-        db.add(
-            PatientMedication(
-                patient_id=patient_id,
-                doctor_id=doctor_id,
-                name=name,
-                dosage=dosage,
-                frequency=frequency,
-                created_at=created_at,
+    ) -> PatientMedication | None:
+        existing = db.execute(
+            select(PatientMedication).where(
+                PatientMedication.patient_id == patient_id,
+                func.lower(PatientMedication.name) == name.strip().lower(),
+                func.lower(PatientMedication.dosage) == dosage.strip().lower(),
+                func.lower(PatientMedication.frequency) == frequency.strip().lower(),
             )
+        ).scalar_one_or_none()
+        if existing is not None:
+            return None
+
+        medication = PatientMedication(
+            patient_id=patient_id,
+            doctor_id=doctor_id,
+            name=name,
+            dosage=dosage,
+            frequency=frequency,
+            created_at=created_at,
         )
+        db.add(medication)
+        db.flush()
+        return medication
+
+    def get_patient_medications(self, db, *, patient_id: int) -> list[PatientMedication]:
+        return db.execute(
+            select(PatientMedication)
+            .where(PatientMedication.patient_id == patient_id)
+            .order_by(PatientMedication.created_at.desc(), PatientMedication.id.desc())
+        ).scalars().all()
+
+    def get_latest_medication_by_name(self, db, *, patient_id: int, name: str) -> PatientMedication | None:
+        return db.execute(
+            select(PatientMedication)
+            .where(
+                PatientMedication.patient_id == patient_id,
+                func.lower(PatientMedication.name) == name.strip().lower(),
+            )
+            .order_by(PatientMedication.created_at.desc(), PatientMedication.id.desc())
+        ).scalar_one_or_none()
+
+    def update_patient_medication_plan(
+        self,
+        db,
+        *,
+        medication: PatientMedication,
+        doctor_id: int,
+        dosage: str,
+        frequency: str,
+        updated_at: datetime,
+        note: str | None = None,
+        notes: str | None = None,
+    ) -> PatientMedication:
+        medication.doctor_id = doctor_id
+        medication.dosage = dosage
+        medication.frequency = frequency
+        medication.updated_at = updated_at
+        medication.last_updated_note = note
+        if notes is not None:
+            medication.notes = notes
+        return medication
 
     def create_patient_allergy(
         self,
@@ -343,17 +396,41 @@ class SimulatorRepository:
         message: str,
         severity: str,
         created_at: datetime | None = None,
-    ) -> None:
-        db.add(
-            Alert(
-                patient_id=patient_id,
-                vital_id=vital_id,
-                alert_type=alert_type,
-                message=message,
-                severity=severity,
-                created_at=created_at or now_utc(),
-            )
+    ) -> Alert | None:
+        if patient_id is None:
+            return None
+
+        patient = db.get(Patient, patient_id)
+        if patient is None:
+            return None
+
+        alert = Alert(
+            patient_id=patient_id,
+            vital_id=vital_id,
+            alert_type=alert_type,
+            message=message,
+            severity=severity,
+            created_at=created_at or now_utc(),
         )
+        db.add(alert)
+        db.flush()
+        return alert
+
+    def cleanup_invalid_alerts(self, db) -> int:
+        invalid_alert_ids = db.execute(
+            select(Alert.id)
+            .outerjoin(Patient, Patient.id == Alert.patient_id)
+            .where((Alert.patient_id.is_(None)) | (Patient.id.is_(None)))
+        ).scalars().all()
+        if not invalid_alert_ids:
+            return 0
+
+        deleted = (
+            db.query(Alert)
+            .filter(Alert.id.in_(invalid_alert_ids))
+            .delete(synchronize_session=False)
+        )
+        return int(deleted or 0)
 
     def remove_patient_assignments(self, db, patient_id: int) -> None:
         db.execute(doctor_activity_patients.delete().where(doctor_activity_patients.c.patient_id == patient_id))

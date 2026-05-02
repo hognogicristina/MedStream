@@ -75,6 +75,39 @@ function hasChanges(initialValues, currentValues, keys) {
   return keys.some((key) => initialValues[key] !== currentValues[key])
 }
 
+const INITIAL_FORMS = {
+  diagnosis: {diagnosis: "", notes: "", status: ""},
+  editDiagnosis: {diagnosis: "", notes: "", status: "", note: ""},
+  medication: {name: "", dosage: "", frequency: ""},
+  editMedication: {dosage: "", frequency: "", note: ""},
+  allergy: {name: "", severity: "mild"},
+  editAllergy: {name: "", severity: "mild"},
+  editCondition: {status: "", notes: ""},
+}
+
+const STATUS_COLORS = {
+  diagnosis: {
+    active: "#22C55E",
+    resolved: "#3B82F6",
+    chronic: "#F59E0B",
+    inactive: "#6B7280",
+  },
+  allergy: {
+    mild: "#22C55E",
+    moderate: "#F59E0B",
+    severe: "#EF4444",
+  },
+  condition: {
+    active: "#22C55E",
+    improving: "#4ADE80",
+    stable: "#3B82F6",
+    worsening: "#F59E0B",
+    critical: "#EF4444",
+    resolved: "#60A5FA",
+    chronic: "#A855F7",
+  },
+}
+
 export default function PatientMedicalHistoryPage() {
   const {id} = useParams()
   const {notifyError, notifySuccess} = useNotifications()
@@ -95,14 +128,14 @@ export default function PatientMedicalHistoryPage() {
   const [showDialog, setShowDialog] = useState(null)
   const [editItem, setEditItem] = useState(null)
 
-  const [diagnosisForm, setDiagnosisForm] = useState({diagnosis: "", notes: "", status: ""})
-  const [editDiagnosisForm, setEditDiagnosisForm] = useState({diagnosis: "", notes: "", status: "", note: ""})
-  const [medicationForm, setMedicationForm] = useState({name: "", dosage: "", frequency: ""})
-  const [editMedicationForm, setEditMedicationForm] = useState({dosage: "", frequency: "", note: ""})
-  const [allergyForm, setAllergyForm] = useState({name: "", severity: "mild"})
-  const [editAllergyForm, setEditAllergyForm] = useState({name: "", severity: "mild"})
+  const [diagnosisForm, setDiagnosisForm] = useState(INITIAL_FORMS.diagnosis)
+  const [editDiagnosisForm, setEditDiagnosisForm] = useState(INITIAL_FORMS.editDiagnosis)
+  const [medicationForm, setMedicationForm] = useState(INITIAL_FORMS.medication)
+  const [editMedicationForm, setEditMedicationForm] = useState(INITIAL_FORMS.editMedication)
+  const [allergyForm, setAllergyForm] = useState(INITIAL_FORMS.allergy)
+  const [editAllergyForm, setEditAllergyForm] = useState(INITIAL_FORMS.editAllergy)
   const [conditionId, setConditionId] = useState("")
-  const [editConditionForm, setEditConditionForm] = useState({status: "", notes: ""})
+  const [editConditionForm, setEditConditionForm] = useState(INITIAL_FORMS.editCondition)
 
   const [allergyOptions, setAllergyOptions] = useState([])
   const [medicationOptions, setMedicationOptions] = useState([])
@@ -437,6 +470,40 @@ export default function PatientMedicalHistoryPage() {
     }
   }
 
+  const resetAllDialogState = () => {
+    setDiagnosisForm(INITIAL_FORMS.diagnosis)
+    setEditDiagnosisForm(INITIAL_FORMS.editDiagnosis)
+    setMedicationForm(INITIAL_FORMS.medication)
+    setEditMedicationForm(INITIAL_FORMS.editMedication)
+    setAllergyForm(INITIAL_FORMS.allergy)
+    setEditAllergyForm(INITIAL_FORMS.editAllergy)
+    setConditionId("")
+    setConditionSearch("")
+    setEditConditionForm(INITIAL_FORMS.editCondition)
+  }
+
+  const handleCancelDialog = () => {
+    resetAllDialogState()
+    setShowDialog(null)
+    setEditItem(null)
+  }
+
+  const getRecordStatusMeta = (item) => {
+    if (item.type === "diagnosis" && item.status) {
+      return {label: item.status, color: STATUS_COLORS.diagnosis[String(item.status || "").toLowerCase()] || "#6B7280"}
+    }
+
+    if (item.type === "condition" && item.status) {
+      return {label: item.status, color: STATUS_COLORS.condition[String(item.status || "").toLowerCase()] || "#6B7280"}
+    }
+
+    if (item.type === "allergy" && item.severity) {
+      return {label: item.severity, color: STATUS_COLORS.allergy[String(item.severity || "").toLowerCase()] || "#6B7280"}
+    }
+
+    return null
+  }
+
   if (isLoading) {
     return (
       <div className="app-shell min-h-screen px-4 py-6 text-slate-100">
@@ -530,6 +597,7 @@ export default function PatientMedicalHistoryPage() {
               const involvedDoctorStr = item.doctor_id
                 ? doctors.find((doctor) => doctor.id === item.doctor_id)?.last_name || "--"
                 : "--"
+              const statusMeta = getRecordStatusMeta(item)
 
               return (
                 <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4 flex flex-col sm:flex-row justify-between gap-4">
@@ -567,17 +635,18 @@ export default function PatientMedicalHistoryPage() {
                         </div>
                       )
                     })()}
-                    {item.status && (
+                    {statusMeta && (
                       <div className="mt-2">
-    <span
-      className={`inline-block px-2 py-0.5 rounded text-xs font-medium uppercase tracking-wider ${
-        ["severe", "worsened", "critical"].includes(item.status.toLowerCase())
-          ? "bg-[#3b1010] text-[#fecaca] border border-[#7f1d1d]"
-          : "bg-[#0e2519] text-[#bbf7d0] border border-[#1f4d36]"
-      }`}
-    >
-      {item.status}
-    </span>
+                        <span
+                          className="inline-block px-2 py-0.5 rounded text-xs font-medium uppercase tracking-wider border"
+                          style={{
+                            color: statusMeta.color,
+                            borderColor: statusMeta.color,
+                            backgroundColor: `${statusMeta.color}1A`,
+                          }}
+                        >
+                          {statusMeta.label}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -618,10 +687,7 @@ export default function PatientMedicalHistoryPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowDialog(null)
-                    setEditItem(null)
-                  }}
+                  onClick={handleCancelDialog}
                   disabled={isSubmitting}
                   className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -905,17 +971,6 @@ export default function PatientMedicalHistoryPage() {
                 )}
 
                 <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDialog(null)
-                      setEditItem(null)
-                    }}
-                    disabled={isSubmitting}
-                    className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Cancel
-                  </button>
                   <button
                     type="submit"
                     disabled={
