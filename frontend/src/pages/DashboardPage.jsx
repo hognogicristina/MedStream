@@ -237,12 +237,12 @@ export default function DashboardPage() {
   const temperatureDelta = recentVitals.length >= 2 ? recentVitals[0].temperature - recentVitals[recentVitals.length - 1].temperature : 0
   const formatDelta = (value) => value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1)
   const handleAlertClick = (alert) => {
-    const cnp = patientCnpById[alert?.patient_id]
-    if (!cnp) {
+    const patientId = Number(alert?.patient_id)
+    const alertId = Number(alert?.id)
+    if (!Number.isInteger(patientId) || patientId <= 0 || !Number.isInteger(alertId) || alertId <= 0) {
       return
     }
-    const patientName = patientNameById[alert.patient_id] || ""
-    navigate(`/alerts?cnp=${encodeURIComponent(cnp)}&patient=${encodeURIComponent(patientName)}`)
+    navigate(`/alerts?patientId=${patientId}&alertId=${alertId}`)
   }
 
   return (

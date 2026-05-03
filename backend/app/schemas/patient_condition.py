@@ -13,6 +13,7 @@ class PatientConditionRead(BaseModel):
     status: str | None = None
     notes: str | None = None
     diagnosed_at: datetime | None = None
+    updated_at: datetime | None = None
     model_config = {"from_attributes": True}
 
 
@@ -28,6 +29,7 @@ class PatientConditionAssignmentRead(BaseModel):
     status: str
     notes: str | None = None
     diagnosed_at: datetime
+    updated_at: datetime
     model_config = {"from_attributes": True}
 
 

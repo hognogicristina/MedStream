@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react"
-import {Link, useLocation, useSearchParams} from "react-router-dom"
+import {Link, useSearchParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
 import CountValue from "../components/CountValue.jsx"
 import DataTable from "../components/DataTable.jsx"
@@ -17,11 +17,11 @@ const SEVERITY_ORDER = {
 
 export default function AlertsPage() {
   const {notifyError} = useNotifications()
-  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [alerts, setAlerts] = useState([])
   const [patients, setPatients] = useState([])
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(true)
+  const [flashAlertId, setFlashAlertId] = useState(null)
 
   useEffect(() => {
     const loadAlerts = async () => {
@@ -61,20 +61,50 @@ export default function AlertsPage() {
   const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
   const patientCnpById = Object.fromEntries(patients.map((patient) => [patient.id, patient.cnp]))
   const patientByCnp = Object.fromEntries(patients.map((patient) => [patient.cnp, patient]))
-  const params = new URLSearchParams(location.search)
-  const scopedCnp = params.get("cnp") || ""
-  const scopedPatientName = params.get("patient") || ""
-  const scopedPatient = scopedCnp ? patientByCnp[scopedCnp] : null
+  const patientById = Object.fromEntries(patients.map((patient) => [patient.id, patient]))
+  const scopedCnp = searchParams.get("cnp") || ""
+  const scopedPatientIdRaw = searchParams.get("patientId")
+  const scopedAlertIdRaw = searchParams.get("alertId")
+  const scopedPatientId = scopedPatientIdRaw && /^\d+$/.test(scopedPatientIdRaw) ? Number(scopedPatientIdRaw) : null
+  const scopedAlertId = scopedAlertIdRaw && /^\d+$/.test(scopedAlertIdRaw) ? Number(scopedAlertIdRaw) : null
+  const scopedPatient = scopedPatientId ? patientById[scopedPatientId] : (scopedCnp ? patientByCnp[scopedCnp] : null)
   const validPatientIds = new Set(patients.map((patient) => patient.id))
   const validAlerts = alerts.filter(
     (alert) => Number.isInteger(alert.patient_id) && validPatientIds.has(alert.patient_id) && Boolean(patientNameById[alert.patient_id]),
   )
-  const visibleAlerts = scopedCnp ? validAlerts.filter((alert) => patientCnpById[alert.patient_id] === scopedCnp) : validAlerts
+  const visibleAlerts = scopedPatientId
+    ? validAlerts.filter((alert) => alert.patient_id === scopedPatientId)
+    : scopedCnp
+      ? validAlerts.filter((alert) => patientCnpById[alert.patient_id] === scopedCnp)
+      : validAlerts
   const severityCounts = {
     critical: visibleAlerts.filter((alert) => alert.severity === "critical").length,
     high: visibleAlerts.filter((alert) => alert.severity === "high").length,
     normal: visibleAlerts.filter((alert) => alert.severity === "normal").length,
   }
+
+  useEffect(() => {
+    if (!scopedAlertId) {
+      return
+    }
+    setFlashAlertId(scopedAlertId)
+    const timeoutId = window.setTimeout(() => setFlashAlertId(null), 1800)
+    return () => window.clearTimeout(timeoutId)
+  }, [scopedAlertId])
+
+  useEffect(() => {
+    if (!scopedAlertId || isLoadingAlerts) {
+      return
+    }
+    const animationFrameId = window.requestAnimationFrame(() => {
+      const row = document.querySelector(`.alert-row-${scopedAlertId}`)
+      if (!row) {
+        return
+      }
+      row.scrollIntoView({behavior: "smooth", block: "center"})
+    })
+    return () => window.cancelAnimationFrame(animationFrameId)
+  }, [isLoadingAlerts, scopedAlertId, visibleAlerts])
 
 
   return (
@@ -89,13 +119,13 @@ export default function AlertsPage() {
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Alerts</h1>
               <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">Live alert queue with filters, sort order, and paging.</p>
-              {scopedCnp && (
+              {(scopedCnp || scopedPatientId) && (
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
                     Patient: {scopedPatient ? (
                     <Link to={`/patient/${scopedPatient.id}`}
                           className="hover:underline text-inherit">{formatPatientFullName(scopedPatient)}</Link>
-                  ) : (scopedPatientName || "Unknown patient")}
+                  ) : "Unknown patient"}
                   </span>
                   <Link className="console-link text-sm font-semibold" to="/alerts">
                     Clear filter
@@ -130,7 +160,7 @@ export default function AlertsPage() {
           </div>
 
           <DataTable
-            key={`alerts-${scopedCnp || "all"}`}
+            key={`alerts-${scopedPatientId || scopedCnp || "all"}`}
             items={visibleAlerts}
             loading={isLoadingAlerts}
             loadingMessage="Loading alert queue..."
@@ -143,6 +173,14 @@ export default function AlertsPage() {
                 value: "newest",
                 label: "Newest first",
                 compare: (left, right) => {
+                  if (scopedAlertId) {
+                    if (left.id === scopedAlertId && right.id !== scopedAlertId) {
+                      return -1
+                    }
+                    if (right.id === scopedAlertId && left.id !== scopedAlertId) {
+                      return 1
+                    }
+                  }
                   const leftSeverity = SEVERITY_ORDER[left.severity] ?? 99
                   const rightSeverity = SEVERITY_ORDER[right.severity] ?? 99
 
@@ -156,7 +194,17 @@ export default function AlertsPage() {
               {
                 value: "oldest",
                 label: "Oldest first",
-                compare: (left, right) => new Date(left.created_at) - new Date(right.created_at),
+                compare: (left, right) => {
+                  if (scopedAlertId) {
+                    if (left.id === scopedAlertId && right.id !== scopedAlertId) {
+                      return -1
+                    }
+                    if (right.id === scopedAlertId && left.id !== scopedAlertId) {
+                      return 1
+                    }
+                  }
+                  return new Date(left.created_at) - new Date(right.created_at)
+                },
               },
             ]}
             filters={[
@@ -185,7 +233,7 @@ export default function AlertsPage() {
                 type: "text",
                 placeholder: "Filter by CNP",
                 defaultValue: scopedCnp,
-                disabled: Boolean(scopedPatient),
+                disabled: Boolean(scopedPatientId),
                 onChange: (value) => {
                   if (value.trim().length === 13 && /^\d{13}$/.test(value.trim())) {
                     setSearchParams({cnp: value.trim()})
@@ -213,7 +261,7 @@ export default function AlertsPage() {
                 <div>Created</div>
               </div>
             )}
-            rowClassName={(alert) => `grid grid-cols-[0.9fr_1.2fr_1fr_2.2fr_1.1fr] gap-3 px-4 py-4 ${alert.severity === "critical" ? "bg-[rgba(93,22,31,0.24)]" : alert.severity === "high" ? "bg-[rgba(86,52,12,0.2)]" : "bg-[#151b22]"}`}
+            rowClassName={(alert) => `alert-row-${alert.id} grid grid-cols-[0.9fr_1.2fr_1fr_2.2fr_1.1fr] gap-3 px-4 py-4 ${alert.severity === "critical" ? "bg-[rgba(93,22,31,0.24)]" : alert.severity === "high" ? "bg-[rgba(86,52,12,0.2)]" : "bg-[#151b22]"} ${flashAlertId === alert.id ? "alert-row-flash" : ""}`}
             renderRow={(alert) => (
               <>
                 <div>

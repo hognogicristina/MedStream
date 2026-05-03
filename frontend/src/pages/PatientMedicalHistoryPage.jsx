@@ -237,15 +237,15 @@ export default function PatientMedicalHistoryPage() {
 
   const items = useMemo(() => {
     const mapped = [
-      ...diagnosis.map((item) => ({...item, type: "diagnosis", label: item.diagnosis, timestamp: item.created_at || item.diagnosed_at})),
-      ...medications.map((item) => ({...item, type: "medication", label: item.name, timestamp: item.created_at})),
-      ...allergies.map((item) => ({...item, type: "allergy", label: item.allergy_name, timestamp: item.created_at})),
+      ...diagnosis.map((item) => ({...item, type: "diagnosis", label: item.diagnosis, timestamp: item.updated_at || item.created_at || item.diagnosed_at})),
+      ...medications.map((item) => ({...item, type: "medication", label: item.name, timestamp: item.updated_at || item.created_at})),
+      ...allergies.map((item) => ({...item, type: "allergy", label: item.allergy_name, timestamp: item.updated_at || item.created_at})),
       ...patientConditions.map((item) => ({
         ...item,
         type: "condition",
         label: item.name,
         id: item.assignment_id || item.id,
-        timestamp: item.diagnosed_at || item.created_at,
+        timestamp: item.updated_at || item.diagnosed_at || item.created_at,
       })),
     ]
 
@@ -699,7 +699,7 @@ export default function PatientMedicalHistoryPage() {
                       <span className="block text-xs uppercase tracking-wider text-[#879196] font-medium mb-1">
                         Doc: {involvedDoctorStr}
                       </span>
-                      <span className="block text-xs text-[#879196]">{formatDateTime(item.timestamp)}</span>
+                      <span className="block text-xs text-[#879196]">Last updated: {formatDateTime(item.timestamp)}</span>
                     </div>
 
                     {["diagnosis", "medication", "allergy", "condition"].includes(item.type) && (

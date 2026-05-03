@@ -49,10 +49,12 @@ export default function ActivityList({
     <ul className="space-y-3">
       {activities.map((activity) => {
         const isCanceled = activity.status === "canceled"
+        const isCompleted = activity.status === "completed"
         const isIncoming = activity.status === "incoming"
         const hasPermission = canManageActivity ? canManageActivity(activity) : true
-        const canEdit = Boolean(onEdit) && !isCanceled && hasPermission
-        const canCancel = Boolean(onCancel) && !isCanceled && hasPermission
+        const isReadOnly = isCanceled || isCompleted
+        const canEdit = Boolean(onEdit) && !isReadOnly && hasPermission
+        const canCancel = Boolean(onCancel) && !isReadOnly && hasPermission
 
         return (
           <li
@@ -82,7 +84,7 @@ export default function ActivityList({
                       type="button"
                       onClick={() => canEdit && onEdit(activity)}
                       disabled={!canEdit}
-                      className="console-button-secondary rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                      className="console-button-secondary rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                     >
                       Edit
                     </button>
@@ -101,7 +103,7 @@ export default function ActivityList({
                     type="button"
                     onClick={() => canCancel && onCancel(activity)}
                     disabled={!canCancel}
-                    className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-2 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                    className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-2 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:opacity-60 disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                   >
                     Cancel Activity
                   </button>

@@ -10,7 +10,7 @@ export default function ProtectedRoute({children}) {
   }
 
   if (!token || !isAuthenticated) {
-    return <Navigate to="/login" replace state={{message: "You must be logged in to access this page."}}/>
+    return <Navigate to="/login" replace/>
   }
 
   return children

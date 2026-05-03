@@ -5,7 +5,6 @@ import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {getPatient, getPatientTreatmentAnalysis} from "../services/patientApi.js"
 import LoadingSpinner from "./LoadingSpinner.jsx"
 
-const DEFAULT_OUTCOME_WINDOW_MS = 24 * 60 * 60 * 1000
 const TIMELINE_BUCKET_MS = 6 * 60 * 60 * 1000
 const ALERT_SEVERITY_SCORE = {
   critical: 4,
@@ -21,6 +20,11 @@ const ALERT_TYPE_COLOR_MAP = {
   temperature: "#F97316",
   status: "#22C55E",
 }
+const VITAL_TYPE_ALIASES = {
+  heartRate: ["heart_rate"],
+  oxygen: ["oxygen_saturation", "oxygen"],
+  temperature: ["temperature"],
+}
 
 const toTimestamp = (value) => {
   const time = new Date(value).getTime()
@@ -35,6 +39,62 @@ function formatDate(value) {
     return "--"
   }
   return new Intl.DateTimeFormat("en-GB", {day: "2-digit", month: "short", year: "numeric"}).format(date)
+}
+
+function formatAlertLastUpdated(value) {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) {
+    return "--"
+  }
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "numeric",
+    month: "short",
+  }).format(date)
+}
+
+const extractVitalsFromMessage = (message) => {
+  const text = String(message || "")
+  const hrMatch = text.match(/HR\s*(-?\d+(?:\.\d+)?)/i)
+  const o2Match = text.match(/SpO2\s*(-?\d+(?:\.\d+)?)/i)
+  const tempMatch = text.match(/Temp\s*(-?\d+(?:\.\d+)?)/i)
+  return {
+    heartRate: hrMatch ? Number(hrMatch[1]) : null,
+    oxygen: o2Match ? Number(o2Match[1]) : null,
+    temperature: tempMatch ? Number(tempMatch[1]) : null,
+  }
+}
+
+const normalizeTreatmentAlert = (alert) => {
+  const normalizedType = String(alert?.type || alert?.alert_type || "").trim().toLowerCase()
+  const normalizedSeverity = String(alert?.severity || "").trim().toLowerCase()
+  const numericValue = Number(alert?.value)
+
+  return {
+    ...alert,
+    type: normalizedType,
+    severity: normalizedSeverity,
+    time: toTimestamp(alert?.created_at),
+    value: Number.isFinite(numericValue) ? numericValue : null,
+    vitals: {
+      heartRate: Number.isFinite(Number(alert?.vitals?.heartRate)) ? Number(alert?.vitals?.heartRate) : null,
+      oxygen: Number.isFinite(Number(alert?.vitals?.oxygen)) ? Number(alert?.vitals?.oxygen) : null,
+      temperature: Number.isFinite(Number(alert?.vitals?.temperature)) ? Number(alert?.vitals?.temperature) : null,
+    },
+  }
+}
+
+const getStatusVitals = (alert) => {
+  if (!alert) {
+    return {heartRate: null, oxygen: null, temperature: null}
+  }
+  const parsedFromMessage = extractVitalsFromMessage(alert.message)
+  return {
+    heartRate: alert.vitals?.heartRate ?? parsedFromMessage.heartRate,
+    oxygen: alert.vitals?.oxygen ?? parsedFromMessage.oxygen,
+    temperature: alert.vitals?.temperature ?? parsedFromMessage.temperature,
+  }
 }
 
 const deriveOutcomeFromAlertEvolution = ({beforeCount, afterCount, beforeSeverityScore, afterSeverityScore}) => {
@@ -65,6 +125,7 @@ export default function PatientTreatmentAnalysisSection({
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(true)
   const [showFullAlertHistory, setShowFullAlertHistory] = useState(false)
   const [alertHistoryPage, setAlertHistoryPage] = useState(1)
+  const [medicationPage, setMedicationPage] = useState(1)
 
   const loadAnalysis = useCallback(async (patientId) => {
     setIsLoadingAnalysis(true)
@@ -85,6 +146,7 @@ export default function PatientTreatmentAnalysisSection({
     }
     setShowFullAlertHistory(false)
     setAlertHistoryPage(1)
+    setMedicationPage(1)
 
     const loadInitial = async () => {
       try {
@@ -105,50 +167,6 @@ export default function PatientTreatmentAnalysisSection({
 
     loadInitial().then(() => {})
   }, [loadAnalysis, notifyError, selectedPatientId])
-
-  const treatmentOutcomeHistory = useMemo(() => {
-    const medications = analysis?.medications || []
-    const alerts = (analysis?.alerts || [])
-      .map((alert) => ({
-        ...alert,
-        time: toTimestamp(alert.created_at),
-        severityScore: getSeverityScore(alert.severity),
-      }))
-      .filter((alert) => alert.time !== null)
-      .sort((left, right) => left.time - right.time)
-
-    const medicationsByTime = medications
-      .map((medication) => ({...medication, time: toTimestamp(medication.prescribed_at)}))
-      .filter((medication) => medication.time !== null)
-      .sort((left, right) => left.time - right.time)
-
-    return medicationsByTime.map((medication, index) => {
-      const nextMedicationTime = medicationsByTime[index + 1]?.time ?? null
-      const afterWindowEnd = nextMedicationTime && nextMedicationTime > medication.time
-        ? nextMedicationTime
-        : medication.time + DEFAULT_OUTCOME_WINDOW_MS
-      const windowDuration = Math.max(DEFAULT_OUTCOME_WINDOW_MS, afterWindowEnd - medication.time)
-      const beforeWindowStart = medication.time - windowDuration
-
-      const beforeAlerts = alerts.filter((alert) => alert.time >= beforeWindowStart && alert.time < medication.time)
-      const afterAlerts = alerts.filter((alert) => alert.time >= medication.time && alert.time < afterWindowEnd)
-
-      const beforeCount = beforeAlerts.length
-      const afterCount = afterAlerts.length
-      const beforeSeverityScore = beforeAlerts.reduce((sum, alert) => sum + alert.severityScore, 0)
-      const afterSeverityScore = afterAlerts.reduce((sum, alert) => sum + alert.severityScore, 0)
-
-      return {
-        medication,
-        outcome: deriveOutcomeFromAlertEvolution({
-          beforeCount,
-          afterCount,
-          beforeSeverityScore,
-          afterSeverityScore,
-        }),
-      }
-    })
-  }, [analysis])
 
   const timelineOutcomeHistory = useMemo(() => {
     const alerts = (analysis?.alerts || [])
@@ -241,23 +259,81 @@ export default function PatientTreatmentAnalysisSection({
     [timelineOutcomeHistory],
   )
 
+  const treatmentTimelineEvaluation = useMemo(() => {
+    const parsedAlerts = (analysis?.alerts || [])
+      .map((alert) => normalizeTreatmentAlert(alert))
+      .filter((alert) => alert.time !== null)
+      .sort((left, right) => right.time - left.time)
+
+    const latestAlert = parsedAlerts[0] || null
+    const latestByVital = (vitalKey, options = {}) => {
+      const vitalTypes = VITAL_TYPE_ALIASES[vitalKey] || []
+      const minTime = options.minTime ?? null
+      return parsedAlerts.find((alert) => (
+        vitalTypes.includes(alert.type)
+        && alert.value != null
+        && (minTime == null || alert.time > minTime)
+      )) || null
+    }
+
+    const latestHeartRate = latestByVital("heartRate")
+    const latestOxygen = latestByVital("oxygen")
+    const latestTemperature = latestByVital("temperature")
+
+    const lastStable = parsedAlerts.find(
+      (alert) => alert.type === "status" || alert.severity === "normal",
+    ) || null
+
+    const lastStableVitals = getStatusVitals(lastStable)
+    const latestHeartRateAfterStable = latestByVital("heartRate", {minTime: lastStable?.time ?? null})
+    const latestOxygenAfterStable = latestByVital("oxygen", {minTime: lastStable?.time ?? null})
+    const latestTemperatureAfterStable = latestByVital("temperature", {minTime: lastStable?.time ?? null})
+
+    const finalValues = {
+      heartRate: latestHeartRateAfterStable?.value ?? lastStableVitals.heartRate ?? latestHeartRate?.value ?? null,
+      oxygen: latestOxygenAfterStable?.value ?? lastStableVitals.oxygen ?? latestOxygen?.value ?? null,
+      temperature: latestTemperatureAfterStable?.value ?? lastStableVitals.temperature ?? latestTemperature?.value ?? null,
+    }
+
+    const abnormalAfterStable = Boolean(lastStable) && parsedAlerts.some((alert) => (
+      alert.time > lastStable.time && (alert.severity === "high" || alert.severity === "critical")
+    ))
+
+    const outcome = !lastStable
+      ? "Ineffective"
+      : abnormalAfterStable
+        ? "Ineffective"
+        : "Effective"
+
+    console.log({
+      lastStable,
+      abnormalAfterStable,
+      finalValues,
+    })
+
+    const lastUpdated = latestAlert?.created_at ? formatAlertLastUpdated(latestAlert.created_at) : "--"
+
+    return {
+      outcome,
+      latestAlertSummary: {
+        ...finalValues,
+        lastUpdated,
+        usingStableHeartRateFallback: lastStableVitals.heartRate != null && latestHeartRateAfterStable == null,
+        usingStableOxygenFallback: lastStableVitals.oxygen != null && latestOxygenAfterStable == null,
+        usingStableTemperatureFallback: lastStableVitals.temperature != null && latestTemperatureAfterStable == null,
+        summary: "Values start from the latest stable snapshot and are overridden by newer alerts per vital.",
+      },
+    }
+  }, [analysis])
+
   const medicationHistory = useMemo(() => {
     const medications = analysis?.medications || []
-    const timelineByBucket = new Map(
-      timelineOutcomeHistory.map((entry) => [entry.bucketStart, entry.outcome]),
-    )
 
     return medications.map((medication) => {
       const relatedAlerts = medication.reasoning?.alerts || []
       const relatedDiagnoses = medication.reasoning?.diagnoses || []
       const relatedConditions = medication.reasoning?.conditions || []
-      const medicationTime = toTimestamp(medication.prescribed_at)
-      const medicationBucket = medicationTime == null
-        ? null
-        : Math.floor(medicationTime / TIMELINE_BUCKET_MS) * TIMELINE_BUCKET_MS
-      const timelineOutcome = medicationBucket == null ? null : timelineByBucket.get(medicationBucket)
-      const fallbackOutcome = treatmentOutcomeHistory.find((entry) => entry.medication.id === medication.id)?.outcome
-      const outcome = timelineOutcome || fallbackOutcome || (relatedAlerts.length ? "Ineffective" : "Effective")
+      const outcome = treatmentTimelineEvaluation.outcome
 
       let reasonText = "Prescribed based on current clinical assessment."
       if (relatedAlerts.length && relatedDiagnoses.length) {
@@ -273,6 +349,7 @@ export default function PatientTreatmentAnalysisSection({
         dosage: medication.dosage,
         frequency: medication.frequency,
         created_at: medication.prescribed_at,
+        updated_at: medication.updated_at,
         notes: medication.notes || "",
         modified_by: medication.modified_by || "",
         related_alerts: relatedAlerts,
@@ -281,81 +358,20 @@ export default function PatientTreatmentAnalysisSection({
         outcome,
         reasonText,
       }
-    })
-  }, [analysis, timelineOutcomeHistory, treatmentOutcomeHistory])
-
-  const latestTreatment = useMemo(() => {
-    if (!medicationHistory.length) {
-      return null
-    }
-    return medicationHistory[medicationHistory.length - 1]
-  }, [medicationHistory])
-
-  const latestTimelineOutcome = useMemo(() => {
-    if (!timelineOutcomeHistory.length) {
-      return "Effective"
-    }
-    return timelineOutcomeHistory[timelineOutcomeHistory.length - 1].outcome || "Effective"
-  }, [timelineOutcomeHistory])
-
-  const latestAlertSummary = useMemo(() => {
-    const alerts = [...(analysis?.alerts || [])]
-      .map((alert) => ({...alert, time: toTimestamp(alert.created_at)}))
-      .filter((alert) => alert.time !== null)
-      .sort((left, right) => right.time - left.time)
-
-    const extractNumericValue = (input) => {
-      const match = String(input || "").match(/(-?\d+(?:\.\d+)?)/)
-      if (!match) {
-        return null
+    }).sort((left, right) => {
+      const leftTime = toTimestamp(left.updated_at || left.created_at) ?? 0
+      const rightTime = toTimestamp(right.updated_at || right.created_at) ?? 0
+      if (leftTime !== rightTime) {
+        return rightTime - leftTime
       }
-      const value = Number(match[1])
-      return Number.isFinite(value) ? value : null
-    }
+      return String(right.medication_name || "").localeCompare(String(left.medication_name || ""))
+    })
+  }, [analysis, treatmentTimelineEvaluation.outcome])
 
-    const getLatestByType = (type) => alerts.find((alert) => alert.alert_type === type) || null
-    const heartRateAlert = getLatestByType("heart_rate")
-    const oxygenAlert = getLatestByType("oxygen_saturation")
-    const temperatureAlert = getLatestByType("temperature")
-    const latestStatusAlert = getLatestByType("status")
-    const statusMessage = String(latestStatusAlert?.message || "")
-    const isStable = statusMessage.includes("Vitals within normal ranges")
+  const totalMedicationPages = Math.max(1, medicationHistory.length)
+  const displayedMedication = medicationHistory.length ? medicationHistory[Math.max(0, medicationPage - 1)] : null
 
-    const statusVitalsMatch = statusMessage.match(
-      /HR\s*(-?\d+(?:\.\d+)?)\s*bpm,\s*SpO2\s*(-?\d+(?:\.\d+)?)%,\s*Temp\s*(-?\d+(?:\.\d+)?)\s*°?\s*C/i,
-    )
-    const stableHeartRate = statusVitalsMatch ? Number(statusVitalsMatch[1]) : null
-    const stableOxygen = statusVitalsMatch ? Number(statusVitalsMatch[2]) : null
-    const stableTemperature = statusVitalsMatch ? Number(statusVitalsMatch[3]) : null
-
-    const parsedHeartRate = extractNumericValue(heartRateAlert?.message)
-    const parsedOxygen = extractNumericValue(oxygenAlert?.message)
-    const parsedTemperature = extractNumericValue(temperatureAlert?.message)
-
-    const heartRate = parsedHeartRate ?? (isStable ? stableHeartRate : null)
-    const oxygen = parsedOxygen ?? (isStable ? stableOxygen : null)
-    const temperature = parsedTemperature ?? (isStable ? stableTemperature : null)
-
-    const usingStableHeartRateFallback = parsedHeartRate == null && isStable && stableHeartRate != null
-    const usingStableOxygenFallback = parsedOxygen == null && isStable && stableOxygen != null
-    const usingStableTemperatureFallback = parsedTemperature == null && isStable && stableTemperature != null
-    const usingStableFallback = usingStableHeartRateFallback || usingStableOxygenFallback || usingStableTemperatureFallback
-    const summary = isStable
-      ? "Patient vitals are currently stable and within normal ranges."
-      : "Patient shows persistent abnormal vitals with elevated heart rate, low oxygen saturation, and high temperature."
-
-    return {
-      heartRate,
-      oxygen,
-      temperature,
-      isStable,
-      usingStableHeartRateFallback,
-      usingStableOxygenFallback,
-      usingStableTemperatureFallback,
-      usingStableFallback,
-      summary,
-    }
-  }, [analysis])
+  const latestAlertSummary = treatmentTimelineEvaluation.latestAlertSummary
 
   const fullAlertHistory = useMemo(() => {
     return (analysis?.alerts || [])
@@ -381,6 +397,12 @@ export default function PatientTreatmentAnalysisSection({
       setAlertHistoryPage(totalAlertHistoryPages)
     }
   }, [alertHistoryPage, totalAlertHistoryPages])
+
+  useEffect(() => {
+    if (medicationPage > totalMedicationPages) {
+      setMedicationPage(totalMedicationPages)
+    }
+  }, [medicationPage, totalMedicationPages])
 
   return (
     <section className="monitor-card rounded-[24px] p-6">
@@ -439,37 +461,59 @@ export default function PatientTreatmentAnalysisSection({
           <div>
             <h3 className="text-xl font-semibold text-white">Treatment Summary & Clinical Reasoning</h3>
             <div className="mt-4 space-y-4">
-              {latestTreatment ? (
+              {displayedMedication ? (
                 <div className="monitor-panel rounded-2xl px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-white">Medication: {latestTreatment.medication_name || "--"}</p>
-                    <p className="text-xs text-[#b6bec9]">Date: {formatDate(latestTreatment.created_at)}</p>
+                    <p className="text-sm font-semibold text-white">Medication: {displayedMedication.medication_name || "--"}</p>
+                    <p className="text-xs text-[#b6bec9]">Date: {formatDate(displayedMedication.updated_at || displayedMedication.created_at)}</p>
                   </div>
-                  <p className="mt-2 text-sm text-[#d5dbdb]">Dosage: {latestTreatment.dosage || "--"}</p>
-                  <p className="mt-1 text-sm text-[#d5dbdb]">Frequency: {latestTreatment.frequency || "--"}</p>
-                  {latestTreatment.notes ? (
-                    <p className="mt-1 text-sm text-[#d5dbdb]">Notes: {latestTreatment.notes}</p>
+                  <p className="mt-2 text-sm text-[#d5dbdb]">Dosage: {displayedMedication.dosage || "--"}</p>
+                  <p className="mt-1 text-sm text-[#d5dbdb]">Frequency: {displayedMedication.frequency || "--"}</p>
+                  {displayedMedication.notes ? (
+                    <p className="mt-1 text-sm text-[#d5dbdb]">Notes: {displayedMedication.notes}</p>
                   ) : null}
-                  {latestTreatment.modified_by ? (
-                    <p className="mt-1 text-sm text-[#d5dbdb]">Modified by doctor: {latestTreatment.modified_by}</p>
+                  {displayedMedication.modified_by ? (
+                    <p className="mt-1 text-sm text-[#d5dbdb]">Modified by doctor: {displayedMedication.modified_by}</p>
                   ) : null}
+                  <div className="mt-3 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setMedicationPage((page) => Math.max(1, page - 1))}
+                      disabled={medicationPage === 1}
+                      className="rounded-lg border border-[#2a3441] px-3 py-1 text-xs font-semibold text-[#d5dbdb] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-xs text-[#b6bec9]">{medicationPage} / {totalMedicationPages}</span>
+                    <button
+                      type="button"
+                      onClick={() => setMedicationPage((page) => Math.min(totalMedicationPages, page + 1))}
+                      disabled={medicationPage >= totalMedicationPages}
+                      className="rounded-lg border border-[#2a3441] px-3 py-1 text-xs font-semibold text-[#d5dbdb] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Reason</p>
-                      <p className="mt-2 text-sm text-white">{latestTreatment.reasonText}</p>
+                      <p className="mt-2 text-sm text-white">{displayedMedication.reasonText}</p>
                     </div>
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Outcome</p>
-                      <p className={`mt-2 text-sm font-semibold ${latestTimelineOutcome === "Effective" ? "text-[#22c55e]" : "text-[#ef4444]"}`}>
-                        {latestTimelineOutcome}
+                      <p className={`mt-2 text-sm font-semibold ${displayedMedication.outcome === "Effective" ? "text-[#22c55e]" : "text-[#ef4444]"}`}>
+                        {displayedMedication.outcome}
                       </p>
                     </div>
                   </div>
 
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Latest Alert Summary</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Latest Alert Summary</p>
+                        <p className="text-[11px] text-[#879196]">Last update: {latestAlertSummary.lastUpdated}</p>
+                      </div>
                       <div className="mt-2 grid gap-2 sm:grid-cols-3">
                         <div className={`rounded-lg border px-3 py-2 ${latestAlertSummary.usingStableHeartRateFallback ? "border-[#1d3f2d] bg-[#0e2519]" : "border-[#2a3441] bg-[#11161c]"}`}>
                           <p className="text-[11px] uppercase tracking-[0.14em] text-[#9aa5b1]">Heart Rate</p>
@@ -586,13 +630,13 @@ export default function PatientTreatmentAnalysisSection({
                     </div>
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Diagnosis</p>
-                      <p className="mt-2 text-sm text-white">{latestTreatment.related_diagnoses.length ? latestTreatment.related_diagnoses.join(", ") : "No linked diagnosis"}</p>
+                      <p className="mt-2 text-sm text-white">{displayedMedication.related_diagnoses.length ? displayedMedication.related_diagnoses.join(", ") : "No linked diagnosis"}</p>
                     </div>
                   </div>
 
                   <div className="mt-3 rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Conditions</p>
-                    <p className="mt-2 text-sm text-white">{latestTreatment.related_conditions.length ? latestTreatment.related_conditions.join(", ") : "No linked conditions"}</p>
+                    <p className="mt-2 text-sm text-white">{displayedMedication.related_conditions.length ? displayedMedication.related_conditions.join(", ") : "No linked conditions"}</p>
                   </div>
                 </div>
               ) : (

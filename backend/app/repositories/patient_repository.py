@@ -49,9 +49,67 @@ from app.validators.patient_validators import (
     validate_update_value_present,
 )
 from app.core.errors import ValidationError
+from app.utils.datetime import now_utc
 
 
 class PatientRepository:
+    @staticmethod
+    def _extract_status_vitals(message: str | None) -> dict | None:
+        import re
+
+        alert_message = str(message or "")
+        hr_match = re.search(r"HR\s*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+        o2_match = re.search(r"SpO2\s*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+        temp_match = re.search(r"Temp\s*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+
+        if hr_match is None and o2_match is None and temp_match is None:
+            return None
+
+        def to_float(match):
+            if match is None:
+                return None
+            try:
+                return float(match.group(1))
+            except ValueError:
+                return None
+
+        return {
+            "heartRate": to_float(hr_match),
+            "oxygen": to_float(o2_match),
+            "temperature": to_float(temp_match),
+        }
+
+    @classmethod
+    def _extract_alert_structured_fields(cls, alert_type: str | None, message: str | None, severity: str | None) -> tuple[str | None, float | None, str | None, dict | None]:
+        normalized_type = str(alert_type or "").strip().lower()
+        normalized_severity = str(severity or "").strip().lower()
+        alert_message = str(message or "")
+
+        status_vitals = cls._extract_status_vitals(alert_message)
+        is_status_alert = normalized_type == "status" or normalized_severity == "normal"
+        if is_status_alert:
+            return "status", None, None, status_vitals
+
+        type_map = {
+            "heart_rate": ("heart_rate", "bpm"),
+            "oxygen_saturation": ("oxygen_saturation", "%"),
+            "temperature": ("temperature", "C"),
+        }
+        mapped = type_map.get(normalized_type)
+        if mapped is None:
+            return None, None, None, None
+
+        import re
+        match = re.search(r"(-?\d+(?:\.\d+)?)", alert_message)
+        if match is None:
+            return mapped[0], None, mapped[1], None
+
+        try:
+            value = float(match.group(1))
+        except ValueError:
+            value = None
+        return mapped[0], value, mapped[1], None
+
     def __init__(self, address_repository: AddressRepository | None = None):
         self.address_repository = address_repository or AddressRepository()
 
@@ -244,6 +302,7 @@ class PatientRepository:
                         "dosage": medication.dosage,
                         "frequency": medication.frequency,
                         "prescribed_at": medication.created_at,
+                        "updated_at": medication.updated_at,
                         "notes": medication.notes,
                         "last_updated_note": medication.last_updated_note,
                         "modified_by": doctor_name,
@@ -255,6 +314,10 @@ class PatientRepository:
                         ),
                     }
                 )
+            medications_payload.sort(
+                key=lambda item: (item["updated_at"] or item["prescribed_at"], item["id"]),
+                reverse=True,
+            )
 
             diagnoses_payload = [
                 {
@@ -267,16 +330,26 @@ class PatientRepository:
                 for diagnosis in diagnoses
             ]
 
-            alerts_payload = [
-                {
-                    "id": alert.id,
-                    "alert_type": alert.alert_type,
-                    "message": alert.message,
-                    "severity": alert.severity,
-                    "created_at": alert.created_at,
-                }
-                for alert in alerts
-            ]
+            alerts_payload = []
+            for alert in alerts:
+                alert_type, value, unit, vitals = self._extract_alert_structured_fields(
+                    alert.alert_type,
+                    alert.message,
+                    alert.severity,
+                )
+                alerts_payload.append(
+                    {
+                        "id": alert.id,
+                        "alert_type": alert.alert_type,
+                        "type": alert_type,
+                        "value": value,
+                        "unit": unit,
+                        "vitals": vitals,
+                        "message": alert.message,
+                        "severity": alert.severity,
+                        "created_at": alert.created_at,
+                    }
+                )
 
             timeline_events = []
             for medication in medications:
@@ -623,6 +696,7 @@ class PatientRepository:
             if notes is not None:
                 assignment.notes = normalize_optional_text(notes)
 
+            assignment.updated_at = now_utc()
             db.commit()
             db.refresh(assignment)
             return assignment
@@ -638,7 +712,7 @@ class PatientRepository:
             allergies = db.execute(
                 select(PatientAllergy)
                 .where(PatientAllergy.patient_id == patient_id)
-                .order_by(desc(PatientAllergy.created_at), desc(PatientAllergy.id))
+                .order_by(desc(PatientAllergy.updated_at), desc(PatientAllergy.id))
                 .offset((page - 1) * page_size)
                 .limit(page_size)
             ).scalars().all()
@@ -674,6 +748,7 @@ class PatientRepository:
             validate_update_value_present(severity, "NO_ALLERGY_UPDATES")
 
             allergy.severity = validate_required_text(severity, "Severity")
+            allergy.updated_at = now_utc()
             db.commit()
             db.refresh(allergy)
             return allergy
@@ -689,7 +764,7 @@ class PatientRepository:
             diagnosis_entries = db.execute(
                 select(PatientDiagnosis)
                 .where(PatientDiagnosis.patient_id == patient_id)
-                .order_by(desc(PatientDiagnosis.created_at), desc(PatientDiagnosis.id))
+                .order_by(desc(PatientDiagnosis.updated_at), desc(PatientDiagnosis.id))
                 .offset((page - 1) * page_size)
                 .limit(page_size)
             ).scalars().all()
@@ -734,6 +809,7 @@ class PatientRepository:
 
             validate_non_empty_update(updated, "NO_DIAGNOSIS_UPDATES")
 
+            diagnosis.updated_at = now_utc()
             db.commit()
             db.refresh(diagnosis)
             return diagnosis
@@ -772,7 +848,10 @@ class PatientRepository:
             return db.execute(
                 select(PatientMedication)
                 .where(PatientMedication.patient_id == patient_id)
-                .order_by(desc(PatientMedication.created_at))
+                .order_by(
+                    desc(func.coalesce(PatientMedication.updated_at, PatientMedication.created_at)),
+                    desc(PatientMedication.id),
+                )
             ).scalars().all()
 
     def update_medication(self, medication_id: int, doctor_id: int, dosage: str | None, frequency: str | None, note: str) -> PatientMedication:
@@ -784,22 +863,35 @@ class PatientRepository:
             validate_patient_assignment(db, doctor_id, medication.patient_id)
             validate_patient_editable(get_patient_or_raise(db, medication.patient_id))
 
+            latest_medication = db.execute(
+                select(PatientMedication)
+                .where(PatientMedication.patient_id == medication.patient_id)
+                .order_by(
+                    desc(func.coalesce(PatientMedication.updated_at, PatientMedication.created_at)),
+                    desc(PatientMedication.id),
+                )
+                .limit(1)
+            ).scalar_one_or_none()
+            if latest_medication is None:
+                raise NotFoundError("MEDICATION_NOT_FOUND")
+
             updated = False
             if dosage is not None:
-                medication.dosage = validate_dosage(dosage)
+                latest_medication.dosage = validate_dosage(dosage)
                 updated = True
 
             if frequency is not None:
-                medication.frequency = validate_frequency(frequency)
+                latest_medication.frequency = validate_frequency(frequency)
                 updated = True
 
             validate_non_empty_update(updated, "NO_MEDICATION_UPDATES")
 
-            medication.last_updated_note = validate_required_text(note, "Note")
+            latest_medication.last_updated_note = validate_required_text(note, "Note")
+            latest_medication.updated_at = now_utc()
 
             db.commit()
-            db.refresh(medication)
-            return medication
+            db.refresh(latest_medication)
+            return latest_medication
 
     def get_patient_activities(self, patient_id: int) -> list[DoctorActivity]:
         with SessionLocal() as db:

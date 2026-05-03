@@ -205,7 +205,7 @@ export default function PatientDiagnosisPage() {
                         <p className="mt-2 text-sm text-[#c4ccd5]">{entry.notes}</p>
                       )}
                     </div>
-                    <span className="text-xs text-[#879196]">{formatDateTime(entry.created_at)}</span>
+                    <span className="text-xs text-[#879196]">{formatDateTime(entry.updated_at || entry.created_at)}</span>
                   </div>
                 </li>
               ))}

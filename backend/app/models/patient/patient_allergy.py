@@ -16,6 +16,7 @@ class PatientAllergy(Base):
     allergy_name: Mapped[str] = mapped_column(String(255))
     severity: Mapped[str] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
     @property
     def status(self) -> str:
