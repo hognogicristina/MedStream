@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, desc
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -9,6 +9,9 @@ from app.utils.datetime import now_utc
 
 class Vital(Base):
     __tablename__ = "vitals"
+    __table_args__ = (
+        Index("ix_vitals_patient_recorded_at_desc", "patient_id", desc("recorded_at")),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))

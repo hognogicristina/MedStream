@@ -53,6 +53,10 @@ from app.utils.datetime import now_utc
 
 
 class PatientRepository:
+    MEDICATION_NAME_MAX_LENGTH = 255
+    MEDICATION_DOSAGE_MAX_LENGTH = 100
+    MEDICATION_FREQUENCY_MAX_LENGTH = 100
+
     @staticmethod
     def _extract_status_vitals(message: str | None) -> dict | None:
         import re
@@ -117,6 +121,10 @@ class PatientRepository:
 
     def __init__(self, address_repository: AddressRepository | None = None):
         self.address_repository = address_repository or AddressRepository()
+
+    @staticmethod
+    def _clamp_text(value: str, max_length: int) -> str:
+        return (value or "")[:max_length]
 
     def _load_patient_with_address(self, db, patient_id: int) -> Patient:
         patient = db.execute(
@@ -836,9 +844,12 @@ class PatientRepository:
             medication = PatientMedication(
                 patient_id=patient.id,
                 doctor_id=doctor_id,
-                name=validate_medication_name(name, is_pregnant=patient.is_pregnant),
-                dosage=validate_dosage(dosage),
-                frequency=validate_frequency(frequency),
+                name=self._clamp_text(
+                    validate_medication_name(name, is_pregnant=patient.is_pregnant),
+                    self.MEDICATION_NAME_MAX_LENGTH,
+                ),
+                dosage=self._clamp_text(validate_dosage(dosage), self.MEDICATION_DOSAGE_MAX_LENGTH),
+                frequency=self._clamp_text(validate_frequency(frequency), self.MEDICATION_FREQUENCY_MAX_LENGTH),
                 notes=normalize_optional_text(notes),
             )
 
@@ -882,11 +893,17 @@ class PatientRepository:
 
             updated = False
             if dosage is not None:
-                latest_medication.dosage = validate_dosage(dosage)
+                latest_medication.dosage = self._clamp_text(
+                    validate_dosage(dosage),
+                    self.MEDICATION_DOSAGE_MAX_LENGTH,
+                )
                 updated = True
 
             if frequency is not None:
-                latest_medication.frequency = validate_frequency(frequency)
+                latest_medication.frequency = self._clamp_text(
+                    validate_frequency(frequency),
+                    self.MEDICATION_FREQUENCY_MAX_LENGTH,
+                )
                 updated = True
 
             validate_non_empty_update(updated, "NO_MEDICATION_UPDATES")

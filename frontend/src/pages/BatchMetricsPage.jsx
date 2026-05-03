@@ -532,33 +532,33 @@ export default function BatchMetricsPage() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <div className="flex flex-col gap-4">
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                title="Download all metrics"
-                aria-label="Download all metrics"
-                className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
-                onClick={handleExportAllMetrics}
-              >
-                <DownloadIcon/>
-              </button>
-              <BackButton fallbackTo="/dashboard"/>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
+                  Demo View
+                </p>
+
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  Batch Metrics
+                </h1>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  title="Download all metrics"
+                  aria-label="Download all metrics"
+                  className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
+                  onClick={handleExportAllMetrics}
+                >
+                  <DownloadIcon/>
+                </button>
+                <BackButton fallbackTo="/dashboard"/>
+              </div>
             </div>
-            <div className="w-full">
-              <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
-                Demo View
-              </p>
-
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                Batch Metrics
-              </h1>
-
-              <p className="mt-3 text-[#b6bec9]">
-                This view shows aggregated data computed over a time window (e.g., last 5 minutes).
-                Batch processing analyzes large volumes of historical data, providing more stable and accurate insights.
-              </p>
-
-            </div>
+            <p className="mt-4 text-[#b6bec9]">
+              This view shows aggregated data computed over a time window (e.g., last 5 minutes).
+              Batch processing analyzes large volumes of historical data, providing more stable and accurate insights.
+            </p>
           </div>
         </header>
 

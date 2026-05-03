@@ -76,27 +76,6 @@ export default function VitalsChart({data}) {
             animationDuration={300}
           />
 
-          <Line
-            type="monotone"
-            dataKey="systolic_bp"
-            name="Systolic BP"
-            stroke="#a78bfa"
-            strokeWidth={2}
-            dot={false}
-            isAnimationActive={true}
-            animationDuration={300}
-          />
-
-          <Line
-            type="monotone"
-            dataKey="diastolic_bp"
-            name="Diastolic BP"
-            stroke="#fda4af"
-            strokeWidth={2}
-            dot={false}
-            isAnimationActive={true}
-            animationDuration={300}
-          />
         </LineChart>
       </ResponsiveContainer>
     </div>

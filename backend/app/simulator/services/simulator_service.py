@@ -458,6 +458,7 @@ class SimulatorService:
                 emit_events=False,
                 include_buffer=False,
             )
+            has_abnormal_vitals = self._has_abnormal_vitals(vitals)
             state = evaluate_patient_state(vitals)
             self._record_outcome_evaluation(patient_data, recorded_at=recorded_at, alert_stats=alert_stats)
             self._update_stability_tracking(
@@ -470,7 +471,7 @@ class SimulatorService:
                 db,
                 patient=patient,
                 patient_data=patient_data,
-                alert_stats=alert_stats,
+                has_abnormal_vitals=has_abnormal_vitals,
                 current_state=state,
                 event_time=recorded_at,
                 allow_discharge=False,
@@ -523,6 +524,7 @@ class SimulatorService:
             patient_data=patient_data,
             recorded_at=event_time,
         )
+        has_abnormal_vitals = self._has_abnormal_vitals(vitals)
         self._record_outcome_evaluation(patient_data, recorded_at=event_time, alert_stats=alert_stats)
         self._update_stability_tracking(
             patient_data=patient_data,
@@ -534,7 +536,7 @@ class SimulatorService:
             db,
             patient=patient,
             patient_data=patient_data,
-            alert_stats=alert_stats,
+            has_abnormal_vitals=has_abnormal_vitals,
             current_state=new_state,
             event_time=event_time,
             allow_discharge=True,
@@ -973,26 +975,23 @@ class SimulatorService:
     def _increase_frequency(frequency: str) -> str:
         text = (frequency or "").strip()
         if not text:
-            return "Every 12 hours"
-
-        normalized = text.lower().replace(" ", "")
-        if normalized.startswith("every") and normalized.endswith("h"):
-            hours_text = normalized[5:-1]
-            if hours_text.isdigit():
-                hours = max(4, int(hours_text))
-                if hours > 4:
-                    return f"Every {max(4, hours - 4)}h"
-                return "Every 4h"
+            return "once daily"
 
         mapped = {
-            "daily": "Every 12h",
-            "every 24h": "Every 12h",
-            "every 12h": "Every 8h",
-            "every 8h": "Every 6h",
-            "every 6h": "Every 4h",
-            "weekly": "Daily",
+            "once daily": "twice daily",
+            "daily": "twice daily",
+            "every 24h": "twice daily",
+            "every 24 hours": "twice daily",
+            "twice daily": "every 8 hours",
+            "every 12h": "every 8 hours",
+            "every 12 hours": "every 8 hours",
+            "every 8h": "every 6 hours",
+            "every 8 hours": "every 6 hours",
+            "every 6h": "every 4 hours",
+            "every 6 hours": "every 4 hours",
+            "weekly": "once daily",
         }
-        return mapped.get(text.lower(), f"{text} (increased)")
+        return mapped.get(text.lower(), text)
 
     def _plan_medication_adjustment(self, *, dosage: str, frequency: str) -> tuple[str, str]:
         if random.random() < 0.5:
@@ -1052,7 +1051,7 @@ class SimulatorService:
         *,
         patient,
         patient_data: dict,
-        alert_stats: dict,
+        has_abnormal_vitals: bool,
         current_state: str,
         event_time: datetime,
         allow_discharge: bool,
@@ -1061,9 +1060,7 @@ class SimulatorService:
         if not isinstance(treatment, dict):
             return False
 
-        has_high_or_critical = bool(alert_stats.get("high_or_critical_count"))
-
-        if treatment.get("active_medication_name") is None and has_high_or_critical:
+        if treatment.get("active_medication_name") is None and has_abnormal_vitals:
             started = self._start_treatment(
                 db,
                 patient=patient,
@@ -1082,12 +1079,12 @@ class SimulatorService:
             return False
 
         treatment["cycles_on_medication"] = int(treatment.get("cycles_on_medication", 0)) + 1
-        if has_high_or_critical:
+        if has_abnormal_vitals:
             treatment["abnormal_cycles_on_medication"] = int(treatment.get("abnormal_cycles_on_medication", 0)) + 1
         else:
             treatment["normal_cycles_on_medication"] = int(treatment.get("normal_cycles_on_medication", 0)) + 1
 
-        if current_state == "stable" and not has_high_or_critical:
+        if current_state == "stable" and not has_abnormal_vitals:
             treatment["status"] = "effective"
 
         cycles_on_medication = int(treatment.get("cycles_on_medication", 0))
@@ -1152,6 +1149,14 @@ class SimulatorService:
 
         return False
 
+    @staticmethod
+    def _has_abnormal_vitals(vitals: dict) -> bool:
+        return (
+            vitals["heart_rate"] > 120
+            or vitals["oxygen_saturation"] < 90
+            or vitals["temperature"] > 38
+        )
+
     def _start_treatment(
         self,
         db,
@@ -1209,6 +1214,7 @@ class SimulatorService:
             db,
             patient_id=patient.id,
             name=medication_name,
+            event_time=event_time,
         )
         if existing_same_medication is not None:
             next_dosage, next_frequency = self._plan_medication_adjustment(
@@ -1250,6 +1256,7 @@ class SimulatorService:
                     db,
                     patient_id=patient.id,
                     name=medication_name,
+                    event_time=event_time,
                 )
                 if latest is not None:
                     self.repository.update_patient_medication_plan(
@@ -1293,6 +1300,7 @@ class SimulatorService:
             db,
             patient_id=patient.id,
             name=active_medication,
+            event_time=event_time,
         )
         if latest is not None:
             self.repository.update_patient_medication_plan(

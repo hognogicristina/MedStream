@@ -11,6 +11,7 @@ class AlertRead(BaseModel):
     message: str
     severity: str
     created_at: datetime
+    event_time: datetime | None = None
     model_config = {"from_attributes": True}
 
 
