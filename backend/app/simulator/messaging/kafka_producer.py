@@ -9,7 +9,7 @@ class SimulatorKafkaProducer:
         send_message(settings.kafka_vitals_topic, payload)
 
     def send_alert(self, payload: dict) -> None:
-        send_message("alerts-events", payload)
+        send_message(settings.kafka_alerts_topic, payload)
 
     def send_batch(self, payload: dict) -> None:
         send_message(settings.kafka_batch_topic, payload)

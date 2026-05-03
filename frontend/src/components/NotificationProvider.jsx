@@ -117,7 +117,7 @@ export function NotificationProvider({children}) {
               {notification.actionLabel && typeof notification.onAction === "function" && (
                 <button
                   type="button"
-                  className="notification-toast-action"
+                  className="notification-toast-action-link"
                   onClick={notification.onAction}
                 >
                   {notification.actionLabel}

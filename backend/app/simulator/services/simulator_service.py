@@ -551,6 +551,7 @@ class SimulatorService:
                 {
                     "event": "vital",
                     "patient_id": patient.id,
+                    "recorded_at": event_time.isoformat(),
                     **vitals,
                 }
             )
@@ -776,7 +777,7 @@ class SimulatorService:
                 "highest_severity": "normal",
             }
 
-        def create_alert(*, alert_type: str, value: int, severity: str, message: str) -> None:
+        def create_alert(*, alert_type: str, severity: str, message: str) -> None:
             nonlocal count, severity_score, high_or_critical_count, highest_severity, generated_in_cycle
             if generated_in_cycle >= MAX_ALERTS_PER_PATIENT_PER_CYCLE:
                 return
@@ -799,10 +800,13 @@ class SimulatorService:
                 self.producer.send_alert(
                     {
                         "event": "alert",
-                        "patient_id": patient_id,
-                        "type": alert_type,
-                        "value": value,
-                        "severity": severity,
+                        "id": created_alert.id,
+                        "patient_id": created_alert.patient_id,
+                        "vital_id": created_alert.vital_id,
+                        "alert_type": created_alert.alert_type,
+                        "severity": created_alert.severity,
+                        "message": created_alert.message,
+                        "created_at": created_alert.created_at.isoformat(),
                     }
                 )
 
@@ -822,7 +826,6 @@ class SimulatorService:
         if current_state in {"high", "critical"} and vitals["heart_rate"] > 120:
             create_alert(
                 alert_type="heart_rate",
-                value=vitals["heart_rate"],
                 severity="high",
                 message=f"High heart rate detected: {vitals['heart_rate']} bpm",
             )
@@ -830,7 +833,6 @@ class SimulatorService:
         if current_state == "critical" and vitals["oxygen_saturation"] < 90:
             create_alert(
                 alert_type="oxygen",
-                value=vitals["oxygen_saturation"],
                 severity="critical",
                 message=f"Low oxygen saturation detected: {vitals['oxygen_saturation']}%",
             )
@@ -838,7 +840,6 @@ class SimulatorService:
         if current_state in {"high", "critical"} and vitals["temperature"] > 38:
             create_alert(
                 alert_type="temperature",
-                value=vitals["temperature"],
                 severity="high",
                 message=f"Elevated temperature detected: {vitals['temperature']}°C",
             )
@@ -846,7 +847,6 @@ class SimulatorService:
         if current_state == "normal" and previous_state in {"high", "critical"}:
             create_alert(
                 alert_type="status",
-                value=vitals["heart_rate"],
                 severity="normal",
                 message=(
                     "Vitals within normal ranges: "

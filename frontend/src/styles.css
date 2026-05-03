@@ -576,21 +576,23 @@ textarea {
   color: #f2f3f3;
 }
 
-.notification-toast-action {
+.notification-toast-action-link {
   margin-top: 10px;
-  border: 1px solid #4d5661;
-  border-radius: 10px;
-  background: #1c222b;
-  color: #f4d4a1;
+  border: 0;
+  background: transparent;
+  color: #9dccff;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  padding: 6px 10px;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: rgba(157, 204, 255, 0.5);
+  text-underline-offset: 4px;
 }
 
-.notification-toast-action:hover {
-  border-color: #ff9900;
-  color: #ffcb82;
+.notification-toast-action-link:hover {
+  color: #cfe6ff;
+  text-decoration-color: #cfe6ff;
 }
 
 .notification-toast-dismiss {

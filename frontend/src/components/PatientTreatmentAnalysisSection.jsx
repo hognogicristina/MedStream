@@ -3,15 +3,9 @@ import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAx
 import {useNotifications} from "./useNotifications.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {getPatient, getPatientTreatmentAnalysis} from "../services/patientApi.js"
+import {createWebSocket} from "../services/ws.js"
 import LoadingSpinner from "./LoadingSpinner.jsx"
 
-const TIMELINE_BUCKET_MS = 6 * 60 * 60 * 1000
-const ALERT_SEVERITY_SCORE = {
-  critical: 4,
-  high: 3,
-  medium: 2,
-  low: 1,
-}
 const ALERT_HISTORY_PAGE_SIZE = 5
 const ALERT_TYPE_COLOR_MAP = {
   heart_rate: "#F43F5E",
@@ -30,8 +24,6 @@ const toTimestamp = (value) => {
   const time = new Date(value).getTime()
   return Number.isFinite(time) ? time : null
 }
-
-const getSeverityScore = (severity) => ALERT_SEVERITY_SCORE[String(severity || "").trim().toLowerCase()] || 1
 
 function formatDate(value) {
   const date = new Date(value)
@@ -57,7 +49,9 @@ function formatAlertLastUpdated(value) {
 const extractVitalsFromMessage = (message) => {
   const text = String(message || "")
   const hrMatch = text.match(/HR\s*(-?\d+(?:\.\d+)?)/i)
-  const o2Match = text.match(/SpO2\s*(-?\d+(?:\.\d+)?)/i)
+  const o2Match = text.match(
+    /(?:SpO2\s*|oxygen.*?:\s*)(\d+(?:\.\d+)?)/i,
+  )
   const tempMatch = text.match(/Temp\s*(-?\d+(?:\.\d+)?)/i)
   return {
     heartRate: hrMatch ? Number(hrMatch[1]) : null,
@@ -70,6 +64,10 @@ const normalizeTreatmentAlert = (alert) => {
   const normalizedType = String(alert?.type || alert?.alert_type || "").trim().toLowerCase()
   const normalizedSeverity = String(alert?.severity || "").trim().toLowerCase()
   const numericValue = Number(alert?.value)
+  const oxygenValue =
+    alert?.vitals?.oxygen != null
+      ? Number(alert.vitals.oxygen)
+      : null
 
   return {
     ...alert,
@@ -79,7 +77,7 @@ const normalizeTreatmentAlert = (alert) => {
     value: Number.isFinite(numericValue) ? numericValue : null,
     vitals: {
       heartRate: Number.isFinite(Number(alert?.vitals?.heartRate)) ? Number(alert?.vitals?.heartRate) : null,
-      oxygen: Number.isFinite(Number(alert?.vitals?.oxygen)) ? Number(alert?.vitals?.oxygen) : null,
+      oxygen: Number.isFinite(oxygenValue) ? oxygenValue : null,
       temperature: Number.isFinite(Number(alert?.vitals?.temperature)) ? Number(alert?.vitals?.temperature) : null,
     },
   }
@@ -95,24 +93,6 @@ const getStatusVitals = (alert) => {
     oxygen: alert.vitals?.oxygen ?? parsedFromMessage.oxygen,
     temperature: alert.vitals?.temperature ?? parsedFromMessage.temperature,
   }
-}
-
-const deriveOutcomeFromAlertEvolution = ({beforeCount, afterCount, beforeSeverityScore, afterSeverityScore}) => {
-  const alertsDecreased = afterCount < beforeCount
-  const alertsWorsened = afterCount > beforeCount
-  const severityImproved = afterSeverityScore < beforeSeverityScore
-  const severityWorsened = afterSeverityScore > beforeSeverityScore
-  const alertsPersisted = afterCount > 0 && afterCount === beforeCount
-
-  if (alertsDecreased || severityImproved) {
-    return "Effective"
-  }
-
-  if (alertsWorsened || severityWorsened || alertsPersisted) {
-    return "Ineffective"
-  }
-
-  return "Effective"
 }
 
 export default function PatientTreatmentAnalysisSection({
@@ -168,103 +148,59 @@ export default function PatientTreatmentAnalysisSection({
     loadInitial().then(() => {})
   }, [loadAnalysis, notifyError, selectedPatientId])
 
-  const timelineOutcomeHistory = useMemo(() => {
-    const alerts = (analysis?.alerts || [])
-      .map((alert) => ({
-        time: toTimestamp(alert.created_at),
-        severityScore: getSeverityScore(alert.severity),
-      }))
-      .filter((alert) => alert.time !== null)
-      .sort((left, right) => left.time - right.time)
-
-    if (!alerts.length) {
-      const now = Date.now()
-      const before = now - TIMELINE_BUCKET_MS
-      return [
-        {
-          time: new Date(before).toISOString().slice(0, 16),
-          bucketStart: before,
-          outcome: "Effective",
-          effective: 1,
-          ineffective: 0,
-        },
-        {
-          time: new Date(now).toISOString().slice(0, 16),
-          bucketStart: now,
-          outcome: "Effective",
-          effective: 1,
-          ineffective: 0,
-        },
-      ]
+  useEffect(() => {
+    if (!selectedPatientId) {
+      return
     }
 
-    const bucketed = new Map()
-    alerts.forEach((alert) => {
-      const bucketStart = Math.floor(alert.time / TIMELINE_BUCKET_MS) * TIMELINE_BUCKET_MS
-      const current = bucketed.get(bucketStart) || {count: 0, severityScore: 0}
-      current.count += 1
-      current.severityScore += alert.severityScore
-      bucketed.set(bucketStart, current)
-    })
-
-    const sortedBuckets = Array.from(bucketed.keys()).sort((left, right) => left - right)
-    let firstBucket = sortedBuckets[0]
-    let lastBucket = sortedBuckets[sortedBuckets.length - 1]
-
-    if (sortedBuckets.length === 1) {
-      firstBucket -= TIMELINE_BUCKET_MS
-      lastBucket += TIMELINE_BUCKET_MS
-    }
-
-    const timelineBuckets = []
-    for (let bucketStart = firstBucket; bucketStart <= lastBucket; bucketStart += TIMELINE_BUCKET_MS) {
-      timelineBuckets.push(bucketStart)
-    }
-
-    return timelineBuckets.map((bucketStart, index) => {
-      const previousBucket = timelineBuckets[index - 1]
-      const currentBucketStats = bucketed.get(bucketStart) || {count: 0, severityScore: 0}
-      const previousBucketStats = previousBucket == null
-        ? {count: 0, severityScore: 0}
-        : (bucketed.get(previousBucket) || {count: 0, severityScore: 0})
-
-      const outcome = index === 0
-        ? (currentBucketStats.count > 0 ? "Ineffective" : "Effective")
-        : deriveOutcomeFromAlertEvolution({
-          beforeCount: previousBucketStats.count,
-          afterCount: currentBucketStats.count,
-          beforeSeverityScore: previousBucketStats.severityScore,
-          afterSeverityScore: currentBucketStats.severityScore,
-        })
-
-      return {
-        time: new Date(bucketStart).toISOString().slice(0, 16),
-        bucketStart,
-        bucketEnd: bucketStart + TIMELINE_BUCKET_MS,
-        alertCount: currentBucketStats.count,
-        severityScore: currentBucketStats.severityScore,
-        outcome,
-        effective: outcome === "Effective" ? 1 : 0,
-        ineffective: outcome === "Ineffective" ? 1 : 0,
+    const socket = createWebSocket((msg) => {
+      if (msg.type !== "alert") {
+        return
       }
+
+      if (String(msg.data?.patient_id) !== String(selectedPatientId)) {
+        return
+      }
+
+      loadAnalysis(selectedPatientId).then(() => {})
     })
-  }, [analysis])
 
-  const timelineData = useMemo(
-    () => timelineOutcomeHistory.map((entry) => ({
-      time: entry.time,
-      effective: entry.effective,
-      ineffective: entry.ineffective,
-    })),
-    [timelineOutcomeHistory],
-  )
+    return () => {
+      socket.close()
+    }
+  }, [loadAnalysis, selectedPatientId])
 
-  const treatmentTimelineEvaluation = useMemo(() => {
-    const parsedAlerts = (analysis?.alerts || [])
+  const parsedAlerts = useMemo(() => {
+    return (analysis?.alerts || [])
       .map((alert) => normalizeTreatmentAlert(alert))
       .filter((alert) => alert.time !== null)
       .sort((left, right) => right.time - left.time)
+  }, [analysis])
 
+  const treatmentTimelineData = useMemo(() => {
+    const ascendingAlerts = [...parsedAlerts].sort((left, right) => left.time - right.time)
+    if (!ascendingAlerts.length) {
+      return []
+    }
+
+    const lastStable = parsedAlerts.find(
+      (alert) => alert.type === "status" || alert.severity === "normal",
+    ) || null
+
+    return ascendingAlerts.map((alert) => {
+      const isAbnormalAfterStable = Boolean(lastStable)
+        && alert.time > lastStable.time
+        && (alert.severity === "high" || alert.severity === "critical")
+
+      return {
+        time: new Date(alert.time).toISOString().slice(0, 16),
+        stable: isAbnormalAfterStable ? 0 : 1,
+        abnormal: isAbnormalAfterStable ? 1 : 0,
+      }
+    })
+  }, [parsedAlerts])
+
+  const treatmentTimelineEvaluation = useMemo(() => {
     const latestAlert = parsedAlerts[0] || null
     const latestByVital = (vitalKey, options = {}) => {
       const vitalTypes = VITAL_TYPE_ALIASES[vitalKey] || []
@@ -324,7 +260,7 @@ export default function PatientTreatmentAnalysisSection({
         summary: "Values start from the latest stable snapshot and are overridden by newer alerts per vital.",
       },
     }
-  }, [analysis])
+  }, [parsedAlerts])
 
   const medicationHistory = useMemo(() => {
     const medications = analysis?.medications || []
@@ -426,7 +362,7 @@ export default function PatientTreatmentAnalysisSection({
         <div className="mt-6 space-y-6">
           <div className="h-[320px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={timelineData}>
+              <AreaChart data={treatmentTimelineData}>
                 <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" />
                 <XAxis dataKey="time" stroke="#879196" tick={{fontSize: 11}} />
                 <YAxis stroke="#879196" tick={{fontSize: 11}} allowDecimals={false}/>
@@ -440,7 +376,7 @@ export default function PatientTreatmentAnalysisSection({
                 />
                 <Area
                   type="monotone"
-                  dataKey="effective"
+                  dataKey="stable"
                   stackId="1"
                   stroke="#22c55e"
                   fill="#22c55e"
@@ -448,7 +384,7 @@ export default function PatientTreatmentAnalysisSection({
                 />
                 <Area
                   type="monotone"
-                  dataKey="ineffective"
+                  dataKey="abnormal"
                   stackId="1"
                   stroke="#ef4444"
                   fill="#ef4444"
