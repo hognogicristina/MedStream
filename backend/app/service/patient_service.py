@@ -71,13 +71,13 @@ class PatientService:
         return self.repository.update_patient_diagnosis(diagnosis_id, doctor_id, status, note)
 
     def administer_medication(
-        self,
-        patient_id: int,
-        doctor_id: int,
-        name: str,
-        dosage: str,
-        frequency: str,
-        notes: str | None,
+            self,
+            patient_id: int,
+            doctor_id: int,
+            name: str,
+            dosage: str,
+            frequency: str,
+            notes: str | None,
     ):
         return self.repository.administer_medication(patient_id, doctor_id, name, dosage, frequency, notes)
 

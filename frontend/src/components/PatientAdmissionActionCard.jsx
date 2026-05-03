@@ -1,18 +1,18 @@
 export default function PatientAdmissionActionCard({
-  patient,
-  canManagePatient = true,
-  dischargeReason,
-  dischargeType,
-  dischargeTypes = [],
-  readmitArrivalMethod,
-  onDischargeReasonChange,
-  onDischargeTypeChange,
-  onReadmitArrivalMethodChange,
-  onDischargeSubmit,
-  onReadmitSubmit,
-  isSubmittingDischarge,
-  isSubmittingReadmit,
-}) {
+                                                     patient,
+                                                     canManagePatient = true,
+                                                     dischargeReason,
+                                                     dischargeType,
+                                                     dischargeTypes = [],
+                                                     readmitArrivalMethod,
+                                                     onDischargeReasonChange,
+                                                     onDischargeTypeChange,
+                                                     onReadmitArrivalMethodChange,
+                                                     onDischargeSubmit,
+                                                     onReadmitSubmit,
+                                                     isSubmittingDischarge,
+                                                     isSubmittingReadmit,
+                                                   }) {
   const canSubmitDischarge = canManagePatient && dischargeReason.trim().length > 0 && Boolean(dischargeType) && !patient?.is_discharged
   const canSubmitReadmit = canManagePatient && Boolean(readmitArrivalMethod) && Boolean(patient?.is_discharged)
 

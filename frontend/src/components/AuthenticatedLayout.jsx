@@ -5,7 +5,7 @@ import {useAuth} from "./AuthContext.jsx"
 import {resendVerificationEmail} from "../services/authApi.js"
 import {getCurrentDoctor} from "../services/doctorApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
-import {useNotifications} from "./useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 
 const EMAIL_NOT_VERIFIED_WARNING = "Your email is not verified. Please verify your email."
 const EMAIL_WARNING_INTERVAL_MS = 15000

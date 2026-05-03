@@ -6,7 +6,7 @@ import CountValue from "../components/CountValue.jsx"
 import DataTable from "../components/DataTable.jsx"
 import ActivityDialog from "../components/ActivityDialog.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {resendVerificationEmail} from "../services/authApi.js"
 import {
@@ -23,7 +23,15 @@ import {
   updateCurrentDoctorEmail,
   updateDoctorActivity,
 } from "../services/doctorApi.js"
-import {getActivityOptions, getDepartments, getPatientActivities, getPatientDoctors, listPatients, searchPatientsByCnp, transferPatient} from "../services/patientApi.js"
+import {
+  getActivityOptions,
+  getDepartments,
+  getPatientActivities,
+  getPatientDoctors,
+  listPatients,
+  searchPatientsByCnp,
+  transferPatient
+} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {formatPatientFullName} from "../utils/patients.js"
 import {buildPatientPhoneNumber, normalizeRomanianPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone.js"
@@ -358,7 +366,7 @@ export default function ProfilePage() {
       try {
         await refetchDoctorProfile()
       } catch {
-        
+
       }
     }, EMAIL_VERIFICATION_STATUS_POLL_MS)
 
@@ -736,7 +744,8 @@ export default function ProfilePage() {
                               {formatPatientFullName(patient)}
                             </Link>
                             {patient.is_discharged && (
-                              <span className="rounded-full border border-[#a33a45] bg-[#3a1f25] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#ffd8dc]">
+                              <span
+                                className="rounded-full border border-[#a33a45] bg-[#3a1f25] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#ffd8dc]">
                                 Discharged
                               </span>
                             )}
@@ -964,7 +973,8 @@ export default function ProfilePage() {
 
               <section className={`monitor-card rounded-[28px] p-6 ${isEmailUnverified ? "border border-[#a33a45] bg-[#2a1d23]" : ""}`}>
                 <div className="mb-6">
-                  <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${isEmailUnverified ? "text-[#ff7a7a]" : "text-[#ff9900]"}`}>Email</p>
+                  <p
+                    className={`text-xs font-semibold uppercase tracking-[0.3em] ${isEmailUnverified ? "text-[#ff7a7a]" : "text-[#ff9900]"}`}>Email</p>
                   <h2 className={`mt-2 text-2xl font-semibold ${isEmailUnverified ? "text-[#ffd1d6]" : "text-white"}`}>Account Email</h2>
                 </div>
 
@@ -1078,7 +1088,8 @@ export default function ProfilePage() {
 
               <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
                 <p className="text-sm text-[#d5dbdb]">
-                  This action deactivates the doctor account and automatically reassigns your patients to another doctor from the same department.
+                  This action deactivates the doctor account and automatically reassigns your patients to another doctor from the same
+                  department.
                 </p>
               </div>
 
@@ -1117,7 +1128,8 @@ export default function ProfilePage() {
                 <>
                   <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
                     <p className="text-sm text-[#d5dbdb]">
-                      Select another doctor from {patientPendingTransfer.department} to transfer {formatPatientFullName(patientPendingTransfer)}.
+                      Select another doctor from {patientPendingTransfer.department} to
+                      transfer {formatPatientFullName(patientPendingTransfer)}.
                     </p>
                     <p className="mt-2 text-sm text-[#879196]">CNP: {patientPendingTransfer.cnp}</p>
                   </div>

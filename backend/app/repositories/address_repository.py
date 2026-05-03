@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.models.address.address import Address
+from app.models.address import Address
 from app.validators.address_validators import validate_address_create, validate_address_update
 
 

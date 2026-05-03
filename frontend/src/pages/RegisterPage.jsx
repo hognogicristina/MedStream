@@ -3,7 +3,7 @@ import {Link, useNavigate} from "react-router-dom"
 import {registerDoctor} from "../services/authApi.js"
 import {getDepartments} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {
   buildPatientPhoneNumber,
   ROMANIA_PHONE_PLACEHOLDER,

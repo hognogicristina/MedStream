@@ -5,15 +5,14 @@ from datetime import date
 
 from faker import Faker
 
-
 fake = Faker("ro_RO")
 
 
 def generate_doctor_payloads(
-    *,
-    count: int,
-    departments: list[str],
-    password_hash: str,
+        *,
+        count: int,
+        departments: list[str],
+        password_hash: str,
 ) -> list[dict]:
     payloads: list[dict] = []
 

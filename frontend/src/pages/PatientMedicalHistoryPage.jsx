@@ -3,7 +3,7 @@ import {useParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import DataTable from "../components/DataTable.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {getCurrentDoctor} from "../services/doctorApi.js"
 import {
@@ -237,7 +237,12 @@ export default function PatientMedicalHistoryPage() {
 
   const items = useMemo(() => {
     const mapped = [
-      ...diagnosis.map((item) => ({...item, type: "diagnosis", label: item.diagnosis, timestamp: item.updated_at || item.created_at || item.diagnosed_at})),
+      ...diagnosis.map((item) => ({
+        ...item,
+        type: "diagnosis",
+        label: item.diagnosis,
+        timestamp: item.updated_at || item.created_at || item.diagnosed_at
+      })),
       ...medications.map((item) => ({...item, type: "medication", label: item.name, timestamp: item.updated_at || item.created_at})),
       ...allergies.map((item) => ({...item, type: "allergy", label: item.allergy_name, timestamp: item.updated_at || item.created_at})),
       ...patientConditions.map((item) => ({
@@ -1034,17 +1039,20 @@ export default function PatientMedicalHistoryPage() {
                       {isSubmitting ? "Saving..." : "Submit"}
                     </button>
                     {showDialog === "medication" && isDuplicateMedication ? (
-                      <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                      <span
+                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                         This medication already exists for this patient
                       </span>
                     ) : null}
                     {showDialog === "condition" && isDuplicateCondition ? (
-                      <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                      <span
+                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                         This condition already exists for this patient
                       </span>
                     ) : null}
                     {showDialog === "allergy" && isDuplicateAllergy ? (
-                      <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                      <span
+                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                         This allergy already exists for this patient
                       </span>
                     ) : null}

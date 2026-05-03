@@ -513,8 +513,10 @@ class DoctorRepository:
             matching_doctors = db.execute(select(Doctor).where(or_(*duplicate_filters))).scalars().all()
 
             email_match = next((doctor for doctor in matching_doctors if doctor.email == validated_payload["email"]), None)
-            phone_match = next((doctor for doctor in matching_doctors if validated_payload["phone_number"] and doctor.phone_number == validated_payload["phone_number"]), None)
-            license_match = next((doctor for doctor in matching_doctors if doctor.license_number == validated_payload["license_number"]), None)
+            phone_match = next((doctor for doctor in matching_doctors if
+                                validated_payload["phone_number"] and doctor.phone_number == validated_payload["phone_number"]), None)
+            license_match = next((doctor for doctor in matching_doctors if doctor.license_number == validated_payload["license_number"]),
+                                 None)
 
             if email_match and email_match.is_active:
                 raise ValidationError("EMAIL_ALREADY_REGISTERED")

@@ -35,9 +35,7 @@ from app.simulator.messaging.kafka_producer import SimulatorKafkaProducer
 from app.simulator.repositories.simulator_repository import SimulatorRepository
 from app.utils.datetime import now_utc
 
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 ALERT_SEVERITY_SCORE = {
     "critical": 4,
@@ -69,12 +67,12 @@ CONDITION_ALLOWED_STATUSES = ("active", "improving", "stable", "worsening", "cri
 
 class SimulatorService:
     def __init__(
-        self,
-        *,
-        config: SimulatorConfig,
-        buffers: SimulatorBuffers,
-        repository: SimulatorRepository,
-        producer: SimulatorKafkaProducer,
+            self,
+            *,
+            config: SimulatorConfig,
+            buffers: SimulatorBuffers,
+            repository: SimulatorRepository,
+            producer: SimulatorKafkaProducer,
     ):
         self.config = config
         self.buffers = buffers
@@ -264,22 +262,22 @@ class SimulatorService:
         return patient_data
 
     def _seed_patient_medical_records(
-        self,
-        db,
-        *,
-        patient_id: int,
-        doctor_id: int,
-        base_condition: str,
-        diagnosis_seed: str | None,
-        medication_name: str,
-        base_time: datetime,
-        admission_date: datetime,
-        now: datetime,
-        all_conditions: list[str],
-        all_diagnoses: list[str],
-        all_allergies: list[str],
-        dosages: list[str],
-        frequencies: list[str],
+            self,
+            db,
+            *,
+            patient_id: int,
+            doctor_id: int,
+            base_condition: str,
+            diagnosis_seed: str | None,
+            medication_name: str,
+            base_time: datetime,
+            admission_date: datetime,
+            now: datetime,
+            all_conditions: list[str],
+            all_diagnoses: list[str],
+            all_allergies: list[str],
+            dosages: list[str],
+            frequencies: list[str],
     ) -> None:
         profile = generate_patient_profile(
             base_condition=base_condition,
@@ -458,6 +456,7 @@ class SimulatorService:
                 emit_events=False,
                 include_buffer=False,
             )
+            has_abnormal_vitals = self._has_abnormal_vitals(vitals)
             state = evaluate_patient_state(vitals)
             self._record_outcome_evaluation(patient_data, recorded_at=recorded_at, alert_stats=alert_stats)
             self._update_stability_tracking(
@@ -470,7 +469,7 @@ class SimulatorService:
                 db,
                 patient=patient,
                 patient_data=patient_data,
-                alert_stats=alert_stats,
+                has_abnormal_vitals=has_abnormal_vitals,
                 current_state=state,
                 event_time=recorded_at,
                 allow_discharge=False,
@@ -523,6 +522,7 @@ class SimulatorService:
             patient_data=patient_data,
             recorded_at=event_time,
         )
+        has_abnormal_vitals = self._has_abnormal_vitals(vitals)
         self._record_outcome_evaluation(patient_data, recorded_at=event_time, alert_stats=alert_stats)
         self._update_stability_tracking(
             patient_data=patient_data,
@@ -534,7 +534,7 @@ class SimulatorService:
             db,
             patient=patient,
             patient_data=patient_data,
-            alert_stats=alert_stats,
+            has_abnormal_vitals=has_abnormal_vitals,
             current_state=new_state,
             event_time=event_time,
             allow_discharge=True,
@@ -649,11 +649,11 @@ class SimulatorService:
         admission_date = patient_data.get("admission_date")
 
         if not is_patient_discharge_eligible(
-            now=event_time,
-            admission_date=admission_date,
-            outcome_history=outcome_history,
-            has_incoming_activities=has_pending,
-            patient_state=current_state,
+                now=event_time,
+                admission_date=admission_date,
+                outcome_history=outcome_history,
+                has_incoming_activities=has_pending,
+                patient_state=current_state,
         ):
             return
 
@@ -705,16 +705,16 @@ class SimulatorService:
         )
 
     def _create_alerts(
-        self,
-        db,
-        patient_id: int,
-        vital_id: int,
-        vitals: dict,
-        *,
-        patient_data: dict,
-        recorded_at: datetime,
-        emit_events: bool = True,
-        include_buffer: bool = True,
+            self,
+            db,
+            patient_id: int,
+            vital_id: int,
+            vitals: dict,
+            *,
+            patient_data: dict,
+            recorded_at: datetime,
+            emit_events: bool = True,
+            include_buffer: bool = True,
     ) -> dict:
         patient = self.repository.get_patient(db, patient_id)
         if patient is None or getattr(patient, "id", None) is None:
@@ -892,12 +892,12 @@ class SimulatorService:
         }
 
     def _build_medication_plan(
-        self,
-        *,
-        drugs: list[dict],
-        condition_name: str,
-        is_pregnant: bool,
-        preferred_medication: str | None,
+            self,
+            *,
+            drugs: list[dict],
+            condition_name: str,
+            is_pregnant: bool,
+            preferred_medication: str | None,
     ) -> list[str]:
         allowed_categories = {"A", "B"} if is_pregnant else {"A", "B", "C", "D", "N"}
         condition_key = (condition_name or "").strip().lower()
@@ -973,26 +973,23 @@ class SimulatorService:
     def _increase_frequency(frequency: str) -> str:
         text = (frequency or "").strip()
         if not text:
-            return "Every 12 hours"
-
-        normalized = text.lower().replace(" ", "")
-        if normalized.startswith("every") and normalized.endswith("h"):
-            hours_text = normalized[5:-1]
-            if hours_text.isdigit():
-                hours = max(4, int(hours_text))
-                if hours > 4:
-                    return f"Every {max(4, hours - 4)}h"
-                return "Every 4h"
+            return "once daily"
 
         mapped = {
-            "daily": "Every 12h",
-            "every 24h": "Every 12h",
-            "every 12h": "Every 8h",
-            "every 8h": "Every 6h",
-            "every 6h": "Every 4h",
-            "weekly": "Daily",
+            "once daily": "twice daily",
+            "daily": "twice daily",
+            "every 24h": "twice daily",
+            "every 24 hours": "twice daily",
+            "twice daily": "every 8 hours",
+            "every 12h": "every 8 hours",
+            "every 12 hours": "every 8 hours",
+            "every 8h": "every 6 hours",
+            "every 8 hours": "every 6 hours",
+            "every 6h": "every 4 hours",
+            "every 6 hours": "every 4 hours",
+            "weekly": "once daily",
         }
-        return mapped.get(text.lower(), f"{text} (increased)")
+        return mapped.get(text.lower(), text)
 
     def _plan_medication_adjustment(self, *, dosage: str, frequency: str) -> tuple[str, str]:
         if random.random() < 0.5:
@@ -1047,23 +1044,21 @@ class SimulatorService:
         patient_data["stability_started_at"] = None
 
     def _update_treatment_lifecycle(
-        self,
-        db,
-        *,
-        patient,
-        patient_data: dict,
-        alert_stats: dict,
-        current_state: str,
-        event_time: datetime,
-        allow_discharge: bool,
+            self,
+            db,
+            *,
+            patient,
+            patient_data: dict,
+            has_abnormal_vitals: bool,
+            current_state: str,
+            event_time: datetime,
+            allow_discharge: bool,
     ) -> bool:
         treatment = patient_data.get("treatment_state")
         if not isinstance(treatment, dict):
             return False
 
-        has_high_or_critical = bool(alert_stats.get("high_or_critical_count"))
-
-        if treatment.get("active_medication_name") is None and has_high_or_critical:
+        if treatment.get("active_medication_name") is None and has_abnormal_vitals:
             started = self._start_treatment(
                 db,
                 patient=patient,
@@ -1082,12 +1077,12 @@ class SimulatorService:
             return False
 
         treatment["cycles_on_medication"] = int(treatment.get("cycles_on_medication", 0)) + 1
-        if has_high_or_critical:
+        if has_abnormal_vitals:
             treatment["abnormal_cycles_on_medication"] = int(treatment.get("abnormal_cycles_on_medication", 0)) + 1
         else:
             treatment["normal_cycles_on_medication"] = int(treatment.get("normal_cycles_on_medication", 0)) + 1
 
-        if current_state == "stable" and not has_high_or_critical:
+        if current_state == "stable" and not has_abnormal_vitals:
             treatment["status"] = "effective"
 
         cycles_on_medication = int(treatment.get("cycles_on_medication", 0))
@@ -1152,16 +1147,24 @@ class SimulatorService:
 
         return False
 
+    @staticmethod
+    def _has_abnormal_vitals(vitals: dict) -> bool:
+        return (
+                vitals["heart_rate"] > 120
+                or vitals["oxygen_saturation"] < 90
+                or vitals["temperature"] > 38
+        )
+
     def _start_treatment(
-        self,
-        db,
-        *,
-        patient,
-        patient_data: dict,
-        medication_index: int,
-        event_time: datetime,
-        doctor_id: int | None = None,
-        escalation_note: str | None = None,
+            self,
+            db,
+            *,
+            patient,
+            patient_data: dict,
+            medication_index: int,
+            event_time: datetime,
+            doctor_id: int | None = None,
+            escalation_note: str | None = None,
     ) -> bool:
         treatment = patient_data.get("treatment_state")
         if not isinstance(treatment, dict):
@@ -1209,6 +1212,7 @@ class SimulatorService:
             db,
             patient_id=patient.id,
             name=medication_name,
+            event_time=event_time,
         )
         if existing_same_medication is not None:
             next_dosage, next_frequency = self._plan_medication_adjustment(
@@ -1250,6 +1254,7 @@ class SimulatorService:
                     db,
                     patient_id=patient.id,
                     name=medication_name,
+                    event_time=event_time,
                 )
                 if latest is not None:
                     self.repository.update_patient_medication_plan(
@@ -1269,15 +1274,15 @@ class SimulatorService:
         return True
 
     def _adjust_existing_treatment(
-        self,
-        db,
-        *,
-        patient,
-        patient_data: dict,
-        doctor_id: int,
-        event_time: datetime,
-        next_dosage: str,
-        next_frequency: str,
+            self,
+            db,
+            *,
+            patient,
+            patient_data: dict,
+            doctor_id: int,
+            event_time: datetime,
+            next_dosage: str,
+            next_frequency: str,
     ) -> bool:
         treatment = patient_data.get("treatment_state") or {}
         active_medication = str(treatment.get("active_medication_name") or "").strip()
@@ -1293,6 +1298,7 @@ class SimulatorService:
             db,
             patient_id=patient.id,
             name=active_medication,
+            event_time=event_time,
         )
         if latest is not None:
             self.repository.update_patient_medication_plan(
@@ -1339,13 +1345,13 @@ class SimulatorService:
         return f"{doctor.last_name} {doctor.first_name}".strip()
 
     def _build_effect_profile(
-        self,
-        *,
-        patient_id: int,
-        condition_name: str,
-        medication_name: str,
-        line_index: int,
-        current_severity: float,
+            self,
+            *,
+            patient_id: int,
+            condition_name: str,
+            medication_name: str,
+            line_index: int,
+            current_severity: float,
     ) -> dict:
         line_penalty = min(0.24, line_index * 0.06)
         severity_penalty = min(0.18, max(0.0, (current_severity - 50.0) / 220.0))
@@ -1515,7 +1521,7 @@ class SimulatorService:
         key = "|".join(str(part) for part in parts)
         digest = hashlib.sha256(key.encode("utf-8")).digest()
         value = int.from_bytes(digest[:8], "big")
-        return value / float(2**64 - 1)
+        return value / float(2 ** 64 - 1)
 
     @classmethod
     def _deterministic_centered_value(cls, *parts: object, amplitude: float) -> float:
@@ -1538,15 +1544,15 @@ class SimulatorService:
         )
 
     def _maybe_generate_random_activity(
-        self,
-        db,
-        *,
-        patient_id: int,
-        patient_department: str,
-        source_condition: str | None,
-        source_diagnosis: str | None,
-        activities_created_in_cycle: set[int],
-        reference_time: datetime,
+            self,
+            db,
+            *,
+            patient_id: int,
+            patient_department: str,
+            source_condition: str | None,
+            source_diagnosis: str | None,
+            activities_created_in_cycle: set[int],
+            reference_time: datetime,
     ) -> None:
         if not self._can_create_patient_activity(db, patient_id, activities_created_in_cycle):
             return

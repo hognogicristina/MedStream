@@ -145,8 +145,13 @@ export function getDepartments() {
   return api.get("/departments")
 }
 
-export function getVitals() {
-  return api.get("/vitals")
+export function getVitals(patientId, limit = 100) {
+  return api.get("/vitals", {
+    params: {
+      patient_id: patientId,
+      limit,
+    },
+  })
 }
 
 export function getBatchMetrics() {

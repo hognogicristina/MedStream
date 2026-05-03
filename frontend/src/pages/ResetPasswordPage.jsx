@@ -1,6 +1,6 @@
 import {useMemo, useState} from "react"
 import {Link, useNavigate, useSearchParams} from "react-router-dom"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {resetPassword} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 
@@ -69,7 +69,7 @@ export default function ResetPasswordPage() {
           </aside>
 
           <div className="auth-divider" aria-hidden="true"/>
-          <div className="hidden lg:block w-px bg-[#2a3441] mx-6" />
+          <div className="hidden lg:block w-px bg-[#2a3441] mx-6"/>
 
           <div className="login-panel">
             <div className="login-header">

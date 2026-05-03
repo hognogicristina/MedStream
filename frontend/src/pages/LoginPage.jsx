@@ -2,7 +2,7 @@ import {Link} from "react-router-dom"
 import {useEffect, useRef, useState} from "react"
 import {useLocation, useNavigate, useSearchParams} from "react-router-dom"
 import {useAuth} from "../components/AuthContext.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {loginDoctor} from "../services/authApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 
@@ -75,7 +75,8 @@ export default function LoginPage() {
               </Link>
             </div>
             <h1 className="login-title">{"Doctor Access"}</h1>
-            <p className="login-subtitle">{"Authenticate into the operations console to monitor vitals, review alerts, and manage patient workflows."}</p>
+            <p
+              className="login-subtitle">{"Authenticate into the operations console to monitor vitals, review alerts, and manage patient workflows."}</p>
             <div className="auth-metrics">
               <div className="auth-metric">
                 <p className="auth-metric-label">Workspace</p>

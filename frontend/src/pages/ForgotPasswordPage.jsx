@@ -1,6 +1,6 @@
 import {useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {requestPasswordReset} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 
@@ -53,13 +53,14 @@ export default function ForgotPasswordPage() {
               <div className="auth-metric">
                 <p className="auth-metric-label">Scalable</p>
                 <p className="auth-metric-value">Built to Grow</p>
-                <p className="auth-metric-copy">The system is designed to handle increasing numbers of patients and data streams effortlessly.</p>
+                <p className="auth-metric-copy">The system is designed to handle increasing numbers of patients and data streams
+                  effortlessly.</p>
               </div>
             </div>
           </aside>
 
           <div className="auth-divider" aria-hidden="true"/>
-          <div className="hidden lg:block w-px bg-[#2a3441] mx-6" />
+          <div className="hidden lg:block w-px bg-[#2a3441] mx-6"/>
 
           <div className="login-panel">
             <div className="login-header">

@@ -202,7 +202,7 @@ export default function DepartmentTransferDialog({
                 </div>
               )}
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 type="submit"

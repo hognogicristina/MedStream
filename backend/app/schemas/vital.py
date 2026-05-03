@@ -17,3 +17,10 @@ class VitalRead(VitalCreate):
     recorded_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class VitalTimelineRead(BaseModel):
+    recorded_at: datetime
+    heart_rate: int
+    oxygen_saturation: int
+    temperature: int

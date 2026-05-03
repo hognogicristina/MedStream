@@ -41,13 +41,13 @@ export function NotificationProvider({children}) {
   }, [])
 
   const showNotification = useCallback(({
-    message,
-    type = "success",
-    duration = DEFAULT_NOTIFICATION_DURATION,
-    actionLabel = "",
-    onAction = null,
-    dedupeKey = "",
-  }) => {
+                                          message,
+                                          type = "success",
+                                          duration = DEFAULT_NOTIFICATION_DURATION,
+                                          actionLabel = "",
+                                          onAction = null,
+                                          dedupeKey = "",
+                                        }) => {
     if (!message) {
       return
     }

@@ -73,11 +73,11 @@ class BatchStatusStore:
         with self._lock:
             snapshot = dict(self._status)
             for key in (
-                "last_run_started_at",
-                "last_successful_run_at",
-                "last_run_finished_at",
-                "next_run_estimate",
-                "last_run",
+                    "last_run_started_at",
+                    "last_successful_run_at",
+                    "last_run_finished_at",
+                    "next_run_estimate",
+                    "last_run",
             ):
                 snapshot[key] = to_utc(snapshot.get(key))
 

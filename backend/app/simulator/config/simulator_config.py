@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 BATCH_INTERVAL_SECONDS = 30
 
 

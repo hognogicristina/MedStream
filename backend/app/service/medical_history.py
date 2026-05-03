@@ -42,6 +42,7 @@ def load_csv_column(filename, index):
         return medical_repository.get_all_frequencies()
     raise ValueError(f"Unsupported medical history dataset: {filename}")
 
+
 __all__ = [
     "ACTIVITY_TYPES",
     "ALLERGIES",

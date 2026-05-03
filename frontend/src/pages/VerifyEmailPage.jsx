@@ -3,7 +3,7 @@ import {Link, useNavigate, useSearchParams} from "react-router-dom"
 import {resendVerificationEmail, verifyEmailToken} from "../services/authApi.js"
 import {getErrorMessage} from "../services/apiMessages.js"
 import {VERIFICATION_LINK_EXPIRED_MESSAGE} from "../services/appMessages.js"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 
 export default function VerifyEmailPage() {
   const navigate = useNavigate()

@@ -11,12 +11,12 @@ from app.utils.datetime import now_utc
 
 class BatchService:
     def __init__(
-        self,
-        *,
-        config: SimulatorConfig,
-        buffers: SimulatorBuffers,
-        repository: SimulatorRepository,
-        producer: SimulatorKafkaProducer,
+            self,
+            *,
+            config: SimulatorConfig,
+            buffers: SimulatorBuffers,
+            repository: SimulatorRepository,
+            producer: SimulatorKafkaProducer,
     ):
         self.config = config
         self.buffers = buffers

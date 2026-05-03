@@ -10,11 +10,11 @@ export function getCountyOptions() {
 
 export function getCityOptions(countyName) {
   if (!countyName) return []
-  
+
   const state = State.getStatesOfCountry("RO").find(
     s => s.name === countyName || s.name.replace(/ County/g, "") === countyName || s.isoCode === countyName
   )
-  
+
   if (!state) return []
 
   const cities = City.getCitiesOfState("RO", state.isoCode)

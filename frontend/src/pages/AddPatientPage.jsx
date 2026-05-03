@@ -1,6 +1,6 @@
 import {useEffect, useState} from "react"
 import BackButton from "../components/BackButton.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {Link, useNavigate} from "react-router-dom"
 import {createPatient} from "../services/patientApi.js"
@@ -52,11 +52,11 @@ export default function AddPatientPage() {
   const handleChange = (event) => {
     const {name, value} = event.target
     setForm((prev) => {
-      const updates = { [name]: name === "is_pregnant" ? value === "true" : value }
+      const updates = {[name]: name === "is_pregnant" ? value === "true" : value}
       if (name === "gender" && value === "male") {
         updates.is_pregnant = false
       }
-      return { ...prev, ...updates }
+      return {...prev, ...updates}
     })
   }
 

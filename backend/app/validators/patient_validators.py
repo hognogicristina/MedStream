@@ -123,11 +123,11 @@ def validate_patient_editable(patient: Patient) -> None:
 
 
 def validate_patient_identity_uniqueness(
-    db: Session,
-    *,
-    cnp: str | None = None,
-    phone_number: str | None = None,
-    patient_id: int | None = None,
+        db: Session,
+        *,
+        cnp: str | None = None,
+        phone_number: str | None = None,
+        patient_id: int | None = None,
 ) -> None:
     if cnp:
         cnp_query = select(Patient).where(Patient.cnp == cnp)

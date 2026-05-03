@@ -1,7 +1,7 @@
 import {useEffect, useState} from "react"
 import BackButton from "../components/BackButton.jsx"
 import CountValue from "../components/CountValue.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {Link, useParams} from "react-router-dom"
 import DataTable from "../components/DataTable.jsx"
 import {getAlerts, getBatchStatusStats, getDepartments, getStats, listPatients} from "../services/patientApi.js"

@@ -6,7 +6,7 @@ import DepartmentTransferDialog from "../components/DepartmentTransferDialog.jsx
 import EditPatientDialog from "../components/EditPatientDialog.jsx"
 import VitalsChart from "../components/VitalsChart.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {
   getBatchMetrics,
   getPatient,
@@ -189,11 +189,8 @@ export default function PatientPage() {
   useEffect(() => {
     const loadPatientVitals = async () => {
       try {
-        const vitalsResponse = await getVitals()
-        const allVitals = getResponseData(vitalsResponse) || []
-        const patientVitals = allVitals
-          .filter((vital) => String(vital.patient_id) === id)
-          .slice(0, MAX_VITAL_POINTS)
+        const vitalsResponse = await getVitals(id, MAX_VITAL_POINTS)
+        const patientVitals = (getResponseData(vitalsResponse) || [])
           .map((vital) => ({
             ...vital,
             recorded_at: vital.recorded_at || new Date().toISOString(),
@@ -402,15 +399,12 @@ export default function PatientPage() {
   const patientCounty = patient?.address?.county || "--"
   const chartData = useMemo(
     () => [...vitals]
-      .slice(0, MAX_VITAL_POINTS)
       .reverse()
       .map((vital) => ({
         time: formatDateTime(vital.recorded_at),
         heart_rate: vital.heart_rate,
         oxygen_saturation: vital.oxygen_saturation,
         temperature: vital.temperature,
-        systolic_bp: vital.systolic_bp,
-        diastolic_bp: vital.diastolic_bp,
       })),
     [vitals],
   )
