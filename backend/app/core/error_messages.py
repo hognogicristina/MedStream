@@ -92,6 +92,7 @@ ERROR_MESSAGES = {
     "ACTIVITY_PATIENT_DOCTOR_DEPARTMENT_MISMATCH": "Patients must belong to the current doctor's department.",
     "ACTIVITY_DISCHARGED_PATIENT_MODIFY_FORBIDDEN": "Discharged patients cannot have activities modified.",
     "ACTIVITY_MODIFIER_FORBIDDEN": "Only assigned doctors can modify this activity.",
+    "COMPLETED_ACTIVITY_EDIT_FORBIDDEN": "Completed activities cannot be edited or canceled.",
 }
 
 

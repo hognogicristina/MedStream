@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from pydantic import BaseModel
+from typing import Literal
 
 
 class PatientSearchResultRead(BaseModel):
@@ -21,6 +22,7 @@ class TreatmentMedicationRead(BaseModel):
     dosage: str
     frequency: str
     prescribed_at: datetime
+    updated_at: datetime | None = None
     notes: str | None = None
     last_updated_note: str | None = None
     modified_by: str | None = None
@@ -36,8 +38,17 @@ class TreatmentDiagnosisRead(BaseModel):
 
 
 class TreatmentAlertRead(BaseModel):
+    class StatusVitalsRead(BaseModel):
+        heartRate: float | None = None
+        oxygen: float | None = None
+        temperature: float | None = None
+
     id: int
     alert_type: str
+    type: Literal["heart_rate", "oxygen_saturation", "temperature", "status"] | None = None
+    value: float | None = None
+    unit: str | None = None
+    vitals: StatusVitalsRead | None = None
     message: str
     severity: str
     created_at: datetime

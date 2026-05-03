@@ -21,3 +21,4 @@ class PatientConditionAssignment(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     diagnosed_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)

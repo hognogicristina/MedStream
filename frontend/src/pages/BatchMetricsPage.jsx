@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from "react"
-import {Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
+import {Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {
   getBatchInsights,
   getBatchMetrics,
@@ -45,6 +45,11 @@ const EMPTY_SCHEDULE = {
   interval_seconds: 30,
 }
 
+const TREATMENT_CATEGORY_DESCRIPTION = {
+  Effective: "Patients whose condition improved or remained clinically stable after treatment.",
+  Ineffective: "Patients whose condition showed no improvement or worsened after treatment.",
+}
+
 function formatBatchTimestamp(value) {
   if (!value) {
     return "No batch run yet"
@@ -67,6 +72,32 @@ function MetricTile({label, value}) {
     <div className="monitor-panel rounded-2xl px-4 py-3">
       <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">{label}</p>
       <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+    </div>
+  )
+}
+
+function SimpleCasesTooltip({active, payload}) {
+  if (!active || !Array.isArray(payload) || !payload.length) {
+    return null
+  }
+
+  const row = payload[0]?.payload || {}
+  const label = String(row.label || row.name || "")
+  const value = Number.isFinite(Number(row.count)) ? row.count : (row.rawValue ?? row.value ?? 0)
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#111827",
+        border: "1px solid #334155",
+        borderRadius: "12px",
+        color: "#fff",
+        padding: "8px 10px",
+        fontSize: "12px",
+        fontWeight: 600,
+      }}
+    >
+      {label}: {value}
     </div>
   )
 }
@@ -405,11 +436,13 @@ export default function BatchMetricsPage() {
       label: "Effective",
       count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.effective : 0,
       fill: "#22c55e",
+      description: TREATMENT_CATEGORY_DESCRIPTION.Effective,
     },
     {
       label: "Ineffective",
       count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.ineffective : 0,
       fill: "#ef4444",
+      description: TREATMENT_CATEGORY_DESCRIPTION.Ineffective,
     },
   ]
 
@@ -788,7 +821,7 @@ export default function BatchMetricsPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Treatment Analysis</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Treatment Effectiveness</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Treatment Effectiveness (cases)</h2>
             </div>
             {treatmentMode === "medication" && selectedMedication ? (
               <button
@@ -830,6 +863,23 @@ export default function BatchMetricsPage() {
 
           {treatmentMode === "medication" ? (
             <div className="mt-6 space-y-5">
+              <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+                <p className="text-sm font-semibold text-white">What this chart measures</p>
+                <p className="mt-2 text-sm text-[#b6bec9]">
+                  The chart shows treatment outcomes for the selected medication across all recorded treatment instances.
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {medicationBarData.map((item) => (
+                    <div key={`explain-${item.label}`} className="rounded-lg border border-[#2a3441] bg-[#151b22] px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{color: item.fill}}>
+                        {item.label}: {item.count}
+                      </p>
+                      <p className="mt-1 text-xs text-[#b6bec9]">{item.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="monitor-panel rounded-2xl p-4">
                 <label htmlFor="medication-select" className="text-xs uppercase tracking-[0.2em] text-[#879196]">
                   Select medication
@@ -855,17 +905,9 @@ export default function BatchMetricsPage() {
                     <CartesianGrid stroke="#1f2937" strokeDasharray="3 3"/>
                     <XAxis dataKey="label" stroke="#879196" tick={{fontSize: 11}}/>
                     <YAxis allowDecimals={false} stroke="#879196" tick={{fontSize: 11}}/>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#111827",
-                        border: "1px solid #334155",
-                        borderRadius: "12px",
-                        color: "#fff",
-                      }}
-                      labelStyle={{color: "#ffffff"}}
-                      itemStyle={{color: "#ffffff"}}
-                    />
+                    <Tooltip content={<SimpleCasesTooltip/>}/>
                     <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                      <LabelList dataKey="count" position="top" fill="#d5dbdb" fontSize={12}/>
                       {medicationBarData.map((item) => (
                         <Cell key={item.label} fill={item.fill}/>
                       ))}
@@ -873,17 +915,15 @@ export default function BatchMetricsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <p className="mt-3 text-center text-sm text-[#b6bec9]">
-                This chart shows how effective the selected medication has been across all treated patients. The count
-                represents how many treatment instances resulted in an effective or ineffective outcome.
-              </p>
-              <p className="mt-2 text-center text-xs text-[#879196]">
-                Effective treatments indicate improvement or stabilization in patient condition, while ineffective
-                treatments indicate no improvement or worsening after medication.
-              </p>
             </div>
           ) : (
             <div className="mt-6 rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
+              <div className="mb-3 rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+                <p className="text-sm font-semibold text-white">What this chart measures</p>
+                <p className="mt-2 text-sm text-[#b6bec9]">
+                  This chart summarizes treatment outcomes across all medications and patients in the selected batch window.
+                </p>
+              </div>
               <div className="h-[300px]">
                 {totalTreatments > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -904,13 +944,7 @@ export default function BatchMetricsPage() {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#111827",
-                          border: "1px solid #334155",
-                          borderRadius: "12px",
-                          color: "#fff",
-                        }}
-                        formatter={(_value, _name, payload) => [payload?.payload?.rawValue ?? 0, payload?.payload?.name || ""]}
+                        content={<SimpleCasesTooltip/>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -923,17 +957,13 @@ export default function BatchMetricsPage() {
               <div className="mt-3 flex items-center justify-center gap-5 text-sm text-[#b6bec9]">
                 <span className="inline-flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]"/>
-                  Effective
+                  Effective: {treatmentEffectiveness.effective}
                 </span>
                 <span className="inline-flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#ef4444]"/>
-                  Ineffective
+                  Ineffective: {treatmentEffectiveness.ineffective}
                 </span>
               </div>
-              <p className="mt-3 text-center text-sm text-[#b6bec9]">
-                Effective treatments represent cases where patient conditions improved or stabilized.
-                Ineffective treatments represent cases where conditions did not improve or worsened.
-              </p>
             </div>
           )}
         </section>

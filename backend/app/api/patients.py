@@ -79,6 +79,7 @@ def serialize_condition_rows(rows):
                     "status": assignment.status,
                     "notes": assignment.notes,
                     "diagnosed_at": assignment.diagnosed_at,
+                    "updated_at": assignment.updated_at,
                 }
             ).model_dump(mode="json")
         )

@@ -392,7 +392,7 @@ export default function ProfilePage() {
   }
 
   const handleActivityEdit = (activity) => {
-    if (activity.status === "canceled") {
+    if (activity.status === "canceled" || activity.status === "completed") {
       return
     }
 
@@ -403,6 +403,9 @@ export default function ProfilePage() {
 
   const handleCancelActivity = async () => {
     if (!doctor || !activityPendingCancellation || isSubmittingActivity) {
+      return
+    }
+    if (activityPendingCancellation.status === "completed") {
       return
     }
 
@@ -793,7 +796,12 @@ export default function ProfilePage() {
                   emptyMessage="No future activities are scheduled for this doctor."
                   isLoading={isLoading}
                   loadingMessage="Loading doctor activities..."
-                  onCancel={(activity) => setActivityPendingCancellation(activity)}
+                  onCancel={(activity) => {
+                    if (activity.status === "completed") {
+                      return
+                    }
+                    setActivityPendingCancellation(activity)
+                  }}
                   onEdit={handleActivityEdit}
                 />
                 {totalActivityPages > 1 && (
@@ -988,7 +996,7 @@ export default function ProfilePage() {
                         disabled={isResendingVerification}
                         className="rounded-2xl border border-[#facc15] bg-[#facc15] px-5 py-3 text-sm font-semibold text-[#1f2937] transition hover:border-[#eab308] hover:bg-[#eab308] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
                       >
-                        {isResendingVerification ? "Resending..." : "Resend Verification Email"}
+                        {isResendingVerification ? "Resending..." : "Resend Email"}
                       </button>
                     )}
                     <button

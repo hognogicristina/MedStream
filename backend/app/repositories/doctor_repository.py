@@ -191,6 +191,8 @@ class DoctorRepository:
                 raise NotFoundError("ACTIVITY_NOT_FOUND")
 
             ensure_activity_modifier(activity, doctor_id)
+            if activity.status == "completed":
+                raise ValidationError("COMPLETED_ACTIVITY_EDIT_FORBIDDEN")
 
             updated_fields = []
 

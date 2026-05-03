@@ -66,6 +66,40 @@ const ALERT_COLOR_BY_SEVERITY = {
   High: "#f97316",
   Normal: "#3b82f6",
 }
+const ALERT_TYPE_SHORT_LABEL = {
+  heart_rate: "HR",
+  oxygen_saturation: "O2",
+  temperature: "Temp",
+}
+
+function AlertDistributionTooltip({active, payload, fullAlerts = [], patientId}) {
+  if (!active || !Array.isArray(payload) || !payload.length) {
+    return null
+  }
+
+  const row = payload[0]?.payload || {}
+  const label = String(row.name || "")
+  const count = Number(row.count || 0)
+  const severity = label.toLowerCase()
+
+  const uniqueTypes = [...new Set(
+    fullAlerts
+      .filter((alert) => String(alert.patient_id) === String(patientId))
+      .filter((alert) => String(alert.severity || "").trim().toLowerCase() === severity)
+      .map((alert) => String(alert.type || alert.alert_type || "").trim().toLowerCase())
+      .filter(Boolean),
+  )]
+
+  const typeLabels = uniqueTypes.map((type) => ALERT_TYPE_SHORT_LABEL[type] || type)
+  const typesText = typeLabels.length ? typeLabels.join(", ") : "--"
+
+  return (
+    <div className="rounded-xl border border-[#4b5563] bg-[#0b1118] px-3 py-2 shadow-lg">
+      <p className="text-base font-bold text-white">{label}: {count}</p>
+      <p className="mt-1 text-sm font-medium text-[#d1d5db]">Types: {typesText}</p>
+    </div>
+  )
+}
 
 export default function PatientPage() {
   const {notifyError, notifySuccess} = useNotifications()
@@ -249,10 +283,8 @@ export default function PatientPage() {
       if (msg.type === "alert") {
         setAlerts((prev) => {
           const currentAlerts = Array.isArray(prev) ? prev : []
-          const filtered = currentAlerts.filter(
-            (alert) => String(alert.patient_id) === String(id),
-          )
-          return [msg.data, ...filtered].slice(0, 25)
+          const filtered = currentAlerts.filter((alert) => String(alert.patient_id) === String(id))
+          return [msg.data, ...filtered.filter((alert) => alert.id !== msg.data?.id)]
         })
       }
     })
@@ -387,21 +419,12 @@ export default function PatientPage() {
       return []
     }
 
-    const scopedAlerts = alerts.filter(
-      (alert) => String(alert.patient_id) === String(id),
-    )
-
-    const counts = scopedAlerts.reduce((accumulator, alert) => {
-      const severity = String(alert.severity || "").trim().toLowerCase()
-      if (severity === "critical") {
-        accumulator.critical += 1
-      } else if (severity === "high") {
-        accumulator.high += 1
-      } else {
-        accumulator.normal += 1
-      }
-      return accumulator
-    }, {critical: 0, high: 0, normal: 0})
+    const scopedAlerts = alerts.filter((alert) => String(alert.patient_id) === String(id))
+    const counts = {
+      critical: scopedAlerts.filter((alert) => String(alert.severity || "").trim().toLowerCase() === "critical").length,
+      high: scopedAlerts.filter((alert) => String(alert.severity || "").trim().toLowerCase() === "high").length,
+      normal: scopedAlerts.filter((alert) => String(alert.severity || "").trim().toLowerCase() === "normal").length,
+    }
 
     return [
       {name: "Critical", count: counts.critical},
@@ -641,9 +664,7 @@ export default function PatientPage() {
                       <XAxis dataKey="name" stroke="#879196" tick={{fill: "#b6bec9", fontSize: 12}}/>
                       <YAxis allowDecimals={false} stroke="#879196" tick={{fill: "#b6bec9", fontSize: 12}}/>
                       <Tooltip
-                        contentStyle={{backgroundColor: "#0f141a", border: "1px solid #3b424b", borderRadius: 12}}
-                        labelStyle={{color: "#e5e7eb"}}
-                        itemStyle={{color: "#d5dbdb"}}
+                        content={<AlertDistributionTooltip fullAlerts={alerts || []} patientId={id}/>}
                       />
                       <Bar dataKey="count" radius={[8, 8, 0, 0]}>
                         {alertDistributionData.map((entry) => (
