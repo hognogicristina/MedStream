@@ -2,7 +2,7 @@ import {useCallback, useEffect, useState} from "react"
 import {useParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {createPatientDiagnosis, getPatient, getPatientDiagnosis} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 
@@ -116,102 +116,102 @@ export default function PatientDiagnosisPage() {
         </header>
 
         {isLoading ? <LoadingSpinner/> : (
-        <section className="grid gap-6 xl:grid-cols-[0.95fr_1.25fr]">
-          <div className="monitor-card rounded-[28px] p-6">
-            <div className="mb-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Add Diagnosis</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">New Entry</h2>
+          <section className="grid gap-6 xl:grid-cols-[0.95fr_1.25fr]">
+            <div className="monitor-card rounded-[28px] p-6">
+              <div className="mb-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Add Diagnosis</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">New Entry</h2>
+              </div>
+
+              <form className="space-y-4" onSubmit={handleSubmit}>
+                <input
+                  type="text"
+                  name="diagnosis"
+                  value={form.diagnosis}
+                  onChange={handleChange}
+                  placeholder="Diagnosis"
+                  className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                  required
+                />
+
+                <textarea
+                  name="notes"
+                  value={form.notes}
+                  onChange={handleChange}
+                  placeholder="Notes"
+                  className="console-input min-h-28 w-full rounded-2xl px-4 py-3 outline-none"
+                />
+
+                <button
+                  type="submit"
+                  disabled={!form.diagnosis.trim() || isSubmitting}
+                  className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                >
+                  {isSubmitting ? "Saving..." : "Add Diagnosis"}
+                </button>
+              </form>
             </div>
 
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <input
-                type="text"
-                name="diagnosis"
-                value={form.diagnosis}
-                onChange={handleChange}
-                placeholder="Diagnosis"
-                className="console-input w-full rounded-2xl px-4 py-3 outline-none"
-                required
-              />
-
-              <textarea
-                name="notes"
-                value={form.notes}
-                onChange={handleChange}
-                placeholder="Notes"
-                className="console-input min-h-28 w-full rounded-2xl px-4 py-3 outline-none"
-              />
-
-              <button
-                type="submit"
-                disabled={!form.diagnosis.trim() || isSubmitting}
-                className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
-              >
-                {isSubmitting ? "Saving..." : "Add Diagnosis"}
-              </button>
-            </form>
-          </div>
-
-          <div className="monitor-card rounded-[28px] p-6">
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Entries</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Diagnosis Timeline</h2>
-              </div>
-              <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
+            <div className="monitor-card rounded-[28px] p-6">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Entries</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Diagnosis Timeline</h2>
+                </div>
+                <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
                 {diagnosisTotal} total
               </span>
-            </div>
-
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
-                Page {diagnosisPage}
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
-                  onClick={() => setDiagnosisPage((prev) => Math.max(1, prev - 1))}
-                  disabled={diagnosisPage === 1}
-                  type="button"
-                >
-                  Previous
-                </button>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
+                  Page {diagnosisPage}
+                </div>
 
-                <button
-                  className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
-                  onClick={() => setDiagnosisPage((prev) => prev + 1)}
-                  disabled={diagnosisPage >= maxDiagnosisPage}
-                  type="button"
-                >
-                  Next
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
+                    onClick={() => setDiagnosisPage((prev) => Math.max(1, prev - 1))}
+                    disabled={diagnosisPage === 1}
+                    type="button"
+                  >
+                    Previous
+                  </button>
+
+                  <button
+                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
+                    onClick={() => setDiagnosisPage((prev) => prev + 1)}
+                    disabled={diagnosisPage >= maxDiagnosisPage}
+                    type="button"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <ul className="space-y-3">
-              {diagnosisEntries.length === 0 && (
-                <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                  {isLoading ? "Loading diagnosis entries..." : "No diagnosis entries recorded for this patient."}
-                </li>
-              )}
+              <ul className="space-y-3">
+                {diagnosisEntries.length === 0 && (
+                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                    {isLoading ? "Loading diagnosis entries..." : "No diagnosis entries recorded for this patient."}
+                  </li>
+                )}
 
-              {diagnosisEntries.map((entry) => (
-                <li key={entry.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-semibold text-white">{entry.diagnosis}</p>
-                      {entry.notes && (
-                        <p className="mt-2 text-sm text-[#c4ccd5]">{entry.notes}</p>
-                      )}
+                {diagnosisEntries.map((entry) => (
+                  <li key={entry.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-white">{entry.diagnosis}</p>
+                        {entry.notes && (
+                          <p className="mt-2 text-sm text-[#c4ccd5]">{entry.notes}</p>
+                        )}
+                      </div>
+                      <span className="text-xs text-[#879196]">{formatDateTime(entry.updated_at || entry.created_at)}</span>
                     </div>
-                    <span className="text-xs text-[#879196]">{formatDateTime(entry.updated_at || entry.created_at)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
         )}
       </div>
     </div>

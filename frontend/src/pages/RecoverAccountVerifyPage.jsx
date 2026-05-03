@@ -2,7 +2,7 @@ import {useEffect, useState} from "react"
 import {Link, useNavigate, useSearchParams} from "react-router-dom"
 import {verifyRecoverAccountToken} from "../services/authApi.js"
 import {getErrorMessage} from "../services/apiMessages.js"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 
 export default function RecoverAccountVerifyPage() {
   const navigate = useNavigate()

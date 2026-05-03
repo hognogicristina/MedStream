@@ -1,6 +1,5 @@
 from app.repositories.patient_repository import PatientRepository
 
-
 _patient_repository = PatientRepository()
 
 

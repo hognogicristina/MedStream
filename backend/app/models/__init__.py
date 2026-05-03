@@ -1,4 +1,4 @@
-from app.models.address.address import Address
+from app.models.address import Address
 from app.models.encounter import Encounter
 from app.models.vital import Vital
 from app.models.alert import Alert

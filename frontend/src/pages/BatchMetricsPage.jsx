@@ -10,7 +10,7 @@ import {
 } from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
@@ -974,11 +974,13 @@ export default function BatchMetricsPage() {
 
           <div className="mt-4 space-y-4 text-sm text-[#b6bec9] leading-6">
             <p>
-              This page represents the batch processing layer of the system. Data is collected over time and processed in intervals rather than instantly.
+              This page represents the batch processing layer of the system. Data is collected over time and processed in intervals rather
+              than instantly.
             </p>
 
             <p>
-              Instead of reacting to each event individually, batch processing aggregates data across multiple patients and time windows to generate more stable and reliable insights.
+              Instead of reacting to each event individually, batch processing aggregates data across multiple patients and time windows to
+              generate more stable and reliable insights.
             </p>
 
             <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
@@ -1023,7 +1025,8 @@ export default function BatchMetricsPage() {
             </div>
 
             <p>
-              This layer complements streaming processing: batch provides accuracy and deeper insights, while streaming provides speed and real-time visibility.
+              This layer complements streaming processing: batch provides accuracy and deeper insights, while streaming provides speed and
+              real-time visibility.
             </p>
           </div>
         </section>

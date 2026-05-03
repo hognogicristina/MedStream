@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 
 from app.core.errors import ValidationError
 from app.db.session import SessionLocal
-from app.models.address.address import Address
+from app.models.address import Address
 from app.models.alert import Alert
 from app.models.doctor.doctor import Doctor
 from app.models.doctor.doctor_activity import DoctorActivity
@@ -115,14 +115,14 @@ class SimulatorRepository:
         assign_doctor_to_patient(db, doctor_id, patient_id)
 
     def create_encounter(
-        self,
-        db,
-        *,
-        patient_id: int,
-        doctor_id: int | None,
-        encounter_type: str,
-        chief_complaint: str,
-        created_at: datetime | None = None,
+            self,
+            db,
+            *,
+            patient_id: int,
+            doctor_id: int | None,
+            encounter_type: str,
+            chief_complaint: str,
+            created_at: datetime | None = None,
     ) -> None:
         db.add(
             Encounter(
@@ -135,15 +135,15 @@ class SimulatorRepository:
         )
 
     def create_admission_history(
-        self,
-        db,
-        *,
-        patient_id: int,
-        doctor_id: int,
-        entry_type: str,
-        reason: str | None,
-        note: str | None,
-        created_at: datetime,
+            self,
+            db,
+            *,
+            patient_id: int,
+            doctor_id: int,
+            entry_type: str,
+            reason: str | None,
+            note: str | None,
+            created_at: datetime,
     ) -> None:
         db.add(
             PatientAdmissionHistory(
@@ -157,17 +157,17 @@ class SimulatorRepository:
         )
 
     def add_doctor_activity(
-        self,
-        db,
-        *,
-        doctor_id: int,
-        patient_id: int,
-        activity_type: str,
-        title: str,
-        description: str,
-        status: str,
-        scheduled_at: datetime | None,
-        created_at: datetime | None = None,
+            self,
+            db,
+            *,
+            doctor_id: int,
+            patient_id: int,
+            activity_type: str,
+            title: str,
+            description: str,
+            status: str,
+            scheduled_at: datetime | None,
+            created_at: datetime | None = None,
     ) -> DoctorActivity | None:
         doctor = db.get(Doctor, doctor_id)
         patient = db.get(Patient, patient_id)
@@ -197,14 +197,14 @@ class SimulatorRepository:
         return activity
 
     def create_patient_diagnosis(
-        self,
-        db,
-        *,
-        patient_id: int,
-        doctor_id: int,
-        diagnosis: str,
-        status: str,
-        created_at: datetime,
+            self,
+            db,
+            *,
+            patient_id: int,
+            doctor_id: int,
+            diagnosis: str,
+            status: str,
+            created_at: datetime,
     ) -> None:
         normalized_status = self._sanitize_diagnosis_status(status)
         db.add(
@@ -239,14 +239,14 @@ class SimulatorRepository:
         return assignment is not None
 
     def create_condition_assignment(
-        self,
-        db,
-        *,
-        patient_id: int,
-        condition_id: int,
-        doctor_id: int,
-        status: str,
-        diagnosed_at: datetime,
+            self,
+            db,
+            *,
+            patient_id: int,
+            condition_id: int,
+            doctor_id: int,
+            status: str,
+            diagnosed_at: datetime,
     ) -> None:
         normalized_status = self._sanitize_condition_status(status)
         db.add(
@@ -261,15 +261,15 @@ class SimulatorRepository:
         )
 
     def create_patient_medication(
-        self,
-        db,
-        *,
-        patient_id: int,
-        doctor_id: int,
-        name: str,
-        dosage: str,
-        frequency: str,
-        created_at: datetime,
+            self,
+            db,
+            *,
+            patient_id: int,
+            doctor_id: int,
+            name: str,
+            dosage: str,
+            frequency: str,
+            created_at: datetime,
     ) -> PatientMedication | None:
         clamped_name = self._clamp_text(name, self.MEDICATION_NAME_MAX_LENGTH)
         clamped_dosage = self._clamp_text(dosage, self.MEDICATION_DOSAGE_MAX_LENGTH)
@@ -310,12 +310,12 @@ class SimulatorRepository:
         ).scalars().all()
 
     def get_latest_medication_by_name(
-        self,
-        db,
-        *,
-        patient_id: int,
-        name: str,
-        event_time: datetime,
+            self,
+            db,
+            *,
+            patient_id: int,
+            name: str,
+            event_time: datetime,
     ) -> PatientMedication | None:
         return db.execute(
             select(PatientMedication)
@@ -328,16 +328,16 @@ class SimulatorRepository:
         ).scalar_one_or_none()
 
     def update_patient_medication_plan(
-        self,
-        db,
-        *,
-        medication: PatientMedication,
-        doctor_id: int,
-        dosage: str,
-        frequency: str,
-        updated_at: datetime,
-        note: str | None = None,
-        notes: str | None = None,
+            self,
+            db,
+            *,
+            medication: PatientMedication,
+            doctor_id: int,
+            dosage: str,
+            frequency: str,
+            updated_at: datetime,
+            note: str | None = None,
+            notes: str | None = None,
     ) -> PatientMedication:
         clamped_dosage = self._clamp_text(dosage, self.MEDICATION_DOSAGE_MAX_LENGTH)
         clamped_frequency = self._clamp_text(frequency, self.MEDICATION_FREQUENCY_MAX_LENGTH)
@@ -352,14 +352,14 @@ class SimulatorRepository:
         return medication
 
     def create_patient_allergy(
-        self,
-        db,
-        *,
-        patient_id: int,
-        doctor_id: int,
-        allergy_name: str,
-        severity: str,
-        created_at: datetime,
+            self,
+            db,
+            *,
+            patient_id: int,
+            doctor_id: int,
+            allergy_name: str,
+            severity: str,
+            created_at: datetime,
     ) -> None:
         db.add(
             PatientAllergy(
@@ -448,15 +448,15 @@ class SimulatorRepository:
         return self.create_vital(db, patient_id, vitals, recorded_at=recorded_at)
 
     def create_alert(
-        self,
-        db,
-        *,
-        patient_id: int,
-        vital_id: int,
-        alert_type: str,
-        message: str,
-        severity: str,
-        created_at: datetime | None = None,
+            self,
+            db,
+            *,
+            patient_id: int,
+            vital_id: int,
+            alert_type: str,
+            message: str,
+            severity: str,
+            created_at: datetime | None = None,
     ) -> Alert | None:
         if patient_id is None:
             return None

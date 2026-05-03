@@ -11,8 +11,8 @@ router = APIRouter(prefix="/vitals", tags=["vitals"])
 
 @router.get("", response_model=ApiResponse[list[VitalTimelineRead]])
 def list_vitals(
-    patient_id: int = Query(..., ge=1),
-    limit: int = Query(default=100, ge=1, le=100),
+        patient_id: int = Query(..., ge=1),
+        limit: int = Query(default=100, ge=1, le=100),
 ):
     with SessionLocal() as db:
         vitals = db.execute(

@@ -21,6 +21,8 @@ from app.validators.metrics_validators import validate_metric_value
 
 WINDOW_MINUTES = 60
 WINDOW_DELTA = timedelta(minutes=WINDOW_MINUTES)
+
+
 def _empty_metrics():
     return {
         "avg_heart_rate": 0.0,

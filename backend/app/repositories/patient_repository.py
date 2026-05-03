@@ -84,7 +84,8 @@ class PatientRepository:
         }
 
     @classmethod
-    def _extract_alert_structured_fields(cls, alert_type: str | None, message: str | None, severity: str | None) -> tuple[str | None, float | None, str | None, dict | None]:
+    def _extract_alert_structured_fields(cls, alert_type: str | None, message: str | None, severity: str | None) -> tuple[
+        str | None, float | None, str | None, dict | None]:
         normalized_type = str(alert_type or "").strip().lower()
         if normalized_type == "oxygen":
             normalized_type = "oxygen_saturation"
@@ -242,11 +243,11 @@ class PatientRepository:
 
     @staticmethod
     def _build_treatment_reasoning_payload(
-        *,
-        medication: PatientMedication,
-        alerts: list[Alert],
-        diagnosis_labels: list[str],
-        condition_labels: list[str],
+            *,
+            medication: PatientMedication,
+            alerts: list[Alert],
+            diagnosis_labels: list[str],
+            condition_labels: list[str],
     ) -> dict:
         medication_time = medication.created_at
         closest_alerts = sorted(
@@ -554,11 +555,11 @@ class PatientRepository:
             return self._load_patient_with_address(db, patient.id)
 
     def transfer_patient_assignment(
-        self,
-        patient_id: int,
-        current_doctor_id: int,
-        from_doctor_id: int,
-        to_doctor_id: int,
+            self,
+            patient_id: int,
+            current_doctor_id: int,
+            from_doctor_id: int,
+            to_doctor_id: int,
     ) -> Patient:
         with SessionLocal() as db:
             patient = db.execute(
@@ -828,13 +829,13 @@ class PatientRepository:
             return diagnosis
 
     def administer_medication(
-        self,
-        patient_id: int,
-        doctor_id: int,
-        name: str,
-        dosage: str,
-        frequency: str,
-        notes: str | None,
+            self,
+            patient_id: int,
+            doctor_id: int,
+            name: str,
+            dosage: str,
+            frequency: str,
+            notes: str | None,
     ) -> PatientMedication:
         with SessionLocal() as db:
             patient = get_patient_or_raise(db, patient_id)
@@ -870,7 +871,8 @@ class PatientRepository:
                 )
             ).scalars().all()
 
-    def update_medication(self, medication_id: int, doctor_id: int, dosage: str | None, frequency: str | None, note: str) -> PatientMedication:
+    def update_medication(self, medication_id: int, doctor_id: int, dosage: str | None, frequency: str | None,
+                          note: str) -> PatientMedication:
         with SessionLocal() as db:
             medication = db.get(PatientMedication, medication_id)
             if medication is None:

@@ -21,14 +21,14 @@ function formatPersonNames(items, prefix = "") {
 }
 
 export default function ActivityList({
-  activities,
-  canManageActivity,
-  emptyMessage,
-  isLoading,
-  loadingMessage,
-  onCancel,
-  onEdit,
-}) {
+                                       activities,
+                                       canManageActivity,
+                                       emptyMessage,
+                                       isLoading,
+                                       loadingMessage,
+                                       onCancel,
+                                       onEdit,
+                                     }) {
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">

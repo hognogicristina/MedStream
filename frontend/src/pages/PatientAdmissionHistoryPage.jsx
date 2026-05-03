@@ -4,7 +4,7 @@ import {Link, useParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import PatientAdmissionActionCard from "../components/PatientAdmissionActionCard.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {usePatientAdmissionActions} from "../hooks/usePatientAdmissionActions.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {getPatient, getPatientAdmissionHistory} from "../services/patientApi.js"
@@ -91,7 +91,8 @@ export default function PatientAdmissionHistoryPage() {
   const patientName = patient ? `${patient.last_name} ${patient.first_name}`.trim() : "Patient"
 
   useEffect(() => {
-    loadDischargeTypes().then(() => {})
+    loadDischargeTypes().then(() => {
+    })
   }, [loadDischargeTypes])
 
   return (
@@ -109,89 +110,89 @@ export default function PatientAdmissionHistoryPage() {
         </header>
 
         {isLoading ? <LoadingSpinner/> : (
-        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
-          <div className="monitor-card rounded-[28px] p-6">
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Timeline</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Admissions and Discharges</h2>
-              </div>
-              <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
+          <section className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
+            <div className="monitor-card rounded-[28px] p-6">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Timeline</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Admissions and Discharges</h2>
+                </div>
+                <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
                 {total} total
               </span>
-            </div>
-
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
-                Page {page}
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={page === 1}
-                  type="button"
-                >
-                  Previous
-                </button>
-                <button
-                  className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
-                  onClick={() => setPage((current) => current + 1)}
-                  disabled={page >= maxPage}
-                  type="button"
-                >
-                  Next
-                </button>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
+                  Page {page}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                    disabled={page === 1}
+                    type="button"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
+                    onClick={() => setPage((current) => current + 1)}
+                    disabled={page >= maxPage}
+                    type="button"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <ul className="space-y-3">
-              {entries.length === 0 && (
-                <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
-                  {isLoading ? "Loading admission history..." : "No admission history recorded for this patient."}
-                </li>
-              )}
+              <ul className="space-y-3">
+                {entries.length === 0 && (
+                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                    {isLoading ? "Loading admission history..." : "No admission history recorded for this patient."}
+                  </li>
+                )}
 
-              {entries.map((entry) => (
-                <li key={entry.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-semibold text-white">{formatAdmissionType(entry.type)}</p>
-                      <p className="mt-2 text-sm text-[#c4ccd5]">{entry.note || entry.reason || "--"}</p>
+                {entries.map((entry) => (
+                  <li key={entry.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-white">{formatAdmissionType(entry.type)}</p>
+                        <p className="mt-2 text-sm text-[#c4ccd5]">{entry.note || entry.reason || "--"}</p>
+                      </div>
+                      <span className="text-xs text-[#879196]">{formatDateTime(entry.created_at)}</span>
                     </div>
-                    <span className="text-xs text-[#879196]">{formatDateTime(entry.created_at)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
 
-            <div className="mt-4">
-              <Link
-                to={`/patient/${id}`}
-                className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
-              >
-                Back to patient page
-              </Link>
+              <div className="mt-4">
+                <Link
+                  to={`/patient/${id}`}
+                  className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
+                >
+                  Back to patient page
+                </Link>
+              </div>
             </div>
-          </div>
 
-          <PatientAdmissionActionCard
-            patient={patient}
-            canManagePatient={Boolean(token)}
-            dischargeReason={admissionActions.dischargeReason}
-            dischargeType={admissionActions.dischargeType}
-            dischargeTypes={admissionActions.dischargeTypes}
-            readmitArrivalMethod={admissionActions.readmitArrivalMethod}
-            onDischargeReasonChange={admissionActions.setDischargeReason}
-            onDischargeTypeChange={admissionActions.setDischargeType}
-            onReadmitArrivalMethodChange={admissionActions.setReadmitArrivalMethod}
-            onDischargeSubmit={admissionActions.handleDischargeSubmit}
-            onReadmitSubmit={admissionActions.handleReadmitSubmit}
-            isSubmittingDischarge={admissionActions.isSubmittingDischarge}
-            isSubmittingReadmit={admissionActions.isSubmittingReadmit}
-          />
-        </section>
+            <PatientAdmissionActionCard
+              patient={patient}
+              canManagePatient={Boolean(token)}
+              dischargeReason={admissionActions.dischargeReason}
+              dischargeType={admissionActions.dischargeType}
+              dischargeTypes={admissionActions.dischargeTypes}
+              readmitArrivalMethod={admissionActions.readmitArrivalMethod}
+              onDischargeReasonChange={admissionActions.setDischargeReason}
+              onDischargeTypeChange={admissionActions.setDischargeType}
+              onReadmitArrivalMethodChange={admissionActions.setReadmitArrivalMethod}
+              onDischargeSubmit={admissionActions.handleDischargeSubmit}
+              onReadmitSubmit={admissionActions.handleReadmitSubmit}
+              isSubmittingDischarge={admissionActions.isSubmittingDischarge}
+              isSubmittingReadmit={admissionActions.isSubmittingReadmit}
+            />
+          </section>
         )}
       </div>
     </div>

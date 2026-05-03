@@ -6,7 +6,7 @@ import DepartmentTransferDialog from "../components/DepartmentTransferDialog.jsx
 import EditPatientDialog from "../components/EditPatientDialog.jsx"
 import VitalsChart from "../components/VitalsChart.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {
   getBatchMetrics,
   getPatient,

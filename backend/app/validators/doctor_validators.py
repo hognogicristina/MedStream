@@ -106,13 +106,13 @@ def validate_doctor_email(value: str) -> str:
 
 
 def validate_doctor_uniqueness(
-    db,
-    doctor_model,
-    *,
-    email: str | None = None,
-    phone_number: str | None = None,
-    license_number: str | None = None,
-    doctor_id: int | None = None,
+        db,
+        doctor_model,
+        *,
+        email: str | None = None,
+        phone_number: str | None = None,
+        license_number: str | None = None,
+        doctor_id: int | None = None,
 ) -> None:
     if email:
         email_query = select(doctor_model).where(or_(doctor_model.email == email, doctor_model.pending_email == email))
@@ -167,7 +167,8 @@ def validate_password_reset_payload(payload) -> tuple[str, str]:
     return token, password
 
 
-def validate_activity_payload(type_value: str, title: str, description: str | None, doctor_ids: list[int]) -> tuple[str, str, str | None, list[int]]:
+def validate_activity_payload(type_value: str, title: str, description: str | None, doctor_ids: list[int]) -> tuple[
+    str, str, str | None, list[int]]:
     normalized_type = require_non_empty(type_value, "Type")
     normalized_title = require_non_empty(title, "Title")
     normalized_description = normalize_optional_text(description)

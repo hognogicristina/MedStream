@@ -28,9 +28,9 @@ def create_warning_flow(reference_time=None) -> dict:
 
 
 def random_activity_probability_for_state(
-    state: str,
-    base_probability: float,
-    multipliers: dict[str, float],
+        state: str,
+        base_probability: float,
+        multipliers: dict[str, float],
 ) -> float:
     multiplier = multipliers.get(state, multipliers.get("monitoring", 0.2))
     return base_probability * multiplier

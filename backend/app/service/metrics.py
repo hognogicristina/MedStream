@@ -18,6 +18,7 @@ def get_batch_insights_service(db, *, departments_page: int, diagnoses_page: int
         page_size=page_size,
     )
 
+
 __all__ = [
     "WINDOW_DELTA",
     "WINDOW_MINUTES",

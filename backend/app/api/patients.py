@@ -213,9 +213,9 @@ def transfer_patient(id: int, payload: PatientTransferRequest, authorization: st
 
 @router.get("/{id}/admission-history", response_model=ApiResponse[PatientAdmissionHistoryPage])
 def get_patient_admission_history(
-    id: int,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(5, ge=1, le=100),
+        id: int,
+        page: int = Query(1, ge=1),
+        page_size: int = Query(5, ge=1, le=100),
 ):
     try:
         entries, total = patient_service.get_patient_admission_history(id, page, page_size)

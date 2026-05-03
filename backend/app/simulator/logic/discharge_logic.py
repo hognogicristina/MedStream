@@ -2,18 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-
 MIN_ADMISSION_DURATION = timedelta(days=3)
 STABILITY_HOURS = 6
 MIN_EFFECTIVE_EVALUATIONS = 5
 
 
 def derive_outcome_from_alert_evolution(
-    *,
-    before_count: int,
-    after_count: int,
-    before_severity_score: int,
-    after_severity_score: int,
+        *,
+        before_count: int,
+        after_count: int,
+        before_severity_score: int,
+        after_severity_score: int,
 ) -> str:
     alerts_decreased = after_count < before_count
     alerts_worsened = after_count > before_count
@@ -42,20 +41,20 @@ def is_stable_window_effective(outcome_history: list[dict], *, now: datetime) ->
 
     time_window_effective = bool(recent_by_time) and all(item.get("outcome") == "effective" for item in recent_by_time)
     count_window_effective = (
-        len(recent_by_count) >= MIN_EFFECTIVE_EVALUATIONS
-        and all(item.get("outcome") == "effective" for item in recent_by_count)
+            len(recent_by_count) >= MIN_EFFECTIVE_EVALUATIONS
+            and all(item.get("outcome") == "effective" for item in recent_by_count)
     )
 
     return time_window_effective or count_window_effective
 
 
 def is_patient_discharge_eligible(
-    *,
-    now: datetime,
-    admission_date: datetime | None,
-    outcome_history: list[dict],
-    has_incoming_activities: bool,
-    patient_state: str,
+        *,
+        now: datetime,
+        admission_date: datetime | None,
+        outcome_history: list[dict],
+        has_incoming_activities: bool,
+        patient_state: str,
 ) -> bool:
     if admission_date is None:
         return False

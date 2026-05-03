@@ -34,10 +34,10 @@ class SimulatorBuffers:
         return self.patient_activity_cooldowns[patient_id]
 
     def can_create_activity_for_patient(
-        self,
-        patient_id: int,
-        incoming_count: int,
-        activities_created_in_cycle: set[int] | None = None,
+            self,
+            patient_id: int,
+            incoming_count: int,
+            activities_created_in_cycle: set[int] | None = None,
     ) -> bool:
         if activities_created_in_cycle is not None and patient_id in activities_created_in_cycle:
             return False

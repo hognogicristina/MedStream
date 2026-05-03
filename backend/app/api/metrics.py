@@ -49,10 +49,10 @@ def get_batch_metrics():
 
 @router.get("/batch-insights", response_model=ApiResponse[BatchInsightsRead])
 def get_batch_insights_endpoint(
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=5, ge=1, le=50),
-    departments_page: int | None = Query(default=None, ge=1),
-    diagnoses_page: int | None = Query(default=None, ge=1),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=5, ge=1, le=50),
+        departments_page: int | None = Query(default=None, ge=1),
+        diagnoses_page: int | None = Query(default=None, ge=1),
 ):
     current_departments_page = departments_page or page
     current_diagnoses_page = diagnoses_page or page
@@ -77,8 +77,8 @@ def get_batch_insights_endpoint(
 
 @router.get("/streaming-alerts", response_model=ApiResponse[PaginatedStreamingAlertsRead])
 def get_streaming_alerts(
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=3, ge=1, le=10),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=3, ge=1, le=10),
 ):
     return success_response(
         "Streaming alerts retrieved successfully.",

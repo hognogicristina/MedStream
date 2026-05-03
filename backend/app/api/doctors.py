@@ -90,10 +90,10 @@ def create_doctor_activity(doctor_id: int, payload: DoctorActivityCreate, author
 
 @router.patch("/{doctor_id}/activities/{activity_id}", response_model=ApiResponse[DoctorActivityRead])
 def update_doctor_activity(
-    doctor_id: int,
-    activity_id: int,
-    payload: DoctorActivityUpdate,
-    authorization: str | None = Header(default=None),
+        doctor_id: int,
+        activity_id: int,
+        payload: DoctorActivityUpdate,
+        authorization: str | None = Header(default=None),
 ):
     current_doctor = get_current_doctor(authorization)
     try:
@@ -116,9 +116,9 @@ def update_current_doctor(payload: DoctorUpdate, authorization: str | None = Hea
 
 @router.patch("/me/email", response_model=ApiResponse[DoctorRead])
 def update_current_doctor_email(
-    payload: DoctorEmailUpdate,
-    background_tasks: BackgroundTasks,
-    authorization: str | None = Header(default=None),
+        payload: DoctorEmailUpdate,
+        background_tasks: BackgroundTasks,
+        authorization: str | None = Header(default=None),
 ):
     current_doctor = get_current_doctor(authorization)
     try:
@@ -273,7 +273,8 @@ def root_login(payload: LoginRequest):
 def register(payload: DoctorCreate):
     try:
         doctor = doctor_service.register_doctor(payload)
-        return success_response("Doctor account created successfully. Please verify your email.", serialize(doctor, DoctorRead), status_code=201)
+        return success_response("Doctor account created successfully. Please verify your email.", serialize(doctor, DoctorRead),
+                                status_code=201)
     except Exception as error:
         raise_http_from_error(error)
 
@@ -290,8 +291,8 @@ def verify_email(token: str | None = Query(default=None)):
 
 @auth_router.post("/auth/resend-verification", response_model=ApiResponse[EmailVerificationResponse])
 def resend_verification_email(
-    authorization: str | None = Header(default=None),
-    token: str | None = Query(default=None),
+        authorization: str | None = Header(default=None),
+        token: str | None = Query(default=None),
 ):
     try:
         current_doctor = get_current_doctor(authorization) if authorization else None

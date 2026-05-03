@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from "react"
 import {useNavigate} from "react-router-dom"
 import CountValue from "../components/CountValue.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {getAlertDashboardSummary, listPatients} from "../services/patientApi.js"
 import {listDoctors} from "../services/doctorApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
@@ -139,7 +139,8 @@ export default function DashboardPage() {
       }
     }
 
-    loadDoctors().then(() => {})
+    loadDoctors().then(() => {
+    })
   }, [])
 
   useEffect(() => {
@@ -268,7 +269,8 @@ export default function DashboardPage() {
               </div>
               <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Alerts</p>
-                <p className="mt-3 text-3xl font-semibold text-[#ffb3bc]"><CountValue tooltipLabel={String(alertCount)} value={alertCount}/></p>
+                <p className="mt-3 text-3xl font-semibold text-[#ffb3bc]"><CountValue tooltipLabel={String(alertCount)} value={alertCount}/>
+                </p>
               </div>
               <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Doctors</p>
@@ -309,10 +311,11 @@ export default function DashboardPage() {
                 <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Current Patient State</p>
                 <p className="mt-2 text-base font-semibold text-white">{currentPatientState}</p>
               </div>
-                <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Active Alerts</p>
-                  <p className="mt-2 text-base font-semibold text-white"><CountValue tooltipLabel={String(alertCount)} value={alertCount}/></p>
-                </div>
+              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Active Alerts</p>
+                <p className="mt-2 text-base font-semibold text-white"><CountValue tooltipLabel={String(alertCount)} value={alertCount}/>
+                </p>
+              </div>
               <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Feed Status</p>
                 <p className="mt-2 text-base font-semibold text-white">{latestVital ? "Connected" : "Waiting for feed"}</p>

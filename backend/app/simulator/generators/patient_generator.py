@@ -5,7 +5,6 @@ from datetime import date
 
 from faker import Faker
 
-
 fake = Faker("ro_RO")
 
 
@@ -95,14 +94,14 @@ def generate_patient_identity(index: int, department: str) -> dict:
 
 
 def generate_patient_profile(
-    *,
-    base_condition: str,
-    diagnosis_seed: str | None,
-    all_conditions: list[str],
-    all_diagnoses: list[str],
-    all_allergies: list[str],
-    dosages: list[str],
-    frequencies: list[str],
+        *,
+        base_condition: str,
+        diagnosis_seed: str | None,
+        all_conditions: list[str],
+        all_diagnoses: list[str],
+        all_allergies: list[str],
+        dosages: list[str],
+        frequencies: list[str],
 ) -> dict:
     target_condition_count = random.randint(2, 5)
     selected_conditions: list[str] = []

@@ -11,7 +11,7 @@ import {
 import {getMetricsComparison} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
@@ -149,41 +149,43 @@ export default function StreamingBatchPage() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <div className="flex flex-col gap-4">
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                title="Download all metrics"
-                aria-label="Download all metrics"
-                className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
-                onClick={() => {
-                  const rows = [
-                    ["Section", "Metric", "Streaming", "Batch", "Difference"],
-                    ["Comparison Snapshot", "Heart Rate", streaming.avg_heart_rate, batch.avg_heart_rate, differences.avg_heart_rate],
-                    ["Comparison Snapshot", "Oxygen", streaming.avg_oxygen, batch.avg_oxygen, differences.avg_oxygen],
-                    ["Comparison Snapshot", "Temperature", streaming.avg_temperature, batch.avg_temperature, differences.avg_temperature],
-                    ["Comparison Snapshot", "Alerts", streaming.alerts, batch.alerts, differences.alerts],
-                    ["Comparison Snapshot", "Execution Time", streaming.execution_time_ms, batch.execution_time_ms, differences.execution_time_ms],
-                    ["Comparison Trend", "Time", "Streaming Avg HR", "Batch Avg HR", ""],
-                    ...history.map((point) => ["Comparison Trend", point.time, point.streaming, point.batch, ""]),
-                  ]
-                  downloadCSV("comparison_all_metrics.csv", rows)
-                }}
-              >
-                <DownloadIcon/>
-              </button>
-              <BackButton fallbackTo="/dashboard"/>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
+                  Demo View
+                </p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  Streaming vs Batch
+                </h1>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  title="Download all metrics"
+                  aria-label="Download all metrics"
+                  className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
+                  onClick={() => {
+                    const rows = [
+                      ["Section", "Metric", "Streaming", "Batch", "Difference"],
+                      ["Comparison Snapshot", "Heart Rate", streaming.avg_heart_rate, batch.avg_heart_rate, differences.avg_heart_rate],
+                      ["Comparison Snapshot", "Oxygen", streaming.avg_oxygen, batch.avg_oxygen, differences.avg_oxygen],
+                      ["Comparison Snapshot", "Temperature", streaming.avg_temperature, batch.avg_temperature, differences.avg_temperature],
+                      ["Comparison Snapshot", "Alerts", streaming.alerts, batch.alerts, differences.alerts],
+                      ["Comparison Snapshot", "Execution Time", streaming.execution_time_ms, batch.execution_time_ms, differences.execution_time_ms],
+                      ["Comparison Trend", "Time", "Streaming Avg HR", "Batch Avg HR", ""],
+                      ...history.map((point) => ["Comparison Trend", point.time, point.streaming, point.batch, ""]),
+                    ]
+                    downloadCSV("comparison_all_metrics.csv", rows)
+                  }}
+                >
+                  <DownloadIcon/>
+                </button>
+                <BackButton fallbackTo="/dashboard"/>
+              </div>
             </div>
 
             <div className="w-full">
-              <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
-                Demo View
-              </p>
-
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                Streaming vs Batch
-              </h1>
-
-              <p className="mt-3 text-[#b6bec9]">
+              <p className="mt-4 text-[#b6bec9]">
                 This view compares real-time streaming data with batch-processed results.
                 Streaming is fast and responsive, while batch is slower but more accurate.
                 This demonstrates the trade-off between speed and accuracy in data processing systems.
@@ -206,87 +208,87 @@ export default function StreamingBatchPage() {
             </section>
 
             <section className="monitor-card rounded-[24px] p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Avg Heart Rate Trend</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Last {history.length} Polls</h2>
-              <p className="mt-2 text-sm text-[#b6bec9]">
-                This chart compares how the average heart rate evolves over time for both processing models.
-                The streaming line reacts instantly to changes, while the batch line changes more gradually,
-                reflecting aggregated data over a time window.
-              </p>
-              <p className="mt-2 text-sm text-[#b6bec9]">
-                The divergence between the two lines represents the inherent trade-off in modern data systems:
-                real-time responsiveness versus statistical stability. This comparison highlights why
-                many production systems adopt a hybrid architecture combining both approaches.
-              </p>
-            </div>
-          </div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Avg Heart Rate Trend</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Last {history.length} Polls</h2>
+                  <p className="mt-2 text-sm text-[#b6bec9]">
+                    This chart compares how the average heart rate evolves over time for both processing models.
+                    The streaming line reacts instantly to changes, while the batch line changes more gradually,
+                    reflecting aggregated data over a time window.
+                  </p>
+                  <p className="mt-2 text-sm text-[#b6bec9]">
+                    The divergence between the two lines represents the inherent trade-off in modern data systems:
+                    real-time responsiveness versus statistical stability. This comparison highlights why
+                    many production systems adopt a hybrid architecture combining both approaches.
+                  </p>
+                </div>
+              </div>
 
-          <div className="mt-6 h-[280px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={history}>
-                <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false}/>
-                <XAxis dataKey="time" stroke="#6b7280" tick={{fontSize: 11}} minTickGap={24}/>
-                <YAxis stroke="#6b7280" tick={{fontSize: 11}} domain={["auto", "auto"]}/>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#0f172a",
-                    border: "1px solid #334155",
-                    borderRadius: "12px",
-                    color: "#fff",
-                  }}
-                />
-                <Line type="monotone" dataKey="streaming" stroke="#f97316" strokeWidth={3} dot={false}/>
-                <Line type="monotone" dataKey="batch" stroke="#60a5fa" strokeWidth={3} dot={false}/>
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+              <div className="mt-6 h-[280px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={history}>
+                    <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false}/>
+                    <XAxis dataKey="time" stroke="#6b7280" tick={{fontSize: 11}} minTickGap={24}/>
+                    <YAxis stroke="#6b7280" tick={{fontSize: 11}} domain={["auto", "auto"]}/>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#0f172a",
+                        border: "1px solid #334155",
+                        borderRadius: "12px",
+                        color: "#fff",
+                      }}
+                    />
+                    <Line type="monotone" dataKey="streaming" stroke="#f97316" strokeWidth={3} dot={false}/>
+                    <Line type="monotone" dataKey="batch" stroke="#60a5fa" strokeWidth={3} dot={false}/>
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </section>
             <section className="monitor-card rounded-[24px] p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding the Comparison</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Streaming vs Batch Processing</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding the Comparison</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Streaming vs Batch Processing</h2>
 
-          <div className="mt-4 space-y-4 text-sm text-[#b6bec9] leading-6">
-            <p>
-              This page provides a direct comparison between <strong>streaming (real-time)</strong> processing
-              and <strong>batch (periodic)</strong> processing using the same underlying data.
-            </p>
+              <div className="mt-4 space-y-4 text-sm text-[#b6bec9] leading-6">
+                <p>
+                  This page provides a direct comparison between <strong>streaming (real-time)</strong> processing
+                  and <strong>batch (periodic)</strong> processing using the same underlying data.
+                </p>
 
-            <p>
-              Both systems operate on identical patient data, but process it differently:
-              streaming processes events instantly, while batch processes accumulated data over a time window.
-            </p>
+                <p>
+                  Both systems operate on identical patient data, but process it differently:
+                  streaming processes events instantly, while batch processes accumulated data over a time window.
+                </p>
 
-            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="font-semibold text-white mb-2">Streaming (Real-Time)</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Processes data immediately as it arrives</li>
-                <li>Very low latency (near-instant updates)</li>
-                <li>Values fluctuate more due to real-time noise</li>
-                <li>Ideal for alerts and monitoring</li>
-              </ul>
-            </div>
+                <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+                  <p className="font-semibold text-white mb-2">Streaming (Real-Time)</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Processes data immediately as it arrives</li>
+                    <li>Very low latency (near-instant updates)</li>
+                    <li>Values fluctuate more due to real-time noise</li>
+                    <li>Ideal for alerts and monitoring</li>
+                  </ul>
+                </div>
 
-            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="font-semibold text-white mb-2">Batch Processing</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Processes data periodically (e.g., every few minutes)</li>
-                <li>Higher latency but more stable results</li>
-                <li>Aggregates larger datasets</li>
-                <li>Ideal for analytics and reporting</li>
-              </ul>
-            </div>
+                <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+                  <p className="font-semibold text-white mb-2">Batch Processing</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Processes data periodically (e.g., every few minutes)</li>
+                    <li>Higher latency but more stable results</li>
+                    <li>Aggregates larger datasets</li>
+                    <li>Ideal for analytics and reporting</li>
+                  </ul>
+                </div>
 
-            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="font-semibold text-white mb-2">Key Insight</p>
-              <p>
-                Streaming prioritizes <strong>speed</strong>, while batch prioritizes <strong>accuracy</strong>.
-                The difference values shown on this page highlight how real-time metrics can deviate
-                from aggregated results.
-              </p>
-            </div>
-          </div>
+                <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
+                  <p className="font-semibold text-white mb-2">Key Insight</p>
+                  <p>
+                    Streaming prioritizes <strong>speed</strong>, while batch prioritizes <strong>accuracy</strong>.
+                    The difference values shown on this page highlight how real-time metrics can deviate
+                    from aggregated results.
+                  </p>
+                </div>
+              </div>
             </section>
           </>
         )}

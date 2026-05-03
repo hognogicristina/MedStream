@@ -2,7 +2,7 @@ import {useEffect, useState} from "react"
 import {useParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
 import PatientTreatmentAnalysisSection from "../components/PatientTreatmentAnalysisSection.jsx"
-import {useNotifications} from "../components/useNotifications.js"
+import {useNotifications} from "../hooks/useNotifications.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {getPatient} from "../services/patientApi.js"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
@@ -43,7 +43,8 @@ export default function PatientTreatmentAnalysisPage() {
       }
     }
 
-    loadPatient().then(() => {})
+    loadPatient().then(() => {
+    })
 
     return () => {
       active = false

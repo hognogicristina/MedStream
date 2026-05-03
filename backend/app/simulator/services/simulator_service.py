@@ -35,9 +35,7 @@ from app.simulator.messaging.kafka_producer import SimulatorKafkaProducer
 from app.simulator.repositories.simulator_repository import SimulatorRepository
 from app.utils.datetime import now_utc
 
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 ALERT_SEVERITY_SCORE = {
     "critical": 4,
@@ -69,12 +67,12 @@ CONDITION_ALLOWED_STATUSES = ("active", "improving", "stable", "worsening", "cri
 
 class SimulatorService:
     def __init__(
-        self,
-        *,
-        config: SimulatorConfig,
-        buffers: SimulatorBuffers,
-        repository: SimulatorRepository,
-        producer: SimulatorKafkaProducer,
+            self,
+            *,
+            config: SimulatorConfig,
+            buffers: SimulatorBuffers,
+            repository: SimulatorRepository,
+            producer: SimulatorKafkaProducer,
     ):
         self.config = config
         self.buffers = buffers
@@ -264,22 +262,22 @@ class SimulatorService:
         return patient_data
 
     def _seed_patient_medical_records(
-        self,
-        db,
-        *,
-        patient_id: int,
-        doctor_id: int,
-        base_condition: str,
-        diagnosis_seed: str | None,
-        medication_name: str,
-        base_time: datetime,
-        admission_date: datetime,
-        now: datetime,
-        all_conditions: list[str],
-        all_diagnoses: list[str],
-        all_allergies: list[str],
-        dosages: list[str],
-        frequencies: list[str],
+            self,
+            db,
+            *,
+            patient_id: int,
+            doctor_id: int,
+            base_condition: str,
+            diagnosis_seed: str | None,
+            medication_name: str,
+            base_time: datetime,
+            admission_date: datetime,
+            now: datetime,
+            all_conditions: list[str],
+            all_diagnoses: list[str],
+            all_allergies: list[str],
+            dosages: list[str],
+            frequencies: list[str],
     ) -> None:
         profile = generate_patient_profile(
             base_condition=base_condition,
@@ -651,11 +649,11 @@ class SimulatorService:
         admission_date = patient_data.get("admission_date")
 
         if not is_patient_discharge_eligible(
-            now=event_time,
-            admission_date=admission_date,
-            outcome_history=outcome_history,
-            has_incoming_activities=has_pending,
-            patient_state=current_state,
+                now=event_time,
+                admission_date=admission_date,
+                outcome_history=outcome_history,
+                has_incoming_activities=has_pending,
+                patient_state=current_state,
         ):
             return
 
@@ -707,16 +705,16 @@ class SimulatorService:
         )
 
     def _create_alerts(
-        self,
-        db,
-        patient_id: int,
-        vital_id: int,
-        vitals: dict,
-        *,
-        patient_data: dict,
-        recorded_at: datetime,
-        emit_events: bool = True,
-        include_buffer: bool = True,
+            self,
+            db,
+            patient_id: int,
+            vital_id: int,
+            vitals: dict,
+            *,
+            patient_data: dict,
+            recorded_at: datetime,
+            emit_events: bool = True,
+            include_buffer: bool = True,
     ) -> dict:
         patient = self.repository.get_patient(db, patient_id)
         if patient is None or getattr(patient, "id", None) is None:
@@ -894,12 +892,12 @@ class SimulatorService:
         }
 
     def _build_medication_plan(
-        self,
-        *,
-        drugs: list[dict],
-        condition_name: str,
-        is_pregnant: bool,
-        preferred_medication: str | None,
+            self,
+            *,
+            drugs: list[dict],
+            condition_name: str,
+            is_pregnant: bool,
+            preferred_medication: str | None,
     ) -> list[str]:
         allowed_categories = {"A", "B"} if is_pregnant else {"A", "B", "C", "D", "N"}
         condition_key = (condition_name or "").strip().lower()
@@ -1046,15 +1044,15 @@ class SimulatorService:
         patient_data["stability_started_at"] = None
 
     def _update_treatment_lifecycle(
-        self,
-        db,
-        *,
-        patient,
-        patient_data: dict,
-        has_abnormal_vitals: bool,
-        current_state: str,
-        event_time: datetime,
-        allow_discharge: bool,
+            self,
+            db,
+            *,
+            patient,
+            patient_data: dict,
+            has_abnormal_vitals: bool,
+            current_state: str,
+            event_time: datetime,
+            allow_discharge: bool,
     ) -> bool:
         treatment = patient_data.get("treatment_state")
         if not isinstance(treatment, dict):
@@ -1152,21 +1150,21 @@ class SimulatorService:
     @staticmethod
     def _has_abnormal_vitals(vitals: dict) -> bool:
         return (
-            vitals["heart_rate"] > 120
-            or vitals["oxygen_saturation"] < 90
-            or vitals["temperature"] > 38
+                vitals["heart_rate"] > 120
+                or vitals["oxygen_saturation"] < 90
+                or vitals["temperature"] > 38
         )
 
     def _start_treatment(
-        self,
-        db,
-        *,
-        patient,
-        patient_data: dict,
-        medication_index: int,
-        event_time: datetime,
-        doctor_id: int | None = None,
-        escalation_note: str | None = None,
+            self,
+            db,
+            *,
+            patient,
+            patient_data: dict,
+            medication_index: int,
+            event_time: datetime,
+            doctor_id: int | None = None,
+            escalation_note: str | None = None,
     ) -> bool:
         treatment = patient_data.get("treatment_state")
         if not isinstance(treatment, dict):
@@ -1276,15 +1274,15 @@ class SimulatorService:
         return True
 
     def _adjust_existing_treatment(
-        self,
-        db,
-        *,
-        patient,
-        patient_data: dict,
-        doctor_id: int,
-        event_time: datetime,
-        next_dosage: str,
-        next_frequency: str,
+            self,
+            db,
+            *,
+            patient,
+            patient_data: dict,
+            doctor_id: int,
+            event_time: datetime,
+            next_dosage: str,
+            next_frequency: str,
     ) -> bool:
         treatment = patient_data.get("treatment_state") or {}
         active_medication = str(treatment.get("active_medication_name") or "").strip()
@@ -1347,13 +1345,13 @@ class SimulatorService:
         return f"{doctor.last_name} {doctor.first_name}".strip()
 
     def _build_effect_profile(
-        self,
-        *,
-        patient_id: int,
-        condition_name: str,
-        medication_name: str,
-        line_index: int,
-        current_severity: float,
+            self,
+            *,
+            patient_id: int,
+            condition_name: str,
+            medication_name: str,
+            line_index: int,
+            current_severity: float,
     ) -> dict:
         line_penalty = min(0.24, line_index * 0.06)
         severity_penalty = min(0.18, max(0.0, (current_severity - 50.0) / 220.0))
@@ -1523,7 +1521,7 @@ class SimulatorService:
         key = "|".join(str(part) for part in parts)
         digest = hashlib.sha256(key.encode("utf-8")).digest()
         value = int.from_bytes(digest[:8], "big")
-        return value / float(2**64 - 1)
+        return value / float(2 ** 64 - 1)
 
     @classmethod
     def _deterministic_centered_value(cls, *parts: object, amplitude: float) -> float:
@@ -1546,15 +1544,15 @@ class SimulatorService:
         )
 
     def _maybe_generate_random_activity(
-        self,
-        db,
-        *,
-        patient_id: int,
-        patient_department: str,
-        source_condition: str | None,
-        source_diagnosis: str | None,
-        activities_created_in_cycle: set[int],
-        reference_time: datetime,
+            self,
+            db,
+            *,
+            patient_id: int,
+            patient_department: str,
+            source_condition: str | None,
+            source_diagnosis: str | None,
+            activities_created_in_cycle: set[int],
+            reference_time: datetime,
     ) -> None:
         if not self._can_create_patient_activity(db, patient_id, activities_created_in_cycle):
             return

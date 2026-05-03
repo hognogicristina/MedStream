@@ -14,7 +14,6 @@ from app.service.metrics import streaming_metrics_store
 from app.utils.datetime import to_utc
 from app.websocket.manager import manager
 
-
 VITAL_ALLOWED_FIELDS = {
     "patient_id",
     "heart_rate",
