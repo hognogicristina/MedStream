@@ -82,6 +82,8 @@ class PatientRepository:
     @classmethod
     def _extract_alert_structured_fields(cls, alert_type: str | None, message: str | None, severity: str | None) -> tuple[str | None, float | None, str | None, dict | None]:
         normalized_type = str(alert_type or "").strip().lower()
+        if normalized_type == "oxygen":
+            normalized_type = "oxygen_saturation"
         normalized_severity = str(severity or "").strip().lower()
         alert_message = str(message or "")
 
@@ -100,7 +102,10 @@ class PatientRepository:
             return None, None, None, None
 
         import re
-        match = re.search(r"(-?\d+(?:\.\d+)?)", alert_message)
+        if mapped[0] == "oxygen_saturation":
+            match = re.search(r"(?:SpO2|oxygen.*?:)\s*(\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+        else:
+            match = re.search(r"(-?\d+(?:\.\d+)?)", alert_message)
         if match is None:
             return mapped[0], None, mapped[1], None
 

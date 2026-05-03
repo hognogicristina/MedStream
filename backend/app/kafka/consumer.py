@@ -2,18 +2,29 @@ import json
 import time
 import asyncio
 import traceback
+from datetime import datetime
 
 from confluent_kafka import Consumer
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.alert import Alert
 from app.models.patient.patient import Patient
 from app.models.vital import Vital
-
 from app.service.metrics import streaming_metrics_store
 from app.utils.datetime import to_utc
 from app.websocket.manager import manager
+
+
+VITAL_ALLOWED_FIELDS = {
+    "patient_id",
+    "heart_rate",
+    "oxygen_saturation",
+    "temperature",
+    "systolic_bp",
+    "diastolic_bp",
+    "recorded_at",
+}
+
 
 def build_consumer():
     return Consumer(
@@ -25,57 +36,103 @@ def build_consumer():
     )
 
 
-def create_alerts(db, vital):
-    alerts = []
-    if vital is None or getattr(vital, "patient_id", None) is None:
-        return alerts
-
-    patient = db.get(Patient, vital.patient_id)
-    if patient is None:
-        return alerts
-
-    if vital.heart_rate > settings.heart_rate_alert_threshold:
-        alerts.append(
-            Alert(
-                patient_id=vital.patient_id,
-                vital_id=vital.id,
-                alert_type="heart_rate",
-                message=f"High heart rate detected: {vital.heart_rate} bpm",
-                severity="high",
-            )
-        )
-
-    if vital.oxygen_saturation < settings.oxygen_alert_threshold:
-        alerts.append(
-            Alert(
-                patient_id=vital.patient_id,
-                vital_id=vital.id,
-                alert_type="oxygen_saturation",
-                message=f"Low oxygen saturation detected: {vital.oxygen_saturation}%",
-                severity="critical",
-            )
-        )
-
-    if vital.temperature > settings.temperature_alert_threshold:
-        alerts.append(
-            Alert(
-                patient_id=vital.patient_id,
-                vital_id=vital.id,
-                alert_type="temperature",
-                message=f"High temperature detected: {vital.temperature} C",
-                severity="high",
-            )
-        )
-
-    for alert in alerts:
-        db.add(alert)
-
-    return alerts
-
-
 def schedule_broadcast(app_loop: asyncio.AbstractEventLoop, message: dict):
     future = asyncio.run_coroutine_threadsafe(manager.broadcast(message), app_loop)
     future.add_done_callback(lambda f: f.exception())
+
+
+def parse_datetime(value):
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
+def handle_vital_event(payload: dict, app_loop: asyncio.AbstractEventLoop):
+    clean_payload = {k: v for k, v in payload.items() if k in VITAL_ALLOWED_FIELDS}
+
+    parsed_recorded_at = parse_datetime(clean_payload.get("recorded_at"))
+    if parsed_recorded_at is not None:
+        clean_payload["recorded_at"] = parsed_recorded_at
+    else:
+        clean_payload.pop("recorded_at", None)
+
+    with SessionLocal() as db:
+        patient_id = clean_payload.get("patient_id")
+        if patient_id is None:
+            print("Skipping vital event: missing patient_id")
+            return
+
+        patient = db.get(Patient, patient_id)
+        if patient is None:
+            print(f"Skipping vital event: patient {patient_id} does not exist")
+            return
+        if patient.is_discharged:
+            print(f"Skipping vital event: patient {patient_id} is discharged")
+            return
+
+        vital = Vital(**clean_payload)
+        db.add(vital)
+        db.commit()
+        db.refresh(vital)
+
+        streaming_metrics_store.record_vital(vital, 0)
+
+        schedule_broadcast(
+            app_loop,
+            {
+                "type": "vital",
+                "data": {
+                    "patient_id": vital.patient_id,
+                    "heart_rate": vital.heart_rate,
+                    "oxygen_saturation": vital.oxygen_saturation,
+                    "temperature": vital.temperature,
+                    "systolic_bp": vital.systolic_bp,
+                    "diastolic_bp": vital.diastolic_bp,
+                    "recorded_at": to_utc(vital.recorded_at).isoformat(),
+                },
+            },
+        )
+
+
+def handle_alert_event(payload: dict, app_loop: asyncio.AbstractEventLoop):
+    alert_type = payload.get("alert_type")
+    if alert_type is None:
+        alert_type = payload.get("type")
+
+    created_at_dt = parse_datetime(payload.get("created_at"))
+    created_at_iso = to_utc(created_at_dt).isoformat() if created_at_dt is not None else payload.get("created_at")
+
+    alert_event = {
+        "id": payload.get("id"),
+        "patient_id": payload.get("patient_id"),
+        "vital_id": payload.get("vital_id"),
+        "alert_type": alert_type,
+        "severity": payload.get("severity"),
+        "message": payload.get("message"),
+        "created_at": created_at_iso,
+    }
+
+    if alert_event["patient_id"] is None:
+        print("Skipping alert event: missing patient_id")
+        return
+
+    schedule_broadcast(
+        app_loop,
+        {
+            "type": "alert",
+            "data": alert_event,
+        },
+    )
 
 
 def run(app_loop: asyncio.AbstractEventLoop):
@@ -84,7 +141,7 @@ def run(app_loop: asyncio.AbstractEventLoop):
         while True:
             try:
                 consumer = build_consumer()
-                consumer.subscribe([settings.kafka_vitals_topic])
+                consumer.subscribe([settings.kafka_vitals_topic, settings.kafka_alerts_topic])
 
                 while True:
                     try:
@@ -99,74 +156,16 @@ def run(app_loop: asyncio.AbstractEventLoop):
 
                         payload = json.loads(message.value().decode("utf-8"))
                         payload = payload.get("data", payload)
-                        allowed_fields = {
-                            "patient_id",
-                            "heart_rate",
-                            "oxygen_saturation",
-                            "temperature",
-                            "systolic_bp",
-                            "diastolic_bp",
-                        }
+                        topic = message.topic()
 
-                        clean_payload = {k: v for k, v in payload.items() if k in allowed_fields}
-                        with SessionLocal() as db:
-                            patient_id = clean_payload.get("patient_id")
-                            if patient_id is None:
-                                print("Skipping vital event: missing patient_id")
-                                continue
+                        if topic == settings.kafka_vitals_topic:
+                            handle_vital_event(payload, app_loop)
+                            continue
+                        if topic == settings.kafka_alerts_topic:
+                            handle_alert_event(payload, app_loop)
+                            continue
 
-                            patient = db.get(Patient, patient_id)
-                            if patient is None:
-                                print(f"Skipping vital event: patient {patient_id} does not exist")
-                                continue
-                            if patient.is_discharged:
-                                print(f"Skipping vital event: patient {patient_id} is discharged")
-                                continue
-
-                            vital = Vital(**clean_payload)
-                            db.add(vital)
-                            db.commit()
-                            db.refresh(vital)
-
-                            alerts = create_alerts(db, vital)
-                            db.commit()
-                            streaming_metrics_store.record_vital(vital, len(alerts))
-
-                            schedule_broadcast(
-                                app_loop,
-                                {
-                                    "type": "vital",
-                                    "data": {
-                                        "patient_id": vital.patient_id,
-                                        "heart_rate": vital.heart_rate,
-                                        "oxygen_saturation": vital.oxygen_saturation,
-                                        "temperature": vital.temperature,
-                                        "systolic_bp": vital.systolic_bp,
-                                        "diastolic_bp": vital.diastolic_bp,
-                                        "recorded_at": to_utc(vital.recorded_at).isoformat(),
-                                    },
-                                },
-                            )
-
-                            for alert in alerts:
-                                db.refresh(alert)
-                                streaming_metrics_store.record_alert(alert)
-
-                                schedule_broadcast(
-                                    app_loop,
-                                    {
-                                        "type": "alert",
-                                        "data": {
-                                            "id": alert.id,
-                                            "patient_id": alert.patient_id,
-                                            "vital_id": alert.vital_id,
-                                            "alert_type": alert.alert_type,
-                                            "message": alert.message,
-                                            "severity": alert.severity,
-                                            "created_at": to_utc(alert.created_at).isoformat(),
-                                        },
-                                    },
-                                )
+                        print(f"Skipping event from unsupported topic: {topic}")
                     except Exception:
                         traceback.print_exc()
                         raise

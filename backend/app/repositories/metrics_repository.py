@@ -19,7 +19,7 @@ from app.models.vital import Vital
 from app.utils.datetime import to_utc
 from app.validators.metrics_validators import validate_metric_value
 
-WINDOW_MINUTES = 5
+WINDOW_MINUTES = 60
 WINDOW_DELTA = timedelta(minutes=WINDOW_MINUTES)
 def _empty_metrics():
     return {
