@@ -31,6 +31,9 @@ def _empty_metrics():
         "avg_systolic_bp": None,
         "avg_diastolic_bp": None,
         "total_alerts": 0,
+        "alerts_critical_count": 0,
+        "alerts_high_count": 0,
+        "alerts_stable_count": 0,
         "active_patients": 0,
         "execution_time_ms": 0.0,
         "timestamp": None,
@@ -149,6 +152,7 @@ def paginate_items(items, page: int, page_size: int):
 
 
 def refresh_batch_snapshot(db: Session, execution_time_ms: float):
+    snapshot_timestamp = utc_now()
     metrics_row = db.execute(
         select(
             func.avg(PatientStats.avg_heart_rate),
@@ -164,8 +168,25 @@ def refresh_batch_snapshot(db: Session, execution_time_ms: float):
             func.avg(Vital.diastolic_bp),
         )
     ).one()
+    alert_severity_rows = db.execute(
+        select(Alert.severity, func.count(Alert.id))
+        .where(
+            Alert.created_at >= (snapshot_timestamp - WINDOW_DELTA),
+            Alert.created_at <= snapshot_timestamp,
+        )
+        .group_by(Alert.severity)
+    ).all()
 
-    snapshot_timestamp = utc_now()
+    severity_counts = {"critical": 0, "high": 0, "stable": 0}
+    for severity, count in alert_severity_rows:
+        normalized = str(severity or "").strip().lower()
+        if normalized == "critical":
+            severity_counts["critical"] += int(count or 0)
+        elif normalized == "high":
+            severity_counts["high"] += int(count or 0)
+        else:
+            severity_counts["stable"] += int(count or 0)
+
     batch_row = BatchAnalytics(
         timestamp=snapshot_timestamp,
         avg_heart_rate=validate_metric_value(metrics_row[0]),
@@ -174,6 +195,9 @@ def refresh_batch_snapshot(db: Session, execution_time_ms: float):
         avg_systolic_bp=float(bp_row[0]) if bp_row[0] is not None else None,
         avg_diastolic_bp=float(bp_row[1]) if bp_row[1] is not None else None,
         alerts_count=int(metrics_row[3] or 0),
+        alerts_critical_count=severity_counts["critical"],
+        alerts_high_count=severity_counts["high"],
+        alerts_stable_count=severity_counts["stable"],
         patients_count=int(metrics_row[4] or 0),
     )
     db.add(batch_row)
@@ -187,6 +211,9 @@ def refresh_batch_snapshot(db: Session, execution_time_ms: float):
         "avg_systolic_bp": batch_row.avg_systolic_bp,
         "avg_diastolic_bp": batch_row.avg_diastolic_bp,
         "total_alerts": batch_row.alerts_count,
+        "alerts_critical_count": batch_row.alerts_critical_count,
+        "alerts_high_count": batch_row.alerts_high_count,
+        "alerts_stable_count": batch_row.alerts_stable_count,
         "active_patients": batch_row.patients_count,
         "execution_time_ms": round(float(execution_time_ms or 0), 2),
         "timestamp": snapshot_timestamp,
@@ -215,10 +242,33 @@ def get_latest_batch_metrics(db: Session) -> dict:
         "avg_systolic_bp": float(latest.avg_systolic_bp) if latest.avg_systolic_bp is not None else None,
         "avg_diastolic_bp": float(latest.avg_diastolic_bp) if latest.avg_diastolic_bp is not None else None,
         "total_alerts": int(latest.alerts_count or 0),
+        "alerts_critical_count": int(latest.alerts_critical_count or 0),
+        "alerts_high_count": int(latest.alerts_high_count or 0),
+        "alerts_stable_count": int(latest.alerts_stable_count or 0),
         "active_patients": int(latest.patients_count or 0),
         "execution_time_ms": round(float(status_snapshot.get("last_run_duration_ms") or 0), 2),
         "timestamp": to_utc(latest.timestamp),
     }
+
+
+def get_batch_alerts_history(db: Session, *, limit: int = 24) -> list[dict]:
+    rows = db.execute(
+        select(BatchAnalytics)
+        .order_by(BatchAnalytics.timestamp.desc(), BatchAnalytics.id.desc())
+        .limit(limit)
+    ).scalars().all()
+
+    ordered = list(reversed(rows))
+    return [
+        {
+            "timestamp": to_utc(row.timestamp),
+            "critical": int(row.alerts_critical_count or 0),
+            "high": int(row.alerts_high_count or 0),
+            "stable": int(row.alerts_stable_count or 0),
+            "total": int(row.alerts_count or 0),
+        }
+        for row in ordered
+    ]
 
 
 def get_comparison_metrics(db: Session) -> dict:

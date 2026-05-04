@@ -25,10 +25,6 @@ from app.simulator.logic.activity_logic import (
     create_warning_flow,
     random_activity_probability_for_state,
 )
-from app.simulator.logic.discharge_logic import (
-    derive_outcome_from_alert_evolution,
-    is_patient_discharge_eligible,
-)
 from app.simulator.logic.patient_state_logic import evaluate_patient_state, handle_state_transition
 from app.simulator.logic.transfer_logic import transfer_patient
 from app.simulator.messaging.kafka_producer import SimulatorKafkaProducer
@@ -53,15 +49,15 @@ MAX_OUTCOME_HISTORY = 400
 TREATMENT_EVALUATION_WINDOW_CYCLES = 6
 TREATMENT_FAILURE_ALERT_CYCLES = 2
 TREATMENT_MIN_SUCCESS_NORMAL_CYCLES = 2
-STABILITY_DURATION_REQUIRED = timedelta(days=3)
 MAX_TREATMENT_MEDICATIONS = 6
 ALERT_COOLDOWN_MINUTES_RANGE = (5, 15)
 MAX_ALERTS_PER_PATIENT_PER_HOUR = 18
 MAX_ALERTS_PER_PATIENT_PER_CYCLE = 2
 MAX_DOSAGE_MULTIPLIER = 4
 ALERT_PROCESSING_DELAY_MS_RANGE = (50, 200)
-ALERT_DRIVEN_TRANSFER_TREATMENT_THRESHOLD = 10
-EFFECTIVE_DISCHARGE_TREATMENT_THRESHOLD = 10
+ALERT_DRIVEN_TRANSFER_TREATMENT_THRESHOLD = 5
+EFFECTIVE_DISCHARGE_TREATMENT_THRESHOLD = 5
+RECENT_OUTCOMES_REQUIRED = 2
 DEBUG_FORCE_FREQUENT_ALERTS = True
 DEBUG_ABNORMAL_VITAL_PROBABILITY = 0.25
 DEBUG_ALERT_COOLDOWN_SECONDS_RANGE = (10, 20)
@@ -256,8 +252,8 @@ class SimulatorService:
             "base_time": base_time,
             "admission_date": admission_date,
             "timeline_cursor": admission_date,
-            "patient_outcome_history": [],
             "last_alert_evaluation": {"count": 0, "severity_score": 0},
+            "recent_treatment_outcomes": [],
             "last_alert_state": None,
             "last_alert_timestamp": None,
             "recent_alert_timestamps": [],
@@ -271,6 +267,8 @@ class SimulatorService:
             "alert_driven_treatment_count": 0,
             "treatment_update_count": 0,
             "total_alert_count": 0,
+            "latest_treatment_outcome": None,
+            "pending_treatment_outcome_since": None,
             "monitoring_status": "active",
             "debug_alert_cooldown_seconds": random.randint(*DEBUG_ALERT_COOLDOWN_SECONDS_RANGE),
             "debug_alert_burst_cycles_remaining": 0,
@@ -490,10 +488,13 @@ class SimulatorService:
         if high_or_critical_count > 0:
             patient_data["high_critical_alert_count"] = int(patient_data.get("high_critical_alert_count", 0)) + high_or_critical_count
         has_abnormal_vitals = self._has_abnormal_vitals(vitals)
-        self._record_outcome_evaluation(patient_data, recorded_at=event_time, alert_stats=alert_stats)
+        self._record_outcome_evaluation(
+            patient_data=patient_data,
+            recorded_at=event_time,
+            vitals=vitals,
+        )
         self._update_stability_tracking(
             patient_data=patient_data,
-            alert_stats=alert_stats,
             current_state=new_state,
             event_time=event_time,
         )
@@ -505,7 +506,6 @@ class SimulatorService:
             current_state=new_state,
             event_time=event_time,
             allow_discharge=True,
-            has_high_or_critical_alert=high_or_critical_count > 0,
         )
         self._apply_treatment_effect_to_clinical_state(
             patient_data,
@@ -601,28 +601,9 @@ class SimulatorService:
             self.buffers.mark_activity_created(patient.id, activities_created_in_cycle)
 
     def _handle_stable_flow(self, db, patient, patient_data: dict, *, current_state: str, event_time: datetime) -> None:
-        stability_started_at = patient_data.get("stability_started_at")
-        if not isinstance(stability_started_at, datetime):
+        if current_state != "stable":
             return
-        if event_time - stability_started_at < STABILITY_DURATION_REQUIRED:
-            return
-
-        treatment_state = patient_data.get("treatment_state") or {}
-        active_medication = treatment_state.get("active_medication_name")
-        if active_medication and treatment_state.get("status") != "effective":
-            return
-
-        has_pending = self.repository.count_incoming_activities(db, patient.id) > 0
-        outcome_history = patient_data.get("patient_outcome_history", [])
-        admission_date = patient_data.get("admission_date")
-
-        if not is_patient_discharge_eligible(
-                now=event_time,
-                admission_date=admission_date,
-                outcome_history=outcome_history,
-                has_incoming_activities=has_pending,
-                patient_state=current_state,
-        ):
+        if not self._is_effective_outcome_ready_for_discharge(patient_data=patient_data):
             return
 
         self.repository.mark_patient_discharged(db, patient, "Recovered", event_time)
@@ -845,29 +826,14 @@ class SimulatorService:
             "generated_count": generated_in_cycle,
         }
 
-    def _record_outcome_evaluation(self, patient_data: dict, *, recorded_at: datetime, alert_stats: dict) -> None:
-        previous = patient_data.get("last_alert_evaluation") or {"count": 0, "severity_score": 0}
-        outcome = derive_outcome_from_alert_evolution(
-            before_count=int(previous.get("count", 0)),
-            after_count=int(alert_stats.get("count", 0)),
-            before_severity_score=int(previous.get("severity_score", 0)),
-            after_severity_score=int(alert_stats.get("severity_score", 0)),
-        )
-
-        history = patient_data.setdefault("patient_outcome_history", [])
-        history.append(
-            {
-                "timestamp": recorded_at,
-                "outcome": outcome,
-            }
-        )
-        if len(history) > MAX_OUTCOME_HISTORY:
-            del history[:-MAX_OUTCOME_HISTORY]
-
-        patient_data["last_alert_evaluation"] = {
-            "count": int(alert_stats.get("count", 0)),
-            "severity_score": int(alert_stats.get("severity_score", 0)),
-        }
+    def _record_outcome_evaluation(self, patient_data: dict, *, recorded_at: datetime, vitals: dict) -> None:
+        outcome = "effective" if not self._has_abnormal_vitals(vitals) else "ineffective"
+        recent = patient_data.setdefault("recent_treatment_outcomes", [])
+        recent.append(outcome)
+        if len(recent) > RECENT_OUTCOMES_REQUIRED:
+            del recent[:-RECENT_OUTCOMES_REQUIRED]
+        patient_data["latest_treatment_outcome"] = outcome
+        patient_data["pending_treatment_outcome_since"] = None
 
     def _build_medication_plan(
             self,
@@ -1013,9 +979,8 @@ class SimulatorService:
             "oscillation_phase": phase,
         }
 
-    def _update_stability_tracking(self, *, patient_data: dict, alert_stats: dict, current_state: str, event_time: datetime) -> None:
-        has_high_or_critical = bool(alert_stats.get("high_or_critical_count"))
-        if current_state == "stable" and not has_high_or_critical:
+    def _update_stability_tracking(self, *, patient_data: dict, current_state: str, event_time: datetime) -> None:
+        if current_state == "stable":
             if not isinstance(patient_data.get("stability_started_at"), datetime):
                 patient_data["stability_started_at"] = event_time
             return
@@ -1031,7 +996,6 @@ class SimulatorService:
             current_state: str,
             event_time: datetime,
             allow_discharge: bool,
-            has_high_or_critical_alert: bool,
     ) -> bool:
         treatment = patient_data.get("treatment_state")
         if not isinstance(treatment, dict):
@@ -1045,14 +1009,6 @@ class SimulatorService:
                 medication_index=0,
                 event_time=event_time,
             )
-            if started and has_high_or_critical_alert:
-                if self._register_alert_driven_treatment_change(
-                        db,
-                        patient=patient,
-                        patient_data=patient_data,
-                        event_time=event_time,
-                ):
-                    return True
             if not started:
                 treatment["status"] = "exhausted"
                 if allow_discharge:
@@ -1112,14 +1068,13 @@ class SimulatorService:
                     treatment["cycles_on_medication"] = 0
                     treatment["abnormal_cycles_on_medication"] = 0
                     treatment["normal_cycles_on_medication"] = 0
-                    if has_high_or_critical_alert:
-                        if self._register_alert_driven_treatment_change(
-                                db,
-                                patient=patient,
-                                patient_data=patient_data,
-                                event_time=event_time,
-                        ):
-                            return True
+                    if self._should_transfer_for_persistent_instability(patient_data=patient_data):
+                        return self._transfer_due_to_alert_driven_treatments(
+                            db,
+                            patient=patient,
+                            patient_data=patient_data,
+                            event_time=event_time,
+                        )
                     return False
 
             replacement = self._choose_replacement_medication(db, patient=patient, patient_data=patient_data)
@@ -1135,14 +1090,13 @@ class SimulatorService:
                     escalation_note=TREATMENT_ESCALATION_NOTE,
                 )
                 if switched:
-                    if has_high_or_critical_alert:
-                        if self._register_alert_driven_treatment_change(
-                                db,
-                                patient=patient,
-                                patient_data=patient_data,
-                                event_time=event_time,
-                        ):
-                            return True
+                    if self._should_transfer_for_persistent_instability(patient_data=patient_data):
+                        return self._transfer_due_to_alert_driven_treatments(
+                            db,
+                            patient=patient,
+                            patient_data=patient_data,
+                            event_time=event_time,
+                        )
                     return False
 
             treatment["status"] = "exhausted"
@@ -1164,38 +1118,15 @@ class SimulatorService:
 
         return False
 
-    def _register_alert_driven_treatment_change(
-            self,
-            db,
-            *,
-            patient,
-            patient_data: dict,
-            event_time: datetime,
-    ) -> bool:
-        updated_count = int(patient_data.get("alert_driven_treatment_count", 0)) + 1
-        patient_data["alert_driven_treatment_count"] = updated_count
-        if updated_count < ALERT_DRIVEN_TRANSFER_TREATMENT_THRESHOLD:
-            return False
-        return self._transfer_due_to_alert_driven_treatments(
-            db,
-            patient=patient,
-            patient_data=patient_data,
-            event_time=event_time,
-        )
-
     def _is_effective_outcome_ready_for_discharge(self, *, patient_data: dict) -> bool:
         treatment_updates = int(patient_data.get("treatment_update_count", 0))
         if treatment_updates < EFFECTIVE_DISCHARGE_TREATMENT_THRESHOLD:
             return False
 
-        if int(patient_data.get("total_alert_count", 0)) < 1:
+        recent_outcomes = [str(item).strip().lower() for item in (patient_data.get("recent_treatment_outcomes") or [])]
+        if len(recent_outcomes) < RECENT_OUTCOMES_REQUIRED:
             return False
-
-        latest_outcome = None
-        history = patient_data.get("patient_outcome_history") or []
-        if history:
-            latest_outcome = (history[-1] or {}).get("outcome")
-        if latest_outcome != "effective":
+        if any(outcome != "effective" for outcome in recent_outcomes[-RECENT_OUTCOMES_REQUIRED:]):
             return False
 
         if str((patient_data.get("monitoring_status") or "active")).lower() == "transferred":
@@ -1270,20 +1201,29 @@ class SimulatorService:
             {
                 "event": "transfer",
                 "patient_id": patient.id,
-                "reason": "Transferred after repeated alert-driven treatment changes",
-                "trigger": "alert_driven_treatment_threshold",
+                "reason": "Transferred after persistent unstable vitals despite repeated treatment changes",
+                "trigger": "persistent_unstable_vitals_threshold",
                 "alert_count": int(patient_data.get("high_critical_alert_count", 0)),
-                "treatment_count": int(patient_data.get("alert_driven_treatment_count", 0)),
+                "treatment_count": int(patient_data.get("treatment_update_count", 0)),
                 "created_at": event_time.isoformat(),
             }
         )
         return True
 
+    def _should_transfer_for_persistent_instability(self, *, patient_data: dict) -> bool:
+        treatment_updates = int(patient_data.get("treatment_update_count", 0))
+        if treatment_updates < ALERT_DRIVEN_TRANSFER_TREATMENT_THRESHOLD:
+            return False
+        recent_outcomes = [str(item).strip().lower() for item in (patient_data.get("recent_treatment_outcomes") or [])]
+        if len(recent_outcomes) < RECENT_OUTCOMES_REQUIRED:
+            return False
+        return all(outcome == "ineffective" for outcome in recent_outcomes[-RECENT_OUTCOMES_REQUIRED:])
+
     @staticmethod
     def _has_abnormal_vitals(vitals: dict) -> bool:
         return (
-                vitals["heart_rate"] > 120
-                or vitals["oxygen_saturation"] < 90
+                vitals["heart_rate"] > 110
+                or vitals["oxygen_saturation"] < 92
                 or vitals["temperature"] > 38
         )
 
@@ -1338,6 +1278,8 @@ class SimulatorService:
             }
         )
         patient_data["treatment_update_count"] = int(patient_data.get("treatment_update_count", 0)) + 1
+        patient_data["pending_treatment_outcome_since"] = event_time
+        patient_data["latest_treatment_outcome"] = None
 
         dosage = str(patient_data.get("medication_dosage") or "1x standard dose")
         frequency = str(patient_data.get("medication_frequency") or "Daily")
@@ -1470,6 +1412,8 @@ class SimulatorService:
         patient_data["medication_dosage"] = next_dosage
         patient_data["medication_frequency"] = next_frequency
         patient_data["treatment_update_count"] = int(patient_data.get("treatment_update_count", 0)) + 1
+        patient_data["pending_treatment_outcome_since"] = event_time
+        patient_data["latest_treatment_outcome"] = None
         return True
 
     def _doctor_display_name(self, db, doctor_id: int) -> str:

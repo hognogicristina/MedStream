@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useMemo, useState} from "react"
-import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
+import {Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {getPatient, getPatientTreatmentAnalysis} from "../services/patientApi.js"
@@ -33,6 +33,18 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("en-GB", {day: "2-digit", month: "short", year: "numeric"}).format(date)
 }
 
+function formatTime(value) {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) {
+    return ""
+  }
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
+}
+
 function formatAlertLastUpdated(value) {
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) {
@@ -44,6 +56,32 @@ function formatAlertLastUpdated(value) {
     day: "numeric",
     month: "short",
   }).format(date)
+}
+
+function TreatmentOutcomeTooltip({active, payload}) {
+  if (!active || !payload?.length) {
+    return null
+  }
+  const point = payload[0]?.payload
+  if (!point) {
+    return null
+  }
+
+  return (
+    <div className="rounded-xl border border-[#334155] bg-[#111827] p-3 text-xs text-white">
+      <p className="font-semibold">Treatment #{point.treatmentIndex}</p>
+      <p
+        className={`mt-1 font-semibold ${
+          point.outcome === "effective"
+            ? "text-[#22c55e]"
+            : "text-[#ef4444]"
+        }`}
+      >
+        Outcome: {point.outcome}
+      </p>
+      {point.decisionTimeLabel ? <p className="mt-1 text-[#d5dbdb]">Time: {point.decisionTimeLabel}</p> : null}
+    </div>
+  )
 }
 
 const extractVitalsFromMessage = (message) => {
@@ -136,6 +174,7 @@ export default function PatientTreatmentAnalysisSection({
           setSelectedPatient({
             cnp: patientData.cnp,
             full_name: `${patientData.last_name} ${patientData.first_name}`.trim(),
+            is_discharged: Boolean(patientData.is_discharged),
           })
         }
       } catch (error) {
@@ -179,28 +218,35 @@ export default function PatientTreatmentAnalysisSection({
       .sort((left, right) => right.time - left.time)
   }, [analysis])
 
-  const treatmentTimelineData = useMemo(() => {
-    const ascendingAlerts = [...parsedAlerts].sort((left, right) => left.time - right.time)
-    if (!ascendingAlerts.length) {
-      return []
-    }
-
-    const lastStable = parsedAlerts.find(
-      (alert) => alert.type === "status" || alert.severity === "normal",
-    ) || null
-
-    return ascendingAlerts.map((alert) => {
-      const isAbnormalAfterStable = Boolean(lastStable)
-        && alert.time > lastStable.time
-        && (alert.severity === "high" || alert.severity === "critical")
-
+  const treatmentOutcomeTimeline = useMemo(() => {
+    const medicationsAscending = [...(analysis?.medications || [])]
+      .sort((left, right) => {
+        const leftTime = toTimestamp(left.prescribed_at) ?? 0
+        const rightTime = toTimestamp(right.prescribed_at) ?? 0
+        if (leftTime !== rightTime) {
+          return leftTime - rightTime
+        }
+        return Number(left.id || 0) - Number(right.id || 0)
+      })
+    return medicationsAscending.map((medication, index) => {
+      const normalizedOutcome = String(medication.outcome || "").trim().toLowerCase()
+      const outcome = normalizedOutcome === "effective" ? "effective" : "ineffective"
+      const color = outcome === "effective" ? "#22c55e" : "#ef4444"
       return {
-        time: new Date(alert.time).toISOString().slice(0, 16),
-        stable: isAbnormalAfterStable ? 0 : 1,
-        abnormal: isAbnormalAfterStable ? 1 : 0,
+        treatmentIndex: index + 1,
+        medicationId: medication.id,
+        medicationName: medication.name,
+        medicationTimeLabel: formatDate(medication.prescribed_at),
+        decisionTimeLabel: medication.prescribed_at ? formatTime(medication.prescribed_at) : "",
+        previousAlertType: medication.previous_alert?.alert_type || "--",
+        previousAlertSeverity: medication.previous_alert?.severity || "--",
+        previousAlertTimeLabel: medication.previous_alert?.created_at ? formatDate(medication.previous_alert.created_at) : "--",
+        outcome,
+        outcomeValue: outcome === "effective" ? 1 : -1,
+        outcomeColor: color,
       }
     })
-  }, [parsedAlerts])
+  }, [analysis])
 
   const treatmentTimelineEvaluation = useMemo(() => {
     const latestAlert = parsedAlerts[0] || null
@@ -233,21 +279,10 @@ export default function PatientTreatmentAnalysisSection({
       temperature: latestTemperatureAfterStable?.value ?? lastStableVitals.temperature ?? latestTemperature?.value ?? null,
     }
 
-    const abnormalAfterStable = Boolean(lastStable) && parsedAlerts.some((alert) => (
-      alert.time > lastStable.time && (alert.severity === "high" || alert.severity === "critical")
-    ))
-
-    const outcome = !lastStable
-      ? "Ineffective"
-      : abnormalAfterStable
-        ? "Ineffective"
-        : "Effective"
-
-    console.log({
-      lastStable,
-      abnormalAfterStable,
-      finalValues,
-    })
+    const finalTreatmentOutcome = treatmentOutcomeTimeline.length
+      ? treatmentOutcomeTimeline[treatmentOutcomeTimeline.length - 1].outcome
+      : "ineffective"
+    const outcome = finalTreatmentOutcome
 
     const lastUpdated = latestAlert?.created_at ? formatAlertLastUpdated(latestAlert.created_at) : "--"
 
@@ -262,7 +297,7 @@ export default function PatientTreatmentAnalysisSection({
         summary: "Values start from the latest stable snapshot and are overridden by newer alerts per vital.",
       },
     }
-  }, [parsedAlerts])
+  }, [parsedAlerts, treatmentOutcomeTimeline])
 
   const medicationHistory = useMemo(() => {
     const medications = analysis?.medications || []
@@ -271,7 +306,8 @@ export default function PatientTreatmentAnalysisSection({
       const relatedAlerts = medication.reasoning?.alerts || []
       const relatedDiagnoses = medication.reasoning?.diagnoses || []
       const relatedConditions = medication.reasoning?.conditions || []
-      const outcome = treatmentTimelineEvaluation.outcome
+      const timelineEntry = treatmentOutcomeTimeline.find((item) => item.medicationId === medication.id)
+      const outcome = timelineEntry?.outcome || "ineffective"
 
       let reasonText = "Prescribed based on current clinical assessment."
       if (relatedAlerts.length && relatedDiagnoses.length) {
@@ -295,6 +331,13 @@ export default function PatientTreatmentAnalysisSection({
         related_conditions: relatedConditions,
         outcome,
         reasonText,
+        treatment_index: timelineEntry?.treatmentIndex || null,
+        alert_after_treatment: timelineEntry
+          ? `${timelineEntry.nextAlertType} (${timelineEntry.nextAlertSeverity}) on ${timelineEntry.nextAlertTimeLabel}`
+          : "--",
+        alert_before_treatment: timelineEntry
+          ? `${timelineEntry.previousAlertType} (${timelineEntry.previousAlertSeverity}) on ${timelineEntry.previousAlertTimeLabel}`
+          : "--",
       }
     }).sort((left, right) => {
       const leftTime = toTimestamp(left.updated_at || left.created_at) ?? 0
@@ -304,12 +347,19 @@ export default function PatientTreatmentAnalysisSection({
       }
       return String(right.medication_name || "").localeCompare(String(left.medication_name || ""))
     })
-  }, [analysis, treatmentTimelineEvaluation.outcome])
+  }, [analysis, treatmentOutcomeTimeline])
 
   const totalMedicationPages = Math.max(1, medicationHistory.length)
   const displayedMedication = medicationHistory.length ? medicationHistory[Math.max(0, medicationPage - 1)] : null
 
   const latestAlertSummary = treatmentTimelineEvaluation.latestAlertSummary
+  const finalOutcome = treatmentTimelineEvaluation.outcome
+  const hasInconsistentDischarge = Boolean(selectedPatient?.is_discharged) && finalOutcome !== "effective"
+  const outcomeTextClass = (outcome) => (
+    outcome === "effective"
+      ? "text-[#22c55e]"
+      : "text-[#ef4444]"
+  )
 
   const fullAlertHistory = useMemo(() => {
     return (analysis?.alerts || [])
@@ -362,35 +412,54 @@ export default function PatientTreatmentAnalysisSection({
 
       {!isLoadingAnalysis && analysis ? (
         <div className="mt-6 space-y-6">
+          <div>
+            <h3 className="text-xl font-semibold text-white">Treatment Timeline</h3>
+          </div>
           <div className="h-[320px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={treatmentTimelineData}>
+              <AreaChart data={treatmentOutcomeTimeline}>
+                <defs>
+                  <linearGradient id="treatmentOutcomeFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.42}/>
+                    <stop offset="50%" stopColor="#22c55e" stopOpacity={0.32}/>
+                    <stop offset="50%" stopColor="#ef4444" stopOpacity={0.32}/>
+                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0.42}/>
+                  </linearGradient>
+                  <linearGradient id="treatmentOutcomeStroke" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#22c55e"/>
+                    <stop offset="100%" stopColor="#ef4444"/>
+                  </linearGradient>
+                </defs>
                 <CartesianGrid stroke="#1f2937" strokeDasharray="3 3"/>
-                <XAxis dataKey="time" stroke="#879196" tick={{fontSize: 11}}/>
-                <YAxis stroke="#879196" tick={{fontSize: 11}} allowDecimals={false}/>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#111827",
-                    border: "1px solid #334155",
-                    borderRadius: "12px",
-                    color: "#fff",
-                  }}
+                <XAxis dataKey="treatmentIndex" stroke="#879196" tick={{fontSize: 11}}/>
+                <YAxis
+                  stroke="#879196"
+                  tick={{fontSize: 11}}
+                  allowDecimals={false}
+                  domain={[-1, 1]}
+                  ticks={[-1, 0, 1]}
                 />
+                <ReferenceLine y={0} stroke="#6b7280" strokeDasharray="4 4"/>
+                <Tooltip content={<TreatmentOutcomeTooltip/>}/>
                 <Area
                   type="monotone"
-                  dataKey="stable"
-                  stackId="1"
-                  stroke="#22c55e"
-                  fill="#22c55e"
-                  fillOpacity={0.6}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="abnormal"
-                  stackId="1"
-                  stroke="#ef4444"
-                  fill="#ef4444"
-                  fillOpacity={0.6}
+                  dataKey="outcomeValue"
+                  name="Outcome"
+                  stroke="url(#treatmentOutcomeStroke)"
+                      fill="url(#treatmentOutcomeFill)"
+                      strokeWidth={3}
+                      isAnimationActive={true}
+                      animationDuration={420}
+                      dot={({cx, cy, payload}) => (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={4}
+                      fill={payload?.outcomeValue > 0 ? "#22c55e" : "#ef4444"}
+                      stroke="#0f141a"
+                      strokeWidth={1}
+                    />
+                  )}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -398,6 +467,11 @@ export default function PatientTreatmentAnalysisSection({
 
           <div>
             <h3 className="text-xl font-semibold text-white">Treatment Summary & Clinical Reasoning</h3>
+            {hasInconsistentDischarge ? (
+              <div className="mt-3 rounded-xl border border-[#7f1d1d] bg-[#2b1212] px-3 py-2 text-sm text-[#fecaca]">
+                Inconsistency detected: patient is discharged but the final treatment outcome is ineffective.
+              </div>
+            ) : null}
             <div className="mt-4 space-y-4">
               {displayedMedication ? (
                 <div className="monitor-panel rounded-2xl px-4 py-4">
@@ -441,8 +515,7 @@ export default function PatientTreatmentAnalysisSection({
                     </div>
                     <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Outcome</p>
-                      <p
-                        className={`mt-2 text-sm font-semibold ${displayedMedication.outcome === "Effective" ? "text-[#22c55e]" : "text-[#ef4444]"}`}>
+                      <p className={`mt-2 text-sm font-semibold ${outcomeTextClass(displayedMedication.outcome)}`}>
                         {displayedMedication.outcome}
                       </p>
                     </div>
@@ -591,6 +664,7 @@ export default function PatientTreatmentAnalysisSection({
               )}
             </div>
           </div>
+
         </div>
       ) : null}
     </section>

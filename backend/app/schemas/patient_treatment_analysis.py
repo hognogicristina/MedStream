@@ -17,6 +17,12 @@ class TreatmentMedicationReasoningRead(BaseModel):
 
 
 class TreatmentMedicationRead(BaseModel):
+    class TreatmentLinkedAlertRead(BaseModel):
+        alert_type: str
+        severity: str
+        message: str
+        created_at: datetime
+
     id: int
     name: str
     dosage: str
@@ -26,6 +32,10 @@ class TreatmentMedicationRead(BaseModel):
     notes: str | None = None
     last_updated_note: str | None = None
     modified_by: str | None = None
+    treatment_index: int | None = None
+    outcome: Literal["Effective", "Ineffective"] | None = None
+    previous_alert: TreatmentLinkedAlertRead | None = None
+    next_alert: TreatmentLinkedAlertRead | None = None
     reasoning: TreatmentMedicationReasoningRead
 
 

@@ -19,6 +19,7 @@ from app.models.patient.patient_condition import PatientCondition
 from app.models.patient.patient_condition_assignment import PatientConditionAssignment
 from app.models.patient.patient_diagnosis import PatientDiagnosis
 from app.models.patient.patient_medication import PatientMedication
+from app.models.vital import Vital
 from app.repositories.address_repository import AddressRepository
 from app.validators.doctor_validators import validate_doctor_patient_specialization
 from app.validators.medical_validators import (
@@ -122,6 +123,31 @@ class PatientRepository:
 
     def __init__(self, address_repository: AddressRepository | None = None):
         self.address_repository = address_repository or AddressRepository()
+
+    @staticmethod
+    def _stable_vital_count(vital: Vital | None) -> int:
+        if vital is None:
+            return 0
+        stable_flags = [
+            vital.heart_rate <= 110,
+            vital.oxygen_saturation >= 92,
+            vital.temperature <= 38,
+        ]
+        return sum(1 for flag in stable_flags if flag)
+
+    @classmethod
+    def _derive_outcome_from_vital(cls, vital: Vital | None) -> str:
+        return "Effective" if cls._is_vital_snapshot_stable(vital) else "Ineffective"
+
+    @staticmethod
+    def _is_vital_snapshot_stable(vital: Vital | None) -> bool:
+        if vital is None:
+            return False
+        return (
+            vital.heart_rate <= 110
+            and vital.oxygen_saturation >= 92
+            and vital.temperature <= 38
+        )
 
     @staticmethod
     def _clamp_text(value: str, max_length: int) -> str:
@@ -295,6 +321,11 @@ class PatientRepository:
                 .where(Alert.patient_id == patient_id)
                 .order_by(Alert.created_at.asc(), Alert.id.asc())
             ).scalars().all()
+            vitals = db.execute(
+                select(Vital)
+                .where(Vital.patient_id == patient_id)
+                .order_by(Vital.recorded_at.asc(), Vital.id.asc())
+            ).scalars().all()
 
             diagnosis_labels = [entry.diagnosis for entry in diagnoses if entry.diagnosis]
             condition_labels = [
@@ -303,23 +334,83 @@ class PatientRepository:
                 if condition.name
             ]
 
-            medications_payload = []
+            sequence_alerts = sorted(alerts, key=lambda item: (item.created_at, item.id))
+            sequence_vitals = sorted(vitals, key=lambda item: (item.recorded_at, item.id))
+
+            treatment_actions = []
             for medication in medications:
+                treatment_actions.append(
+                    {
+                        "action": "add",
+                        "timestamp": medication.created_at,
+                        "medication": medication,
+                    }
+                )
+                if (
+                    medication.updated_at is not None
+                    and medication.updated_at > medication.created_at
+                ):
+                    treatment_actions.append(
+                        {
+                            "action": "modify",
+                            "timestamp": medication.updated_at,
+                            "medication": medication,
+                        }
+                    )
+
+            treatment_actions.sort(
+                key=lambda item: (
+                    item["timestamp"],
+                    item["medication"].id,
+                    0 if item["action"] == "add" else 1,
+                )
+            )
+
+            medications_payload = []
+            for index, action_entry in enumerate(treatment_actions, start=1):
+                medication = action_entry["medication"]
+                action_time = action_entry["timestamp"]
                 doctor_name = None
                 doctor = db.get(Doctor, medication.doctor_id)
                 if doctor is not None:
                     doctor_name = f"{doctor.last_name} {doctor.first_name}".strip()
+                related_vital = next(
+                    (vital for vital in sequence_vitals if vital.recorded_at >= action_time),
+                    None,
+                )
+                if related_vital is None:
+                    related_vital = next(
+                        (vital for vital in reversed(sequence_vitals) if vital.recorded_at <= action_time),
+                        None,
+                    )
+
+                previous_alert = next(
+                    (alert for alert in reversed(sequence_alerts) if alert.created_at <= action_time),
+                    None,
+                )
+
                 medications_payload.append(
                     {
                         "id": medication.id,
                         "name": medication.name,
                         "dosage": medication.dosage,
                         "frequency": medication.frequency,
-                        "prescribed_at": medication.created_at,
+                        "prescribed_at": action_time,
                         "updated_at": medication.updated_at,
                         "notes": medication.notes,
                         "last_updated_note": medication.last_updated_note,
                         "modified_by": doctor_name,
+                        "treatment_index": index,
+                        "outcome": self._derive_outcome_from_vital(related_vital),
+                        "previous_alert": (
+                            {
+                                "alert_type": previous_alert.alert_type,
+                                "severity": previous_alert.severity,
+                                "message": previous_alert.message,
+                                "created_at": previous_alert.created_at,
+                            } if previous_alert is not None else None
+                        ),
+                        "next_alert": None,
                         "reasoning": self._build_treatment_reasoning_payload(
                             medication=medication,
                             alerts=alerts,
@@ -328,10 +419,6 @@ class PatientRepository:
                         ),
                     }
                 )
-            medications_payload.sort(
-                key=lambda item: (item["updated_at"] or item["prescribed_at"], item["id"]),
-                reverse=True,
-            )
 
             diagnoses_payload = [
                 {

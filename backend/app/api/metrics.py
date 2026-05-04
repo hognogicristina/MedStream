@@ -2,8 +2,20 @@ from fastapi import APIRouter, Query
 
 from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
-from app.schemas.stats import BatchInsightsRead, ComparisonMetricsRead, ComparisonSummaryRead, PaginatedStreamingAlertsRead
-from app.service.metrics import get_batch_insights_service, get_comparison_metrics, get_latest_batch_metrics, streaming_metrics_store
+from app.schemas.stats import (
+    BatchAlertsHistoryPointRead,
+    BatchInsightsRead,
+    ComparisonMetricsRead,
+    ComparisonSummaryRead,
+    PaginatedStreamingAlertsRead,
+)
+from app.service.metrics import (
+    get_batch_alerts_history,
+    get_batch_insights_service,
+    get_comparison_metrics,
+    get_latest_batch_metrics,
+    streaming_metrics_store,
+)
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -94,4 +106,15 @@ def get_metrics_comparison():
     return success_response(
         "Comparison metrics retrieved successfully.",
         comparison,
+    )
+
+
+@router.get("/batch-alerts-history", response_model=ApiResponse[list[BatchAlertsHistoryPointRead]])
+def get_batch_alerts_history_endpoint(limit: int = Query(default=24, ge=2, le=120)):
+    with SessionLocal() as db:
+        history = get_batch_alerts_history(db, limit=limit)
+
+    return success_response(
+        "Batch alerts history retrieved successfully.",
+        history,
     )
