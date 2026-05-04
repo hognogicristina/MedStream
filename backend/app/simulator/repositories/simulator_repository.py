@@ -392,6 +392,24 @@ class SimulatorRepository:
         patient.discharge_date = discharged_at or now_utc()
         patient.discharge_reason = reason
 
+    def resolve_all_patient_diagnoses(self, db, *, patient_id: int, updated_at: datetime) -> int:
+        diagnoses = db.execute(
+            select(PatientDiagnosis).where(PatientDiagnosis.patient_id == patient_id)
+        ).scalars().all()
+        for diagnosis in diagnoses:
+            diagnosis.status = "resolved"
+            diagnosis.updated_at = updated_at
+        return len(diagnoses)
+
+    def resolve_all_patient_conditions(self, db, *, patient_id: int, updated_at: datetime) -> int:
+        assignments = db.execute(
+            select(PatientConditionAssignment).where(PatientConditionAssignment.patient_id == patient_id)
+        ).scalars().all()
+        for assignment in assignments:
+            assignment.status = "resolved"
+            assignment.updated_at = updated_at
+        return len(assignments)
+
     def get_first_assigned_doctor_id(self, db, patient_id: int) -> int | None:
         link = db.execute(
             doctor_activity_patients.select().where(doctor_activity_patients.c.patient_id == patient_id)

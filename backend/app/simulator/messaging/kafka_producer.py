@@ -11,5 +11,11 @@ class SimulatorKafkaProducer:
     def send_alert(self, payload: dict) -> None:
         send_message(settings.kafka_alerts_topic, payload)
 
+    def send_transfer(self, payload: dict) -> None:
+        send_message(settings.kafka_alerts_topic, payload)
+
+    def send_discharge(self, payload: dict) -> None:
+        send_message(settings.kafka_alerts_topic, payload)
+
     def send_batch(self, payload: dict) -> None:
         send_message(settings.kafka_batch_topic, payload)

@@ -3,6 +3,7 @@ import time
 import asyncio
 import traceback
 from datetime import datetime
+from types import SimpleNamespace
 
 from confluent_kafka import Consumer
 
@@ -11,7 +12,7 @@ from app.db.session import SessionLocal
 from app.models.patient.patient import Patient
 from app.models.vital import Vital
 from app.service.metrics import streaming_metrics_store
-from app.utils.datetime import to_utc
+from app.utils.datetime import now_utc, to_utc
 from app.websocket.manager import manager
 
 VITAL_ALLOWED_FIELDS = {
@@ -104,6 +105,59 @@ def handle_vital_event(payload: dict, app_loop: asyncio.AbstractEventLoop):
 
 
 def handle_alert_event(payload: dict, app_loop: asyncio.AbstractEventLoop):
+    if payload.get("event") == "discharge":
+        discharge_created_at_dt = parse_datetime(payload.get("created_at"))
+        discharge_created_at_iso = (
+            to_utc(discharge_created_at_dt).isoformat() if discharge_created_at_dt is not None else payload.get("created_at")
+        )
+        discharge_event = {
+            "patient_id": payload.get("patient_id"),
+            "reason": payload.get("reason"),
+            "note": payload.get("note"),
+            "trigger": payload.get("trigger"),
+            "treatment_count": payload.get("treatment_count"),
+            "alert_count": payload.get("alert_count"),
+            "created_at": discharge_created_at_iso,
+        }
+        if discharge_event["patient_id"] is None:
+            print("Skipping discharge event: missing patient_id")
+            return
+
+        schedule_broadcast(
+            app_loop,
+            {
+                "type": "discharge",
+                "data": discharge_event,
+            },
+        )
+        return
+
+    if payload.get("event") == "transfer":
+        transfer_created_at_dt = parse_datetime(payload.get("created_at"))
+        transfer_created_at_iso = (
+            to_utc(transfer_created_at_dt).isoformat() if transfer_created_at_dt is not None else payload.get("created_at")
+        )
+        transfer_event = {
+            "patient_id": payload.get("patient_id"),
+            "reason": payload.get("reason"),
+            "trigger": payload.get("trigger"),
+            "alert_count": payload.get("alert_count"),
+            "treatment_count": payload.get("treatment_count"),
+            "created_at": transfer_created_at_iso,
+        }
+        if transfer_event["patient_id"] is None:
+            print("Skipping transfer event: missing patient_id")
+            return
+
+        schedule_broadcast(
+            app_loop,
+            {
+                "type": "transfer",
+                "data": transfer_event,
+            },
+        )
+        return
+
     alert_type = payload.get("alert_type")
     if alert_type is None:
         alert_type = payload.get("type")
@@ -124,6 +178,18 @@ def handle_alert_event(payload: dict, app_loop: asyncio.AbstractEventLoop):
     if alert_event["patient_id"] is None:
         print("Skipping alert event: missing patient_id")
         return
+
+    streaming_metrics_store.record_alert(
+        SimpleNamespace(
+            id=alert_event["id"],
+            patient_id=alert_event["patient_id"],
+            vital_id=alert_event["vital_id"],
+            alert_type=alert_event["alert_type"],
+            severity=alert_event["severity"],
+            message=alert_event["message"],
+            created_at=created_at_dt or now_utc(),
+        )
+    )
 
     schedule_broadcast(
         app_loop,

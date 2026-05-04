@@ -5,6 +5,7 @@ import {
   getBatchMetrics,
   getBatchSchedule,
   getBatchStatus,
+  getMetricsComparison,
   runBatchNow,
   updateBatchSchedule,
 } from "../services/patientApi.js"
@@ -17,6 +18,7 @@ import LoadingSpinner from "../components/LoadingSpinner.jsx"
 const POLL_INTERVAL_MS = 30000
 const STATUS_POLL_INTERVAL_MS = 2500
 const PAGE_SIZE = 5
+const AGGREGATION_WINDOW_MINUTES = 60
 const WEEKDAY_OPTIONS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
 
 const EMPTY_METRICS = {
@@ -162,6 +164,7 @@ export default function BatchMetricsPage() {
   const {notifyError, notifySuccess} = useNotifications()
   const [metrics, setMetrics] = useState(null)
   const [insights, setInsights] = useState(null)
+  const [comparison, setComparison] = useState(null)
   const [batchProgress, setBatchProgress] = useState({is_running: false, progress: 0, stage: "Idle", last_run: null})
   const [progressDisplay, setProgressDisplay] = useState(0)
   const [schedule, setSchedule] = useState(EMPTY_SCHEDULE)
@@ -199,7 +202,7 @@ export default function BatchMetricsPage() {
         setIsLoading(true)
       }
       try {
-        const [metricsResponse, insightsResponse, scheduleResponse] = await Promise.all([
+        const [metricsResponse, insightsResponse, scheduleResponse, comparisonResponse] = await Promise.all([
           getBatchMetrics(),
           getBatchInsights({
             page_size: PAGE_SIZE,
@@ -207,6 +210,7 @@ export default function BatchMetricsPage() {
             diagnoses_page: nextDiagnosesPage,
           }),
           getBatchSchedule(),
+          getMetricsComparison(),
         ])
 
         if (!active) {
@@ -216,6 +220,8 @@ export default function BatchMetricsPage() {
         const nextMetrics = getResponseData(metricsResponse)
         const nextInsights = getResponseData(insightsResponse)
         const nextSchedule = getResponseData(scheduleResponse)
+        const nextComparison = getResponseData(comparisonResponse)
+        setComparison(nextComparison || null)
 
         if (nextMetrics?.timestamp) {
           const currentTimestamp = lastBatchTimestampRef.current
@@ -451,25 +457,53 @@ export default function BatchMetricsPage() {
   const ineffectivePercentage = totalTreatments ? (treatmentEffectiveness.ineffective / totalTreatments) * 100 : 0
 
   const handleExportAllMetrics = () => {
+    const exportTimestamp = new Date().toISOString()
+    const batchTimestampIso = data.timestamp ? new Date(data.timestamp).toISOString() : ""
+    const totalEventsProcessed = Number(comparison?.total_events) || 0
+    const totalAlertsDetected = Number(comparison?.total_alerts) || Number(data.alerts) || 0
+    const alertsPerMinute = AGGREGATION_WINDOW_MINUTES > 0
+      ? totalAlertsDetected / AGGREGATION_WINDOW_MINUTES
+      : 0
+    const batchLatencyAvgSeconds = Number(comparison?.batch_latency_avg) || 0
     const rows = [
-      ["Section", "Metric", "Value"],
-      ["Batch Snapshot", "Avg Heart Rate", data.avg_heart_rate],
-      ["Batch Snapshot", "Avg Oxygen", data.avg_oxygen],
-      ["Batch Snapshot", "Avg Temperature", data.avg_temperature],
-      ["Batch Snapshot", "Alerts", data.alerts],
-      ["Batch Snapshot", "Execution Time (ms)", data.execution_time_ms],
-      ["Department Insights", "Department", "Patients"],
-      ...patientsPerDepartment.items.map((entry) => ["Department Insights", entry.department, entry.patients]),
-      ["Diagnosis Insights", "Diagnosis", "Patients"],
-      ...topDiagnosis.items.map((entry) => ["Diagnosis Insights", entry.name, entry.patients]),
-      ["OVERALL_TREATMENT_EFFECTIVENESS", "total_treatments", totalTreatments],
-      ["OVERALL_TREATMENT_EFFECTIVENESS", "effective_count", treatmentEffectiveness.effective],
-      ["OVERALL_TREATMENT_EFFECTIVENESS", "ineffective_count", treatmentEffectiveness.ineffective],
-      ["OVERALL_TREATMENT_EFFECTIVENESS", "effective_percentage", effectivePercentage.toFixed(2)],
-      ["OVERALL_TREATMENT_EFFECTIVENESS", "ineffective_percentage", ineffectivePercentage.toFixed(2)],
-      ["Medication Effectiveness", "Medication", "Effective", "Ineffective", "Total"],
+      [
+        "timestamp",
+        "batch_timestamp",
+        "batch_duration_ms",
+        "total_events_processed",
+        "total_alerts_detected",
+        "average_heart_rate",
+        "alerts_per_minute",
+        "batch_latency_avg_seconds",
+        "aggregation_window_minutes",
+      ],
+      [
+        exportTimestamp,
+        batchTimestampIso,
+        Number((Number(data.execution_time_ms) || 0).toFixed(2)),
+        totalEventsProcessed,
+        totalAlertsDetected,
+        Number((Number(data.avg_heart_rate) || 0).toFixed(2)),
+        Number(alertsPerMinute.toFixed(4)),
+        Number(batchLatencyAvgSeconds.toFixed(4)),
+        AGGREGATION_WINDOW_MINUTES,
+      ],
+      [],
+      ["department", "patients"],
+      ...patientsPerDepartment.items.map((entry) => [entry.department, entry.patients]),
+      [],
+      ["diagnosis", "patients"],
+      ...topDiagnosis.items.map((entry) => [entry.name, entry.patients]),
+      [],
+      ["metric", "value"],
+      ["overall_treatments_total", totalTreatments],
+      ["overall_treatments_effective_count", treatmentEffectiveness.effective],
+      ["overall_treatments_ineffective_count", treatmentEffectiveness.ineffective],
+      ["overall_treatments_effective_percentage", Number(effectivePercentage.toFixed(2))],
+      ["overall_treatments_ineffective_percentage", Number(ineffectivePercentage.toFixed(2))],
+      [],
+      ["medication", "effective", "ineffective", "total"],
       ...medicationEffectiveness.map((item) => [
-        "Medication Effectiveness",
         item.name,
         item.effective,
         item.ineffective,
@@ -780,8 +814,17 @@ export default function BatchMetricsPage() {
               {topDiagnosis.items?.length ? topDiagnosis.items.map((diagnosis) => (
                 <div key={diagnosis.name} className="monitor-panel rounded-2xl px-4 py-3">
                   <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm font-semibold text-white">{diagnosis.name}</p>
-                    <div className="rounded-full border border-[#4d5661] bg-[#232f3e] px-3 py-1 text-xs font-semibold text-[#d5dbdb]">
+                    <div className="group relative flex flex-1 min-w-0 items-center">
+                      <p className="flex-1 min-w-0 truncate text-sm font-semibold text-white">
+                        {diagnosis.name}
+                      </p>
+                      <span
+                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs font-medium text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                        {diagnosis.name}
+                      </span>
+                    </div>
+                    <div
+                      className="shrink-0 w-[110px] text-center rounded-full border border-[#4d5661] bg-[#232f3e] px-3 py-1 text-xs font-semibold text-[#d5dbdb]">
                       {diagnosis.patients} patients
                     </div>
                   </div>
@@ -821,7 +864,7 @@ export default function BatchMetricsPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Treatment Analysis</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Treatment Effectiveness (cases)</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Treatment Effectiveness</h2>
             </div>
             {treatmentMode === "medication" && selectedMedication ? (
               <button

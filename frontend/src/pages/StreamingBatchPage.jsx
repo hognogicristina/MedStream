@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import {getMetricsComparison} from "../services/patientApi.js"
+import {getBatchMetrics, getMetricsComparison, getStreamingMetrics} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
@@ -16,56 +16,29 @@ import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const POLL_INTERVAL_MS = 4000
-const MAX_HISTORY_POINTS = 24
+const MAX_HISTORY_POINTS = 30
 
-function formatMetric(value, unit = "") {
+function formatFixed(value, digits = 2) {
   const safeValue = Number.isFinite(value) ? value : 0
-  return `${safeValue.toFixed(2)}${unit}`
+  return safeValue.toFixed(digits)
 }
 
-function formatDifference(streamingValue, batchValue, unit = "") {
-  const diff = (streamingValue || 0) - (batchValue || 0)
-  const prefix = diff > 0 ? "+" : ""
-  return `${prefix}${diff.toFixed(2)}${unit}`
-}
-
-function ComparisonCard({title, data, differences, accentClass}) {
-  const metrics = [
-    {label: "Avg Heart Rate", value: formatMetric(data.avg_heart_rate, " bpm"), diff: differences.avg_heart_rate},
-    {label: "Avg Oxygen", value: formatMetric(data.avg_oxygen, "%"), diff: differences.avg_oxygen},
-    {label: "Avg Temperature", value: formatMetric(data.avg_temperature, " C"), diff: differences.avg_temperature},
-    {label: "Alerts Count", value: String(data.alerts ?? 0), diff: differences.alerts},
-    {label: "Execution Time", value: formatMetric(data.execution_time_ms, " ms"), diff: differences.execution_time_ms},
-  ]
-
+function MetricCard({label, value, hint}) {
   return (
-    <section className="monitor-card rounded-[24px] p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${accentClass}`}>{title}</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">{title} Metrics</h2>
-        </div>
-      </div>
+    <div className="monitor-panel rounded-2xl px-4 py-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+      <p className="mt-1 text-xs text-[#b6bec9]">{hint}</p>
+    </div>
+  )
+}
 
-      <div className="mt-6 space-y-3">
-        <p className="text-sm text-[#b6bec9]">
-          The value on the right represents the difference between streaming and batch results for each metric.
-        </p>
-        {metrics.map((metric) => (
-          <div key={metric.label} className="monitor-panel rounded-2xl px-4 py-3">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">{metric.label}</p>
-                <p className="mt-2 text-lg font-semibold text-white">{metric.value}</p>
-              </div>
-              <div className="rounded-full border border-[#4d5661] bg-[#232f3e] px-3 py-1 text-xs font-semibold text-[#d5dbdb]">
-                {metric.diff}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
+function SectionHeader({title, subtitle, accentClass = "text-[#879196]"}) {
+  return (
+    <div>
+      <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${accentClass}`}>{title}</p>
+      <p className="mt-2 text-sm text-[#b6bec9]">{subtitle}</p>
+    </div>
   )
 }
 
@@ -80,31 +53,45 @@ function DownloadIcon() {
 export default function StreamingBatchPage() {
   const {notifyError} = useNotifications()
   const [comparison, setComparison] = useState(null)
+  const [streamingMetricsSnapshot, setStreamingMetricsSnapshot] = useState(null)
+  const [batchMetricsSnapshot, setBatchMetricsSnapshot] = useState(null)
   const [history, setHistory] = useState([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     let active = true
+    let isFirstLoad = true
 
-    const loadComparison = async () => {
-      if (comparison === null) {
+    const loadData = async () => {
+      if (isFirstLoad) {
         setIsLoading(true)
       }
+
       try {
-        const response = await getMetricsComparison()
-        const data = getResponseData(response)
+        const [comparisonResponse, streamingResponse, batchResponse] = await Promise.all([
+          getMetricsComparison(),
+          getStreamingMetrics(),
+          getBatchMetrics(),
+        ])
 
         if (!active) {
           return
         }
 
-        setComparison(data)
+        const nextComparison = getResponseData(comparisonResponse)
+        const streamingMetrics = getResponseData(streamingResponse)
+        const batchMetrics = getResponseData(batchResponse)
+
+        setComparison(nextComparison)
+        setStreamingMetricsSnapshot(streamingMetrics || null)
+        setBatchMetricsSnapshot(batchMetrics || null)
         setHistory((current) => [
           ...current.slice(-(MAX_HISTORY_POINTS - 1)),
           {
+            time_iso: new Date().toISOString(),
             time: new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}),
-            streaming: data.streaming.avg_heart_rate,
-            batch: data.batch.avg_heart_rate,
+            streaming_alerts: streamingMetrics.alerts ?? 0,
+            batch_alerts: batchMetrics.alerts ?? 0,
           },
         ])
       } catch (loadError) {
@@ -114,137 +101,210 @@ export default function StreamingBatchPage() {
       } finally {
         if (active) {
           setIsLoading(false)
+          isFirstLoad = false
         }
       }
     }
 
-    loadComparison()
-    const intervalId = window.setInterval(loadComparison, POLL_INTERVAL_MS)
+    loadData()
+    const intervalId = window.setInterval(loadData, POLL_INTERVAL_MS)
 
     return () => {
       active = false
       window.clearInterval(intervalId)
     }
-  }, [comparison, notifyError])
+  }, [notifyError])
 
-  const streaming = comparison?.streaming ?? {
-    avg_heart_rate: 0,
-    avg_oxygen: 0,
-    avg_temperature: 0,
-    alerts: 0,
-    execution_time_ms: 0,
+  const data = comparison ?? {
+    streaming_latency_avg: 0,
+    batch_latency_avg: 0,
+    total_events: 0,
+    total_alerts: 0,
+    events_per_second: 0,
+    alert_rate: 0,
   }
-  const batch = comparison?.batch ?? streaming
 
-  const differences = {
-    avg_heart_rate: formatDifference(streaming.avg_heart_rate, batch.avg_heart_rate, " bpm"),
-    avg_oxygen: formatDifference(streaming.avg_oxygen, batch.avg_oxygen, "%"),
-    avg_temperature: formatDifference(streaming.avg_temperature, batch.avg_temperature, " C"),
-    alerts: formatDifference(streaming.alerts, batch.alerts),
-    execution_time_ms: formatDifference(streaming.execution_time_ms, batch.execution_time_ms, " ms"),
-  }
+  const batchLatencyMinutes = (Number(data.batch_latency_avg) || 0) / 60
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
-                  Demo View
-                </p>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  Streaming vs Batch
-                </h1>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  title="Download all metrics"
-                  aria-label="Download all metrics"
-                  className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
-                  onClick={() => {
-                    const rows = [
-                      ["Section", "Metric", "Streaming", "Batch", "Difference"],
-                      ["Comparison Snapshot", "Heart Rate", streaming.avg_heart_rate, batch.avg_heart_rate, differences.avg_heart_rate],
-                      ["Comparison Snapshot", "Oxygen", streaming.avg_oxygen, batch.avg_oxygen, differences.avg_oxygen],
-                      ["Comparison Snapshot", "Temperature", streaming.avg_temperature, batch.avg_temperature, differences.avg_temperature],
-                      ["Comparison Snapshot", "Alerts", streaming.alerts, batch.alerts, differences.alerts],
-                      ["Comparison Snapshot", "Execution Time", streaming.execution_time_ms, batch.execution_time_ms, differences.execution_time_ms],
-                      ["Comparison Trend", "Time", "Streaming Avg HR", "Batch Avg HR", ""],
-                      ...history.map((point) => ["Comparison Trend", point.time, point.streaming, point.batch, ""]),
-                    ]
-                    downloadCSV("comparison_all_metrics.csv", rows)
-                  }}
-                >
-                  <DownloadIcon/>
-                </button>
-                <BackButton fallbackTo="/dashboard"/>
-              </div>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Streaming vs Batch</h1>
             </div>
-
-            <div className="w-full">
-              <p className="mt-4 text-[#b6bec9]">
-                This view compares real-time streaming data with batch-processed results.
-                Streaming is fast and responsive, while batch is slower but more accurate.
-                This demonstrates the trade-off between speed and accuracy in data processing systems.
-              </p>
-
-              <p className="mt-2 text-sm text-[#b6bec9]">
-                Each metric displays the current value and the difference compared to the other processing model.
-                Positive values indicate that streaming is higher, while negative values indicate that batch results are higher.
-              </p>
-
+            <div className="flex gap-2">
+              <button
+                type="button"
+                title="Download metrics"
+                aria-label="Download metrics"
+                className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
+                onClick={() => {
+                  const exportTimestamp = new Date().toISOString()
+                  const streamingLatencyMs = Number(data.streaming_latency_avg) || 0
+                  const batchLatencyMs = (Number(data.batch_latency_avg) || 0) * 1000
+                  const latencyDifferenceMs = batchLatencyMs - streamingLatencyMs
+                  const responsivenessRatio = streamingLatencyMs > 0
+                    ? batchLatencyMs / streamingLatencyMs
+                    : 0
+                  const rows = [
+                    [
+                      "timestamp",
+                      "streaming_latency_avg_ms",
+                      "batch_latency_avg_ms",
+                      "total_events",
+                      "total_alerts",
+                      "alert_rate",
+                      "events_per_second",
+                      "latency_difference_ms",
+                      "responsiveness_ratio",
+                      "streaming_snapshot_timestamp",
+                      "batch_snapshot_timestamp",
+                    ],
+                    [
+                      exportTimestamp,
+                      Number(streamingLatencyMs.toFixed(2)),
+                      Number(batchLatencyMs.toFixed(2)),
+                      Number(data.total_events) || 0,
+                      Number(data.total_alerts) || 0,
+                      Number((Number(data.alert_rate) || 0).toFixed(4)),
+                      Number((Number(data.events_per_second) || 0).toFixed(4)),
+                      Number(latencyDifferenceMs.toFixed(2)),
+                      Number(responsivenessRatio.toFixed(4)),
+                      streamingMetricsSnapshot?.timestamp ? new Date(streamingMetricsSnapshot.timestamp).toISOString() : "",
+                      batchMetricsSnapshot?.timestamp ? new Date(batchMetricsSnapshot.timestamp).toISOString() : "",
+                    ],
+                    [],
+                    ["history_timestamp", "streaming_alerts_window", "batch_alerts_total"],
+                    ...history.map((point) => [point.time_iso || "", point.streaming_alerts, point.batch_alerts]),
+                  ]
+                  downloadCSV("streaming_batch_comparison.csv", rows)
+                }}
+              >
+                <DownloadIcon/>
+              </button>
+              <BackButton fallbackTo="/dashboard"/>
             </div>
+          </div>
+          <div className="w-full">
+            <p className="mt-4 text-[#b6bec9]">
+              This view compares real-time streaming data with batch-processed results.
+              Streaming is fast and responsive, while batch is slower but more accurate.
+              This demonstrates the trade-off between speed and accuracy in data processing systems.
+            </p>
+
+            <p className="mt-2 text-sm text-[#b6bec9]">
+              Each metric displays the current value and the difference compared to the other processing model.
+              Positive values indicate that streaming is higher, while negative values indicate that batch results are higher.
+            </p>
+
           </div>
         </header>
 
         {isLoading ? <LoadingSpinner/> : (
           <>
-            <section className="grid gap-6 lg:grid-cols-2">
-              <ComparisonCard title="Streaming" data={streaming} differences={differences} accentClass="text-[#ff9900]"/>
-              <ComparisonCard title="Batch" data={batch} differences={differences} accentClass="text-[#9dccff]"/>
+            <section className="monitor-card rounded-[24px] p-6">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="space-y-3">
+                  <SectionHeader
+                    title="Streaming (Real-Time Alerts)"
+                    subtitle="Immediate event handling and low-latency alerting."
+                    accentClass="text-[#ff9900]"
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <MetricCard
+                      label="Streaming Latency"
+                      value={`${formatFixed(Number(data.streaming_latency_avg) || 0, 2)} ms`}
+                      hint="Event to alert in streaming pipeline"
+                    />
+                    <MetricCard
+                      label="Events per Second"
+                      value={formatFixed(Number(data.events_per_second) || 0, 4)}
+                      hint="Recent ingestion rate"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <SectionHeader
+                    title="Batch (Delayed Analytics)"
+                    subtitle="Periodic processing with delayed but broader analysis."
+                    accentClass="text-[#9dccff]"
+                  />
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <MetricCard
+                      label="Batch Latency"
+                      value={`${formatFixed(batchLatencyMinutes, 2)} min`}
+                      hint="Event to latest batch output"
+                    />
+                    <MetricCard
+                      label="Total Alerts"
+                      value={String(data.total_alerts ?? 0)}
+                      hint="Alerts in comparison window"
+                    />
+                    <MetricCard
+                      label="Alert Rate"
+                      value={`${formatFixed((Number(data.alert_rate) || 0) * 100, 2)}%`}
+                      hint="Alerts as share of total events"
+                    />
+                  </div>
+                </div>
+              </div>
             </section>
 
             <section className="monitor-card rounded-[24px] p-6">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Avg Heart Rate Trend</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Last {history.length} Polls</h2>
-                  <p className="mt-2 text-sm text-[#b6bec9]">
-                    This chart compares how the average heart rate evolves over time for both processing models.
-                    The streaming line reacts instantly to changes, while the batch line changes more gradually,
-                    reflecting aggregated data over a time window.
-                  </p>
-                  <p className="mt-2 text-sm text-[#b6bec9]">
-                    The divergence between the two lines represents the inherent trade-off in modern data systems:
-                    real-time responsiveness versus statistical stability. This comparison highlights why
-                    many production systems adopt a hybrid architecture combining both approaches.
-                  </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Time Behavior</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Streaming Activity vs Batch Snapshots</h2>
+              <p className="mt-2 text-sm text-[#b6bec9]">
+                Orange updates represent real-time streaming alerts. Blue updates represent periodic batch snapshot totals, so changes
+                appear in delayed steps.
+              </p>
+
+              <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                <div className="h-[260px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={history}>
+                      <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false}/>
+                      <XAxis dataKey="time" stroke="#6b7280" tick={{fontSize: 11}} minTickGap={24}/>
+                      <YAxis stroke="#6b7280" tick={{fontSize: 11}} domain={["auto", "auto"]}/>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          border: "1px solid #334155",
+                          borderRadius: "12px",
+                          color: "#fff",
+                        }}
+                      />
+                      <Line type="monotone" dataKey="streaming_alerts" name="Streaming Alerts" stroke="#f97316" strokeWidth={3}
+                            dot={false}/>
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="h-[260px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={history}>
+                      <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false}/>
+                      <XAxis dataKey="time" stroke="#6b7280" tick={{fontSize: 11}} minTickGap={24}/>
+                      <YAxis stroke="#6b7280" tick={{fontSize: 11}} domain={["auto", "auto"]}/>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          border: "1px solid #334155",
+                          borderRadius: "12px",
+                          color: "#fff",
+                        }}
+                      />
+                      <Line type="monotone" dataKey="batch_alerts" name="Batch Alerts (Delayed)" stroke="#60a5fa" strokeWidth={3}
+                            dot={false}/>
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
-
-              <div className="mt-6 h-[280px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={history}>
-                    <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false}/>
-                    <XAxis dataKey="time" stroke="#6b7280" tick={{fontSize: 11}} minTickGap={24}/>
-                    <YAxis stroke="#6b7280" tick={{fontSize: 11}} domain={["auto", "auto"]}/>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#0f172a",
-                        border: "1px solid #334155",
-                        borderRadius: "12px",
-                        color: "#fff",
-                      }}
-                    />
-                    <Line type="monotone" dataKey="streaming" stroke="#f97316" strokeWidth={3} dot={false}/>
-                    <Line type="monotone" dataKey="batch" stroke="#60a5fa" strokeWidth={3} dot={false}/>
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
             </section>
+
             <section className="monitor-card rounded-[24px] p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding the Comparison</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Streaming vs Batch Processing</h2>
