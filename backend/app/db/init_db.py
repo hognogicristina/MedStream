@@ -13,6 +13,11 @@ def _ensure_updated_at_columns():
     table_column_specs = {
         "patient_allergies": {"updated_at": "TIMESTAMP"},
         "patient_condition_assignments": {"updated_at": "TIMESTAMP"},
+        "batch_analytics": {
+            "alerts_critical_count": "INTEGER DEFAULT 0",
+            "alerts_high_count": "INTEGER DEFAULT 0",
+            "alerts_stable_count": "INTEGER DEFAULT 0",
+        },
     }
 
     with engine.begin() as connection:
@@ -22,4 +27,7 @@ def _ensure_updated_at_columns():
                 if column_name in existing_columns:
                     continue
                 connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"))
-                connection.execute(text(f"UPDATE {table_name} SET {column_name} = created_at WHERE {column_name} IS NULL"))
+                if column_name == "updated_at":
+                    connection.execute(text(f"UPDATE {table_name} SET {column_name} = created_at WHERE {column_name} IS NULL"))
+                else:
+                    connection.execute(text(f"UPDATE {table_name} SET {column_name} = 0 WHERE {column_name} IS NULL"))

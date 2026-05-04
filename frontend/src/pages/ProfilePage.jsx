@@ -126,6 +126,36 @@ function sortActivitiesByStatus(items) {
   })
 }
 
+function sortAssignedPatients(items) {
+  const statusRank = (patient) => patient?.is_discharged ? 1 : 0
+
+  return items
+    .map((patient, index) => ({patient, index}))
+    .sort((left, right) => {
+      const leftStatusRank = statusRank(left.patient)
+      const rightStatusRank = statusRank(right.patient)
+      if (leftStatusRank !== rightStatusRank) {
+        return leftStatusRank - rightStatusRank
+      }
+
+      const leftName = formatPatientFullName(left.patient).trim()
+      const rightName = formatPatientFullName(right.patient).trim()
+      const nameComparison = leftName.localeCompare(rightName, "ro", {sensitivity: "base"})
+      if (nameComparison !== 0) {
+        return nameComparison
+      }
+
+      const leftId = Number(left.patient?.id || 0)
+      const rightId = Number(right.patient?.id || 0)
+      if (leftId !== rightId) {
+        return leftId - rightId
+      }
+
+      return left.index - right.index
+    })
+    .map((entry) => entry.patient)
+}
+
 export default function ProfilePage() {
   const EMAIL_VERIFICATION_STATUS_POLL_MS = 30000
   const navigate = useNavigate()
@@ -217,7 +247,7 @@ export default function ProfilePage() {
     }
 
     const assignedPatientsResponse = await getDoctorPatients(doctorId)
-    const nextAssignedPatients = getResponseData(assignedPatientsResponse) || []
+    const nextAssignedPatients = sortAssignedPatients(getResponseData(assignedPatientsResponse) || [])
     setAssignedPatients(nextAssignedPatients)
     await loadAssignedDoctorCounts(nextAssignedPatients)
     return nextAssignedPatients
@@ -265,7 +295,7 @@ export default function ProfilePage() {
           getActivityOptions(),
         ])
 
-        const assignedPatientsData = getResponseData(assignedPatientsResponse) || []
+        const assignedPatientsData = sortAssignedPatients(getResponseData(assignedPatientsResponse) || [])
         const patientsData = getResponseData(patientsResponse) || []
         const doctorsData = getResponseData(doctorsResponse) || []
         const normalizedActivities = (getResponseData(activitiesResponse) || []).map((activity) => normalizeActivity(activity, patientsData, doctorsData))
@@ -528,7 +558,7 @@ export default function ProfilePage() {
         }
       }
       const response = await assignPatientToDoctor(doctor.id, selectedPatient.id, authHeaders)
-      const nextAssignedPatients = getResponseData(response) || []
+      const nextAssignedPatients = sortAssignedPatients(getResponseData(response) || [])
       setAssignedPatients(nextAssignedPatients)
       await loadAssignedDoctorCounts(nextAssignedPatients)
       setAssignmentQuery("")
@@ -549,7 +579,7 @@ export default function ProfilePage() {
 
     try {
       const response = await removePatientFromDoctor(doctor.id, patientId, authHeaders)
-      const nextAssignedPatients = getResponseData(response) || []
+      const nextAssignedPatients = sortAssignedPatients(getResponseData(response) || [])
       setAssignedPatients(nextAssignedPatients)
       await loadAssignedDoctorCounts(nextAssignedPatients)
       await refetchActivities(doctor.id)

@@ -18,4 +18,7 @@ class BatchAnalytics(Base):
     avg_systolic_bp: Mapped[float | None] = mapped_column(Float, nullable=True)
     avg_diastolic_bp: Mapped[float | None] = mapped_column(Float, nullable=True)
     alerts_count: Mapped[int] = mapped_column(Integer)
+    alerts_critical_count: Mapped[int] = mapped_column(Integer, default=0)
+    alerts_high_count: Mapped[int] = mapped_column(Integer, default=0)
+    alerts_stable_count: Mapped[int] = mapped_column(Integer, default=0)
     patients_count: Mapped[int] = mapped_column(Integer)

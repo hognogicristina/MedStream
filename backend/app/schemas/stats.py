@@ -131,3 +131,11 @@ class PaginatedStreamingAlertsRead(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class BatchAlertsHistoryPointRead(BaseModel):
+    timestamp: datetime
+    critical: int
+    high: int
+    stable: int
+    total: int
