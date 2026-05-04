@@ -69,6 +69,15 @@ class MetricsComparisonRead(BaseModel):
     batch: ComparisonMetricsRead
 
 
+class ComparisonSummaryRead(BaseModel):
+    streaming_latency_avg: float
+    batch_latency_avg: float
+    total_events: int
+    total_alerts: int
+    events_per_second: float
+    alert_rate: float
+
+
 class PatientsPerDepartmentRead(BaseModel):
     department: str
     patients: int

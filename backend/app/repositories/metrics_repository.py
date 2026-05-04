@@ -41,12 +41,12 @@ class StreamingMetricsStore:
     def __init__(self):
         self._lock = Lock()
         self._vitals = deque()
+        self._alerts = deque()
         self._recent_alerts = deque(maxlen=10)
         self._patient_counts = Counter()
         self._heart_rate_sum = 0.0
         self._oxygen_sum = 0.0
         self._temperature_sum = 0.0
-        self._alerts_total = 0
         self._last_execution_time_ms = 0.0
 
     def record_vital(self, vital, alert_count: int):
@@ -67,14 +67,16 @@ class StreamingMetricsStore:
             self._heart_rate_sum += vital.heart_rate
             self._oxygen_sum += vital.oxygen_saturation
             self._temperature_sum += vital.temperature
-            self._alerts_total += alert_count
             self._patient_counts[vital.patient_id] += 1
 
             self._purge_expired(cutoff)
             self._last_execution_time_ms = round((perf_counter() - started_at) * 1000, 2)
 
     def record_alert(self, alert):
+        cutoff = utc_now() - WINDOW_DELTA
+
         with self._lock:
+            self._alerts.append(to_utc(alert.created_at))
             self._recent_alerts.appendleft(
                 {
                     "id": alert.id,
@@ -86,19 +88,21 @@ class StreamingMetricsStore:
                     "created_at": to_utc(alert.created_at),
                 }
             )
+            self._purge_expired_alerts(cutoff)
 
     def snapshot(self):
         cutoff = utc_now() - WINDOW_DELTA
 
         with self._lock:
             self._purge_expired(cutoff)
+            self._purge_expired_alerts(cutoff)
             count = len(self._vitals)
 
             return {
                 "avg_heart_rate": validate_metric_value(self._heart_rate_sum / count) if count else 0.0,
                 "avg_oxygen": validate_metric_value(self._oxygen_sum / count) if count else 0.0,
                 "avg_temperature": validate_metric_value(self._temperature_sum / count) if count else 0.0,
-                "total_alerts": self._alerts_total,
+                "total_alerts": len(self._alerts),
                 "active_patients": len(self._patient_counts),
                 "execution_time_ms": self._last_execution_time_ms,
             }
@@ -118,15 +122,18 @@ class StreamingMetricsStore:
 
     def _purge_expired(self, cutoff):
         while self._vitals and to_utc(self._vitals[0][0]) < cutoff:
-            _, patient_id, heart_rate, oxygen, temperature, alert_count = self._vitals.popleft()
+            _, patient_id, heart_rate, oxygen, temperature, _ = self._vitals.popleft()
             self._heart_rate_sum -= heart_rate
             self._oxygen_sum -= oxygen
             self._temperature_sum -= temperature
-            self._alerts_total -= alert_count
             self._patient_counts[patient_id] -= 1
 
             if self._patient_counts[patient_id] <= 0:
                 del self._patient_counts[patient_id]
+
+    def _purge_expired_alerts(self, cutoff):
+        while self._alerts and to_utc(self._alerts[0]) < cutoff:
+            self._alerts.popleft()
 
 
 def paginate_items(items, page: int, page_size: int):
@@ -211,6 +218,70 @@ def get_latest_batch_metrics(db: Session) -> dict:
         "active_patients": int(latest.patients_count or 0),
         "execution_time_ms": round(float(status_snapshot.get("last_run_duration_ms") or 0), 2),
         "timestamp": to_utc(latest.timestamp),
+    }
+
+
+def get_comparison_metrics(db: Session) -> dict:
+    now = utc_now()
+    window_start = now - WINDOW_DELTA
+    window_seconds = max(1, int(WINDOW_DELTA.total_seconds()))
+
+    total_events = int(
+        db.execute(
+            select(func.count(Vital.id)).where(Vital.recorded_at >= window_start)
+        ).scalar_one()
+        or 0
+    )
+    total_alerts = int(
+        db.execute(
+            select(func.count(Alert.id)).where(Alert.created_at >= window_start)
+        ).scalar_one()
+        or 0
+    )
+
+    streaming_latency_seconds = db.execute(
+        select(
+            func.avg(
+                func.extract(
+                    "epoch",
+                    Alert.created_at - Vital.recorded_at,
+                )
+            )
+        )
+        .select_from(Alert)
+        .join(Vital, Vital.id == Alert.vital_id)
+        .where(
+            Alert.created_at >= window_start,
+            Vital.recorded_at.is_not(None),
+        )
+    ).scalar_one()
+
+    latest_batch = get_latest_batch_analytics(db)
+    batch_latency_seconds = None
+    if latest_batch and latest_batch.timestamp:
+        batch_latency_seconds = db.execute(
+            select(
+                func.avg(
+                    func.extract(
+                        "epoch",
+                        latest_batch.timestamp - Vital.recorded_at,
+                    )
+                )
+            )
+            .select_from(Vital)
+            .where(
+                Vital.recorded_at >= (latest_batch.timestamp - WINDOW_DELTA),
+                Vital.recorded_at <= latest_batch.timestamp,
+            )
+        ).scalar_one()
+
+    return {
+        "streaming_latency_avg": round(float((streaming_latency_seconds or 0) * 1000), 2),
+        "batch_latency_avg": round(float(batch_latency_seconds or 0), 2),
+        "total_events": total_events,
+        "total_alerts": total_alerts,
+        "events_per_second": round(total_events / window_seconds, 4),
+        "alert_rate": round((total_alerts / total_events), 4) if total_events > 0 else 0.0,
     }
 
 

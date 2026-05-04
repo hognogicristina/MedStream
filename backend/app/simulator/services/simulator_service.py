@@ -49,7 +49,6 @@ BASE_LOOKBACK_DAYS_RANGE = (30, 730)
 VITAL_STEP_MINUTES_RANGE = (4, 12)
 ACTIVITY_STEP_HOURS_RANGE = (6, 48)
 MEDICATION_STEP_DAYS_RANGE = (5, 28)
-HISTORICAL_VITAL_SAMPLES_RANGE = (48, 180)
 MAX_OUTCOME_HISTORY = 400
 TREATMENT_EVALUATION_WINDOW_CYCLES = 6
 TREATMENT_FAILURE_ALERT_CYCLES = 2
@@ -60,7 +59,21 @@ ALERT_COOLDOWN_MINUTES_RANGE = (5, 15)
 MAX_ALERTS_PER_PATIENT_PER_HOUR = 18
 MAX_ALERTS_PER_PATIENT_PER_CYCLE = 2
 MAX_DOSAGE_MULTIPLIER = 4
+ALERT_PROCESSING_DELAY_MS_RANGE = (50, 200)
+ALERT_DRIVEN_TRANSFER_TREATMENT_THRESHOLD = 10
+EFFECTIVE_DISCHARGE_TREATMENT_THRESHOLD = 10
+DEBUG_FORCE_FREQUENT_ALERTS = True
+DEBUG_ABNORMAL_VITAL_PROBABILITY = 0.25
+DEBUG_ALERT_COOLDOWN_SECONDS_RANGE = (10, 20)
+DEBUG_ALERT_BURST_TRIGGER_PROBABILITY = 0.08
+DEBUG_ALERT_BURST_CYCLES_RANGE = (2, 4)
+DEBUG_ALERT_BURST_ABNORMAL_PROBABILITY = 0.7
+DEBUG_ALERT_BURST_COOLDOWN_SECONDS_RANGE = (4, 8)
 TREATMENT_ESCALATION_NOTE = "Treatment not working, patient got worse. Dose/frequency adjusted after persistent alerts."
+SUCCESSFUL_RECOVERY_DISCHARGE_NOTE = (
+    "Patient discharged after successful recovery: treatment remained effective across repeated updates, "
+    "and all tracked diagnoses/conditions were resolved."
+)
 DIAGNOSIS_ALLOWED_STATUSES = ("active", "resolved", "chronic", "inactive")
 CONDITION_ALLOWED_STATUSES = ("active", "improving", "stable", "worsening", "critical", "resolved", "chronic")
 
@@ -254,6 +267,13 @@ class SimulatorService:
             "treatment_state": treatment_state,
             "clinical_state": clinical_state,
             "stability_started_at": None,
+            "high_critical_alert_count": 0,
+            "alert_driven_treatment_count": 0,
+            "treatment_update_count": 0,
+            "total_alert_count": 0,
+            "monitoring_status": "active",
+            "debug_alert_cooldown_seconds": random.randint(*DEBUG_ALERT_COOLDOWN_SECONDS_RANGE),
+            "debug_alert_burst_cycles_remaining": 0,
         }
 
         self._seed_historical_activities(db, patient, patient_data)
@@ -426,60 +446,10 @@ class SimulatorService:
             )
 
     def _seed_historical_vitals_and_alerts(self, db, patient, patient_data: dict) -> None:
-        now = now_utc()
-        admission_date = patient_data["admission_date"]
-        vital_count = random.randint(*HISTORICAL_VITAL_SAMPLES_RANGE)
-        cursor = admission_date
-
-        for index in range(vital_count):
-            cursor = self._advance_time(
-                cursor,
-                timedelta(minutes=VITAL_STEP_MINUTES_RANGE[0]),
-                timedelta(minutes=VITAL_STEP_MINUTES_RANGE[1]),
-            )
-            recorded_at = self._clamp_to_now(cursor)
-            if recorded_at >= now:
-                break
-
-            vitals = self._generate_vitals_for_patient(patient_data)
-            vital = self.repository.create_vital_safe(db, patient.id, vitals, recorded_at=recorded_at)
-            if vital is None:
-                break
-
-            alert_stats = self._create_alerts(
-                db,
-                patient.id,
-                vital.id,
-                vitals,
-                patient_data=patient_data,
-                recorded_at=recorded_at,
-                emit_events=False,
-                include_buffer=False,
-            )
-            has_abnormal_vitals = self._has_abnormal_vitals(vitals)
-            state = evaluate_patient_state(vitals)
-            self._record_outcome_evaluation(patient_data, recorded_at=recorded_at, alert_stats=alert_stats)
-            self._update_stability_tracking(
-                patient_data=patient_data,
-                alert_stats=alert_stats,
-                current_state=state,
-                event_time=recorded_at,
-            )
-            self._update_treatment_lifecycle(
-                db,
-                patient=patient,
-                patient_data=patient_data,
-                has_abnormal_vitals=has_abnormal_vitals,
-                current_state=state,
-                event_time=recorded_at,
-                allow_discharge=False,
-            )
-            self._apply_treatment_effect_to_clinical_state(
-                patient_data,
-                has_escalated_alert=bool(alert_stats.get("high_or_critical_count")),
-            )
-
-        patient_data["timeline_cursor"] = min(self._clamp_to_now(cursor), now - timedelta(minutes=1))
+        # Keep the patient timeline aligned with real-time emission.
+        # Historical backfill rows are intentionally skipped so the simulator never emits
+        # vitals/alerts with past timestamps.
+        patient_data["timeline_cursor"] = now_utc()
 
     def _process_patient(self, db, patient_data: dict, activities_created_in_cycle: set[int]) -> bool:
         patient_id = patient_data.get("id")
@@ -490,13 +460,7 @@ class SimulatorService:
         if patient is None or patient.is_discharged:
             return False
 
-        timeline_cursor = patient_data.get("timeline_cursor") or now_utc()
-        timeline_cursor = self._advance_time(
-            timeline_cursor,
-            timedelta(minutes=VITAL_STEP_MINUTES_RANGE[0]),
-            timedelta(minutes=VITAL_STEP_MINUTES_RANGE[1]),
-        )
-        event_time = self._clamp_to_now(timeline_cursor)
+        event_time = now_utc()
         patient_data["timeline_cursor"] = event_time
 
         vitals = self._generate_vitals_for_patient(patient_data)
@@ -522,6 +486,9 @@ class SimulatorService:
             patient_data=patient_data,
             recorded_at=event_time,
         )
+        high_or_critical_count = int(alert_stats.get("high_or_critical_count", 0))
+        if high_or_critical_count > 0:
+            patient_data["high_critical_alert_count"] = int(patient_data.get("high_critical_alert_count", 0)) + high_or_critical_count
         has_abnormal_vitals = self._has_abnormal_vitals(vitals)
         self._record_outcome_evaluation(patient_data, recorded_at=event_time, alert_stats=alert_stats)
         self._update_stability_tracking(
@@ -538,6 +505,7 @@ class SimulatorService:
             current_state=new_state,
             event_time=event_time,
             allow_discharge=True,
+            has_high_or_critical_alert=high_or_critical_count > 0,
         )
         self._apply_treatment_effect_to_clinical_state(
             patient_data,
@@ -743,7 +711,7 @@ class SimulatorService:
         else:
             current_state = "normal"
 
-        if current_state == previous_state:
+        if (not DEBUG_FORCE_FREQUENT_ALERTS) and current_state == previous_state:
             return {
                 "count": 0,
                 "severity_score": 0,
@@ -766,8 +734,16 @@ class SimulatorService:
                 "highest_severity": "normal",
             }
 
-        cooldown_minutes = int(patient_data.get("alert_cooldown_minutes", ALERT_COOLDOWN_MINUTES_RANGE[0]))
-        cooldown = timedelta(minutes=max(1, cooldown_minutes))
+        if DEBUG_FORCE_FREQUENT_ALERTS:
+            burst_cycles_remaining = int(patient_data.get("debug_alert_burst_cycles_remaining", 0))
+            if burst_cycles_remaining > 0:
+                cooldown_seconds = random.randint(*DEBUG_ALERT_BURST_COOLDOWN_SECONDS_RANGE)
+            else:
+                cooldown_seconds = int(patient_data.get("debug_alert_cooldown_seconds", DEBUG_ALERT_COOLDOWN_SECONDS_RANGE[0]))
+            cooldown = timedelta(seconds=max(1, cooldown_seconds))
+        else:
+            cooldown_minutes = int(patient_data.get("alert_cooldown_minutes", ALERT_COOLDOWN_MINUTES_RANGE[0]))
+            cooldown = timedelta(minutes=max(1, cooldown_minutes))
         last_alert_timestamp = patient_data.get("last_alert_timestamp")
         if isinstance(last_alert_timestamp, datetime) and recorded_at - last_alert_timestamp < cooldown:
             return {
@@ -791,7 +767,7 @@ class SimulatorService:
                 alert_type=alert_type,
                 message=message,
                 severity=severity,
-                created_at=recorded_at,
+                created_at=recorded_at + timedelta(milliseconds=random.randint(*ALERT_PROCESSING_DELAY_MS_RANGE)),
             )
             if created_alert is None:
                 return
@@ -859,12 +835,14 @@ class SimulatorService:
         patient_data["recent_alert_timestamps"] = recent_alert_timestamps
         if generated_in_cycle > 0:
             patient_data["last_alert_state"] = current_state
+            patient_data["total_alert_count"] = int(patient_data.get("total_alert_count", 0)) + generated_in_cycle
 
         return {
             "count": count,
             "severity_score": severity_score,
             "high_or_critical_count": high_or_critical_count,
             "highest_severity": highest_severity,
+            "generated_count": generated_in_cycle,
         }
 
     def _record_outcome_evaluation(self, patient_data: dict, *, recorded_at: datetime, alert_stats: dict) -> None:
@@ -1053,6 +1031,7 @@ class SimulatorService:
             current_state: str,
             event_time: datetime,
             allow_discharge: bool,
+            has_high_or_critical_alert: bool,
     ) -> bool:
         treatment = patient_data.get("treatment_state")
         if not isinstance(treatment, dict):
@@ -1066,6 +1045,14 @@ class SimulatorService:
                 medication_index=0,
                 event_time=event_time,
             )
+            if started and has_high_or_critical_alert:
+                if self._register_alert_driven_treatment_change(
+                        db,
+                        patient=patient,
+                        patient_data=patient_data,
+                        event_time=event_time,
+                ):
+                    return True
             if not started:
                 treatment["status"] = "exhausted"
                 if allow_discharge:
@@ -1084,6 +1071,13 @@ class SimulatorService:
 
         if current_state == "stable" and not has_abnormal_vitals:
             treatment["status"] = "effective"
+            if self._is_effective_outcome_ready_for_discharge(patient_data=patient_data):
+                return self._discharge_due_to_effective_treatment(
+                    db,
+                    patient=patient,
+                    patient_data=patient_data,
+                    event_time=event_time,
+                )
 
         cycles_on_medication = int(treatment.get("cycles_on_medication", 0))
         evaluation_window = max(1, int(treatment.get("evaluation_window_cycles", TREATMENT_EVALUATION_WINDOW_CYCLES)))
@@ -1118,6 +1112,14 @@ class SimulatorService:
                     treatment["cycles_on_medication"] = 0
                     treatment["abnormal_cycles_on_medication"] = 0
                     treatment["normal_cycles_on_medication"] = 0
+                    if has_high_or_critical_alert:
+                        if self._register_alert_driven_treatment_change(
+                                db,
+                                patient=patient,
+                                patient_data=patient_data,
+                                event_time=event_time,
+                        ):
+                            return True
                     return False
 
             replacement = self._choose_replacement_medication(db, patient=patient, patient_data=patient_data)
@@ -1133,6 +1135,14 @@ class SimulatorService:
                     escalation_note=TREATMENT_ESCALATION_NOTE,
                 )
                 if switched:
+                    if has_high_or_critical_alert:
+                        if self._register_alert_driven_treatment_change(
+                                db,
+                                patient=patient,
+                                patient_data=patient_data,
+                                event_time=event_time,
+                        ):
+                            return True
                     return False
 
             treatment["status"] = "exhausted"
@@ -1144,8 +1154,130 @@ class SimulatorService:
         normal_cycles = int(treatment.get("normal_cycles_on_medication", 0))
         if normal_cycles >= TREATMENT_MIN_SUCCESS_NORMAL_CYCLES and current_state == "stable":
             treatment["status"] = "effective"
+            if self._is_effective_outcome_ready_for_discharge(patient_data=patient_data):
+                return self._discharge_due_to_effective_treatment(
+                    db,
+                    patient=patient,
+                    patient_data=patient_data,
+                    event_time=event_time,
+                )
 
         return False
+
+    def _register_alert_driven_treatment_change(
+            self,
+            db,
+            *,
+            patient,
+            patient_data: dict,
+            event_time: datetime,
+    ) -> bool:
+        updated_count = int(patient_data.get("alert_driven_treatment_count", 0)) + 1
+        patient_data["alert_driven_treatment_count"] = updated_count
+        if updated_count < ALERT_DRIVEN_TRANSFER_TREATMENT_THRESHOLD:
+            return False
+        return self._transfer_due_to_alert_driven_treatments(
+            db,
+            patient=patient,
+            patient_data=patient_data,
+            event_time=event_time,
+        )
+
+    def _is_effective_outcome_ready_for_discharge(self, *, patient_data: dict) -> bool:
+        treatment_updates = int(patient_data.get("treatment_update_count", 0))
+        if treatment_updates < EFFECTIVE_DISCHARGE_TREATMENT_THRESHOLD:
+            return False
+
+        if int(patient_data.get("total_alert_count", 0)) < 1:
+            return False
+
+        latest_outcome = None
+        history = patient_data.get("patient_outcome_history") or []
+        if history:
+            latest_outcome = (history[-1] or {}).get("outcome")
+        if latest_outcome != "effective":
+            return False
+
+        if str((patient_data.get("monitoring_status") or "active")).lower() == "transferred":
+            return False
+
+        return True
+
+    def _discharge_due_to_effective_treatment(self, db, *, patient, patient_data: dict, event_time: datetime) -> bool:
+        if patient.is_discharged:
+            return False
+        if str((patient_data.get("monitoring_status") or "active")).lower() == "transferred":
+            return False
+
+        self.repository.resolve_all_patient_diagnoses(
+            db,
+            patient_id=patient.id,
+            updated_at=event_time,
+        )
+        self.repository.resolve_all_patient_conditions(
+            db,
+            patient_id=patient.id,
+            updated_at=event_time,
+        )
+        self.repository.mark_patient_discharged(
+            db,
+            patient,
+            "Recovered after effective treatment",
+            event_time,
+        )
+        patient_data["monitoring_status"] = "discharged"
+
+        doctor_id = self.repository.get_first_assigned_doctor_id(db, patient.id)
+        if doctor_id is not None:
+            self.repository.create_admission_history(
+                db,
+                patient_id=patient.id,
+                doctor_id=doctor_id,
+                entry_type="discharge",
+                reason="Recovered after effective treatment",
+                note=SUCCESSFUL_RECOVERY_DISCHARGE_NOTE,
+                created_at=event_time,
+            )
+
+        self.producer.send_discharge(
+            {
+                "event": "discharge",
+                "patient_id": patient.id,
+                "reason": "Recovered after effective treatment",
+                "note": SUCCESSFUL_RECOVERY_DISCHARGE_NOTE,
+                "trigger": "effective_outcome_treatment_threshold",
+                "treatment_count": int(patient_data.get("treatment_update_count", 0)),
+                "alert_count": int(patient_data.get("total_alert_count", 0)),
+                "created_at": event_time.isoformat(),
+            }
+        )
+        return True
+
+    def _transfer_due_to_alert_driven_treatments(
+            self,
+            db,
+            *,
+            patient,
+            patient_data: dict,
+            event_time: datetime,
+    ) -> bool:
+        if patient.is_discharged:
+            return False
+
+        patient_data["monitoring_status"] = "transferred"
+        self._discharge_as_transferred(db, patient, event_time=event_time)
+        self.producer.send_transfer(
+            {
+                "event": "transfer",
+                "patient_id": patient.id,
+                "reason": "Transferred after repeated alert-driven treatment changes",
+                "trigger": "alert_driven_treatment_threshold",
+                "alert_count": int(patient_data.get("high_critical_alert_count", 0)),
+                "treatment_count": int(patient_data.get("alert_driven_treatment_count", 0)),
+                "created_at": event_time.isoformat(),
+            }
+        )
+        return True
 
     @staticmethod
     def _has_abnormal_vitals(vitals: dict) -> bool:
@@ -1205,6 +1337,7 @@ class SimulatorService:
                 "effective": profile["effective"],
             }
         )
+        patient_data["treatment_update_count"] = int(patient_data.get("treatment_update_count", 0)) + 1
 
         dosage = str(patient_data.get("medication_dosage") or "1x standard dose")
         frequency = str(patient_data.get("medication_frequency") or "Daily")
@@ -1336,6 +1469,7 @@ class SimulatorService:
 
         patient_data["medication_dosage"] = next_dosage
         patient_data["medication_frequency"] = next_frequency
+        patient_data["treatment_update_count"] = int(patient_data.get("treatment_update_count", 0)) + 1
         return True
 
     def _doctor_display_name(self, db, doctor_id: int) -> str:
@@ -1507,6 +1641,24 @@ class SimulatorService:
 
         clinical_state["cycle_index"] = cycle_index + 1
         patient_data["clinical_state"] = clinical_state
+
+        if DEBUG_FORCE_FREQUENT_ALERTS:
+            burst_cycles_remaining = int(patient_data.get("debug_alert_burst_cycles_remaining", 0))
+            if burst_cycles_remaining <= 0 and random.random() < DEBUG_ALERT_BURST_TRIGGER_PROBABILITY:
+                burst_cycles_remaining = random.randint(*DEBUG_ALERT_BURST_CYCLES_RANGE)
+            abnormal_probability = (
+                DEBUG_ALERT_BURST_ABNORMAL_PROBABILITY
+                if burst_cycles_remaining > 0
+                else DEBUG_ABNORMAL_VITAL_PROBABILITY
+            )
+            patient_data["debug_alert_burst_cycles_remaining"] = max(0, burst_cycles_remaining - 1)
+        else:
+            abnormal_probability = 0.0
+
+        if DEBUG_FORCE_FREQUENT_ALERTS and random.random() < abnormal_probability:
+            heart_rate = max(heart_rate, random.randint(124, 150))
+            oxygen_saturation = min(oxygen_saturation, random.randint(82, 89))
+            temperature = max(temperature, random.randint(39, 40))
 
         return {
             "heart_rate": self._clamp_int(heart_rate, 55, 170),

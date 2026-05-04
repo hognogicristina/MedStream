@@ -2,8 +2,8 @@ from fastapi import APIRouter, Query
 
 from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
-from app.schemas.stats import BatchInsightsRead, ComparisonMetricsRead, MetricsComparisonRead, PaginatedStreamingAlertsRead
-from app.service.metrics import get_batch_insights_service, get_latest_batch_metrics, streaming_metrics_store
+from app.schemas.stats import BatchInsightsRead, ComparisonMetricsRead, ComparisonSummaryRead, PaginatedStreamingAlertsRead
+from app.service.metrics import get_batch_insights_service, get_comparison_metrics, get_latest_batch_metrics, streaming_metrics_store
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -86,34 +86,12 @@ def get_streaming_alerts(
     )
 
 
-@router.get("/comparison", response_model=ApiResponse[MetricsComparisonRead])
+@router.get("/comparison", response_model=ApiResponse[ComparisonSummaryRead])
 def get_metrics_comparison():
-    streaming_metrics = streaming_metrics_store.snapshot()
     with SessionLocal() as db:
-        batch_metrics = get_latest_batch_metrics(db)
+        comparison = get_comparison_metrics(db)
 
     return success_response(
         "Comparison metrics retrieved successfully.",
-        {
-            "streaming": {
-                "avg_heart_rate": streaming_metrics["avg_heart_rate"],
-                "avg_oxygen": streaming_metrics["avg_oxygen"],
-                "avg_temperature": streaming_metrics["avg_temperature"],
-                "avg_systolic_bp": None,
-                "avg_diastolic_bp": None,
-                "alerts": streaming_metrics["total_alerts"],
-                "execution_time_ms": streaming_metrics["execution_time_ms"],
-            },
-            "batch": {
-                "avg_heart_rate": batch_metrics["avg_heart_rate"],
-                "avg_oxygen": batch_metrics["avg_oxygen"],
-                "avg_temperature": batch_metrics["avg_temperature"],
-                "avg_systolic_bp": batch_metrics["avg_systolic_bp"],
-                "avg_diastolic_bp": batch_metrics["avg_diastolic_bp"],
-                "alerts": batch_metrics["total_alerts"],
-                "patients_count": batch_metrics["active_patients"],
-                "timestamp": batch_metrics["timestamp"],
-                "execution_time_ms": batch_metrics["execution_time_ms"],
-            },
-        },
+        comparison,
     )

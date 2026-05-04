@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react"
 import {
+  getMetricsComparison,
   getStreamingAlerts,
   getStreamingMetrics,
 } from "../services/patientApi.js"
@@ -19,8 +20,10 @@ import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const POLL_INTERVAL_MS = 2500
-const MAX_POINTS = 20
+const MAX_POINTS = 30
 const ALERTS_PAGE_SIZE = 3
+const ALERTS_TELEMETRY_SIZE = 10
+const ALERTS_WINDOW_SECONDS = 60
 
 function formatMetric(value, unit = "") {
   const safeValue = Number.isFinite(value) ? value : 0
@@ -57,25 +60,37 @@ function formatAlertTime(value) {
   })
 }
 
+function toMillis(value) {
+  const parsed = new Date(value).getTime()
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 export default function StreamingMetricsPage() {
   const {notifyError} = useNotifications()
   const [metrics, setMetrics] = useState(null)
+  const [comparison, setComparison] = useState(null)
   const [alertsPage, setAlertsPage] = useState(1)
   const [recentAlerts, setRecentAlerts] = useState({items: [], total: 0, page: 1, page_size: ALERTS_PAGE_SIZE})
-  const [history, setHistory] = useState([])
+  const [heartRateHistory, setHeartRateHistory] = useState([])
+  const [alertsRateHistory, setAlertsRateHistory] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [seenAlertIds, setSeenAlertIds] = useState({})
+  const [lastAlertTime, setLastAlertTime] = useState(null)
 
   useEffect(() => {
     let active = true
+    let isFirstLoad = true
 
     const loadData = async () => {
-      if (metrics === null) {
+      if (isFirstLoad) {
         setIsLoading(true)
       }
       try {
-        const [metricsResponse, alertsResponse] = await Promise.all([
+        const [metricsResponse, alertsResponse, telemetryAlertsResponse, comparisonResponse] = await Promise.all([
           getStreamingMetrics(),
           getStreamingAlerts(alertsPage, ALERTS_PAGE_SIZE),
+          getStreamingAlerts(1, ALERTS_TELEMETRY_SIZE),
+          getMetricsComparison(),
         ])
 
         if (!active) {
@@ -84,6 +99,9 @@ export default function StreamingMetricsPage() {
 
         const nextMetrics = getResponseData(metricsResponse)
         const nextAlerts = getResponseData(alertsResponse)
+        const telemetryAlerts = getResponseData(telemetryAlertsResponse)
+        const nextComparison = getResponseData(comparisonResponse)
+        setComparison(nextComparison || null)
         const totalPages = Math.max(1, Math.ceil((nextAlerts.total || 0) / ALERTS_PAGE_SIZE))
 
         if (alertsPage > totalPages) {
@@ -93,13 +111,66 @@ export default function StreamingMetricsPage() {
 
         setMetrics(nextMetrics)
         setRecentAlerts(nextAlerts)
-        setHistory((current) => [
+
+        const tickTime = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
+
+        setHeartRateHistory((current) => [
           ...current.slice(-(MAX_POINTS - 1)),
           {
-            time: new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}),
+            time: tickTime,
             heart_rate: nextMetrics.avg_heart_rate,
           },
         ])
+
+        const telemetryItems = Array.isArray(telemetryAlerts.items) ? telemetryAlerts.items : []
+        const newestAlert = telemetryItems[0]
+        if (newestAlert?.created_at) {
+          setLastAlertTime(newestAlert.created_at)
+        }
+
+        setSeenAlertIds((currentSeen) => {
+          const nextSeen = {...currentSeen}
+          const nowMs = Date.now()
+          const windowStartMs = nowMs - ALERTS_WINDOW_SECONDS * 1000
+          let newAlerts = 0
+
+          telemetryItems.forEach((alert) => {
+            if (alert?.id == null) {
+              return
+            }
+            const createdAtMs = toMillis(alert.created_at)
+            if (createdAtMs == null) {
+              return
+            }
+            const key = String(alert.id)
+            if (!nextSeen[key]) {
+              nextSeen[key] = createdAtMs
+              newAlerts += 1
+            }
+          })
+
+          Object.keys(nextSeen).forEach((key) => {
+            if ((nextSeen[key] || 0) < windowStartMs) {
+              delete nextSeen[key]
+            }
+          })
+
+          const activeCount = Object.keys(nextSeen).length
+          const perSecond = activeCount / ALERTS_WINDOW_SECONDS
+          const perMinute = activeCount
+
+          setAlertsRateHistory((current) => [
+            ...current.slice(-(MAX_POINTS - 1)),
+            {
+              time: tickTime,
+              alerts_per_second: Number(perSecond.toFixed(3)),
+              alerts_per_minute: perMinute,
+              new_alerts_tick: newAlerts,
+            },
+          ])
+
+          return nextSeen
+        })
       } catch (loadError) {
         if (active) {
           notifyError(getErrorMessage(loadError), {duration: 5000})
@@ -107,6 +178,7 @@ export default function StreamingMetricsPage() {
       } finally {
         if (active) {
           setIsLoading(false)
+          isFirstLoad = false
         }
       }
     }
@@ -118,7 +190,7 @@ export default function StreamingMetricsPage() {
       active = false
       window.clearInterval(intervalId)
     }
-  }, [alertsPage, metrics, notifyError])
+  }, [alertsPage, notifyError])
 
   const data = metrics ?? {
     avg_heart_rate: 0,
@@ -127,6 +199,13 @@ export default function StreamingMetricsPage() {
     alerts: 0,
     execution_time_ms: 0,
   }
+
+  const latestRatePoint = alertsRateHistory[alertsRateHistory.length - 1] || {
+    alerts_per_second: 0,
+    alerts_per_minute: 0,
+    new_alerts_tick: 0,
+  }
+
   const alertsTotalPages = Math.max(1, Math.ceil((recentAlerts.total || 0) / ALERTS_PAGE_SIZE))
 
   return (
@@ -137,7 +216,7 @@ export default function StreamingMetricsPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Streaming Metrics</h1>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Streaming Alert Processing</h1>
               </div>
               <div className="flex gap-2">
                 <button
@@ -146,25 +225,44 @@ export default function StreamingMetricsPage() {
                   aria-label="Download all metrics"
                   className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
                   onClick={() => {
+                    const exportTimestamp = new Date().toISOString()
+                    const totalEvents = Number(comparison?.total_events) || 0
+                    const totalAlerts = Number(comparison?.total_alerts) || Number(data.alerts) || 0
+                    const alertsPerSecond = Number(comparison?.events_per_second) > 0
+                      ? (Number(comparison?.alert_rate) || 0) * Number(comparison?.events_per_second)
+                      : Number(latestRatePoint.alerts_per_second) || 0
+                    const alertsPerMinute = alertsPerSecond * 60
+                    const alertRate = totalEvents > 0 ? totalAlerts / totalEvents : 0
+                    const streamingLatencyAvgMs = Number(comparison?.streaming_latency_avg) || 0
                     const rows = [
-                      ["Section", "Metric", "Value"],
-                      ["Streaming Snapshot", "Avg Heart Rate", data.avg_heart_rate],
-                      ["Streaming Snapshot", "Avg Oxygen", data.avg_oxygen],
-                      ["Streaming Snapshot", "Avg Temperature", data.avg_temperature],
-                      ["Streaming Snapshot", "Alerts Count", data.alerts],
-                      ["Streaming Snapshot", "Execution Time (ms)", data.execution_time_ms],
-                      ["Recent Alerts", "Alert ID", "Patient ID", "Type", "Severity", "Message", "Created At"],
+                      [
+                        "timestamp",
+                        "total_events",
+                        "total_alerts",
+                        "alerts_per_second",
+                        "alerts_per_minute",
+                        "alert_rate",
+                        "streaming_latency_avg_ms",
+                      ],
+                      [
+                        exportTimestamp,
+                        totalEvents,
+                        totalAlerts,
+                        Number(alertsPerSecond.toFixed(4)),
+                        Number(alertsPerMinute.toFixed(2)),
+                        Number(alertRate.toFixed(4)),
+                        Number(streamingLatencyAvgMs.toFixed(2)),
+                      ],
+                      [],
+                      ["recent_alert_id", "recent_alert_patient_id", "recent_alert_type", "recent_alert_severity", "recent_alert_message", "recent_alert_created_at"],
                       ...(recentAlerts.items || []).map((alert) => [
-                        "Recent Alerts",
                         alert.id,
                         alert.patient_id,
                         alert.alert_type,
                         alert.severity,
                         alert.message,
-                        alert.created_at,
+                        alert.created_at ? new Date(alert.created_at).toISOString() : "",
                       ]),
-                      ["Heart Rate Trend", "Time", "Avg Heart Rate"],
-                      ...history.map((point) => ["Heart Rate Trend", point.time, point.heart_rate]),
                     ]
                     downloadCSV("streaming_all_metrics.csv", rows)
                   }}
@@ -174,24 +272,21 @@ export default function StreamingMetricsPage() {
                 <BackButton fallbackTo="/dashboard"/>
               </div>
             </div>
-            <div className="w-full">
-              <p className="mt-4 w-full text-sm text-[#b6bec9]">
-                This view shows real-time patient monitoring data.
-                Vitals and alerts are processed instantly as they are generated.
-                This allows fast reaction, but values may fluctuate and are not always perfectly accurate.
-                Data is refreshed every ~2.5 seconds using polling, simulating a real-time monitoring system.
-              </p>
-            </div>
+            <p className="mt-4 text-[#b6bec9]">
+              This view prioritizes live alert processing. You can see throughput changing in real time,
+              new alerts appearing immediately, and processing latency indicators updating every poll cycle.
+            </p>
           </div>
         </header>
 
         <section className="monitor-card rounded-[24px] p-6">
           {isLoading ? <LoadingSpinner/> : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+              <MetricTile label="Alerts per Second" value={formatMetric(latestRatePoint.alerts_per_second)}/>
+              <MetricTile label="Alerts per Minute" value={formatMetric(latestRatePoint.alerts_per_minute)}/>
+              <MetricTile label="New Alerts (last tick)" value={String(latestRatePoint.new_alerts_tick ?? 0)}/>
+              <MetricTile label="Live Alerts (window)" value={String(data.alerts ?? 0)}/>
               <MetricTile label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm")}/>
-              <MetricTile label="Avg Oxygen" value={formatMetric(data.avg_oxygen, "%")}/>
-              <MetricTile label="Avg Temperature" value={formatMetric(data.avg_temperature, " C")}/>
-              <MetricTile label="Alerts Count" value={String(data.alerts ?? 0)}/>
               <MetricTile label="Execution Time" value={formatMetric(data.execution_time_ms, " ms")}/>
             </div>
           )}
@@ -199,41 +294,19 @@ export default function StreamingMetricsPage() {
 
         {!isLoading && (
           <>
-            <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+            <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
               <div className="monitor-card rounded-[24px] p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Live Trend</p>
-                <p className="mt-2 text-sm text-[#b6bec9]">
-                  This chart shows the evolution of the average heart rate over time.
-                  Each point represents a real-time snapshot, illustrating how values fluctuate continuously.
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Average Heart Rate</h2>
-
-                <div className="mt-6 h-[280px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={history}>
-                      <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false}/>
-                      <XAxis dataKey="time" stroke="#6b7280" tick={{fontSize: 11}} minTickGap={24}/>
-                      <YAxis stroke="#6b7280" tick={{fontSize: 11}} domain={["auto", "auto"]}/>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#0f172a",
-                          border: "1px solid #334155",
-                          borderRadius: "12px",
-                          color: "#fff",
-                        }}
-                      />
-                      <Line type="monotone" dataKey="heart_rate" stroke="#f97316" strokeWidth={3} dot={false}/>
-                    </LineChart>
-                  </ResponsiveContainer>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Primary Signal</p>
+                    <h2 className="mt-2 text-2xl font-semibold text-white">Streaming Alert Feed</h2>
+                  </div>
+                  <div className="rounded-full border border-[#4d5661] bg-[#232f3e] px-3 py-1 text-xs font-semibold text-[#d5dbdb]">
+                    Last alert: {formatAlertTime(lastAlertTime)}
+                  </div>
                 </div>
-              </div>
-
-              <div className="monitor-card rounded-[24px] p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Latest Alerts</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Streaming Alert Feed</h2>
                 <p className="mt-2 text-sm text-[#b6bec9]">
-                  Alerts are triggered instantly when predefined thresholds are exceeded
-                  (e.g., abnormal heart rate or oxygen levels). This demonstrates real-time anomaly detection.
+                  Alerts are appended as soon as threshold checks trigger. This is the fastest view of abnormal vitals.
                 </p>
 
                 <div className="mt-6 space-y-3">
@@ -280,7 +353,66 @@ export default function StreamingMetricsPage() {
                   </button>
                 </div>
               </div>
+
+              <div className="monitor-card rounded-[24px] p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Live Throughput</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Alerts per Minute</h2>
+                <p className="mt-2 text-sm text-[#b6bec9]">
+                  Throughput is computed from newly observed alerts in the rolling 60-second window.
+                </p>
+
+                <div className="mt-6 h-[280px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={alertsRateHistory}>
+                      <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false}/>
+                      <XAxis dataKey="time" stroke="#6b7280" tick={{fontSize: 11}} minTickGap={20}/>
+                      <YAxis stroke="#6b7280" tick={{fontSize: 11}} domain={[0, "auto"]}/>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          border: "1px solid #334155",
+                          borderRadius: "12px",
+                          color: "#fff",
+                        }}
+                      />
+                      <Line type="monotone" dataKey="alerts_per_minute" name="Alerts/Minute" stroke="#f97316" strokeWidth={3} dot={false}/>
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </section>
+
+            <section className="monitor-card rounded-[24px] p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">
+                Supporting Signal
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">
+                Vital Signs Trend (Heart Rate)
+              </h2>
+              <p className="mt-2 text-sm text-[#b6bec9]">
+                Displays the evolution of patient vitals over time, providing context for alert generation in the streaming pipeline.
+              </p>
+
+              <div className="mt-6 h-[250px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={heartRateHistory}>
+                    <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false}/>
+                    <XAxis dataKey="time" stroke="#6b7280" tick={{fontSize: 11}} minTickGap={24}/>
+                    <YAxis stroke="#6b7280" tick={{fontSize: 11}} domain={["auto", "auto"]}/>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#0f172a",
+                        border: "1px solid #334155",
+                        borderRadius: "12px",
+                        color: "#fff",
+                      }}
+                    />
+                    <Line type="monotone" dataKey="heart_rate" stroke="#60a5fa" strokeWidth={2} dot={false}/>
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
             <section className="monitor-card rounded-[24px] p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding Streaming Processing</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">How this page works</h2>
