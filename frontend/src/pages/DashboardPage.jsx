@@ -9,7 +9,7 @@ import {createWebSocket} from "../services/ws.js"
 import VitalsChart from "../components/VitalsChart.jsx"
 import {formatPatientFullName} from "../utils/patients.js"
 
-const MAX_PREVIEW_ALERTS = 6
+const MAX_PREVIEW_ALERTS = 7
 const MAX_ALERTS = 60
 const isCriticalHighAlert = (alert) => alert?.severity === "critical" || alert?.severity === "high"
 

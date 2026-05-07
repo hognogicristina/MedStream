@@ -41,6 +41,8 @@ function formatDateTime(value) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
   }).format(new Date(value))
 }
 
@@ -257,6 +259,12 @@ export default function PatientMedicalHistoryPage() {
     const filtered = filter === "all" ? mapped : mapped.filter((item) => item.type === filter)
     return filtered.sort((left, right) => new Date(right.timestamp) - new Date(left.timestamp))
   }, [allergies, diagnosis, filter, medications, patientConditions])
+
+  const doctorNameById = useMemo(() => {
+    return Object.fromEntries(
+      doctors.map((doctor) => [doctor.id, `${doctor.first_name || ""} ${doctor.last_name || ""}`.trim()]),
+    )
+  }, [doctors])
 
   const filteredConditionOptions = useMemo(() => {
     const normalizedQuery = conditionSearch.trim().toLowerCase()
@@ -643,8 +651,11 @@ export default function PatientMedicalHistoryPage() {
             getItemKey={(item) => `${item.type}-${item.id}`}
             renderRow={(item) => {
               const involvedDoctorStr = item.doctor_id
-                ? doctors.find((doctor) => doctor.id === item.doctor_id)?.last_name || "--"
+                ? doctorNameById[item.doctor_id] || "--"
                 : "--"
+              const itemDoctorName = trimValue(item.modified_by) || (
+                item.doctor_id ? doctorNameById[item.doctor_id] || "" : ""
+              )
               const statusMeta = getRecordStatusMeta(item)
 
               return (
@@ -663,6 +674,7 @@ export default function PatientMedicalHistoryPage() {
                       (item.type === "diagnosis" && item.status_note)
                       || (item.type === "medication" && item.last_updated_note)
                       || (item.type === "condition" && item.notes)
+                      || ((item.type === "diagnosis" || item.type === "condition") && itemDoctorName)
                     ) && (() => {
                       const raw =
                         item.type === "diagnosis"
@@ -670,11 +682,15 @@ export default function PatientMedicalHistoryPage() {
                           : item.type === "medication"
                             ? item.last_updated_note
                             : item.notes
+                      const normalizedRaw = typeof raw === "string" ? raw : ""
+                      const splitIndex = normalizedRaw.indexOf("Modified by doctor:")
 
-                      const splitIndex = raw.indexOf("Modified by doctor:")
-
-                      const mainText = splitIndex !== -1 ? raw.slice(0, splitIndex).trim() : raw
-                      const doctorText = splitIndex !== -1 ? raw.slice(splitIndex).trim() : null
+                      const mainText = splitIndex !== -1 ? normalizedRaw.slice(0, splitIndex).trim() : normalizedRaw
+                      const doctorText = splitIndex !== -1
+                        ? normalizedRaw.slice(splitIndex).trim()
+                        : itemDoctorName
+                          ? `Modified by doctor: ${itemDoctorName}`
+                          : null
 
                       return (
                         <div className="text-xs text-[#879196] mt-2 shadow-inner bg-[#0f141a] px-3 py-2 rounded-md space-y-1">

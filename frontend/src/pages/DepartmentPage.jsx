@@ -17,6 +17,33 @@ const SEVERITY_FILTERS = [
   {value: "none", label: "No alerts present"},
 ]
 
+function getPatientDisplayName(patient) {
+  if (!patient) {
+    return "Unknown patient"
+  }
+  const explicitFullName = String(patient.full_name || "").trim()
+  if (explicitFullName) {
+    return explicitFullName
+  }
+  const firstName = String(patient.first_name || "").trim()
+  const lastName = String(patient.last_name || "").trim()
+  const firstLast = `${firstName} ${lastName}`.trim()
+  if (firstLast) {
+    return firstLast
+  }
+  return formatPatientFullName(patient)
+}
+
+function comparePatientsByStatusThenName(leftPatient, rightPatient) {
+  const leftStatusRank = leftPatient?.is_discharged ? 1 : 0
+  const rightStatusRank = rightPatient?.is_discharged ? 1 : 0
+  if (leftStatusRank !== rightStatusRank) {
+    return leftStatusRank - rightStatusRank
+  }
+
+  return getPatientDisplayName(leftPatient).localeCompare(getPatientDisplayName(rightPatient), undefined, {sensitivity: "base"})
+}
+
 export default function DepartmentPage() {
   const {notifyError} = useNotifications()
   const {name} = useParams()
@@ -183,13 +210,17 @@ export default function DepartmentPage() {
             loadingMessage="Loading department analytics..."
             emptyMessage={patients.length === 0 ? `No patients are currently assigned to ${departmentName}.` : "No department patients match the current filters."}
             pageSize={10}
-            defaultSort="patient_name"
             controlsLayoutClassName="mb-6 grid gap-4 rounded-[24px] border border-[#3b424b] bg-[#151b22] p-4 lg:grid-cols-[1fr_1fr_1fr_auto]"
             sortOptions={[
               {
+                value: "status_then_name",
+                label: "Admitted first, then name (A-Z)",
+                compare: (left, right) => comparePatientsByStatusThenName(left.patient, right.patient),
+              },
+              {
                 value: "patient_name",
                 label: "By patient name",
-                compare: (left, right) => formatPatientFullName(left.patient).localeCompare(formatPatientFullName(right.patient)),
+                compare: (left, right) => getPatientDisplayName(left.patient).localeCompare(getPatientDisplayName(right.patient), undefined, {sensitivity: "base"}),
               },
               {
                 value: "avg_heart_rate",
@@ -202,6 +233,7 @@ export default function DepartmentPage() {
                 compare: (left, right) => (right.stat?.alerts_count ?? right.alertSummary.count ?? 0) - (left.stat?.alerts_count ?? left.alertSummary.count ?? 0),
               },
             ]}
+            defaultSort="status_then_name"
             filters={[
               {
                 id: "severityPresenceFilter",
@@ -255,13 +287,35 @@ export default function DepartmentPage() {
                     ? "normal"
                     : ""
 
+              const dischargeReason = String(patient.discharge_reason || "").trim()
+              const hasDischargeReason = dischargeReason.length > 0
+
               return (
                 <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                      <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}`}>
-                        {formatPatientFullName(patient)}
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}`}>
+                          {getPatientDisplayName(patient)}
+                        </Link>
+                        {patient.is_discharged ? (
+                          <span className="inline-flex items-center rounded-full border border-[#7f1d1d] bg-[#2b1212] px-2.5 py-0.5 text-xs font-semibold text-[#fca5a5]">
+                            Discharged
+                          </span>
+                        ) : null}
+                      </div>
+                      {patient.is_discharged ? (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-sm text-[#b6bec9]">
+                            Reason: {hasDischargeReason ? dischargeReason : "Not specified"}
+                          </p>
+                          {patient.discharge_date ? (
+                            <p className="text-xs text-[#879196]">
+                              Date: {new Date(patient.discharge_date).toLocaleString()}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {strongestSeverity && (

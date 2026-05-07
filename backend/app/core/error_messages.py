@@ -41,6 +41,8 @@ ERROR_MESSAGES = {
     "INVALID_CONDITION_STATUS": "Invalid condition status.",
     "INVALID_DIAGNOSIS_STATUS": "Invalid diagnosis status.",
     "INVALID_DISCHARGE_TYPE": "Invalid discharge type.",
+    "DISCHARGE_NOT_ALLOWED_FOR_IMPROVING_OUTCOME": "Discharge is not allowed while the latest treatment outcome is Improving.",
+    "TRANSFER_DISCHARGE_REQUIRES_INEFFECTIVE_FINAL_TREATMENT": "Transfer discharge requires an Ineffective final treatment outcome.",
     "INVALID_MEDICATION": "Medication is invalid.",
     "MEDICATION_NOT_ALLOWED_PREGNANT": "Medication is not allowed for pregnant patients.",
     "MEDICATION_NOT_ALLOWED": "Medication is not allowed for this patient.",

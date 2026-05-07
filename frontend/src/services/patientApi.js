@@ -176,7 +176,10 @@ export function getBatchInsights(params) {
   return api.get("/metrics/batch-insights", {params})
 }
 
-export function getAlerts() {
+export function getAlerts(cnp) {
+  if (cnp) {
+    return api.get("/alerts", {params: {cnp}})
+  }
   return api.get("/alerts")
 }
 

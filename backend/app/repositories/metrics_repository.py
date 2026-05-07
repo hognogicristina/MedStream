@@ -2,7 +2,6 @@ from collections import Counter, deque
 from datetime import timedelta
 from threading import Lock
 from time import perf_counter
-from bisect import bisect_left
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -16,6 +15,7 @@ from app.models.patient.patient_diagnosis import PatientDiagnosis
 from app.models.patient.patient_medication import PatientMedication
 from app.models.patient.patient_stats import PatientStats
 from app.models.vital import Vital
+from app.repositories.patient_repository import PatientRepository
 from app.utils.datetime import to_utc
 from app.validators.metrics_validators import validate_metric_value
 
@@ -265,6 +265,7 @@ def get_batch_alerts_history(db: Session, *, limit: int = 24) -> list[dict]:
             "critical": int(row.alerts_critical_count or 0),
             "high": int(row.alerts_high_count or 0),
             "stable": int(row.alerts_stable_count or 0),
+            "normalized": int(row.alerts_stable_count or 0),
             "total": int(row.alerts_count or 0),
         }
         for row in ordered
@@ -352,22 +353,17 @@ def get_batch_insights_repo(db: Session, *, departments_page: int, diagnoses_pag
     ).all()
 
     medications = db.execute(
-        select(
-            PatientMedication.id,
-            PatientMedication.name,
-            PatientMedication.patient_id,
-            PatientMedication.dosage,
-            PatientMedication.frequency,
-            PatientMedication.created_at,
-        )
-    ).all()
-
+        select(PatientMedication)
+        .order_by(PatientMedication.created_at.asc(), PatientMedication.id.asc())
+    ).scalars().all()
     alerts = db.execute(
-        select(
-            Alert.patient_id,
-            Alert.created_at,
-        )
-    ).all()
+        select(Alert)
+        .order_by(Alert.created_at.asc(), Alert.id.asc())
+    ).scalars().all()
+    vitals = db.execute(
+        select(Vital)
+        .order_by(Vital.recorded_at.asc(), Vital.id.asc())
+    ).scalars().all()
     diagnosis_rows = db.execute(
         select(PatientDiagnosis.patient_id)
     ).all()
@@ -375,64 +371,100 @@ def get_batch_insights_repo(db: Session, *, departments_page: int, diagnoses_pag
         select(PatientConditionAssignment.patient_id)
     ).all()
 
-    alerts_by_patient: dict[int, list] = {}
-    for patient_id, created_at in alerts:
-        alerts_by_patient.setdefault(patient_id, []).append(created_at)
-
-    for patient_id in alerts_by_patient:
-        alerts_by_patient[patient_id].sort()
-
     diagnoses_by_patient = {patient_id for (patient_id,) in diagnosis_rows}
     conditions_by_patient = {patient_id for (patient_id,) in condition_rows}
+    patient_ids = sorted(
+        set(int(item.patient_id) for item in medications if item.patient_id is not None)
+        | set(int(item.patient_id) for item in alerts if item.patient_id is not None)
+        | set(int(item.patient_id) for item in vitals if item.patient_id is not None)
+    )
+    patients_by_id = {}
+    if patient_ids:
+        patients = db.execute(
+            select(Patient).where(Patient.id.in_(patient_ids))
+        ).scalars().all()
+        patients_by_id = {int(patient.id): patient for patient in patients}
+
+    medications_by_patient: dict[int, list[PatientMedication]] = {}
+    for medication in medications:
+        medications_by_patient.setdefault(int(medication.patient_id), []).append(medication)
+
+    alerts_by_patient: dict[int, list[Alert]] = {}
+    for alert in alerts:
+        alerts_by_patient.setdefault(int(alert.patient_id), []).append(alert)
+
+    vitals_by_patient: dict[int, list[Vital]] = {}
+    for vital in vitals:
+        vitals_by_patient.setdefault(int(vital.patient_id), []).append(vital)
 
     medication_effectiveness: dict[str, dict] = {}
     treatment_effective_total = 0
+    treatment_improving_total = 0
     treatment_ineffective_total = 0
-    window = timedelta(hours=72)
-
-    for _medication_id, medication_name, patient_id, dosage, frequency, prescribed_at in medications:
-        if not medication_name or prescribed_at is None:
+    for patient_id, patient_medications in medications_by_patient.items():
+        if not patient_medications:
+            continue
+        patient = patients_by_id.get(patient_id)
+        if patient is None:
             continue
 
         patient_alerts = alerts_by_patient.get(patient_id, [])
-        is_effective = True
-        if patient_alerts:
-            first_index = bisect_left(patient_alerts, prescribed_at)
-            if first_index < len(patient_alerts):
-                next_alert_time = patient_alerts[first_index]
-                if prescribed_at <= next_alert_time <= prescribed_at + window:
-                    is_effective = False
+        patient_vitals = vitals_by_patient.get(patient_id, [])
+        treatment_actions = PatientRepository._build_treatment_actions(patient_medications)
+        if not treatment_actions:
+            continue
 
-        if medication_name not in medication_effectiveness:
-            medication_effectiveness[medication_name] = {
-                "effective": 0,
-                "ineffective": 0,
-                "patients": set(),
-                "alert_triggered_count": 0,
-                "diagnosis_triggered_count": 0,
-                "condition_triggered_count": 0,
-                "dosage_breakdown": {},
-            }
+        for action_index, action_entry in enumerate(treatment_actions):
+            medication = action_entry["medication"]
+            medication_name = str(medication.name or "").strip()
+            if not medication_name:
+                continue
 
-        entry = medication_effectiveness[medication_name]
-        entry["patients"].add(patient_id)
+            evaluation = PatientRepository._evaluate_treatment_action(
+                patient=patient,
+                action_index=action_index,
+                treatment_actions=treatment_actions,
+                sequence_vitals=patient_vitals,
+                sequence_alerts=patient_alerts,
+            )
+            outcome = str(evaluation.get("outcome") or "Ineffective").strip()
 
-        dosage_key = (dosage or "--", frequency or "--")
-        entry["dosage_breakdown"][dosage_key] = entry["dosage_breakdown"].get(dosage_key, 0) + 1
+            if medication_name not in medication_effectiveness:
+                medication_effectiveness[medication_name] = {
+                    "effective": 0,
+                    "improving": 0,
+                    "ineffective": 0,
+                    "patients": set(),
+                    "alert_triggered_count": 0,
+                    "diagnosis_triggered_count": 0,
+                    "condition_triggered_count": 0,
+                    "dosage_breakdown": {},
+                }
 
-        if not is_effective:
-            entry["alert_triggered_count"] += 1
-        if patient_id in diagnoses_by_patient:
-            entry["diagnosis_triggered_count"] += 1
-        if patient_id in conditions_by_patient:
-            entry["condition_triggered_count"] += 1
+            entry = medication_effectiveness[medication_name]
+            entry["patients"].add(patient_id)
 
-        if is_effective:
-            entry["effective"] += 1
-            treatment_effective_total += 1
-        else:
-            entry["ineffective"] += 1
-            treatment_ineffective_total += 1
+            dosage_key = (medication.dosage or "--", medication.frequency or "--")
+            entry["dosage_breakdown"][dosage_key] = entry["dosage_breakdown"].get(dosage_key, 0) + 1
+
+            if outcome != "Effective":
+                entry["alert_triggered_count"] += 1
+            if patient_id in diagnoses_by_patient:
+                entry["diagnosis_triggered_count"] += 1
+            if patient_id in conditions_by_patient:
+                entry["condition_triggered_count"] += 1
+
+            if outcome == "Effective":
+                entry["effective"] += 1
+                treatment_effective_total += 1
+            elif outcome == "Improving":
+                entry["improving"] += 1
+                treatment_improving_total += 1
+            else:
+                entry["ineffective"] += 1
+                treatment_ineffective_total += 1
+
+    total_treatments = treatment_effective_total + treatment_improving_total + treatment_ineffective_total
 
     return {
         "patients_per_department": paginate_items(
@@ -456,15 +488,32 @@ def get_batch_insights_repo(db: Session, *, departments_page: int, diagnoses_pag
         ),
         "treatment_effectiveness": {
             "effective": treatment_effective_total,
+            "improving": treatment_improving_total,
             "ineffective": treatment_ineffective_total,
+            "effective_rate": round((treatment_effective_total / total_treatments) * 100, 2) if total_treatments else 0.0,
+            "improving_rate": round((treatment_improving_total / total_treatments) * 100, 2) if total_treatments else 0.0,
+            "ineffective_rate": round((treatment_ineffective_total / total_treatments) * 100, 2) if total_treatments else 0.0,
         },
         "medication_effectiveness": sorted(
             [
                 {
                     "name": name,
                     "effective": values["effective"],
+                    "improving": values["improving"],
                     "ineffective": values["ineffective"],
-                    "total": values["effective"] + values["ineffective"],
+                    "total": values["effective"] + values["improving"] + values["ineffective"],
+                    "effective_rate": round(
+                        (values["effective"] / max(1, values["effective"] + values["improving"] + values["ineffective"])) * 100,
+                        2,
+                    ),
+                    "improving_rate": round(
+                        (values["improving"] / max(1, values["effective"] + values["improving"] + values["ineffective"])) * 100,
+                        2,
+                    ),
+                    "ineffective_rate": round(
+                        (values["ineffective"] / max(1, values["effective"] + values["improving"] + values["ineffective"])) * 100,
+                        2,
+                    ),
                     "total_patients": len(values["patients"]),
                     "alert_triggered_count": values["alert_triggered_count"],
                     "diagnosis_triggered_count": values["diagnosis_triggered_count"],

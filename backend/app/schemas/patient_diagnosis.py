@@ -12,6 +12,7 @@ class PatientDiagnosisRead(BaseModel):
     id: int
     patient_id: int
     doctor_id: int
+    modified_by: str | None = None
     diagnosis: str
     notes: str | None = None
     status: str

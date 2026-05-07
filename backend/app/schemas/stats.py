@@ -90,14 +90,22 @@ class TopDiagnosisRead(BaseModel):
 
 class TreatmentEffectivenessRead(BaseModel):
     effective: int
+    improving: int
     ineffective: int
+    effective_rate: float | None = None
+    improving_rate: float | None = None
+    ineffective_rate: float | None = None
 
 
 class MedicationEffectivenessRead(BaseModel):
     name: str
     effective: int
+    improving: int
     ineffective: int
     total: int
+    effective_rate: float | None = None
+    improving_rate: float | None = None
+    ineffective_rate: float | None = None
     total_patients: int
     alert_triggered_count: int
     diagnosis_triggered_count: int
@@ -138,4 +146,5 @@ class BatchAlertsHistoryPointRead(BaseModel):
     critical: int
     high: int
     stable: int
+    normalized: int | None = None
     total: int

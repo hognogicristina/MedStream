@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
@@ -12,8 +13,8 @@ from app.models.doctor.doctor import Doctor
 from app.models.doctor.doctor_activity import DoctorActivity
 from app.models.doctor.doctor_activity_patient import doctor_activity_patients
 from app.models.patient.patient import Patient
-from app.models.patient.patient_activity_doctor import patient_activity_doctors
 from app.models.patient.patient_admission_history import PatientAdmissionHistory
+from app.models.patient.patient_activity_doctor import patient_activity_doctors
 from app.models.patient.patient_allergy import PatientAllergy
 from app.models.patient.patient_condition import PatientCondition
 from app.models.patient.patient_condition_assignment import PatientConditionAssignment
@@ -49,23 +50,72 @@ from app.validators.patient_validators import (
     validate_required_text,
     validate_update_value_present,
 )
+from app.alerts.alert_catalog import normalize_alert_type, vital_for_alert_type
 from app.core.errors import ValidationError
-from app.utils.datetime import now_utc
+from app.utils.datetime import now_utc, to_utc
 
 
 class PatientRepository:
     MEDICATION_NAME_MAX_LENGTH = 255
     MEDICATION_DOSAGE_MAX_LENGTH = 100
     MEDICATION_FREQUENCY_MAX_LENGTH = 100
+    MIN_TREATMENT_ACTIONS_BEFORE_RECOVERY_DISCHARGE = 10
+    HEART_RATE_STABLE_MAX = 110
+    OXYGEN_STABLE_MIN = 92
+    TEMPERATURE_STABLE_MAX = 38
+
+    ABNORMAL_ALERT_TYPES = {
+        "heart_rate_high",
+        "heart_rate_critical",
+        "oxygen_low",
+        "oxygen_critical",
+        "temperature_high",
+        "temperature_critical",
+    }
+    RECOVERY_ALERT_TYPES = {
+        "heart_rate_normalized",
+        "heart_rate_stable",
+        "heart_rate_normal",
+        "oxygen_normalized",
+        "oxygen_stable",
+        "oxygen_normal",
+        "temperature_normalized",
+        "temperature_stable",
+        "temperature_normal",
+    }
+
+    @classmethod
+    def _classify_alert_state(cls, canonical_type: str) -> str:
+        normalized = str(canonical_type or "").strip().lower()
+        if not normalized:
+            return "none"
+
+        if normalized in cls.ABNORMAL_ALERT_TYPES:
+            return "abnormal"
+        if normalized in cls.RECOVERY_ALERT_TYPES:
+            return "normalized"
+
+        # Fallback classification for legacy/variant canonical values.
+        if normalized.startswith(("heart_rate_", "oxygen_", "temperature_")):
+            if normalized.endswith(("_high", "_critical", "_low")):
+                return "abnormal"
+            if normalized.endswith(("_normalized", "_normal", "_stable")):
+                return "normalized"
+
+        return "none"
+
+    @classmethod
+    def _classify_vital_alert_state(cls, canonical_type: str) -> str:
+        return cls._classify_alert_state(canonical_type)
 
     @staticmethod
     def _extract_status_vitals(message: str | None) -> dict | None:
         import re
 
         alert_message = str(message or "")
-        hr_match = re.search(r"HR\s*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
-        o2_match = re.search(r"SpO2\s*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
-        temp_match = re.search(r"Temp\s*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+        hr_match = re.search(r"(?:heart\s*rate|HR)\D*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+        o2_match = re.search(r"(?:SpO2|oxygen)\D*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+        temp_match = re.search(r"(?:temp(?:erature)?)\D*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
 
         if hr_match is None and o2_match is None and temp_match is None:
             return None
@@ -87,67 +137,1093 @@ class PatientRepository:
     @classmethod
     def _extract_alert_structured_fields(cls, alert_type: str | None, message: str | None, severity: str | None) -> tuple[
         str | None, float | None, str | None, dict | None]:
-        normalized_type = str(alert_type or "").strip().lower()
-        if normalized_type == "oxygen":
-            normalized_type = "oxygen_saturation"
-        normalized_severity = str(severity or "").strip().lower()
+        canonical_type = normalize_alert_type(alert_type, severity)
         alert_message = str(message or "")
 
-        status_vitals = cls._extract_status_vitals(alert_message)
-        is_status_alert = normalized_type == "status" or normalized_severity == "normal"
-        if is_status_alert:
-            return "status", None, None, status_vitals
+        if canonical_type.endswith("_normalized"):
+            status_vitals = cls._extract_status_vitals(alert_message)
+            base_vital = vital_for_alert_type(canonical_type)
+            base_type = base_vital if base_vital != "oxygen" else "oxygen_saturation"
+            value = None
+            unit = None
+            if status_vitals is not None:
+                if base_vital == "heart_rate":
+                    value = status_vitals.get("heartRate")
+                    unit = "bpm"
+                elif base_vital == "oxygen":
+                    value = status_vitals.get("oxygen")
+                    unit = "%"
+                elif base_vital == "temperature":
+                    value = status_vitals.get("temperature")
+                    unit = "C"
+            return base_type, value, unit, status_vitals
 
-        type_map = {
-            "heart_rate": ("heart_rate", "bpm"),
-            "oxygen_saturation": ("oxygen_saturation", "%"),
-            "temperature": ("temperature", "C"),
-        }
-        mapped = type_map.get(normalized_type)
-        if mapped is None:
+        vital = vital_for_alert_type(canonical_type)
+        if vital is None:
             return None, None, None, None
 
         import re
-        if mapped[0] == "oxygen_saturation":
-            match = re.search(r"(?:SpO2|oxygen.*?:)\s*(\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+        if vital == "heart_rate":
+            match = re.search(r"(?:heart\s*rate|HR)\D*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+            unit = "bpm"
+            result_type = "heart_rate"
+        elif vital == "oxygen":
+            match = re.search(r"(?:SpO2|oxygen)\D*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+            unit = "%"
+            result_type = "oxygen_saturation"
         else:
-            match = re.search(r"(-?\d+(?:\.\d+)?)", alert_message)
+            match = re.search(r"(?:temp(?:erature)?)\D*(-?\d+(?:\.\d+)?)", alert_message, re.IGNORECASE)
+            unit = "C"
+            result_type = "temperature"
+
         if match is None:
-            return mapped[0], None, mapped[1], None
+            return result_type, None, unit, None
 
         try:
             value = float(match.group(1))
         except ValueError:
             value = None
-        return mapped[0], value, mapped[1], None
+        return result_type, value, unit, None
 
     def __init__(self, address_repository: AddressRepository | None = None):
         self.address_repository = address_repository or AddressRepository()
+
+    @staticmethod
+    def _normalize_datetime_for_comparison(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return to_utc(value)
+
+    @classmethod
+    def _normalize_datetime_candidates(cls, values: list[datetime | None]) -> list[datetime]:
+        normalized: list[datetime] = []
+        for value in values:
+            normalized_value = cls._normalize_datetime_for_comparison(value)
+            if normalized_value is not None:
+                normalized.append(normalized_value)
+        return normalized
 
     @staticmethod
     def _stable_vital_count(vital: Vital | None) -> int:
         if vital is None:
             return 0
         stable_flags = [
-            vital.heart_rate <= 110,
-            vital.oxygen_saturation >= 92,
-            vital.temperature <= 38,
+            vital.heart_rate <= PatientRepository.HEART_RATE_STABLE_MAX,
+            vital.oxygen_saturation >= PatientRepository.OXYGEN_STABLE_MIN,
+            vital.temperature <= PatientRepository.TEMPERATURE_STABLE_MAX,
         ]
         return sum(1 for flag in stable_flags if flag)
 
     @classmethod
-    def _derive_outcome_from_vital(cls, vital: Vital | None) -> str:
-        return "Effective" if cls._is_vital_snapshot_stable(vital) else "Ineffective"
+    def _build_treatment_actions(cls, medications: list[PatientMedication]) -> list[dict[str, Any]]:
+        actions: list[dict[str, Any]] = []
+        for medication in medications:
+            created_at = cls._normalize_datetime_for_comparison(medication.created_at)
+            updated_at = cls._normalize_datetime_for_comparison(medication.updated_at)
+            actions.append(
+                {
+                    "action": "add",
+                    "timestamp": created_at,
+                    "medication": medication,
+                }
+            )
+            if updated_at is not None and created_at is not None and updated_at > created_at:
+                actions.append(
+                    {
+                        "action": "modify",
+                        "timestamp": updated_at,
+                        "medication": medication,
+                    }
+                )
+
+        actions.sort(
+            key=lambda item: (
+                item["timestamp"],
+                item["medication"].id,
+                0 if item["action"] == "add" else 1,
+            )
+        )
+        return actions
+
+    @classmethod
+    def _build_treatment_evaluation_window(
+            cls,
+            *,
+            patient: Patient,
+            action_index: int,
+            treatment_actions: list[dict[str, Any]],
+            sequence_vitals: list[Vital],
+            sequence_alerts: list[Alert],
+    ) -> tuple[datetime, datetime]:
+        action_time = cls._normalize_datetime_for_comparison(treatment_actions[action_index]["timestamp"])
+        if action_time is None:
+            fallback_now = now_utc()
+            return fallback_now, fallback_now
+        is_final = action_index == len(treatment_actions) - 1
+        if not is_final:
+            next_action_time = cls._normalize_datetime_for_comparison(treatment_actions[action_index + 1]["timestamp"])
+            if next_action_time is None:
+                return action_time, action_time
+            return action_time, next_action_time
+
+        if patient.discharge_date is not None:
+            discharge_time = cls._normalize_datetime_for_comparison(patient.discharge_date)
+            if discharge_time is not None:
+                return action_time, discharge_time
+
+        latest_vital_time = cls._normalize_datetime_for_comparison(sequence_vitals[-1].recorded_at) if sequence_vitals else None
+        latest_alert_time = cls._normalize_datetime_for_comparison(sequence_alerts[-1].created_at) if sequence_alerts else None
+        candidates = cls._normalize_datetime_candidates([latest_vital_time, latest_alert_time, action_time])
+        if not candidates:
+            return action_time, action_time
+        return action_time, max(candidates)
 
     @staticmethod
-    def _is_vital_snapshot_stable(vital: Vital | None) -> bool:
-        if vital is None:
-            return False
-        return (
-            vital.heart_rate <= 110
-            and vital.oxygen_saturation >= 92
-            and vital.temperature <= 38
+    def _get_latest_vital_state_for_window(
+            *,
+            sequence_vitals: list[Vital],
+            window_start: datetime,
+            window_end: datetime,
+    ) -> tuple[Vital | None, str]:
+        normalized_window_start = PatientRepository._normalize_datetime_for_comparison(window_start)
+        normalized_window_end = PatientRepository._normalize_datetime_for_comparison(window_end)
+        if normalized_window_start is None or normalized_window_end is None:
+            return None, "no_vital_available"
+
+        in_window = [
+            vital for vital in sequence_vitals
+            if (
+                (normalized_vital_time := PatientRepository._normalize_datetime_for_comparison(vital.recorded_at)) is not None
+                and normalized_window_start <= normalized_vital_time <= normalized_window_end
+            )
+        ]
+        if in_window:
+            return in_window[-1], "latest_vital_in_window"
+
+        before_end = [
+            vital for vital in sequence_vitals
+            if (
+                (normalized_vital_time := PatientRepository._normalize_datetime_for_comparison(vital.recorded_at)) is not None
+                and normalized_vital_time <= normalized_window_end
+            )
+        ]
+        if before_end:
+            return before_end[-1], "latest_vital_before_window_end"
+        return None, "no_vital_available"
+
+    @staticmethod
+    def _get_latest_vital_before_timestamp(
+            *,
+            sequence_vitals: list[Vital],
+            timestamp: datetime | None,
+    ) -> Vital | None:
+        normalized_timestamp = PatientRepository._normalize_datetime_for_comparison(timestamp)
+        if normalized_timestamp is None:
+            return None
+
+        for vital in reversed(sequence_vitals):
+            vital_time = PatientRepository._normalize_datetime_for_comparison(vital.recorded_at)
+            if vital_time is not None and vital_time < normalized_timestamp:
+                return vital
+        return None
+
+    @classmethod
+    def _get_vital_trend_improvements(
+            cls,
+            *,
+            previous_vital: Vital | None,
+            current_vital: Vital | None,
+    ) -> list[str]:
+        if previous_vital is None or current_vital is None:
+            return []
+
+        improvements: set[str] = set()
+
+        if (
+                previous_vital.heart_rate > cls.HEART_RATE_STABLE_MAX
+                and (
+                        current_vital.heart_rate <= cls.HEART_RATE_STABLE_MAX
+                        or current_vital.heart_rate <= (previous_vital.heart_rate - 4)
+                )
+        ):
+            improvements.add("heart_rate")
+
+        if (
+                previous_vital.oxygen_saturation < cls.OXYGEN_STABLE_MIN
+                and (
+                        current_vital.oxygen_saturation >= cls.OXYGEN_STABLE_MIN
+                        or current_vital.oxygen_saturation >= (previous_vital.oxygen_saturation + 1)
+                )
+        ):
+            improvements.add("oxygen_saturation")
+
+        if (
+                previous_vital.temperature > cls.TEMPERATURE_STABLE_MAX
+                and (
+                        current_vital.temperature <= cls.TEMPERATURE_STABLE_MAX
+                        or current_vital.temperature <= (previous_vital.temperature - 0.2)
+                )
+        ):
+            improvements.add("temperature")
+
+        return sorted(improvements)
+
+    @classmethod
+    def _get_latest_vital_specific_alert_state(
+            cls,
+            *,
+            sequence_alerts: list[Alert],
+            window_start: datetime | None = None,
+            window_end: datetime,
+    ) -> dict[str, dict[str, Any]]:
+        normalized_window_start = cls._normalize_datetime_for_comparison(window_start)
+        normalized_window_end = cls._normalize_datetime_for_comparison(window_end)
+        if normalized_window_end is None:
+            return {
+                "heart_rate": {"latest": None, "latest_abnormal": None, "latest_normalized": None, "latest_state": "none"},
+                "oxygen_saturation": {"latest": None, "latest_abnormal": None, "latest_normalized": None, "latest_state": "none"},
+                "temperature": {"latest": None, "latest_abnormal": None, "latest_normalized": None, "latest_state": "none"},
+            }
+
+        state = {
+            "heart_rate": {"latest": None, "latest_abnormal": None, "latest_normalized": None, "latest_state": "none"},
+            "oxygen_saturation": {"latest": None, "latest_abnormal": None, "latest_normalized": None, "latest_state": "none"},
+            "temperature": {"latest": None, "latest_abnormal": None, "latest_normalized": None, "latest_state": "none"},
+        }
+
+        for alert in sequence_alerts:
+            alert_created_at = cls._normalize_datetime_for_comparison(alert.created_at)
+            if alert_created_at is None:
+                continue
+            if normalized_window_start is not None and alert_created_at < normalized_window_start:
+                continue
+            if alert_created_at > normalized_window_end:
+                continue
+            canonical_type = normalize_alert_type(alert.alert_type, alert.severity)
+            vital_key = vital_for_alert_type(canonical_type)
+            if vital_key is None:
+                continue
+            mapped_vital_key = "oxygen_saturation" if vital_key == "oxygen" else vital_key
+            bucket = state.get(mapped_vital_key)
+            if bucket is None:
+                continue
+
+            bucket["latest"] = alert
+            alert_state = cls._classify_alert_state(canonical_type)
+            if alert_state == "normalized":
+                bucket["latest_normalized"] = alert
+                bucket["latest_state"] = "normalized"
+            elif alert_state == "abnormal":
+                bucket["latest_abnormal"] = alert
+                bucket["latest_state"] = "abnormal"
+
+        return state
+
+    @classmethod
+    def _build_latest_alert_debug_payload(
+            cls,
+            alert_state: dict[str, dict[str, Any]],
+    ) -> dict[str, dict[str, Any] | None]:
+        payload: dict[str, dict[str, Any] | None] = {}
+        for vital_key in ("heart_rate", "oxygen_saturation", "temperature"):
+            bucket = alert_state.get(vital_key) or {}
+            latest_alert = bucket.get("latest")
+            if latest_alert is None:
+                payload[vital_key] = None
+                continue
+
+            canonical_type = normalize_alert_type(latest_alert.alert_type, latest_alert.severity)
+            _, value, _, _ = cls._extract_alert_structured_fields(
+                latest_alert.alert_type,
+                latest_alert.message,
+                latest_alert.severity,
+            )
+            payload[vital_key] = {
+                "id": latest_alert.id,
+                "type": canonical_type,
+                "severity": latest_alert.severity,
+                "timestamp": latest_alert.created_at,
+                "value": value,
+                "message": latest_alert.message,
+                "state": str(bucket.get("latest_state") or cls._classify_alert_state(canonical_type) or "none"),
+            }
+        return payload
+
+    @staticmethod
+    def _format_vital_label(vital_key: str) -> str:
+        return str(vital_key or "").replace("_saturation", "").replace("_", " ")
+
+    @classmethod
+    def _get_unresolved_abnormal_vitals(
+            cls,
+            *,
+            full_alert_state: dict[str, dict[str, Any]],
+            unresolved_after_treatment_vitals: list[str],
+    ) -> list[str]:
+        unresolved_from_latest = [
+            key
+            for key, bucket in full_alert_state.items()
+            if str((bucket or {}).get("latest_state") or "").strip().lower() == "abnormal"
+        ]
+        return sorted(set(unresolved_from_latest) | set(unresolved_after_treatment_vitals or []))
+
+    @classmethod
+    def _get_recovered_vitals_after_treatment(
+            cls,
+            *,
+            sequence_alerts: list[Alert],
+            window_start: datetime,
+            window_end: datetime,
+            post_treatment_alert_state: dict[str, dict[str, Any]],
+            full_alert_state: dict[str, dict[str, Any]],
+    ) -> list[str]:
+        normalized_start = cls._normalize_datetime_for_comparison(window_start)
+        normalized_end = cls._normalize_datetime_for_comparison(window_end)
+        if normalized_start is None or normalized_end is None:
+            return []
+
+        latest_abnormal_at_or_before_end: dict[str, datetime] = {}
+        for alert in sequence_alerts:
+            alert_created_at = cls._normalize_datetime_for_comparison(alert.created_at)
+            if alert_created_at is None or alert_created_at > normalized_end:
+                continue
+            canonical_type = normalize_alert_type(alert.alert_type, alert.severity)
+            vital_key = vital_for_alert_type(canonical_type)
+            if vital_key is None:
+                continue
+            mapped_vital_key = "oxygen_saturation" if vital_key == "oxygen" else vital_key
+            if cls._classify_alert_state(canonical_type) == "abnormal":
+                latest_abnormal_at_or_before_end[mapped_vital_key] = alert_created_at
+
+        recovered: list[str] = []
+        for vital_key in ("heart_rate", "oxygen_saturation", "temperature"):
+            bucket = post_treatment_alert_state.get(vital_key) or {}
+            latest_normalized = bucket.get("latest_normalized")
+            if latest_normalized is None:
+                continue
+
+            normalized_at = cls._normalize_datetime_for_comparison(latest_normalized.created_at)
+            if normalized_at is None or normalized_at <= normalized_start:
+                continue
+
+            latest_abnormal_at = latest_abnormal_at_or_before_end.get(vital_key)
+            if latest_abnormal_at is None or latest_abnormal_at >= normalized_at:
+                continue
+
+            latest_full_state = str((full_alert_state.get(vital_key) or {}).get("latest_state") or "").strip().lower()
+            if latest_full_state != "normalized":
+                continue
+
+            recovered.append(vital_key)
+
+        return sorted(recovered)
+
+    @classmethod
+    def _has_unresolved_abnormal_alerts_after_in_sequence(
+            cls,
+            *,
+            sequence_alerts: list[Alert],
+            after_timestamp: datetime,
+            up_to_timestamp: datetime | None = None,
+    ) -> tuple[bool, dict[str, Any]]:
+        normalized_after_timestamp = cls._normalize_datetime_for_comparison(after_timestamp)
+        normalized_up_to_timestamp = cls._normalize_datetime_for_comparison(up_to_timestamp)
+        if normalized_after_timestamp is None:
+            return False, {
+                "unresolved_vitals": [],
+                "latest_abnormal_by_vital": {},
+                "latest_recovery_by_vital": {},
+            }
+
+        unresolved_by_vital: dict[str, Alert] = {}
+        latest_recovery_by_vital: dict[str, Alert] = {}
+        latest_abnormal_by_vital: dict[str, Alert] = {}
+
+        for alert in sequence_alerts:
+            alert_created_at = cls._normalize_datetime_for_comparison(alert.created_at)
+            if alert_created_at is None:
+                continue
+            if alert_created_at <= normalized_after_timestamp:
+                continue
+            if normalized_up_to_timestamp is not None and alert_created_at > normalized_up_to_timestamp:
+                continue
+            canonical_type = normalize_alert_type(alert.alert_type, alert.severity)
+            vital_key = vital_for_alert_type(canonical_type)
+            if vital_key is None:
+                continue
+
+            mapped_vital_key = "oxygen_saturation" if vital_key == "oxygen" else vital_key
+            alert_state = cls._classify_alert_state(canonical_type)
+            if alert_state == "abnormal":
+                unresolved_by_vital[mapped_vital_key] = alert
+                latest_abnormal_by_vital[mapped_vital_key] = alert
+            elif alert_state == "normalized":
+                latest_recovery_by_vital[mapped_vital_key] = alert
+                unresolved_by_vital.pop(mapped_vital_key, None)
+
+        return bool(unresolved_by_vital), {
+            "unresolved_vitals": sorted(unresolved_by_vital.keys()),
+            "latest_abnormal_by_vital": latest_abnormal_by_vital,
+            "latest_recovery_by_vital": latest_recovery_by_vital,
+        }
+
+    @classmethod
+    def get_latest_vital_state(
+            cls,
+            db,
+            patient_id: int,
+            *,
+            up_to_timestamp: datetime | None = None,
+    ) -> Vital | None:
+        query = select(Vital).where(Vital.patient_id == patient_id)
+        if up_to_timestamp is not None:
+            query = query.where(Vital.recorded_at <= up_to_timestamp)
+        return db.execute(
+            query.order_by(Vital.recorded_at.desc(), Vital.id.desc()).limit(1)
+        ).scalar_one_or_none()
+
+    @classmethod
+    def get_latest_vital_alert_state(
+            cls,
+            db,
+            patient_id: int,
+            *,
+            up_to_timestamp: datetime | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        alerts = db.execute(
+            select(Alert)
+            .where(Alert.patient_id == patient_id)
+            .order_by(Alert.created_at.asc(), Alert.id.asc())
+        ).scalars().all()
+        end_time = up_to_timestamp or now_utc()
+        return cls._get_latest_vital_specific_alert_state(
+            sequence_alerts=alerts,
+            window_end=end_time,
         )
+
+    @classmethod
+    def has_unresolved_abnormal_alerts_after(
+            cls,
+            db,
+            patient_id: int,
+            timestamp: datetime,
+            *,
+            up_to_timestamp: datetime | None = None,
+    ) -> tuple[bool, dict[str, Any]]:
+        alerts = db.execute(
+            select(Alert)
+            .where(Alert.patient_id == patient_id)
+            .order_by(Alert.created_at.asc(), Alert.id.asc())
+        ).scalars().all()
+        return cls._has_unresolved_abnormal_alerts_after_in_sequence(
+            sequence_alerts=alerts,
+            after_timestamp=timestamp,
+            up_to_timestamp=up_to_timestamp,
+        )
+
+    @classmethod
+    def can_discharge_patient_as_recovered(
+            cls,
+            db,
+            patient_id: int,
+            final_treatment: dict[str, Any] | None,
+            *,
+            discharge_timestamp: datetime | None = None,
+            required_stability_window_seconds: int = 0,
+            stability_started_at: datetime | None = None,
+            min_treatment_actions_required: int | None = None,
+    ) -> tuple[bool, str, dict[str, Any]]:
+        candidate_discharge_time = discharge_timestamp or now_utc()
+        required_actions = (
+            cls.MIN_TREATMENT_ACTIONS_BEFORE_RECOVERY_DISCHARGE
+            if min_treatment_actions_required is None
+            else max(0, int(min_treatment_actions_required))
+        )
+        treatment_outcome = str((final_treatment or {}).get("outcome") or "").strip()
+        final_treatment_timestamp = (final_treatment or {}).get("action_timestamp")
+        latest_vital = cls.get_latest_vital_state(
+            db,
+            patient_id,
+            up_to_timestamp=candidate_discharge_time,
+        )
+        full_alert_state = cls.get_latest_vital_alert_state(
+            db,
+            patient_id,
+            up_to_timestamp=candidate_discharge_time,
+        )
+        post_treatment_alert_state = full_alert_state
+        if final_treatment_timestamp is not None:
+            sequence_alerts = db.execute(
+                select(Alert)
+                .where(Alert.patient_id == patient_id)
+                .order_by(Alert.created_at.asc(), Alert.id.asc())
+            ).scalars().all()
+            post_treatment_alert_state = cls._get_latest_vital_specific_alert_state(
+                sequence_alerts=sequence_alerts,
+                window_start=final_treatment_timestamp,
+                window_end=candidate_discharge_time,
+            )
+
+        latest_alert_debug: dict[str, dict[str, Any] | None] = {}
+        latest_abnormal_vitals: list[str] = []
+        for vital_key, mapped_key in (
+                ("heart_rate", "heart_rate"),
+                ("oxygen_saturation", "oxygen_saturation"),
+                ("temperature", "temperature"),
+        ):
+            latest_overall_bucket = full_alert_state.get(mapped_key) or {}
+            latest_post_treatment_bucket = post_treatment_alert_state.get(mapped_key) or {}
+            alert = latest_post_treatment_bucket.get("latest")
+            state_source_bucket = latest_post_treatment_bucket
+            if alert is None:
+                alert = latest_overall_bucket.get("latest")
+                state_source_bucket = latest_overall_bucket
+            if alert is None:
+                latest_alert_debug[vital_key] = None
+                continue
+            canonical_type = normalize_alert_type(alert.alert_type, alert.severity)
+            inferred_state = cls._classify_alert_state(canonical_type)
+            latest_state = state_source_bucket.get("latest_state")
+            if latest_state not in {"abnormal", "normalized"}:
+                latest_state = inferred_state
+            if latest_state == "abnormal":
+                latest_abnormal_vitals.append(vital_key)
+            _, value, _, _ = cls._extract_alert_structured_fields(
+                alert.alert_type,
+                alert.message,
+                alert.severity,
+            )
+            latest_alert_debug[vital_key] = {
+                "type": canonical_type,
+                "severity": alert.severity,
+                "timestamp": alert.created_at,
+                "value": value,
+                "message": alert.message,
+                "state": latest_state or "none",
+            }
+
+        debug_payload = {
+            "patient_id": patient_id,
+            "final_treatment_id": (final_treatment or {}).get("medication_id"),
+            "final_treatment_timestamp": final_treatment_timestamp,
+            "final_treatment_outcome": treatment_outcome,
+            "evaluated_vital_timestamp": (final_treatment or {}).get("evaluated_vital_timestamp"),
+            "evaluated_vital": (final_treatment or {}).get("evaluated_vital"),
+            "latest_vital_timestamp": latest_vital.recorded_at if latest_vital is not None else None,
+            "latest_vital": {
+                "heart_rate": latest_vital.heart_rate if latest_vital is not None else None,
+                "oxygen_saturation": latest_vital.oxygen_saturation if latest_vital is not None else None,
+                "temperature": latest_vital.temperature if latest_vital is not None else None,
+            },
+            "latest_hr_vital_value": latest_vital.heart_rate if latest_vital is not None else None,
+            "latest_hr_vital_timestamp": latest_vital.recorded_at if latest_vital is not None else None,
+            "latest_oxygen_vital_value": latest_vital.oxygen_saturation if latest_vital is not None else None,
+            "latest_oxygen_vital_timestamp": latest_vital.recorded_at if latest_vital is not None else None,
+            "latest_temperature_vital_value": latest_vital.temperature if latest_vital is not None else None,
+            "latest_temperature_vital_timestamp": latest_vital.recorded_at if latest_vital is not None else None,
+            "discharge_timestamp_candidate": candidate_discharge_time,
+            "latest_alerts": latest_alert_debug,
+        }
+
+        if treatment_outcome != "Effective":
+            debug_payload["reason"] = "Blocked recovered discharge because final treatment outcome is not Effective."
+            return False, "final_treatment_outcome_not_effective", debug_payload
+        if final_treatment_timestamp is None:
+            debug_payload["reason"] = "Blocked recovered discharge because final treatment timestamp is missing."
+            return False, "final_treatment_timestamp_missing", debug_payload
+        if latest_vital is None:
+            debug_payload["reason"] = "Blocked recovered discharge because no latest vital snapshot is available."
+            return False, "latest_vital_missing", debug_payload
+
+        treatment_actions_count = 0
+        if required_actions > 0:
+            medications = db.execute(
+                select(PatientMedication)
+                .where(PatientMedication.patient_id == patient_id)
+                .order_by(PatientMedication.created_at.asc(), PatientMedication.id.asc())
+            ).scalars().all()
+            treatment_actions_count = len(cls._build_treatment_actions(medications))
+            debug_payload["treatment_actions_count"] = treatment_actions_count
+            debug_payload["min_treatment_actions_required"] = required_actions
+            if treatment_actions_count < required_actions:
+                debug_payload["reason"] = (
+                    "Blocked recovered discharge because treatment history is too short: "
+                    f"{treatment_actions_count} action(s) recorded, minimum required is {required_actions}."
+                )
+                return False, "minimum_treatment_actions_not_met", debug_payload
+
+        if latest_vital.heart_rate > cls.HEART_RATE_STABLE_MAX:
+            debug_payload["reason"] = (
+                f"Blocked recovered discharge because latest heart rate vital is {latest_vital.heart_rate} "
+                f"(>{cls.HEART_RATE_STABLE_MAX})."
+            )
+            return False, "latest_heart_rate_unstable", debug_payload
+        if latest_vital.oxygen_saturation < cls.OXYGEN_STABLE_MIN:
+            debug_payload["reason"] = (
+                f"Blocked recovered discharge because latest oxygen vital is {latest_vital.oxygen_saturation} "
+                f"(<{cls.OXYGEN_STABLE_MIN})."
+            )
+            return False, "latest_oxygen_unstable", debug_payload
+        if latest_vital.temperature > cls.TEMPERATURE_STABLE_MAX:
+            debug_payload["reason"] = (
+                f"Blocked recovered discharge because latest temperature vital is {latest_vital.temperature} "
+                f"(>{cls.TEMPERATURE_STABLE_MAX})."
+            )
+            return False, "latest_temperature_unstable", debug_payload
+
+        unresolved_after_treatment, unresolved_details = cls.has_unresolved_abnormal_alerts_after(
+            db,
+            patient_id,
+            final_treatment_timestamp,
+            up_to_timestamp=candidate_discharge_time,
+        )
+        unresolved_vitals = sorted(
+            set(unresolved_details.get("unresolved_vitals", []))
+            | set(latest_abnormal_vitals)
+        )
+        debug_payload["unresolved_alerts_after_final_treatment"] = {
+            "exists": bool(unresolved_vitals),
+            "unresolved_vitals": unresolved_vitals,
+        }
+        debug_payload["unresolved_abnormal_vitals"] = unresolved_vitals
+        if unresolved_vitals:
+            reason_lines = []
+            for vital_key in unresolved_vitals:
+                latest_abnormal = (unresolved_details.get("latest_abnormal_by_vital") or {}).get(vital_key)
+                debug_alert = latest_alert_debug.get(vital_key) if isinstance(latest_alert_debug.get(vital_key), dict) else None
+                canonical = (
+                    normalize_alert_type(latest_abnormal.alert_type, latest_abnormal.severity)
+                    if latest_abnormal is not None
+                    else (debug_alert or {}).get("type", "unknown")
+                )
+                ts = (
+                    latest_abnormal.created_at.isoformat()
+                    if latest_abnormal is not None
+                    else (((debug_alert or {}).get("timestamp") or "unknown"))
+                )
+                vital_label = vital_key.replace("_saturation", "")
+                reason_lines.append(
+                    f"Blocked recovered discharge because latest {vital_label} alert is {canonical} at {ts} and no newer normalized alert exists."
+                )
+            debug_payload["reason"] = " ".join(reason_lines)
+            return False, "unresolved_abnormal_alerts_after_effective_treatment", debug_payload
+
+        if required_stability_window_seconds > 0:
+            if stability_started_at is None:
+                debug_payload["reason"] = "Blocked recovered discharge because the stability window start is missing."
+                return False, "stability_window_missing_start", debug_payload
+            stable_seconds = (candidate_discharge_time - stability_started_at).total_seconds()
+            debug_payload["stable_window_seconds"] = stable_seconds
+            if stable_seconds < required_stability_window_seconds:
+                debug_payload["reason"] = (
+                    f"Blocked recovered discharge because stable window is {stable_seconds:.2f}s "
+                    f"(<{required_stability_window_seconds}s)."
+                )
+                return False, "stability_window_not_satisfied", debug_payload
+
+        debug_payload["reason"] = "Recovered discharge allowed: final treatment and latest vital/alert states are stable."
+        return True, "ok", debug_payload
+
+    @staticmethod
+    def _is_treatment_escalation_due_to_worsening(
+            *,
+            next_action: dict[str, Any] | None,
+    ) -> bool:
+        if next_action is None:
+            return False
+
+        next_medication = next_action["medication"]
+        notes = " ".join(
+            [
+                str(next_medication.notes or ""),
+                str(next_medication.last_updated_note or ""),
+            ]
+        ).strip().lower()
+        if not notes:
+            return False
+
+        escalation_markers = [
+            "persistent alert",
+            "treatment not working",
+            "worse",
+            "worsen",
+            "ineffective",
+            "dose",
+            "frequency adjusted",
+            "escalat",
+        ]
+        return any(marker in notes for marker in escalation_markers)
+
+    @classmethod
+    def _derive_treatment_outcome_from_window(
+            cls,
+            *,
+            action_index: int,
+            total_actions: int,
+            pre_treatment_vital: Vital | None,
+            evaluated_vital: Vital | None,
+            full_alert_state: dict[str, dict[str, Any]],
+            post_treatment_alert_state: dict[str, dict[str, Any]],
+            sequence_alerts: list[Alert],
+            treatment_timestamp: datetime | None,
+            window_end: datetime,
+            unresolved_after_treatment_vitals: list[str],
+            next_action: dict[str, Any] | None,
+    ) -> tuple[str, str, dict[str, Any]]:
+        vital_rules = {
+            "heart_rate": {
+                "label": "heart_rate",
+                "threshold_text": f"<= {cls.HEART_RATE_STABLE_MAX}",
+                "is_stable": lambda value: value <= cls.HEART_RATE_STABLE_MAX,
+            },
+            "oxygen_saturation": {
+                "label": "oxygen_saturation",
+                "threshold_text": f">= {cls.OXYGEN_STABLE_MIN}",
+                "is_stable": lambda value: value >= cls.OXYGEN_STABLE_MIN,
+            },
+            "temperature": {
+                "label": "temperature",
+                "threshold_text": f"<= {cls.TEMPERATURE_STABLE_MAX}",
+                "is_stable": lambda value: value <= cls.TEMPERATURE_STABLE_MAX,
+            },
+        }
+
+        stable_reasons: list[str] = []
+        vital_unstable_signals: list[str] = []
+        vital_evidence: dict[str, Any] = {}
+        all_latest_vitals_stable = evaluated_vital is not None
+
+        for key, rule in vital_rules.items():
+            value = getattr(evaluated_vital, key) if evaluated_vital is not None else None
+            vital_alert_state = full_alert_state.get(key, {})
+            latest_state = str(vital_alert_state.get("latest_state") or "none")
+            latest_alert = vital_alert_state.get("latest")
+            latest_alert_payload = (
+                {
+                    "id": latest_alert.id,
+                    "alert_type": normalize_alert_type(latest_alert.alert_type, latest_alert.severity),
+                    "severity": latest_alert.severity,
+                    "message": latest_alert.message,
+                    "created_at": latest_alert.created_at,
+                } if latest_alert is not None else None
+            )
+
+            threshold_stable = None
+            if value is not None:
+                threshold_stable = bool(rule["is_stable"](value))
+                if threshold_stable:
+                    stable_reasons.append(f"{rule['label']}={value} satisfies {rule['threshold_text']}")
+                else:
+                    all_latest_vitals_stable = False
+                    vital_unstable_signals.append(f"{rule['label']}={value} violates {rule['threshold_text']}")
+            else:
+                all_latest_vitals_stable = False
+                vital_unstable_signals.append(f"{rule['label']} has no latest vital value for evaluation")
+
+            vital_evidence[key] = {
+                "value": value,
+                "threshold": rule["threshold_text"],
+                "threshold_stable": threshold_stable,
+                "latest_alert_state": latest_state,
+                "latest_alert": latest_alert_payload,
+            }
+
+        if treatment_timestamp is None:
+            recovered_vitals: list[str] = []
+        else:
+            recovered_vitals = cls._get_recovered_vitals_after_treatment(
+                sequence_alerts=sequence_alerts,
+                window_start=treatment_timestamp,
+                window_end=window_end,
+                post_treatment_alert_state=post_treatment_alert_state,
+                full_alert_state=full_alert_state,
+            )
+
+        unresolved_vitals = cls._get_unresolved_abnormal_vitals(
+            full_alert_state=full_alert_state,
+            unresolved_after_treatment_vitals=unresolved_after_treatment_vitals,
+        )
+
+        next_treatment_escalation = cls._is_treatment_escalation_due_to_worsening(
+            next_action=next_action,
+        )
+        latest_alerts = cls._build_latest_alert_debug_payload(full_alert_state)
+
+        trend_improved_vitals = cls._get_vital_trend_improvements(
+            previous_vital=pre_treatment_vital,
+            current_vital=evaluated_vital,
+        )
+        recovery_signals_vitals = sorted(set(recovered_vitals) | set(trend_improved_vitals))
+        stable_vital_count_before = cls._stable_vital_count(pre_treatment_vital)
+        stable_vital_count_after = cls._stable_vital_count(evaluated_vital)
+        stable_vital_count_gain = max(0, stable_vital_count_after - stable_vital_count_before)
+
+        has_unresolved = bool(unresolved_vitals)
+        has_recovery = bool(recovery_signals_vitals)
+        has_unstable_values = not all_latest_vitals_stable
+
+        unstable_signals: list[str] = [*vital_unstable_signals]
+        if has_unresolved:
+            unstable_signals.append(
+                "Unresolved abnormal alerts remain for: "
+                + ", ".join(cls._format_vital_label(item) for item in unresolved_vitals)
+            )
+        if has_unstable_values:
+            unstable_signals.append(
+                "Latest vital values are not fully stable (heart_rate, oxygen_saturation, temperature)."
+            )
+        if next_treatment_escalation:
+            unstable_signals.append(
+                "A follow-up treatment escalation indicates persistent or worsening clinical instability."
+            )
+
+        evidence = {
+            "vitals": vital_evidence,
+            "stable_signals": stable_reasons,
+            "unstable_signals": unstable_signals,
+            "recovered_vitals": recovered_vitals,
+            "trend_improved_vitals": trend_improved_vitals,
+            "recovery_signals_vitals": recovery_signals_vitals,
+            "unresolved_vitals": unresolved_vitals,
+            "has_unresolved_abnormal_alerts": has_unresolved,
+            "next_treatment_escalation_detected": next_treatment_escalation,
+            "action_index": action_index + 1,
+            "total_actions": total_actions,
+            "stable_vital_count_before": stable_vital_count_before,
+            "stable_vital_count_after": stable_vital_count_after,
+            "stable_vital_count_gain": stable_vital_count_gain,
+            "latest_alerts": latest_alerts,
+        }
+
+        if all_latest_vitals_stable and not has_unresolved and not next_treatment_escalation:
+            if recovered_vitals:
+                reason = (
+                    "Treatment is effective because "
+                    + ", ".join(cls._format_vital_label(item) for item in recovered_vitals)
+                    + " normalized after treatment and no unresolved abnormal alerts remain."
+                )
+            else:
+                reason = "Treatment is effective because latest vital values are stable and no unresolved abnormal alerts remain."
+            return "Effective", reason, evidence
+
+        treatment_number = action_index + 1
+        phase_bonus = 0
+        if 4 <= treatment_number <= 7:
+            phase_bonus = 1
+        elif treatment_number >= 8:
+            phase_bonus = 2
+
+        improving_threshold = 3
+        if 4 <= treatment_number <= 7:
+            improving_threshold = 2
+        elif treatment_number >= 8:
+            improving_threshold = 1
+
+        progression_score = 0
+        if has_recovery:
+            progression_score += 2
+        if stable_vital_count_gain > 0:
+            progression_score += 1
+        if not has_unresolved:
+            progression_score += 1
+        if not has_unstable_values:
+            progression_score += 1
+        if next_treatment_escalation:
+            progression_score -= 1
+        if phase_bonus > 0 and (has_recovery or stable_vital_count_gain > 0):
+            progression_score += phase_bonus
+
+        if (
+                (has_recovery and (has_unresolved or has_unstable_values or next_treatment_escalation))
+                or progression_score >= improving_threshold
+                or (
+                    treatment_number >= 4
+                    and not next_treatment_escalation
+                    and stable_vital_count_after >= stable_vital_count_before
+                    and (has_recovery or stable_vital_count_after >= 2)
+                )
+        ):
+            recovery_labels = recovery_signals_vitals or recovered_vitals
+            unresolved_phrase = (
+                ", and "
+                + ", ".join(cls._format_vital_label(item) for item in unresolved_vitals)
+                + " remains unresolved"
+                if unresolved_vitals
+                else ""
+            )
+            if recovery_labels:
+                reason = (
+                    "Treatment is improving because "
+                    + ", ".join(cls._format_vital_label(item) for item in recovery_labels)
+                    + " shows recovery after treatment"
+                    + unresolved_phrase
+                    + "."
+                )
+            else:
+                reason = (
+                    "Treatment is improving because clinical stability indicators are increasing, "
+                    "but the patient is not fully recovered yet."
+                )
+            return "Improving", reason, evidence
+
+        reason = "Treatment is ineffective because abnormal states remain unresolved and no meaningful post-treatment recovery evidence is present."
+        return "Ineffective", reason, evidence
+
+    @classmethod
+    def _derive_treatment_outcome_from_alert_recovery(
+            cls,
+            *,
+            action_index: int,
+            total_actions: int,
+            pre_treatment_vital: Vital | None,
+            evaluated_vital: Vital | None,
+            full_alert_state: dict[str, dict[str, Any]],
+            post_treatment_alert_state: dict[str, dict[str, Any]],
+            sequence_alerts: list[Alert],
+            treatment_timestamp: datetime | None,
+            window_end: datetime,
+            unresolved_after_treatment_vitals: list[str],
+            next_action: dict[str, Any] | None,
+    ) -> tuple[str, str, dict[str, Any]]:
+        return cls._derive_treatment_outcome_from_window(
+            action_index=action_index,
+            total_actions=total_actions,
+            pre_treatment_vital=pre_treatment_vital,
+            evaluated_vital=evaluated_vital,
+            full_alert_state=full_alert_state,
+            post_treatment_alert_state=post_treatment_alert_state,
+            sequence_alerts=sequence_alerts,
+            treatment_timestamp=treatment_timestamp,
+            window_end=window_end,
+            unresolved_after_treatment_vitals=unresolved_after_treatment_vitals,
+            next_action=next_action,
+        )
+
+    @classmethod
+    def _evaluate_treatment_action(
+            cls,
+            *,
+            patient: Patient,
+            action_index: int,
+            treatment_actions: list[dict[str, Any]],
+            sequence_vitals: list[Vital],
+            sequence_alerts: list[Alert],
+    ) -> dict[str, Any]:
+        current_action = treatment_actions[action_index]
+        next_action = treatment_actions[action_index + 1] if action_index + 1 < len(treatment_actions) else None
+        pre_treatment_vital = cls._get_latest_vital_before_timestamp(
+            sequence_vitals=sequence_vitals,
+            timestamp=current_action["timestamp"],
+        )
+        window_start, window_end = cls._build_treatment_evaluation_window(
+            patient=patient,
+            action_index=action_index,
+            treatment_actions=treatment_actions,
+            sequence_vitals=sequence_vitals,
+            sequence_alerts=sequence_alerts,
+        )
+        evaluated_vital, evaluated_vital_source = cls._get_latest_vital_state_for_window(
+            sequence_vitals=sequence_vitals,
+            window_start=window_start,
+            window_end=window_end,
+        )
+        vital_alert_state = cls._get_latest_vital_specific_alert_state(
+            sequence_alerts=sequence_alerts,
+            window_start=current_action["timestamp"],
+            window_end=window_end,
+        )
+        _, unresolved_after_treatment_details = cls._has_unresolved_abnormal_alerts_after_in_sequence(
+            sequence_alerts=sequence_alerts,
+            after_timestamp=current_action["timestamp"],
+            up_to_timestamp=window_end,
+        )
+
+        outcome, outcome_reason, outcome_evidence = cls._derive_treatment_outcome_from_alert_recovery(
+            action_index=action_index,
+            total_actions=len(treatment_actions),
+            pre_treatment_vital=pre_treatment_vital,
+            evaluated_vital=evaluated_vital,
+            full_alert_state=cls._get_latest_vital_specific_alert_state(
+                sequence_alerts=sequence_alerts,
+                window_end=window_end,
+            ),
+            post_treatment_alert_state=vital_alert_state,
+            sequence_alerts=sequence_alerts,
+            treatment_timestamp=current_action["timestamp"],
+            window_end=window_end,
+            unresolved_after_treatment_vitals=unresolved_after_treatment_details.get("unresolved_vitals", []),
+            next_action=next_action,
+        )
+
+        evaluated_vital_payload = (
+            {
+                "heart_rate": evaluated_vital.heart_rate,
+                "oxygen_saturation": evaluated_vital.oxygen_saturation,
+                "temperature": evaluated_vital.temperature,
+            } if evaluated_vital is not None else None
+        )
+        return {
+            "outcome": outcome,
+            "selected_vital_source": evaluated_vital_source,
+            "selected_vital_timestamp": evaluated_vital.recorded_at if evaluated_vital is not None else None,
+            "selected_vital": evaluated_vital_payload,
+            "evaluation_start": window_start,
+            "evaluation_end": window_end,
+            "evaluated_vital_timestamp": evaluated_vital.recorded_at if evaluated_vital is not None else None,
+            "evaluated_vital": evaluated_vital_payload,
+            "outcome_reason": outcome_reason,
+            "outcome_evidence": outcome_evidence,
+            "recovered_vitals": list((outcome_evidence or {}).get("recovered_vitals") or []),
+            "unresolved_vitals": list((outcome_evidence or {}).get("unresolved_vitals") or []),
+            "latest_alerts": (outcome_evidence or {}).get("latest_alerts"),
+        }
+
+    @classmethod
+    def _latest_treatment_action_outcome(cls, db, patient_id: int) -> dict | None:
+        patient = db.get(Patient, patient_id)
+        if patient is None:
+            return None
+
+        medications = db.execute(
+            select(PatientMedication)
+            .where(PatientMedication.patient_id == patient_id)
+            .order_by(PatientMedication.created_at.asc(), PatientMedication.id.asc())
+        ).scalars().all()
+        if not medications:
+            return None
+
+        vitals = db.execute(
+            select(Vital)
+            .where(Vital.patient_id == patient_id)
+            .order_by(Vital.recorded_at.asc(), Vital.id.asc())
+        ).scalars().all()
+        alerts = db.execute(
+            select(Alert)
+            .where(Alert.patient_id == patient_id)
+            .order_by(Alert.created_at.asc(), Alert.id.asc())
+        ).scalars().all()
+        treatment_actions = cls._build_treatment_actions(medications)
+        if not treatment_actions:
+            return None
+
+        latest_action = treatment_actions[-1]
+        latest_index = len(treatment_actions) - 1
+        evaluation = cls._evaluate_treatment_action(
+            patient=patient,
+            action_index=latest_index,
+            treatment_actions=treatment_actions,
+            sequence_vitals=vitals,
+            sequence_alerts=alerts,
+        )
+
+        medication = latest_action["medication"]
+        return {
+            "medication_id": medication.id,
+            "medication_name": medication.name,
+            "action_type": latest_action["action"],
+            "action_timestamp": latest_action["timestamp"],
+            **evaluation,
+        }
 
     @staticmethod
     def _clamp_text(value: str, max_length: int) -> str:
@@ -281,11 +1357,11 @@ class PatientRepository:
             key=lambda item: abs((item.created_at - medication_time).total_seconds()),
         )[:3]
 
-        alert_labels = [f"{item.alert_type}: {item.message}" for item in closest_alerts]
+        alert_labels = [f"{normalize_alert_type(item.alert_type, item.severity)}: {item.message}" for item in closest_alerts]
 
         if not alert_labels and alerts:
             recent_alerts = sorted(alerts, key=lambda item: item.created_at, reverse=True)[:3]
-            alert_labels = [f"{item.alert_type}: {item.message}" for item in recent_alerts]
+            alert_labels = [f"{normalize_alert_type(item.alert_type, item.severity)}: {item.message}" for item in recent_alerts]
 
         return {
             "alerts": alert_labels,
@@ -295,7 +1371,7 @@ class PatientRepository:
 
     def get_patient_treatment_analysis(self, patient_id: int) -> dict:
         with SessionLocal() as db:
-            get_patient_or_raise(db, patient_id)
+            patient = get_patient_or_raise(db, patient_id)
 
             medications = db.execute(
                 select(PatientMedication)
@@ -326,7 +1402,6 @@ class PatientRepository:
                 .where(Vital.patient_id == patient_id)
                 .order_by(Vital.recorded_at.asc(), Vital.id.asc())
             ).scalars().all()
-
             diagnosis_labels = [entry.diagnosis for entry in diagnoses if entry.diagnosis]
             condition_labels = [
                 f"{condition.name} ({assignment.status})"
@@ -337,74 +1412,58 @@ class PatientRepository:
             sequence_alerts = sorted(alerts, key=lambda item: (item.created_at, item.id))
             sequence_vitals = sorted(vitals, key=lambda item: (item.recorded_at, item.id))
 
-            treatment_actions = []
-            for medication in medications:
-                treatment_actions.append(
-                    {
-                        "action": "add",
-                        "timestamp": medication.created_at,
-                        "medication": medication,
-                    }
-                )
-                if (
-                    medication.updated_at is not None
-                    and medication.updated_at > medication.created_at
-                ):
-                    treatment_actions.append(
-                        {
-                            "action": "modify",
-                            "timestamp": medication.updated_at,
-                            "medication": medication,
-                        }
-                    )
-
-            treatment_actions.sort(
-                key=lambda item: (
-                    item["timestamp"],
-                    item["medication"].id,
-                    0 if item["action"] == "add" else 1,
-                )
-            )
+            treatment_actions = self._build_treatment_actions(medications)
 
             medications_payload = []
-            for index, action_entry in enumerate(treatment_actions, start=1):
+            for action_index, action_entry in enumerate(treatment_actions):
                 medication = action_entry["medication"]
+                action_type = action_entry["action"]
                 action_time = action_entry["timestamp"]
+                index = action_index + 1
                 doctor_name = None
                 doctor = db.get(Doctor, medication.doctor_id)
                 if doctor is not None:
                     doctor_name = f"{doctor.last_name} {doctor.first_name}".strip()
-                related_vital = next(
-                    (vital for vital in sequence_vitals if vital.recorded_at >= action_time),
-                    None,
+                evaluation = self._evaluate_treatment_action(
+                    patient=patient,
+                    action_index=action_index,
+                    treatment_actions=treatment_actions,
+                    sequence_vitals=sequence_vitals,
+                    sequence_alerts=sequence_alerts,
                 )
-                if related_vital is None:
-                    related_vital = next(
-                        (vital for vital in reversed(sequence_vitals) if vital.recorded_at <= action_time),
-                        None,
-                    )
 
                 previous_alert = next(
-                    (alert for alert in reversed(sequence_alerts) if alert.created_at <= action_time),
+                    (
+                        alert
+                        for alert in reversed(sequence_alerts)
+                        if (
+                            (alert_time := self._normalize_datetime_for_comparison(alert.created_at)) is not None
+                            and action_time is not None
+                            and alert_time <= action_time
+                        )
+                    ),
                     None,
                 )
 
                 medications_payload.append(
                     {
                         "id": medication.id,
+                        "action": action_type,
                         "name": medication.name,
                         "dosage": medication.dosage,
                         "frequency": medication.frequency,
+                        "created_at": medication.created_at,
                         "prescribed_at": action_time,
+                        "timestamp": action_time,
                         "updated_at": medication.updated_at,
                         "notes": medication.notes,
                         "last_updated_note": medication.last_updated_note,
                         "modified_by": doctor_name,
                         "treatment_index": index,
-                        "outcome": self._derive_outcome_from_vital(related_vital),
+                        **evaluation,
                         "previous_alert": (
                             {
-                                "alert_type": previous_alert.alert_type,
+                                "alert_type": normalize_alert_type(previous_alert.alert_type, previous_alert.severity),
                                 "severity": previous_alert.severity,
                                 "message": previous_alert.message,
                                 "created_at": previous_alert.created_at,
@@ -426,9 +1485,32 @@ class PatientRepository:
                     "diagnosis": diagnosis.diagnosis,
                     "status": diagnosis.status,
                     "notes": diagnosis.notes,
+                    "status_note": diagnosis.status_note,
+                    "modified_by": (
+                        f"{doctor.last_name} {doctor.first_name}".strip()
+                        if (doctor := db.get(Doctor, diagnosis.doctor_id)) is not None
+                        else None
+                    ),
                     "created_at": diagnosis.created_at,
                 }
                 for diagnosis in diagnoses
+            ]
+
+            conditions_payload = [
+                {
+                    "id": condition.id,
+                    "name": condition.name,
+                    "status": assignment.status,
+                    "notes": assignment.notes,
+                    "modified_by": (
+                        f"{doctor.last_name} {doctor.first_name}".strip()
+                        if (doctor := db.get(Doctor, assignment.doctor_id)) is not None
+                        else None
+                    ),
+                    "diagnosed_at": assignment.diagnosed_at,
+                    "updated_at": assignment.updated_at,
+                }
+                for condition, assignment in condition_rows
             ]
 
             alerts_payload = []
@@ -441,7 +1523,7 @@ class PatientRepository:
                 alerts_payload.append(
                     {
                         "id": alert.id,
-                        "alert_type": alert.alert_type,
+                        "alert_type": normalize_alert_type(alert.alert_type, alert.severity),
                         "type": alert_type,
                         "value": value,
                         "unit": unit,
@@ -469,7 +1551,7 @@ class PatientRepository:
                     {
                         "timestamp": alert.created_at,
                         "event_type": "alert",
-                        "title": alert.alert_type,
+                        "title": normalize_alert_type(alert.alert_type, alert.severity),
                         "details": alert.message,
                         "related_medication_id": None,
                     }
@@ -489,6 +1571,7 @@ class PatientRepository:
             return {
                 "medications": medications_payload,
                 "diagnoses": diagnoses_payload,
+                "conditions": conditions_payload,
                 "alerts": alerts_payload,
                 "timeline": timeline_events,
             }
@@ -591,11 +1674,33 @@ class PatientRepository:
 
             normalized_type = validate_discharge_type(discharge_type)
             normalized_reason = validate_required_text(reason, "Reason")
+            latest_treatment = self._latest_treatment_action_outcome(db, patient.id)
+            latest_outcome = latest_treatment["outcome"] if latest_treatment is not None else "Ineffective"
+            discharge_timestamp = datetime.now(timezone.utc)
+            if latest_outcome == "Improving":
+                raise ValidationError("DISCHARGE_NOT_ALLOWED_FOR_IMPROVING_OUTCOME")
+            if normalized_type == "Recovered":
+                if latest_outcome != "Effective":
+                    raise ValidationError("DISCHARGE_RECOVERED_REQUIRES_EFFECTIVE_FINAL_TREATMENT")
+                can_discharge, reason_code, debug_payload = self.can_discharge_patient_as_recovered(
+                    db,
+                    patient.id,
+                    latest_treatment,
+                    discharge_timestamp=discharge_timestamp,
+                )
+                print(
+                    f"[RECOVERED_DISCHARGE_GUARD] patient_id={patient.id} patient_name={patient.last_name} {patient.first_name} "
+                    f"allowed={can_discharge} reason={reason_code} payload={debug_payload}"
+                )
+                if not can_discharge:
+                    raise ValidationError("DISCHARGE_RECOVERED_REQUIRES_STABLE_LATEST_STATE")
+            elif normalized_type == "Transferred" and latest_outcome != "Ineffective":
+                raise ValidationError("TRANSFER_DISCHARGE_REQUIRES_INEFFECTIVE_FINAL_TREATMENT")
             self._cancel_incoming_patient_activities(db, patient.id)
 
             patient.is_discharged = True
             patient.discharge_reason = normalized_reason
-            patient.discharge_date = datetime.now(timezone.utc)
+            patient.discharge_date = discharge_timestamp
 
             db.add(
                 PatientAdmissionHistory(
@@ -741,12 +1846,29 @@ class PatientRepository:
     def get_patient_conditions(self, patient_id: int):
         with SessionLocal() as db:
             get_patient_or_raise(db, patient_id)
-            return db.execute(
+            rows = db.execute(
                 select(PatientCondition, PatientConditionAssignment)
                 .join(PatientConditionAssignment, PatientConditionAssignment.condition_id == PatientCondition.id)
                 .where(PatientConditionAssignment.patient_id == patient_id)
                 .order_by(PatientCondition.name.asc(), PatientCondition.id.asc())
             ).all()
+            doctor_ids = {
+                assignment.doctor_id
+                for _, assignment in rows
+                if assignment.doctor_id is not None
+            }
+            doctor_names = {}
+            if doctor_ids:
+                doctors = db.execute(
+                    select(Doctor).where(Doctor.id.in_(doctor_ids))
+                ).scalars().all()
+                doctor_names = {
+                    doctor.id: f"{doctor.last_name} {doctor.first_name}".strip()
+                    for doctor in doctors
+                }
+            for _, assignment in rows:
+                setattr(assignment, "modified_by", doctor_names.get(assignment.doctor_id))
+            return rows
 
     def assign_patient_condition(self, patient_id: int, condition_id: int, doctor_id: int):
         with SessionLocal() as db:
@@ -775,12 +1897,29 @@ class PatientRepository:
                 )
                 db.commit()
 
-            return db.execute(
+            rows = db.execute(
                 select(PatientCondition, PatientConditionAssignment)
                 .join(PatientConditionAssignment, PatientConditionAssignment.condition_id == PatientCondition.id)
                 .where(PatientConditionAssignment.patient_id == patient.id)
                 .order_by(PatientCondition.name.asc(), PatientCondition.id.asc())
             ).all()
+            doctor_ids = {
+                assignment.doctor_id
+                for _, assignment in rows
+                if assignment.doctor_id is not None
+            }
+            doctor_names = {}
+            if doctor_ids:
+                doctors = db.execute(
+                    select(Doctor).where(Doctor.id.in_(doctor_ids))
+                ).scalars().all()
+                doctor_names = {
+                    doctor.id: f"{doctor.last_name} {doctor.first_name}".strip()
+                    for doctor in doctors
+                }
+            for _, assignment in rows:
+                setattr(assignment, "modified_by", doctor_names.get(assignment.doctor_id))
+            return rows
 
     def update_condition_assignment(self, assignment_id: int, doctor_id: int, status: str | None, notes: str | None):
         with SessionLocal() as db:
@@ -792,7 +1931,25 @@ class PatientRepository:
             validate_patient_editable(get_patient_or_raise(db, assignment.patient_id))
 
             if status is not None:
-                assignment.status = validate_condition_status(status)
+                normalized_status = validate_condition_status(status)
+                if normalized_status in {"resolved", "improving"}:
+                    latest_treatment = self._latest_treatment_action_outcome(db, assignment.patient_id)
+                    latest_outcome = latest_treatment["outcome"] if latest_treatment is not None else "Ineffective"
+                    if normalized_status == "resolved" and latest_outcome != "Effective":
+                        raise ValidationError("CONDITION_RESOLVE_REQUIRES_EFFECTIVE_FINAL_TREATMENT")
+                    if normalized_status == "improving" and latest_outcome not in {"Effective", "Improving"}:
+                        raise ValidationError("CONDITION_IMPROVING_REQUIRES_EFFECTIVE_FINAL_TREATMENT")
+                    if normalized_status == "resolved":
+                        can_resolve, _, _ = self.can_discharge_patient_as_recovered(
+                            db,
+                            assignment.patient_id,
+                            latest_treatment,
+                            discharge_timestamp=now_utc(),
+                        )
+                        if not can_resolve:
+                            raise ValidationError("CONDITION_RESOLVE_REQUIRES_STABLE_LATEST_STATE")
+                assignment.status = normalized_status
+                assignment.doctor_id = doctor_id
 
             if notes is not None:
                 assignment.notes = normalize_optional_text(notes)
@@ -869,6 +2026,22 @@ class PatientRepository:
                 .offset((page - 1) * page_size)
                 .limit(page_size)
             ).scalars().all()
+            doctor_ids = {
+                diagnosis_entry.doctor_id
+                for diagnosis_entry in diagnosis_entries
+                if diagnosis_entry.doctor_id is not None
+            }
+            doctor_names = {}
+            if doctor_ids:
+                doctors = db.execute(
+                    select(Doctor).where(Doctor.id.in_(doctor_ids))
+                ).scalars().all()
+                doctor_names = {
+                    doctor.id: f"{doctor.last_name} {doctor.first_name}".strip()
+                    for doctor in doctors
+                }
+            for diagnosis_entry in diagnosis_entries:
+                setattr(diagnosis_entry, "modified_by", doctor_names.get(diagnosis_entry.doctor_id))
 
             return diagnosis_entries, total
 
@@ -887,6 +2060,12 @@ class PatientRepository:
             db.add(diagnosis_entry)
             db.commit()
             db.refresh(diagnosis_entry)
+            doctor = db.get(Doctor, doctor_id)
+            setattr(
+                diagnosis_entry,
+                "modified_by",
+                f"{doctor.last_name} {doctor.first_name}".strip() if doctor is not None else None,
+            )
             return diagnosis_entry
 
     def update_patient_diagnosis(self, diagnosis_id: int, doctor_id: int, status: str | None, note: str | None) -> PatientDiagnosis:
@@ -901,7 +2080,22 @@ class PatientRepository:
             updated = False
 
             if status is not None:
-                diagnosis.status = validate_diagnosis_status(status)
+                normalized_status = validate_diagnosis_status(status)
+                if normalized_status == "resolved":
+                    latest_treatment = self._latest_treatment_action_outcome(db, diagnosis.patient_id)
+                    latest_outcome = latest_treatment["outcome"] if latest_treatment is not None else "Ineffective"
+                    if latest_outcome != "Effective":
+                        raise ValidationError("DIAGNOSIS_RESOLVE_REQUIRES_EFFECTIVE_FINAL_TREATMENT")
+                    can_resolve, _, _ = self.can_discharge_patient_as_recovered(
+                        db,
+                        diagnosis.patient_id,
+                        latest_treatment,
+                        discharge_timestamp=now_utc(),
+                    )
+                    if not can_resolve:
+                        raise ValidationError("DIAGNOSIS_RESOLVE_REQUIRES_STABLE_LATEST_STATE")
+                diagnosis.status = normalized_status
+                diagnosis.doctor_id = doctor_id
                 updated = True
 
             if note is not None:
@@ -913,6 +2107,12 @@ class PatientRepository:
             diagnosis.updated_at = now_utc()
             db.commit()
             db.refresh(diagnosis)
+            doctor = db.get(Doctor, diagnosis.doctor_id)
+            setattr(
+                diagnosis,
+                "modified_by",
+                f"{doctor.last_name} {doctor.first_name}".strip() if doctor is not None else None,
+            )
             return diagnosis
 
     def administer_medication(

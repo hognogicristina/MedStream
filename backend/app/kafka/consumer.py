@@ -179,6 +179,15 @@ def handle_alert_event(payload: dict, app_loop: asyncio.AbstractEventLoop):
         print("Skipping alert event: missing patient_id")
         return
 
+    with SessionLocal() as db:
+        patient = db.get(Patient, alert_event["patient_id"])
+        if patient is None:
+            print(f"Skipping alert event: patient {alert_event['patient_id']} does not exist")
+            return
+        if patient.is_discharged:
+            print(f"Skipping alert event broadcast: patient {alert_event['patient_id']} is discharged")
+            return
+
     streaming_metrics_store.record_alert(
         SimpleNamespace(
             id=alert_event["id"],

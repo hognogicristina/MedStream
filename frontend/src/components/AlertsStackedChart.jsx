@@ -46,7 +46,7 @@ export default function AlertsStackedChart({data}) {
           <Area
             type="monotone"
             dataKey="stable"
-            name="Stable"
+            name="Normalized"
             stackId="alerts"
             stroke="#22c55e"
             fill="#22c55e"

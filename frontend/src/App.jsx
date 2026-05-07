@@ -5,7 +5,6 @@ import {useAuth} from "./components/AuthContext.jsx"
 import ProtectedRoute from "./components/ProtectedRoute.jsx"
 import PublicOnlyRoute from "./components/PublicOnlyRoute.jsx"
 import LoadingSpinner from "./components/LoadingSpinner.jsx"
-import {useNotifications} from "./hooks/useNotifications.js"
 import {registerAuthFailureHandler} from "./services/api.js"
 import AddPatientPage from "./pages/AddPatientPage.jsx"
 import AlertsPage from "./pages/AlertsPage.jsx"
@@ -27,6 +26,9 @@ import ResetPasswordPage from "./pages/ResetPasswordPage.jsx"
 import StreamingMetricsPage from "./pages/StreamingMetricsPage.jsx"
 import StreamingBatchPage from "./pages/StreamingBatchPage.jsx"
 import VerifyEmailPage from "./pages/VerifyEmailPage.jsx"
+import {getPatient} from "./services/patientApi.js"
+import {getResponseData} from "./services/apiMessages.js"
+import {formatPatientFullName} from "./utils/patients.js"
 
 function RootRoute() {
   const {isAuthenticated, isAuthResolved} = useAuth()
@@ -42,28 +44,134 @@ function ApiAuthBridge() {
   const navigate = useNavigate()
   const location = useLocation()
   const {logout} = useAuth()
-  const {notifyError} = useNotifications()
+  const isAuthRoute = [
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/reset-password",
+    "/verify-email",
+    "/recover-account",
+    "/recover-account/verify",
+  ].includes(location.pathname)
 
   useEffect(() => {
     registerAuthFailureHandler(() => {
-      notifyError("Session expired. Please log in again.")
       logout()
-      if (location.pathname !== "/login") {
-        navigate("/login", {replace: true, state: {message: "Session expired. Please log in again."}})
+      if (!isAuthRoute) {
+        navigate("/login", {replace: true})
       }
     })
 
     return () => {
       registerAuthFailureHandler(null)
     }
-  }, [location.pathname, logout, navigate, notifyError])
+  }, [isAuthRoute, logout, navigate])
 
+  return null
+}
+
+function resolveStaticTitle(pathname) {
+  if (pathname === "/dashboard") {
+    return "Dashboard"
+  }
+  if (pathname === "/metrics/streaming") {
+    return "Streaming Monitoring"
+  }
+  if (pathname === "/metrics/batch") {
+    return "Batch Analytics"
+  }
+  if (pathname === "/metrics/comparison") {
+    return "Streaming vs Batch"
+  }
+  if (pathname === "/login") {
+    return "Login"
+  }
+  if (pathname === "/register") {
+    return "Register"
+  }
+  if (pathname === "/forgot-password" || pathname === "/recover-account") {
+    return "Recover Account"
+  }
+  if (pathname === "/reset-password") {
+    return "Reset Password"
+  }
+  if (pathname === "/verify-email" || pathname === "/recover-account/verify") {
+    return "Verify Email"
+  }
+  if (pathname === "/profile") {
+    return "My Profile"
+  }
+  if (pathname === "/alerts") {
+    return "Alerting System"
+  }
+  if (pathname.startsWith("/departments/")) {
+    return "Departemnts"
+  }
+  return "MedStream"
+}
+
+function useDocumentTitle() {
+  const location = useLocation()
+
+  useEffect(() => {
+    let active = true
+    const {pathname} = location
+    const staticTitle = resolveStaticTitle(pathname)
+    document.title = staticTitle
+
+    const match = pathname.match(/^\/patients\/(\d+)\/(diagnosis|medical-history|admission-history|analysis)$/)
+      || pathname.match(/^\/patient\/(\d+)$/)
+
+    if (!match) {
+      return () => {
+        active = false
+      }
+    }
+
+    const patientId = match[1]
+    const section = match[2] || ""
+    const sectionTitle = section === "diagnosis"
+      ? "Clinical Records"
+      : section === "medical-history"
+        ? "Medical History"
+        : section === "admission-history"
+          ? "Admission History"
+          : section === "analysis"
+            ? "Treatment Analysis"
+            : ""
+
+    const fallbackPatientTitle = sectionTitle ? `Patient: #${patientId} - ${sectionTitle}` : `Patient: #${patientId}`
+    document.title = fallbackPatientTitle
+
+    const setPatientTitle = async () => {
+      try {
+        const response = await getPatient(patientId)
+        if (!active) {
+          return
+        }
+        const patientName = formatPatientFullName(getResponseData(response))
+        document.title = sectionTitle ? `Patient: ${patientName} - ${sectionTitle}` : `Patient: ${patientName}`
+      } catch {
+      }
+    }
+
+    setPatientTitle()
+
+    return () => {
+      active = false
+    }
+  }, [location])
+}
+
+function TitleManager() {
+  useDocumentTitle()
   return null
 }
 
 function App() {
   return (
     <BrowserRouter>
+      <TitleManager/>
       <ApiAuthBridge/>
       <Routes>
         <Route path="/" element={<RootRoute/>}/>
