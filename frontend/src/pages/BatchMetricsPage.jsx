@@ -34,7 +34,7 @@ const EMPTY_METRICS = {
 const EMPTY_INSIGHTS = {
   patients_per_department: {items: [], total: 0, page: 1, page_size: PAGE_SIZE},
   top_diagnosis: {items: [], total: 0, page: 1, page_size: PAGE_SIZE},
-  treatment_effectiveness: {effective: 0, ineffective: 0},
+  treatment_effectiveness: {effective: 0, improving: 0, ineffective: 0},
   medication_effectiveness: [],
 }
 
@@ -49,6 +49,7 @@ const EMPTY_SCHEDULE = {
 
 const TREATMENT_CATEGORY_DESCRIPTION = {
   Effective: "Patients whose condition improved or remained clinically stable after treatment.",
+  Improving: "Patients with partial recovery where at least one vital improved but unresolved issues remain.",
   Ineffective: "Patients whose condition showed no improvement or worsened after treatment.",
 }
 
@@ -400,12 +401,15 @@ export default function BatchMetricsPage() {
   const insightsData = insights || EMPTY_INSIGHTS
   const patientsPerDepartment = insightsData.patients_per_department
   const topDiagnosis = insightsData.top_diagnosis
-  const treatmentEffectiveness = insightsData.treatment_effectiveness || {effective: 0, ineffective: 0}
-  const medicationEffectiveness = insightsData.medication_effectiveness || []
+  const treatmentEffectiveness = insightsData.treatment_effectiveness || {effective: 0, improving: 0, ineffective: 0}
+  const medicationEffectiveness = useMemo(
+    () => insightsData.medication_effectiveness || [],
+    [insightsData.medication_effectiveness],
+  )
   const progressLabel = batchProgress.is_running ? "Running" : "Idle"
   const departmentsTotalPages = Math.max(1, Math.ceil((patientsPerDepartment.total || 0) / PAGE_SIZE))
   const diagnosesTotalPages = Math.max(1, Math.ceil((topDiagnosis.total || 0) / PAGE_SIZE))
-  const totalTreatments = treatmentEffectiveness.effective + treatmentEffectiveness.ineffective
+  const totalTreatments = treatmentEffectiveness.effective + treatmentEffectiveness.improving + treatmentEffectiveness.ineffective
   const overallEffectivenessData = totalTreatments > 0
     ? [
       {
@@ -413,6 +417,12 @@ export default function BatchMetricsPage() {
         value: treatmentEffectiveness.effective,
         rawValue: treatmentEffectiveness.effective,
         color: "#22c55e",
+      },
+      {
+        name: "Improving",
+        value: treatmentEffectiveness.improving,
+        rawValue: treatmentEffectiveness.improving,
+        color: "#f59e0b",
       },
       {
         name: "Ineffective",
@@ -445,6 +455,12 @@ export default function BatchMetricsPage() {
       description: TREATMENT_CATEGORY_DESCRIPTION.Effective,
     },
     {
+      label: "Improving",
+      count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.improving : 0,
+      fill: "#f59e0b",
+      description: TREATMENT_CATEGORY_DESCRIPTION.Improving,
+    },
+    {
       label: "Ineffective",
       count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.ineffective : 0,
       fill: "#ef4444",
@@ -454,6 +470,7 @@ export default function BatchMetricsPage() {
 
   const scheduleSummary = useMemo(() => formatScheduleSummary(schedule), [schedule])
   const effectivePercentage = totalTreatments ? (treatmentEffectiveness.effective / totalTreatments) * 100 : 0
+  const improvingPercentage = totalTreatments ? (treatmentEffectiveness.improving / totalTreatments) * 100 : 0
   const ineffectivePercentage = totalTreatments ? (treatmentEffectiveness.ineffective / totalTreatments) * 100 : 0
 
   const handleExportAllMetrics = () => {
@@ -498,14 +515,17 @@ export default function BatchMetricsPage() {
       ["metric", "value"],
       ["overall_treatments_total", totalTreatments],
       ["overall_treatments_effective_count", treatmentEffectiveness.effective],
+      ["overall_treatments_improving_count", treatmentEffectiveness.improving],
       ["overall_treatments_ineffective_count", treatmentEffectiveness.ineffective],
       ["overall_treatments_effective_percentage", Number(effectivePercentage.toFixed(2))],
+      ["overall_treatments_improving_percentage", Number(improvingPercentage.toFixed(2))],
       ["overall_treatments_ineffective_percentage", Number(ineffectivePercentage.toFixed(2))],
       [],
-      ["medication", "effective", "ineffective", "total"],
+      ["medication", "effective", "improving", "ineffective", "total"],
       ...medicationEffectiveness.map((item) => [
         item.name,
         item.effective,
+        item.improving,
         item.ineffective,
         item.total,
       ]),
@@ -520,6 +540,7 @@ export default function BatchMetricsPage() {
 
     const medicationTotal = selectedMedicationEffectiveness.total || 0
     const medicationEffectivePercentage = medicationTotal ? (selectedMedicationEffectiveness.effective / medicationTotal) * 100 : 0
+    const medicationImprovingPercentage = medicationTotal ? (selectedMedicationEffectiveness.improving / medicationTotal) * 100 : 0
     const medicationIneffectivePercentage = medicationTotal ? (selectedMedicationEffectiveness.ineffective / medicationTotal) * 100 : 0
 
     const rows = [
@@ -529,8 +550,10 @@ export default function BatchMetricsPage() {
       ["total_patients", selectedMedicationEffectiveness.total_patients ?? 0],
       ["total_treatments", medicationTotal],
       ["effective_count", selectedMedicationEffectiveness.effective],
+      ["improving_count", selectedMedicationEffectiveness.improving],
       ["ineffective_count", selectedMedicationEffectiveness.ineffective],
       ["effective_percentage", medicationEffectivePercentage.toFixed(2)],
+      ["improving_percentage", medicationImprovingPercentage.toFixed(2)],
       ["ineffective_percentage", medicationIneffectivePercentage.toFixed(2)],
       [],
       ["DOSAGE_BREAKDOWN"],
@@ -1001,6 +1024,10 @@ export default function BatchMetricsPage() {
                 <span className="inline-flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]"/>
                   Effective: {treatmentEffectiveness.effective}
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#f59e0b]"/>
+                  Improving: {treatmentEffectiveness.improving}
                 </span>
                 <span className="inline-flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#ef4444]"/>

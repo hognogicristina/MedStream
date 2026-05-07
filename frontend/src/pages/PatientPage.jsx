@@ -21,6 +21,7 @@ import {getErrorMessage, getResponseData, getResponseMessage} from "../services/
 import {createWebSocket} from "../services/ws.js"
 import {formatPatientPhoneWithCode} from "../utils/patientPhone.js"
 import {useAuth} from "../components/AuthContext.jsx"
+import {normalizeAlertType, ALERT_TYPE_SHORT_LABEL} from "../utils/alerts.js"
 
 function formatDateTime(value) {
   if (!value) {
@@ -33,6 +34,8 @@ function formatDateTime(value) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
   }).format(new Date(value))
 }
 
@@ -66,12 +69,6 @@ const ALERT_COLOR_BY_SEVERITY = {
   High: "#f97316",
   Normal: "#3b82f6",
 }
-const ALERT_TYPE_SHORT_LABEL = {
-  heart_rate: "HR",
-  oxygen_saturation: "O2",
-  temperature: "Temp",
-}
-
 function AlertDistributionTooltip({active, payload, fullAlerts = [], patientId}) {
   if (!active || !Array.isArray(payload) || !payload.length) {
     return null
@@ -86,7 +83,7 @@ function AlertDistributionTooltip({active, payload, fullAlerts = [], patientId})
     fullAlerts
       .filter((alert) => String(alert.patient_id) === String(patientId))
       .filter((alert) => String(alert.severity || "").trim().toLowerCase() === severity)
-      .map((alert) => String(alert.type || alert.alert_type || "").trim().toLowerCase())
+      .map((alert) => normalizeAlertType(alert.type || alert.alert_type, alert.severity))
       .filter(Boolean),
   )]
 
@@ -111,6 +108,7 @@ export default function PatientPage() {
   const [batchMetrics, setBatchMetrics] = useState(null)
   const [alerts, setAlerts] = useState(null)
   const [department, setDepartment] = useState("")
+  const [isPatientNotFound, setIsPatientNotFound] = useState(false)
   const [isUpdatingDepartment, setIsUpdatingDepartment] = useState(false)
   const [isLoadingPatient, setIsLoadingPatient] = useState(true)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -127,6 +125,7 @@ export default function PatientPage() {
     setBatchMetrics(null)
     setAlerts(null)
     setDepartment("")
+    setIsPatientNotFound(false)
     setIsEditDialogOpen(false)
     setIsTransferDialogOpen(false)
   }, [id])
@@ -147,6 +146,7 @@ export default function PatientPage() {
   const loadPatient = useCallback(async () => {
     setIsLoadingPatient(true)
     setIsLoadingDoctors(true)
+    setIsPatientNotFound(false)
 
     try {
       const response = await getPatient(id)
@@ -175,7 +175,11 @@ export default function PatientPage() {
     } catch (error) {
       setPatient(null)
       setDepartment("")
-      notifyError(getErrorMessage(error))
+      if (error?.response?.status === 404) {
+        setIsPatientNotFound(true)
+      } else {
+        notifyError(getErrorMessage(error))
+      }
     } finally {
       setIsLoadingPatient(false)
       setIsLoadingDoctors(false)
@@ -187,6 +191,10 @@ export default function PatientPage() {
   }, [loadPatient])
 
   useEffect(() => {
+    if (isPatientNotFound) {
+      return
+    }
+
     const loadPatientVitals = async () => {
       try {
         const vitalsResponse = await getVitals(id, MAX_VITAL_POINTS)
@@ -197,14 +205,21 @@ export default function PatientPage() {
           }))
         setVitals(patientVitals)
       } catch (error) {
+        if (error?.response?.status === 404) {
+          setIsPatientNotFound(true)
+          return
+        }
         notifyError(getErrorMessage(error))
       }
     }
 
     loadPatientVitals().then(r => r)
-  }, [id, notifyError])
+  }, [id, isPatientNotFound, notifyError])
 
   useEffect(() => {
+    if (isPatientNotFound) {
+      return
+    }
     let active = true
 
     const loadPatientAlerts = async () => {
@@ -221,6 +236,10 @@ export default function PatientPage() {
         if (!active) {
           return
         }
+        if (error?.response?.status === 404) {
+          setIsPatientNotFound(true)
+          return
+        }
         setAlerts([])
         notifyError(getErrorMessage(error))
       }
@@ -231,7 +250,7 @@ export default function PatientPage() {
     return () => {
       active = false
     }
-  }, [id, notifyError])
+  }, [id, isPatientNotFound, notifyError])
 
   useEffect(() => {
     let active = true
@@ -263,6 +282,9 @@ export default function PatientPage() {
   }, [notifyError])
 
   useEffect(() => {
+    if (isPatientNotFound) {
+      return
+    }
     const socket = createWebSocket((msg) => {
       if (String(msg.data?.patient_id) !== id) {
         return
@@ -289,7 +311,7 @@ export default function PatientPage() {
     return () => {
       socket.close()
     }
-  }, [id])
+  }, [id, isPatientNotFound])
 
   const handleDepartmentTransfer = async ({department: nextDepartment, doctorId: nextDoctorId, reason}) => {
     setIsUpdatingDepartment(true)
@@ -457,6 +479,28 @@ export default function PatientPage() {
       <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
           <LoadingSpinner/>
+        </div>
+      </div>
+    )
+  }
+
+  if (isPatientNotFound) {
+    return (
+      <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+          <div className="console-topbar rounded-3xl p-6 sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Patient Monitoring</p>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Patient not found</h1>
+            <p className="mt-2 text-sm text-[#b6bec9]">This patient record does not exist or is no longer available.</p>
+            <div className="mt-5">
+              <Link
+                to="/dashboard"
+                className="inline-flex rounded-full border border-[#3b424b] px-4 py-2 text-sm font-semibold text-[#d5dbdb] transition hover:border-[#ff9900] hover:text-white"
+              >
+                Back to dashboard
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     )

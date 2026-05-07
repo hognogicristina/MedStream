@@ -67,15 +67,25 @@ def build_paginated_payload(items, total: int, page: int, page_size: int, schema
     }
 
 
-def serialize_condition_rows(rows):
+def doctor_name_map(doctors):
+    return {
+        doctor.id: f"{doctor.last_name} {doctor.first_name}".strip()
+        for doctor in doctors
+    }
+
+
+def serialize_condition_rows(rows, doctor_names: dict[int, str] | None = None):
+    doctor_names = doctor_names or {}
     payload = []
     for condition, assignment in rows:
+        modified_by = getattr(assignment, "modified_by", None) or doctor_names.get(assignment.doctor_id)
         payload.append(
             PatientConditionRead.model_validate(
                 {
                     **serialize(condition, PatientConditionRead),
                     "assignment_id": assignment.id,
                     "doctor_id": assignment.doctor_id,
+                    "modified_by": modified_by,
                     "status": assignment.status,
                     "notes": assignment.notes,
                     "diagnosed_at": assignment.diagnosed_at,
@@ -231,7 +241,11 @@ def get_patient_admission_history(
 def get_patient_conditions(id: int):
     try:
         rows = patient_service.get_patient_conditions(id)
-        return success_response("Patient conditions retrieved successfully.", serialize_condition_rows(rows))
+        doctors = patient_service.get_patient_doctors(id)
+        return success_response(
+            "Patient conditions retrieved successfully.",
+            serialize_condition_rows(rows, doctor_name_map(doctors)),
+        )
     except Exception as error:
         raise_http_from_error(error)
 
@@ -241,7 +255,11 @@ def assign_patient_condition(id: int, payload: PatientConditionAssignmentCreate,
     current_doctor = get_current_doctor(authorization)
     try:
         rows = patient_service.assign_patient_condition(id, payload.condition_id, current_doctor.id)
-        return success_response("Patient condition assigned successfully.", serialize_condition_rows(rows))
+        doctors = patient_service.get_patient_doctors(id)
+        return success_response(
+            "Patient condition assigned successfully.",
+            serialize_condition_rows(rows, doctor_name_map(doctors)),
+        )
     except Exception as error:
         raise_http_from_error(error)
 
@@ -282,9 +300,19 @@ def create_patient_allergy(id: int, payload: PatientAllergyCreate, authorization
 def get_patient_diagnosis(id: int, page: int = Query(1, ge=1), page_size: int = Query(5, ge=1, le=100)):
     try:
         diagnosis_entries, total = patient_service.get_patient_diagnosis(id, page, page_size)
+        items = []
+        for diagnosis in diagnosis_entries:
+            item = serialize(diagnosis, PatientDiagnosisRead)
+            item["modified_by"] = getattr(diagnosis, "modified_by", None)
+            items.append(item)
         return success_response(
             "Patient diagnosis retrieved successfully.",
-            build_paginated_payload(diagnosis_entries, total, page, page_size, PatientDiagnosisRead),
+            {
+                "items": items,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+            },
         )
     except Exception as error:
         raise_http_from_error(error)
@@ -295,9 +323,11 @@ def create_patient_diagnosis(id: int, payload: PatientDiagnosisCreate, authoriza
     current_doctor = get_current_doctor(authorization)
     try:
         diagnosis_entry = patient_service.create_patient_diagnosis(id, current_doctor.id, payload.diagnosis, payload.notes)
+        result = serialize(diagnosis_entry, PatientDiagnosisRead)
+        result["modified_by"] = f"{current_doctor.last_name} {current_doctor.first_name}".strip()
         return success_response(
             "Patient diagnosis added successfully.",
-            serialize(diagnosis_entry, PatientDiagnosisRead),
+            result,
             status_code=201,
         )
     except Exception as error:
@@ -309,7 +339,9 @@ def update_patient_diagnosis(diagnosis_id: int, payload: PatientDiagnosisUpdate,
     current_doctor = get_current_doctor(authorization)
     try:
         diagnosis = patient_service.update_patient_diagnosis(diagnosis_id, current_doctor.id, payload.status, payload.note)
-        return success_response("Diagnosis updated successfully.", serialize(diagnosis, PatientDiagnosisRead))
+        result = serialize(diagnosis, PatientDiagnosisRead)
+        result["modified_by"] = f"{current_doctor.last_name} {current_doctor.first_name}".strip()
+        return success_response("Diagnosis updated successfully.", result)
     except Exception as error:
         raise_http_from_error(error)
 

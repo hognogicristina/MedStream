@@ -17,7 +17,7 @@ def list_alerts(cnp: str | None = Query(default=None)):
             select(Alert)
             .join(Patient, Patient.id == Alert.patient_id)
             .where(Alert.patient_id.is_not(None))
-            .order_by(Alert.created_at.desc())
+            .order_by(Alert.created_at.desc(), Alert.id.desc())
         )
 
         if cnp:
@@ -25,7 +25,7 @@ def list_alerts(cnp: str | None = Query(default=None)):
                 select(Alert)
                 .join(Patient, Patient.id == Alert.patient_id)
                 .where(Patient.cnp == cnp)
-                .order_by(Alert.created_at.desc())
+                .order_by(Alert.created_at.desc(), Alert.id.desc())
             )
 
         alerts = db.execute(query).scalars().all()
@@ -42,7 +42,7 @@ def list_patient_alerts(patient_id: int):
             select(Alert)
             .join(Patient, Patient.id == Alert.patient_id)
             .where(Alert.patient_id == patient_id)
-            .order_by(Alert.created_at.desc())
+            .order_by(Alert.created_at.desc(), Alert.id.desc())
         ).scalars().all()
         return success_response(
             "Patient alerts retrieved successfully.",

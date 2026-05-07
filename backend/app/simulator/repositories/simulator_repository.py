@@ -81,6 +81,11 @@ class SimulatorRepository:
     def get_doctor_count(self, db) -> int:
         return db.query(Doctor).count()
 
+    def get_doctor_by_email(self, db, email: str) -> Doctor | None:
+        return db.execute(
+            select(Doctor).where(func.lower(Doctor.email) == (email or "").strip().lower())
+        ).scalar_one_or_none()
+
     def create_doctor(self, db, payload: dict) -> Doctor:
         doctor = Doctor(**payload)
         db.add(doctor)
@@ -95,9 +100,30 @@ class SimulatorRepository:
     def get_doctor(self, db, doctor_id: int) -> Doctor | None:
         return db.get(Doctor, doctor_id)
 
-    def is_phone_available(self, db, phone_number: str) -> bool:
-        existing = db.execute(select(Patient).where(Patient.phone_number == phone_number)).scalar_one_or_none()
-        return existing is None
+    def is_phone_available(
+            self,
+            db,
+            phone_number: str,
+            *,
+            exclude_doctor_id: int | None = None,
+            exclude_patient_id: int | None = None,
+    ) -> bool:
+        normalized = (phone_number or "").strip()
+        if not normalized:
+            return False
+
+        doctor_query = select(Doctor).where(func.lower(Doctor.phone_number) == normalized.lower())
+        if exclude_doctor_id is not None:
+            doctor_query = doctor_query.where(Doctor.id != exclude_doctor_id)
+        existing_doctor = db.execute(doctor_query).scalar_one_or_none()
+        if existing_doctor is not None:
+            return False
+
+        patient_query = select(Patient).where(func.lower(Patient.phone_number) == normalized.lower())
+        if exclude_patient_id is not None:
+            patient_query = patient_query.where(Patient.id != exclude_patient_id)
+        existing_patient = db.execute(patient_query).scalar_one_or_none()
+        return existing_patient is None
 
     def create_address(self, db, payload: dict) -> Address:
         address = Address(**payload)
@@ -396,25 +422,176 @@ class SimulatorRepository:
         diagnoses = db.execute(
             select(PatientDiagnosis).where(PatientDiagnosis.patient_id == patient_id)
         ).scalars().all()
+        updated = 0
         for diagnosis in diagnoses:
-            diagnosis.status = "resolved"
-            diagnosis.updated_at = updated_at
-        return len(diagnoses)
+            if diagnosis.status != "resolved":
+                diagnosis.status = "resolved"
+                diagnosis.updated_at = updated_at
+                updated += 1
+        return updated
+
+    def resolve_patient_diagnoses_after_recovery_discharge(
+            self,
+            db,
+            *,
+            patient_id: int,
+            updated_at: datetime,
+            status_note: str,
+            doctor_id: int | None = None,
+    ) -> int:
+        diagnoses = db.execute(
+            select(PatientDiagnosis).where(PatientDiagnosis.patient_id == patient_id)
+        ).scalars().all()
+        updated = 0
+        for diagnosis in diagnoses:
+            changed = False
+            if diagnosis.status != "resolved":
+                diagnosis.status = "resolved"
+                changed = True
+            if (diagnosis.status_note or "").strip() != status_note.strip():
+                diagnosis.status_note = status_note
+                changed = True
+            if changed:
+                if doctor_id is not None:
+                    diagnosis.doctor_id = doctor_id
+                diagnosis.updated_at = updated_at
+                updated += 1
+        return updated
 
     def resolve_all_patient_conditions(self, db, *, patient_id: int, updated_at: datetime) -> int:
         assignments = db.execute(
             select(PatientConditionAssignment).where(PatientConditionAssignment.patient_id == patient_id)
         ).scalars().all()
+        updated = 0
         for assignment in assignments:
-            assignment.status = "resolved"
-            assignment.updated_at = updated_at
-        return len(assignments)
+            if assignment.status != "resolved":
+                assignment.status = "resolved"
+                assignment.updated_at = updated_at
+                updated += 1
+        return updated
+
+    def update_condition_to_improving_after_positive_treatment(
+            self,
+            db,
+            *,
+            patient_id: int,
+            updated_at: datetime,
+            note: str,
+            doctor_id: int | None = None,
+    ) -> int:
+        assignments = db.execute(
+            select(PatientConditionAssignment).where(PatientConditionAssignment.patient_id == patient_id)
+        ).scalars().all()
+        updated = 0
+        for assignment in assignments:
+            if assignment.status == "resolved":
+                continue
+            changed = False
+            if assignment.status != "improving":
+                assignment.status = "improving"
+                changed = True
+            if (assignment.notes or "").strip() != note.strip():
+                assignment.notes = note
+                changed = True
+            if changed:
+                if doctor_id is not None:
+                    assignment.doctor_id = doctor_id
+                assignment.updated_at = updated_at
+                updated += 1
+        return updated
+
+    # Backward-compatible alias used by older call sites.
+    def update_condition_to_improving_after_effective_treatment(
+            self,
+            db,
+            *,
+            patient_id: int,
+            updated_at: datetime,
+            note: str,
+            doctor_id: int | None = None,
+    ) -> int:
+        return self.update_condition_to_improving_after_positive_treatment(
+            db,
+            patient_id=patient_id,
+            updated_at=updated_at,
+            note=note,
+            doctor_id=doctor_id,
+        )
+
+    def reconcile_after_ineffective_treatment(
+            self,
+            db,
+            *,
+            patient_id: int,
+            updated_at: datetime,
+            doctor_id: int | None = None,
+            condition_note: str | None = None,
+    ) -> dict[str, int]:
+        condition_updates = 0
+
+        assignments = db.execute(
+            select(PatientConditionAssignment).where(PatientConditionAssignment.patient_id == patient_id)
+        ).scalars().all()
+        for assignment in assignments:
+            changed = False
+            if assignment.status in {"resolved", "improving"}:
+                assignment.status = "active"
+                changed = True
+            if condition_note is not None and (assignment.notes or "").strip() != condition_note.strip():
+                assignment.notes = condition_note
+                changed = True
+            if changed:
+                if doctor_id is not None:
+                    assignment.doctor_id = doctor_id
+                assignment.updated_at = updated_at
+                condition_updates += 1
+
+        return {
+            "diagnosis_updates": 0,
+            "condition_updates": condition_updates,
+        }
+
+    def resolve_patient_conditions_after_recovery_discharge(
+            self,
+            db,
+            *,
+            patient_id: int,
+            updated_at: datetime,
+            note: str,
+            doctor_id: int | None = None,
+    ) -> int:
+        assignments = db.execute(
+            select(PatientConditionAssignment).where(PatientConditionAssignment.patient_id == patient_id)
+        ).scalars().all()
+        updated = 0
+        for assignment in assignments:
+            changed = False
+            if assignment.status != "resolved":
+                assignment.status = "resolved"
+                changed = True
+            if (assignment.notes or "").strip() != note.strip():
+                assignment.notes = note
+                changed = True
+            if changed:
+                if doctor_id is not None:
+                    assignment.doctor_id = doctor_id
+                assignment.updated_at = updated_at
+                updated += 1
+        return updated
 
     def get_first_assigned_doctor_id(self, db, patient_id: int) -> int | None:
         link = db.execute(
             doctor_activity_patients.select().where(doctor_activity_patients.c.patient_id == patient_id)
         ).first()
         return link.doctor_id if link else None
+
+    def get_assigned_doctor_ids(self, db, patient_id: int) -> list[int]:
+        links = db.execute(
+            doctor_activity_patients.select().where(doctor_activity_patients.c.patient_id == patient_id)
+        ).all()
+        doctor_ids = [int(link.doctor_id) for link in links if getattr(link, "doctor_id", None) is not None]
+        # Stable de-duplication while preserving insertion order.
+        return list(dict.fromkeys(doctor_ids))
 
     def count_incoming_activities(self, db, patient_id: int) -> int:
         return (
@@ -455,13 +632,18 @@ class SimulatorRepository:
         db.flush()
         return vital
 
-    def create_vital_safe(self, db, patient_id: int, vitals: dict, *, recorded_at: datetime | None = None) -> Vital | None:
+    def block_post_discharge_vital_and_alert_generation(self, db, patient_id: int) -> bool:
         patient = db.get(Patient, patient_id)
         if patient is None:
-            print(f"Skipping vital creation: patient {patient_id} does not exist")
-            return None
+            print(f"Blocking clinical event generation: patient {patient_id} does not exist")
+            return True
         if patient.is_discharged:
-            print(f"Skipping vital creation: patient {patient_id} is discharged")
+            print(f"Blocking clinical event generation: patient {patient_id} is discharged")
+            return True
+        return False
+
+    def create_vital_safe(self, db, patient_id: int, vitals: dict, *, recorded_at: datetime | None = None) -> Vital | None:
+        if self.block_post_discharge_vital_and_alert_generation(db, patient_id):
             return None
         return self.create_vital(db, patient_id, vitals, recorded_at=recorded_at)
 
@@ -479,8 +661,7 @@ class SimulatorRepository:
         if patient_id is None:
             return None
 
-        patient = db.get(Patient, patient_id)
-        if patient is None:
+        if self.block_post_discharge_vital_and_alert_generation(db, patient_id):
             return None
 
         alert = Alert(

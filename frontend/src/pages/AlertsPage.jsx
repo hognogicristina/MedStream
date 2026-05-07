@@ -1,18 +1,69 @@
-import {useEffect, useState} from "react"
+import {useEffect, useMemo, useRef, useState} from "react"
 import {Link, useSearchParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
 import CountValue from "../components/CountValue.jsx"
 import DataTable from "../components/DataTable.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
-import {getAlerts, listPatients} from "../services/patientApi.js"
+import {getAlerts, getPatientAlerts, listPatients} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import {formatPatientFullName} from "../utils/patients.js"
 
-const SEVERITY_ORDER = {
-  critical: 0,
-  high: 1,
-  normal: 2,
+const ALL_ALERTS_TITLE = "Alert System"
+const PATIENT_TITLE_FALLBACK = "Alert System - Patient"
+
+function normalizeTimestamp(value) {
+  const timestamp = new Date(value).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function compareNewestFirst(left, right) {
+  const rightTime = normalizeTimestamp(right?.created_at)
+  const leftTime = normalizeTimestamp(left?.created_at)
+  if (rightTime !== leftTime) {
+    return rightTime - leftTime
+  }
+
+  return Number(right?.id || 0) - Number(left?.id || 0)
+}
+
+function compareOldestFirst(left, right) {
+  const leftTime = normalizeTimestamp(left?.created_at)
+  const rightTime = normalizeTimestamp(right?.created_at)
+  if (leftTime !== rightTime) {
+    return leftTime - rightTime
+  }
+
+  return Number(left?.id || 0) - Number(right?.id || 0)
+}
+
+function buildPatientTitle(patient) {
+  if (!patient) {
+    return PATIENT_TITLE_FALLBACK
+  }
+
+  const fullName = formatPatientFullName(patient)
+  if (!fullName || fullName.toLowerCase() === "unknown") {
+    return PATIENT_TITLE_FALLBACK
+  }
+
+  return `Alert System - Patient: ${fullName}`
+}
+
+function formatDateTimeWithSeconds(value) {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) {
+    return "--"
+  }
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date)
 }
 
 export default function AlertsPage() {
@@ -21,27 +72,83 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState([])
   const [patients, setPatients] = useState([])
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(true)
+  const [alertsError, setAlertsError] = useState("")
   const [flashAlertId, setFlashAlertId] = useState(null)
+  const requestSerialRef = useRef(0)
+
+  const scopedCnp = searchParams.get("cnp") || ""
+  const scopedPatientIdRaw = searchParams.get("patientId")
+  const scopedAlertIdRaw = searchParams.get("alertId")
+  const scopedPatientId = scopedPatientIdRaw && /^\d+$/.test(scopedPatientIdRaw) ? Number(scopedPatientIdRaw) : null
+  const scopedAlertId = scopedAlertIdRaw && /^\d+$/.test(scopedAlertIdRaw) ? Number(scopedAlertIdRaw) : null
+
+  const patientById = useMemo(
+    () => Object.fromEntries((Array.isArray(patients) ? patients : []).map((patient) => [patient.id, patient])),
+    [patients],
+  )
+  const patientByCnp = useMemo(
+    () => Object.fromEntries((Array.isArray(patients) ? patients : []).map((patient) => [patient.cnp, patient])),
+    [patients],
+  )
+
+  const scopedPatient = scopedPatientId
+    ? patientById[scopedPatientId]
+    : (scopedCnp ? patientByCnp[scopedCnp] : null)
 
   useEffect(() => {
+    if (!scopedPatientId && !scopedCnp) {
+      document.title = ALL_ALERTS_TITLE
+      return
+    }
+
+    document.title = buildPatientTitle(scopedPatient)
+  }, [scopedCnp, scopedPatient, scopedPatientId])
+
+  useEffect(() => {
+    let isMounted = true
+    const requestId = requestSerialRef.current + 1
+    requestSerialRef.current = requestId
+
     const loadAlerts = async () => {
+      setIsLoadingAlerts(true)
+      setAlertsError("")
+
       try {
-        const [alertsResponse, patientsResponse] = await Promise.all([
-          getAlerts(),
-          listPatients({page: 1, limit: 100}),
-        ])
+        const patientsPromise = listPatients()
+        const alertsPromise = scopedPatientId ? getPatientAlerts(scopedPatientId) : getAlerts(scopedCnp ? scopedCnp : undefined)
+
+        const [alertsResponse, patientsResponse] = await Promise.all([alertsPromise, patientsPromise])
+        if (!isMounted || requestSerialRef.current !== requestId) {
+          return
+        }
+
         const nextAlerts = Array.isArray(getResponseData(alertsResponse)) ? getResponseData(alertsResponse) : []
+        const nextPatients = Array.isArray(getResponseData(patientsResponse)) ? getResponseData(patientsResponse) : []
+
+        setPatients(nextPatients)
         setAlerts(nextAlerts)
-        setPatients(getResponseData(patientsResponse))
       } catch (error) {
+        if (!isMounted || requestSerialRef.current !== requestId) {
+          return
+        }
+
+        setAlerts([])
+        setAlertsError(getErrorMessage(error) || "Unable to load alerts.")
         notifyError(getErrorMessage(error))
       } finally {
-        setIsLoadingAlerts(false)
+        if (isMounted && requestSerialRef.current === requestId) {
+          setIsLoadingAlerts(false)
+        }
       }
     }
 
-    loadAlerts()
-  }, [notifyError, searchParams])
+    loadAlerts().then(() => {
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [notifyError, scopedCnp, scopedPatientId])
 
   useEffect(() => {
     const socket = createWebSocket((msg) => {
@@ -49,39 +156,64 @@ export default function AlertsPage() {
         return
       }
 
-      if (!msg.data?.patient_id) {
+      const nextAlert = msg.data
+      const patientId = Number(nextAlert?.patient_id)
+      if (!Number.isInteger(patientId)) {
         return
       }
-      setAlerts((prev) => [msg.data, ...prev.filter((alert) => alert.id !== msg.data.id)])
+
+      if (scopedPatientId && patientId !== scopedPatientId) {
+        return
+      }
+
+      if (!scopedPatientId && scopedCnp) {
+        const matchedPatient = patientById[patientId]
+        if (!matchedPatient || String(matchedPatient.cnp || "") !== scopedCnp) {
+          return
+        }
+      }
+
+      setAlerts((prev) => [nextAlert, ...prev.filter((alert) => alert.id !== nextAlert.id)].sort(compareNewestFirst))
     })
 
     return () => socket.close()
-  }, [])
+  }, [patientById, scopedCnp, scopedPatientId])
 
-  const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
-  const patientCnpById = Object.fromEntries(patients.map((patient) => [patient.id, patient.cnp]))
-  const patientByCnp = Object.fromEntries(patients.map((patient) => [patient.cnp, patient]))
-  const patientById = Object.fromEntries(patients.map((patient) => [patient.id, patient]))
-  const scopedCnp = searchParams.get("cnp") || ""
-  const scopedPatientIdRaw = searchParams.get("patientId")
-  const scopedAlertIdRaw = searchParams.get("alertId")
-  const scopedPatientId = scopedPatientIdRaw && /^\d+$/.test(scopedPatientIdRaw) ? Number(scopedPatientIdRaw) : null
-  const scopedAlertId = scopedAlertIdRaw && /^\d+$/.test(scopedAlertIdRaw) ? Number(scopedAlertIdRaw) : null
-  const scopedPatient = scopedPatientId ? patientById[scopedPatientId] : (scopedCnp ? patientByCnp[scopedCnp] : null)
-  const validPatientIds = new Set(patients.map((patient) => patient.id))
-  const validAlerts = alerts.filter(
-    (alert) => Number.isInteger(alert.patient_id) && validPatientIds.has(alert.patient_id) && Boolean(patientNameById[alert.patient_id]),
+  const patientNameById = useMemo(
+    () => Object.fromEntries((Array.isArray(patients) ? patients : []).map((patient) => [patient.id, formatPatientFullName(patient)])),
+    [patients],
   )
-  const visibleAlerts = scopedPatientId
-    ? validAlerts.filter((alert) => alert.patient_id === scopedPatientId)
-    : scopedCnp
-      ? validAlerts.filter((alert) => patientCnpById[alert.patient_id] === scopedCnp)
-      : validAlerts
-  const severityCounts = {
-    critical: visibleAlerts.filter((alert) => alert.severity === "critical").length,
-    high: visibleAlerts.filter((alert) => alert.severity === "high").length,
-    normal: visibleAlerts.filter((alert) => alert.severity === "normal").length,
-  }
+  const patientCnpById = useMemo(
+    () => Object.fromEntries((Array.isArray(patients) ? patients : []).map((patient) => [patient.id, patient.cnp])),
+    [patients],
+  )
+  const validPatientIds = useMemo(() => new Set((Array.isArray(patients) ? patients : []).map((patient) => patient.id)), [patients])
+
+  const validAlerts = useMemo(
+    () => (Array.isArray(alerts) ? alerts : []).filter((alert) => Number.isInteger(alert?.patient_id) && validPatientIds.has(alert.patient_id)),
+    [alerts, validPatientIds],
+  )
+
+  const visibleAlerts = useMemo(() => {
+    if (scopedPatientId) {
+      return validAlerts.filter((alert) => alert.patient_id === scopedPatientId)
+    }
+    if (scopedCnp) {
+      return validAlerts.filter((alert) => patientCnpById[alert.patient_id] === scopedCnp)
+    }
+    return validAlerts
+  }, [patientCnpById, scopedCnp, scopedPatientId, validAlerts])
+
+  const chronologicallySortedAlerts = useMemo(() => [...visibleAlerts].sort(compareNewestFirst), [visibleAlerts])
+
+  const severityCounts = useMemo(
+    () => ({
+      critical: chronologicallySortedAlerts.filter((alert) => String(alert.severity || "").toLowerCase() === "critical").length,
+      high: chronologicallySortedAlerts.filter((alert) => String(alert.severity || "").toLowerCase() === "high").length,
+      normal: chronologicallySortedAlerts.filter((alert) => String(alert.severity || "").toLowerCase() === "normal").length,
+    }),
+    [chronologicallySortedAlerts],
+  )
 
   useEffect(() => {
     if (!scopedAlertId) {
@@ -104,8 +236,7 @@ export default function AlertsPage() {
       row.scrollIntoView({behavior: "smooth", block: "center"})
     })
     return () => window.cancelAnimationFrame(animationFrameId)
-  }, [isLoadingAlerts, scopedAlertId, visibleAlerts])
-
+  }, [chronologicallySortedAlerts, isLoadingAlerts, scopedAlertId])
 
   return (
     <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -123,9 +254,8 @@ export default function AlertsPage() {
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
                     Patient: {scopedPatient ? (
-                    <Link to={`/patient/${scopedPatient.id}`}
-                          className="hover:underline text-inherit">{formatPatientFullName(scopedPatient)}</Link>
-                  ) : "Unknown patient"}
+                      <Link to={`/patient/${scopedPatient.id}`} className="hover:underline text-inherit">{formatPatientFullName(scopedPatient)}</Link>
+                    ) : "Unknown patient"}
                   </span>
                   <Link className="console-link text-sm font-semibold" to="/alerts">
                     Clear filter
@@ -159,9 +289,15 @@ export default function AlertsPage() {
             </div>
           </div>
 
+          {alertsError && !isLoadingAlerts ? (
+            <div className="mb-6 rounded-2xl border border-[#5f2323] bg-[#281515] px-4 py-3 text-sm text-[#ffd7d7]">
+              {alertsError}
+            </div>
+          ) : null}
+
           <DataTable
             key={`alerts-${scopedPatientId || scopedCnp || "all"}`}
-            items={visibleAlerts}
+            items={chronologicallySortedAlerts}
             loading={isLoadingAlerts}
             loadingMessage="Loading alert queue..."
             emptyMessage="No alerts match the current filters."
@@ -172,39 +308,12 @@ export default function AlertsPage() {
               {
                 value: "newest",
                 label: "Newest first",
-                compare: (left, right) => {
-                  if (scopedAlertId) {
-                    if (left.id === scopedAlertId && right.id !== scopedAlertId) {
-                      return -1
-                    }
-                    if (right.id === scopedAlertId && left.id !== scopedAlertId) {
-                      return 1
-                    }
-                  }
-                  const leftSeverity = SEVERITY_ORDER[left.severity] ?? 99
-                  const rightSeverity = SEVERITY_ORDER[right.severity] ?? 99
-
-                  if (leftSeverity !== rightSeverity) {
-                    return leftSeverity - rightSeverity
-                  }
-
-                  return new Date(right.created_at) - new Date(left.created_at)
-                },
+                compare: compareNewestFirst,
               },
               {
                 value: "oldest",
                 label: "Oldest first",
-                compare: (left, right) => {
-                  if (scopedAlertId) {
-                    if (left.id === scopedAlertId && right.id !== scopedAlertId) {
-                      return -1
-                    }
-                    if (right.id === scopedAlertId && left.id !== scopedAlertId) {
-                      return 1
-                    }
-                  }
-                  return new Date(left.created_at) - new Date(right.created_at)
-                },
+                compare: compareOldestFirst,
               },
             ]}
             filters={[
@@ -235,8 +344,14 @@ export default function AlertsPage() {
                 defaultValue: scopedCnp,
                 disabled: Boolean(scopedPatientId),
                 onChange: (value) => {
-                  if (value.trim().length === 13 && /^\d{13}$/.test(value.trim())) {
-                    setSearchParams({cnp: value.trim()})
+                  const next = value.trim()
+                  if (next === "") {
+                    setSearchParams({})
+                    return
+                  }
+
+                  if (next.length === 13 && /^\d{13}$/.test(next)) {
+                    setSearchParams({cnp: next})
                   }
                 },
                 matches: (alert, value) => {
@@ -273,13 +388,11 @@ export default function AlertsPage() {
                 <div className="text-sm font-semibold text-white">{patientCnpById[alert.patient_id] || "--"}</div>
                 <div className="text-sm text-[#b6bec9]">{patientNameById[alert.patient_id] || "Unknown patient"}</div>
                 <div className="text-sm text-white">{alert.message}</div>
-                <div className="text-sm text-[#b6bec9]">{new Date(alert.created_at).toLocaleString()}</div>
+                <div className="text-sm text-[#b6bec9]">{formatDateTimeWithSeconds(alert.created_at)}</div>
               </>
             )}
           />
         </section>
-
-
       </div>
     </div>
   )

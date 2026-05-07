@@ -17,6 +17,8 @@ function formatDateTime(value) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
   }).format(new Date(value))
 }
 
@@ -204,6 +206,9 @@ export default function PatientDiagnosisPage() {
                         {entry.notes && (
                           <p className="mt-2 text-sm text-[#c4ccd5]">{entry.notes}</p>
                         )}
+                        {String(entry.modified_by || "").trim() ? (
+                          <p className="mt-2 text-sm text-[#d5dbdb]">Modified by doctor: {entry.modified_by}</p>
+                        ) : null}
                       </div>
                       <span className="text-xs text-[#879196]">{formatDateTime(entry.updated_at || entry.created_at)}</span>
                     </div>

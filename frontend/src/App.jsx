@@ -5,7 +5,6 @@ import {useAuth} from "./components/AuthContext.jsx"
 import ProtectedRoute from "./components/ProtectedRoute.jsx"
 import PublicOnlyRoute from "./components/PublicOnlyRoute.jsx"
 import LoadingSpinner from "./components/LoadingSpinner.jsx"
-import {useNotifications} from "./hooks/useNotifications.js"
 import {registerAuthFailureHandler} from "./services/api.js"
 import AddPatientPage from "./pages/AddPatientPage.jsx"
 import AlertsPage from "./pages/AlertsPage.jsx"
@@ -45,21 +44,28 @@ function ApiAuthBridge() {
   const navigate = useNavigate()
   const location = useLocation()
   const {logout} = useAuth()
-  const {notifyError} = useNotifications()
+  const isAuthRoute = [
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/reset-password",
+    "/verify-email",
+    "/recover-account",
+    "/recover-account/verify",
+  ].includes(location.pathname)
 
   useEffect(() => {
     registerAuthFailureHandler(() => {
-      notifyError("Session expired. Please log in again.")
       logout()
-      if (location.pathname !== "/login") {
-        navigate("/login", {replace: true, state: {message: "Session expired. Please log in again."}})
+      if (!isAuthRoute) {
+        navigate("/login", {replace: true})
       }
     })
 
     return () => {
       registerAuthFailureHandler(null)
     }
-  }, [location.pathname, logout, navigate, notifyError])
+  }, [isAuthRoute, logout, navigate])
 
   return null
 }

@@ -10,6 +10,7 @@ class PatientConditionRead(BaseModel):
     created_at: datetime
     assignment_id: int | None = None
     doctor_id: int | None = None
+    modified_by: str | None = None
     status: str | None = None
     notes: str | None = None
     diagnosed_at: datetime | None = None
