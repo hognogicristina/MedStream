@@ -12,6 +12,7 @@ from app.models.batch_analytics import BatchAnalytics
 from app.models.patient.patient import Patient
 from app.models.patient.patient_condition_assignment import PatientConditionAssignment
 from app.models.patient.patient_diagnosis import PatientDiagnosis
+from app.models.patient.patient_discharge_summary import PatientDischargeSummary
 from app.models.patient.patient_medication import PatientMedication
 from app.models.patient.patient_stats import PatientStats
 from app.models.vital import Vital
@@ -37,6 +38,8 @@ def _empty_metrics():
         "active_patients": 0,
         "execution_time_ms": 0.0,
         "timestamp": None,
+        "generated_discharge_summaries_count": 0,
+        "pending_discharge_summaries_count": 0,
     }
 
 
@@ -234,6 +237,23 @@ def get_latest_batch_metrics(db: Session) -> dict:
         return _empty_metrics()
 
     status_snapshot = batch_status_store.snapshot()
+    generated_discharge_summaries_count = int(
+        db.execute(select(func.count(PatientDischargeSummary.id))).scalar_one() or 0
+    )
+    pending_discharge_summaries_count = int(
+        db.execute(
+            select(func.count(Patient.id))
+            .where(Patient.is_discharged.is_(True), Patient.discharge_date.is_not(None))
+            .where(
+                ~select(PatientDischargeSummary.id)
+                .where(
+                    PatientDischargeSummary.patient_id == Patient.id,
+                    PatientDischargeSummary.discharge_date == Patient.discharge_date,
+                )
+                .exists()
+            )
+        ).scalar_one() or 0
+    )
 
     return {
         "avg_heart_rate": validate_metric_value(latest.avg_heart_rate),
@@ -248,6 +268,8 @@ def get_latest_batch_metrics(db: Session) -> dict:
         "active_patients": int(latest.patients_count or 0),
         "execution_time_ms": round(float(status_snapshot.get("last_run_duration_ms") or 0), 2),
         "timestamp": to_utc(latest.timestamp),
+        "generated_discharge_summaries_count": generated_discharge_summaries_count,
+        "pending_discharge_summaries_count": pending_discharge_summaries_count,
     }
 
 

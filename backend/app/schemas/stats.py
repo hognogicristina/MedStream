@@ -62,6 +62,8 @@ class ComparisonMetricsRead(BaseModel):
     patients_count: int | None = None
     timestamp: datetime | None = None
     execution_time_ms: float
+    generated_discharge_summaries_count: int | None = None
+    pending_discharge_summaries_count: int | None = None
 
 
 class MetricsComparisonRead(BaseModel):

@@ -21,6 +21,10 @@ export function getPatientTreatmentAnalysis(patientId) {
   return api.get(`/patients/${patientId}/treatment-analysis`)
 }
 
+export function getPatientPostDischargeSummary(patientId) {
+  return api.get(`/patients/${patientId}/post-discharge-summary`)
+}
+
 export function updatePatient(patientId, payload, headers) {
   return api.patch(`/patients/${patientId}`, payload, {headers})
 }
