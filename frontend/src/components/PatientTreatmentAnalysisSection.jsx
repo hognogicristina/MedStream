@@ -2,11 +2,12 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import {Area, AreaChart, CartesianGrid, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
-import {getPatient, getPatientTreatmentAnalysis} from "../services/patientApi.js"
+import {getPatient, getPatientPostDischargeSummary, getPatientTreatmentAnalysis} from "../services/patientApi.js"
 import {createWebSocket} from "../services/ws.js"
 import LoadingSpinner from "./LoadingSpinner.jsx"
 import {alertTypeToVital, getAlertSeverityLevel, isNormalizedAlertType, normalizeAlertType} from "../utils/alerts.js"
 import {formatAlertFriendlyTime} from "../utils/time.js"
+import PostDischargeClinicalSummaryCard from "./PostDischargeClinicalSummaryCard.jsx"
 
 const DIAGNOSIS_PAGE_SIZE_COLLAPSED = 1
 const DIAGNOSIS_PAGE_SIZE_EXPANDED = 3
@@ -358,6 +359,8 @@ export default function PatientTreatmentAnalysisSection({
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [analysis, setAnalysis] = useState(null)
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(true)
+  const [postDischargeSummary, setPostDischargeSummary] = useState(null)
+  const [isLoadingPostDischargeSummary, setIsLoadingPostDischargeSummary] = useState(true)
   const [showFullAlertHistory, setShowFullAlertHistory] = useState(false)
   const [alertHistoryPage, setAlertHistoryPage] = useState(1)
   const [medicationPage, setMedicationPage] = useState(1)
@@ -393,6 +396,27 @@ export default function PatientTreatmentAnalysisSection({
     }
   }, [notifyError])
 
+  const loadPostDischargeSummary = useCallback(async (patientId, options = {}) => {
+    const {isBackground = false} = options
+    if (!isBackground) {
+      setIsLoadingPostDischargeSummary(true)
+    }
+    try {
+      const response = await getPatientPostDischargeSummary(patientId)
+      const responseData = getResponseData(response) || null
+      setPostDischargeSummary(responseData)
+    } catch (error) {
+      if (!isBackground) {
+        setPostDischargeSummary(null)
+        notifyError(getErrorMessage(error))
+      }
+    } finally {
+      if (!isBackground) {
+        setIsLoadingPostDischargeSummary(false)
+      }
+    }
+  }, [notifyError])
+
   useEffect(() => {
     if (!selectedPatientId) {
       return
@@ -402,6 +426,7 @@ export default function PatientTreatmentAnalysisSection({
     setMedicationPage(1)
     setDiagnosisPage(1)
     setConditionPage(1)
+    setPostDischargeSummary(null)
 
     const loadInitial = async () => {
       try {
@@ -418,12 +443,15 @@ export default function PatientTreatmentAnalysisSection({
         notifyError(getErrorMessage(error))
       }
 
-      await loadAnalysis(selectedPatientId)
+      await Promise.all([
+        loadAnalysis(selectedPatientId),
+        loadPostDischargeSummary(selectedPatientId),
+      ])
     }
 
     loadInitial().then(() => {
     })
-  }, [loadAnalysis, notifyError, selectedPatientId])
+  }, [loadAnalysis, loadPostDischargeSummary, notifyError, selectedPatientId])
 
   useEffect(() => {
     return () => {
@@ -491,6 +519,31 @@ export default function PatientTreatmentAnalysisSection({
       socket.close()
     }
   }, [loadAnalysis, selectedPatientId])
+
+  useEffect(() => {
+    if (!selectedPatientId) {
+      return
+    }
+    let active = true
+    const refreshSummary = async () => {
+      try {
+        await loadPostDischargeSummary(selectedPatientId, {isBackground: true})
+      } catch (error) {
+        void error
+      }
+    }
+    const intervalId = window.setInterval(() => {
+      if (!active) {
+        return
+      }
+      refreshSummary().then(() => {
+      })
+    }, 30000)
+    return () => {
+      active = false
+      window.clearInterval(intervalId)
+    }
+  }, [loadPostDischargeSummary, selectedPatientId])
 
   const parsedAlerts = useMemo(() => {
     return dedupeAlertsNewestFirst(analysis?.alerts || [])
@@ -682,6 +735,11 @@ export default function PatientTreatmentAnalysisSection({
         ? "text-[#f59e0b]"
         : "text-[#ef4444]"
   )
+  const postDischargeStatus = String(postDischargeSummary?.status || "").trim().toLowerCase()
+  const hasPostDischargeSummaryContent = postDischargeStatus === "ready" || postDischargeStatus === "pending"
+  const shouldShowPostDischargeSummary = isLoadingPostDischargeSummary
+    ? Boolean(selectedPatient?.is_discharged || postDischargeSummary)
+    : hasPostDischargeSummaryContent
 
   const fullAlertHistory = useMemo(() => {
     return dedupeAlertsNewestFirst(analysis?.alerts || [])
@@ -1098,6 +1156,15 @@ export default function PatientTreatmentAnalysisSection({
             </div>
           </div>
 
+        </div>
+      ) : null}
+
+      {shouldShowPostDischargeSummary ? (
+        <div className="mt-6">
+          <PostDischargeClinicalSummaryCard
+            summary={postDischargeSummary}
+            isLoading={isLoadingPostDischargeSummary}
+          />
         </div>
       ) : null}
     </section>

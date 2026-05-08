@@ -5,6 +5,7 @@ from app.db.session import SessionLocal
 from app.models.alert import Alert
 from app.models.patient.patient_stats import PatientStats
 from app.models.vital import Vital
+from app.repositories.patient_repository import PatientRepository
 from app.service.metrics import WINDOW_DELTA
 
 
@@ -78,22 +79,21 @@ def run():
         )
         patient_vitals = [*window_patient_vitals, *fallback_patient_vitals]
 
-        if not patient_vitals:
-            return
-
         alert_counts = _load_alert_counts(db, window_start)
 
-        db.query(PatientStats).delete()
+        if patient_vitals:
+            db.query(PatientStats).delete()
 
-        for patient_vital in patient_vitals:
-            stat = PatientStats(
-                patient_id=patient_vital.patient_id,
-                avg_heart_rate=patient_vital.avg_heart_rate or 0,
-                avg_temperature=patient_vital.avg_temperature or 0,
-                avg_oxygen=patient_vital.avg_oxygen or 0,
-                alerts_count=alert_counts.get(patient_vital.patient_id, 0),
-            )
+            for patient_vital in patient_vitals:
+                stat = PatientStats(
+                    patient_id=patient_vital.patient_id,
+                    avg_heart_rate=patient_vital.avg_heart_rate or 0,
+                    avg_temperature=patient_vital.avg_temperature or 0,
+                    avg_oxygen=patient_vital.avg_oxygen or 0,
+                    alerts_count=alert_counts.get(patient_vital.patient_id, 0),
+                )
 
-            db.add(stat)
+                db.add(stat)
 
+        PatientRepository.generate_post_discharge_summaries(db)
         db.commit()

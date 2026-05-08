@@ -4,10 +4,11 @@ import {Link, useParams} from "react-router-dom"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import PatientAdmissionActionCard from "../components/PatientAdmissionActionCard.jsx"
+import PostDischargeClinicalSummaryCard from "../components/PostDischargeClinicalSummaryCard.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {usePatientAdmissionActions} from "../hooks/usePatientAdmissionActions.js"
 import {useAuth} from "../components/AuthContext.jsx"
-import {getPatient, getPatientAdmissionHistory} from "../services/patientApi.js"
+import {getPatient, getPatientAdmissionHistory, getPatientPostDischargeSummary} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 
 function formatDateTime(value) {
@@ -44,6 +45,7 @@ export default function PatientAdmissionHistoryPage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
+  const [postDischargeSummary, setPostDischargeSummary] = useState(null)
 
   const loadPageData = useCallback(async (nextPage = page) => {
     setIsLoading(true)
@@ -58,6 +60,14 @@ export default function PatientAdmissionHistoryPage() {
       const historyData = getResponseData(historyResponse) || {}
       setEntries(historyData.items || [])
       setTotal(historyData.total || 0)
+
+      try {
+        const summaryResponse = await getPatientPostDischargeSummary(id)
+        setPostDischargeSummary(getResponseData(summaryResponse) || null)
+      } catch (summaryError) {
+        void summaryError
+        setPostDischargeSummary(null)
+      }
     } catch (error) {
       notifyError(getErrorMessage(error))
     } finally {
@@ -112,8 +122,9 @@ export default function PatientAdmissionHistoryPage() {
         </header>
 
         {isLoading ? <LoadingSpinner/> : (
-          <section className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
-            <div className="monitor-card rounded-[28px] p-6">
+          <>
+            <section className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
+              <div className="monitor-card rounded-[28px] p-6">
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Timeline</p>
@@ -177,24 +188,29 @@ export default function PatientAdmissionHistoryPage() {
                   Back to patient page
                 </Link>
               </div>
-            </div>
+              </div>
 
-            <PatientAdmissionActionCard
-              patient={patient}
-              canManagePatient={Boolean(token)}
-              dischargeReason={admissionActions.dischargeReason}
-              dischargeType={admissionActions.dischargeType}
-              dischargeTypes={admissionActions.dischargeTypes}
-              readmitArrivalMethod={admissionActions.readmitArrivalMethod}
-              onDischargeReasonChange={admissionActions.setDischargeReason}
-              onDischargeTypeChange={admissionActions.setDischargeType}
-              onReadmitArrivalMethodChange={admissionActions.setReadmitArrivalMethod}
-              onDischargeSubmit={admissionActions.handleDischargeSubmit}
-              onReadmitSubmit={admissionActions.handleReadmitSubmit}
-              isSubmittingDischarge={admissionActions.isSubmittingDischarge}
-              isSubmittingReadmit={admissionActions.isSubmittingReadmit}
-            />
-          </section>
+              <PatientAdmissionActionCard
+                patient={patient}
+                canManagePatient={Boolean(token)}
+                dischargeReason={admissionActions.dischargeReason}
+                dischargeType={admissionActions.dischargeType}
+                dischargeTypes={admissionActions.dischargeTypes}
+                readmitArrivalMethod={admissionActions.readmitArrivalMethod}
+                onDischargeReasonChange={admissionActions.setDischargeReason}
+                onDischargeTypeChange={admissionActions.setDischargeType}
+                onReadmitArrivalMethodChange={admissionActions.setReadmitArrivalMethod}
+                onDischargeSubmit={admissionActions.handleDischargeSubmit}
+                onReadmitSubmit={admissionActions.handleReadmitSubmit}
+                isSubmittingDischarge={admissionActions.isSubmittingDischarge}
+                isSubmittingReadmit={admissionActions.isSubmittingReadmit}
+              />
+            </section>
+
+            {["ready", "pending"].includes(String(postDischargeSummary?.status || "").trim().toLowerCase()) ? (
+              <PostDischargeClinicalSummaryCard summary={postDischargeSummary}/>
+            ) : null}
+          </>
         )}
       </div>
     </div>

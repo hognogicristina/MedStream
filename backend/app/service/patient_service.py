@@ -19,6 +19,9 @@ class PatientService:
     def get_patient_treatment_analysis(self, patient_id: int):
         return self.repository.get_patient_treatment_analysis(patient_id)
 
+    def get_patient_post_discharge_summary(self, patient_id: int):
+        return self.repository.get_patient_post_discharge_summary(patient_id)
+
     def get_patient_doctors(self, patient_id: int):
         return self.repository.get_patient_doctors(patient_id)
 

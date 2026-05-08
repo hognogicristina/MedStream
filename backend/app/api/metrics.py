@@ -55,6 +55,8 @@ def get_batch_metrics():
             "patients_count": batch_metrics["active_patients"],
             "timestamp": batch_metrics["timestamp"],
             "execution_time_ms": batch_metrics["execution_time_ms"],
+            "generated_discharge_summaries_count": batch_metrics["generated_discharge_summaries_count"],
+            "pending_discharge_summaries_count": batch_metrics["pending_discharge_summaries_count"],
         },
     )
 

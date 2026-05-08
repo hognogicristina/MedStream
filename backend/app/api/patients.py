@@ -34,6 +34,7 @@ from app.schemas.patient_diagnosis import (
 )
 from app.schemas.patient_medication import MedicationUpdate, PatientMedicationCreate, PatientMedicationRead
 from app.schemas.patient_treatment_analysis import PatientSearchResultRead, PatientTreatmentAnalysisRead
+from app.schemas.patient_post_discharge_summary import PatientPostDischargeSummaryRead
 from app.service.medical_history import (
     ACTIVITY_TYPES,
     ALLERGIES,
@@ -136,6 +137,22 @@ def get_patient_treatment_analysis(id: int):
     try:
         analysis = patient_service.get_patient_treatment_analysis(id)
         return success_response("Patient treatment analysis retrieved successfully.", analysis)
+    except Exception as error:
+        raise_http_from_error(error)
+
+
+@router.get("/{id}/post-discharge-summary", response_model=ApiResponse[PatientPostDischargeSummaryRead])
+def get_patient_post_discharge_summary(id: int):
+    try:
+        summary = patient_service.get_patient_post_discharge_summary(id)
+        status = summary.get("status")
+        if status == "ready":
+            message = "Post-discharge clinical summary retrieved successfully."
+        elif status == "pending":
+            message = "Post-discharge clinical summary is pending batch generation."
+        else:
+            message = "Post-discharge clinical summary is not available yet."
+        return success_response(message, summary)
     except Exception as error:
         raise_http_from_error(error)
 

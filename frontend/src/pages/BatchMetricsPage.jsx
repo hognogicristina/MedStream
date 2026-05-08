@@ -29,6 +29,8 @@ const EMPTY_METRICS = {
   patients_count: 0,
   execution_time_ms: 0,
   timestamp: null,
+  generated_discharge_summaries_count: 0,
+  pending_discharge_summaries_count: 0,
 }
 
 const EMPTY_INSIGHTS = {
@@ -781,6 +783,20 @@ export default function BatchMetricsPage() {
             <MetricTile label="Avg Temperature" value={formatMetric(data.avg_temperature, " C", hasBatchData)}/>
             <MetricTile label="Alerts Count" value={hasBatchData ? String(data.alerts ?? 0) : "Not available"}/>
             <MetricTile label="Execution Time" value={formatMetric(data.execution_time_ms, " ms", hasBatchData)}/>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-[#2a3441] bg-[#11161c] p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">Post-Discharge Clinical Summary</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <MetricTile
+                label="Generated Summaries"
+                value={String(data.generated_discharge_summaries_count ?? 0)}
+              />
+              <MetricTile
+                label="Pending Discharged Patients"
+                value={String(data.pending_discharge_summaries_count ?? 0)}
+              />
+            </div>
           </div>
         </section>
 
