@@ -131,7 +131,7 @@ export default function ActivityDialog({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Activities</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">{mode === "edit" ? "Edit Activity" : "Add Activity"}</h2>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{mode === "edit" ? "Edit Activity" : "Add Activity"}</h2>
           </div>
           <button
             type="button"
@@ -234,12 +234,12 @@ export default function ActivityDialog({
 
           <div className={`grid gap-4 ${patientSelectionMode === "hidden" ? "" : "sm:grid-cols-2"}`}>
             {patientSelectionMode !== "hidden" && mode !== "edit" && (
-              <div className="rounded-xl border border-[#3b424b] bg-[#151b22] p-3 text-sm">
+              <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">
                     {patientSelectionMode === "single" ? "Patient" : "Patients Involved"}
                   </p>
-                  <span className="text-xs text-[#879196]">{filteredPatients.length}</span>
+                  <span className="text-xs text-[var(--text-muted)]">{filteredPatients.length}</span>
                 </div>
 
                 <div className="login-field mt-3">
@@ -259,7 +259,7 @@ export default function ActivityDialog({
 
                 <div className="mt-3 space-y-2 max-h-44 overflow-y-auto pr-1">
                   {visiblePatients.map((patient) => (
-                    <label key={patient.id} className="flex items-center gap-3 text-sm text-[#d5dbdb]">
+                    <label key={patient.id} className="flex items-center gap-3 text-sm text-[var(--text-primary)]">
                       <input
                         type={patientSelectionMode === "single" ? "radio" : "checkbox"}
                         name={patientSelectionMode === "single" ? "activity-patient" : undefined}
@@ -273,7 +273,7 @@ export default function ActivityDialog({
                     </label>
                   ))}
                   {visiblePatients.length === 0 && (
-                    <p className="text-sm text-[#879196]">No patients match the current search.</p>
+                    <p className="text-sm text-[var(--text-muted)]">No patients match the current search.</p>
                   )}
                 </div>
 
@@ -287,7 +287,7 @@ export default function ActivityDialog({
                     >
                       Previous
                     </button>
-                    <span className="text-xs text-[#879196]">Page {currentPatientPage} / {maxPatientPage}</span>
+                    <span className="text-xs text-[var(--text-muted)]">Page {currentPatientPage} / {maxPatientPage}</span>
                     <button
                       type="button"
                       className="console-button-secondary rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
@@ -300,13 +300,13 @@ export default function ActivityDialog({
                 )}
               </div>
             )}
-            <div className="rounded-xl border border-[#3b424b] bg-[#151b22] p-3 text-sm">
+            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-3 text-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">Doctors Involved</p>
               <div className="mt-3 space-y-2 max-h-36 overflow-y-auto pr-1">
                 {doctors.map((doctor) => {
                   const isCurrentDoctor = doctor.id === currentDoctorId
                   return (
-                    <label key={doctor.id} className="flex items-center gap-2 text-xs text-[#d5dbdb]">
+                    <label key={doctor.id} className="flex items-center gap-2 text-xs text-[var(--text-primary)]">
                       <input
                         type="checkbox"
                         checked={form.doctorIds.includes(doctor.id) || isCurrentDoctor}
@@ -328,7 +328,7 @@ export default function ActivityDialog({
             <button
               type="submit"
               disabled={!isValid || isSubmitting}
-              className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+              className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
             >
               {isSubmitting ? "Saving..." : mode === "edit" ? "Save Changes" : "Add Activity"}
             </button>

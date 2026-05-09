@@ -33,7 +33,7 @@ export default function ActivityList({
                                      }) {
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+      <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
         {loadingMessage}
       </div>
     )
@@ -41,7 +41,7 @@ export default function ActivityList({
 
   if (activities.length === 0) {
     return (
-      <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+      <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
         {emptyMessage}
       </div>
     )
@@ -61,22 +61,24 @@ export default function ActivityList({
         return (
           <li
             key={activity.id}
-            className={`rounded-2xl border p-4 ${isCanceled ? "border-[#4d5661] bg-[#10151b] opacity-65" : "border-[#3b424b] bg-[#151b22]"}`}
+            className={`rounded-2xl border p-4 ${isCanceled ? "activity-card-canceled" : "border-[var(--border-primary)] bg-[var(--surface-2)]"}`}
           >
             <div className="flex flex-col gap-3">
               <div className="flex justify-between items-start gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">{activity.type}</p>
-                  <p className="mt-1 text-sm font-semibold text-white">{activity.title}</p>
+                  <p className={`mt-1 text-sm font-semibold ${isCanceled ? "text-[var(--text-secondary)]" : "text-[var(--text-primary)]"}`}>
+                    {activity.title}
+                  </p>
                 </div>
                 <div className="flex items-start gap-2">
                   <span
-                    className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                    className={`activity-status-pill inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
                       isCanceled
-                        ? "border-[#5b616b] bg-[#1a2028] text-[#b6bec9]"
+                        ? "activity-status-pill-canceled"
                         : isIncoming
-                          ? "border-[#8b6914] bg-[#2d2208] text-[#ffd76b]"
-                          : "border-[#1f4d36] bg-[#0e2519] text-[#bbf7d0]"
+                          ? "activity-status-pill-incoming"
+                          : "activity-status-pill-completed"
                     }`}
                   >
                     {activity.status}
@@ -86,15 +88,15 @@ export default function ActivityList({
                       type="button"
                       onClick={() => canEdit && onEdit(activity)}
                       disabled={!canEdit}
-                      className="console-button-secondary rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                      className={`${isReadOnly ? "activity-action-muted" : "console-button-secondary"} rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]`}
                     >
                       Edit
                     </button>
                   )}
                 </div>
               </div>
-              {activity.description && <p className="text-sm text-[#b6bec9]">{activity.description}</p>}
-              <div className="space-y-1 text-xs text-[#879196]">
+              {activity.description && <p className={`text-sm ${isCanceled ? "text-[var(--text-muted)]" : "text-[var(--text-secondary)]"}`}>{activity.description}</p>}
+              <div className={`space-y-1 text-xs ${isCanceled ? "text-[var(--text-subtle)]" : "text-[var(--text-muted)]"}`}>
                 <p>{formatDateTime(activity.scheduled_at)}</p>
                 <p>Doctors: {formatPersonNames(activity.doctors, "Dr. ")}</p>
                 <p>Patients: {formatPersonNames(activity.patients)}</p>
@@ -105,7 +107,7 @@ export default function ActivityList({
                     type="button"
                     onClick={() => canCancel && onCancel(activity)}
                     disabled={!canCancel}
-                    className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-2 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:opacity-60 disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                    className={`${isReadOnly ? "activity-action-muted" : "activity-action-danger"} rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]`}
                   >
                     Cancel Activity
                   </button>

@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState} from "react"
 import {NavLink, useLocation, useNavigate} from "react-router-dom"
 import {useAuth} from "./AuthContext.jsx"
+import {useTheme} from "./ThemeContext.jsx"
 import {getResponseData} from "../services/apiMessages.js";
 import {getDepartments} from "../services/patientApi.js";
 
@@ -58,7 +59,7 @@ function NavTooltip({label, children}) {
     <div className="group relative flex items-center">
       {children}
       <span
-        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs font-medium text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs font-medium text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
         {label}
       </span>
     </div>
@@ -69,6 +70,7 @@ export default function Navbar() {
   const location = useLocation()
   const navigate = useNavigate()
   const {logout} = useAuth()
+  const {theme, toggleTheme} = useTheme()
   const [openMenu, setOpenMenu] = useState("")
   const navRef = useRef(null)
   const [departments, setDepartments] = useState([])
@@ -112,12 +114,12 @@ export default function Navbar() {
   }, [])
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[#3b424b] bg-[#16191f]">
+    <header className="sticky top-0 z-30 border-b border-[var(--border-primary)] bg-[var(--app-bg)]">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-4">
           <NavTooltip label={"Dashboard"}>
             <NavLink
-              className={`text-xs font-semibold uppercase tracking-[0.35em] ${location.pathname === "/dashboard" ? "console-eyebrow" : "text-[#b6bec9]"}`}
+              className={`text-xs font-semibold uppercase tracking-[0.35em] ${location.pathname === "/dashboard" ? "console-eyebrow" : "text-[var(--text-secondary)]"}`}
               to="/dashboard">
               MedStream
             </NavLink>
@@ -139,12 +141,12 @@ export default function Navbar() {
               </button>
             </NavTooltip>
             <div
-              className={`absolute right-0 top-full z-40 mt-2 w-56 rounded-[16px] border border-[#3b424b] bg-[#161b22] p-2 ${openMenu === "departments" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
+              className={`absolute right-0 top-full z-40 mt-2 w-56 rounded-[16px] border border-[var(--border-primary)] bg-[var(--surface-2)] p-2 ${openMenu === "departments" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
               <div className="space-y-1 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
                 {departments.map((department) => (
                   <NavLink
                     key={department}
-                    className="block rounded-xl px-4 py-2 text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
+                    className="block rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
                     to={`/departments/${encodeURIComponent(department)}`}
                     onClick={() => setOpenMenu("")}
                   >
@@ -175,24 +177,24 @@ export default function Navbar() {
               </button>
             </NavTooltip>
             <div
-              className={`absolute right-0 top-full z-40 mt-2 w-48 rounded-[16px] border border-[#3b424b] bg-[#161b22] p-2 ${openMenu === "metrics" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
+              className={`absolute right-0 top-full z-40 mt-2 w-48 rounded-[16px] border border-[var(--border-primary)] bg-[var(--surface-2)] p-2 ${openMenu === "metrics" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
               <div className="space-y-1">
                 <NavLink
-                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
+                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
                   to="/metrics/streaming"
                   onClick={() => setOpenMenu("")}
                 >
                   {"Streaming"}
                 </NavLink>
                 <NavLink
-                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
+                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
                   to="/metrics/batch"
                   onClick={() => setOpenMenu("")}
                 >
                   {"Batch"}
                 </NavLink>
                 <NavLink
-                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
+                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
                   to="/metrics/comparison"
                   onClick={() => setOpenMenu("")}
                 >
@@ -222,17 +224,17 @@ export default function Navbar() {
               </button>
             </NavTooltip>
             <div
-              className={`absolute right-0 top-full z-40 mt-2 w-48 rounded-[16px] border border-[#3b424b] bg-[#161b22] p-2 ${openMenu === "profile" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
+              className={`absolute right-0 top-full z-40 mt-2 w-48 rounded-[16px] border border-[var(--border-primary)] bg-[var(--surface-2)] p-2 ${openMenu === "profile" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
               <div className="space-y-1">
                 <NavLink
-                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
+                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
                   to="/profile"
                   onClick={() => setOpenMenu("")}
                 >
                   {"Profile"}
                 </NavLink>
                 <button
-                  className="block w-full rounded-xl px-4 py-2 text-left text-sm font-semibold text-[#d5dbdb] hover:bg-[#232f3e] hover:text-white"
+                  className="block w-full rounded-xl px-4 py-2 text-left text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
                   onClick={handleLogout}
                 >
                   {"Logout"}
@@ -240,6 +242,20 @@ export default function Navbar() {
               </div>
             </div>
           </div>
+
+          <NavTooltip label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={theme === "light"}
+              aria-label="Toggle theme"
+              className={`theme-switch ${theme === "light" ? "theme-switch-light" : "theme-switch-dark"}`}
+              onClick={toggleTheme}
+            >
+              <span className={`theme-switch-knob ${theme === "light" ? "theme-switch-knob-light" : ""}`}/>
+              <span className="sr-only">{theme === "dark" ? "Dark mode enabled" : "Light mode enabled"}</span>
+            </button>
+          </NavTooltip>
         </nav>
       </div>
     </header>

@@ -104,14 +104,14 @@ export default function PatientDiagnosisPage() {
   }, [diagnosisPage, maxDiagnosisPage])
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <header className="console-topbar rounded-3xl p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Diagnosis</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">{patientName}</h1>
-              <p className="mt-2 text-sm text-[#b6bec9]">Structured diagnosis entries for this patient.</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{patientName}</h1>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">Structured diagnosis entries for this patient.</p>
             </div>
             <BackButton/>
           </div>
@@ -122,7 +122,7 @@ export default function PatientDiagnosisPage() {
             <div className="monitor-card rounded-[28px] p-6">
               <div className="mb-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Add Diagnosis</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">New Entry</h2>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">New Entry</h2>
               </div>
 
               <form className="space-y-4" onSubmit={handleSubmit}>
@@ -147,7 +147,7 @@ export default function PatientDiagnosisPage() {
                 <button
                   type="submit"
                   disabled={!form.diagnosis.trim() || isSubmitting}
-                  className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                  className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                 >
                   {isSubmitting ? "Saving..." : "Add Diagnosis"}
                 </button>
@@ -158,7 +158,7 @@ export default function PatientDiagnosisPage() {
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Entries</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Diagnosis Timeline</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Diagnosis Timeline</h2>
                 </div>
                 <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
                 {diagnosisTotal} total
@@ -172,7 +172,7 @@ export default function PatientDiagnosisPage() {
 
                 <div className="flex items-center gap-2">
                   <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
+                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:text-[var(--text-subtle)]"
                     onClick={() => setDiagnosisPage((prev) => Math.max(1, prev - 1))}
                     disabled={diagnosisPage === 1}
                     type="button"
@@ -181,7 +181,7 @@ export default function PatientDiagnosisPage() {
                   </button>
 
                   <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
+                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:text-[var(--text-subtle)]"
                     onClick={() => setDiagnosisPage((prev) => prev + 1)}
                     disabled={diagnosisPage >= maxDiagnosisPage}
                     type="button"
@@ -193,24 +193,24 @@ export default function PatientDiagnosisPage() {
 
               <ul className="space-y-3">
                 {diagnosisEntries.length === 0 && (
-                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                  <li className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
                     {isLoading ? "Loading diagnosis entries..." : "No diagnosis entries recorded for this patient."}
                   </li>
                 )}
 
                 {diagnosisEntries.map((entry) => (
-                  <li key={entry.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                  <li key={entry.id} className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-sm font-semibold text-white">{entry.diagnosis}</p>
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">{entry.diagnosis}</p>
                         {entry.notes && (
-                          <p className="mt-2 text-sm text-[#c4ccd5]">{entry.notes}</p>
+                          <p className="mt-2 text-sm text-[var(--text-secondary)]">{entry.notes}</p>
                         )}
                         {String(entry.modified_by || "").trim() ? (
-                          <p className="mt-2 text-sm text-[#d5dbdb]">Modified by doctor: {entry.modified_by}</p>
+                          <p className="mt-2 text-sm text-[var(--text-primary)]">Modified by doctor: {entry.modified_by}</p>
                         ) : null}
                       </div>
-                      <span className="text-xs text-[#879196]">{formatDateTime(entry.updated_at || entry.created_at)}</span>
+                      <span className="text-xs text-[var(--text-muted)]">{formatDateTime(entry.updated_at || entry.created_at)}</span>
                     </div>
                   </li>
                 ))}

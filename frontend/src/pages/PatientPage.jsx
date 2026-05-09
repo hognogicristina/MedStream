@@ -22,6 +22,8 @@ import {createWebSocket} from "../services/ws.js"
 import {formatPatientPhoneWithCode} from "../utils/patientPhone.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {normalizeAlertType, ALERT_TYPE_SHORT_LABEL} from "../utils/alerts.js"
+import {useTheme} from "../components/ThemeContext.jsx"
+import {getChartTheme} from "../utils/theme.js"
 
 function formatDateTime(value) {
   if (!value) {
@@ -69,7 +71,7 @@ const ALERT_COLOR_BY_SEVERITY = {
   High: "#f97316",
   Normal: "#3b82f6",
 }
-function AlertDistributionTooltip({active, payload, fullAlerts = [], patientId}) {
+function AlertDistributionTooltip({active, payload, fullAlerts = [], patientId, chartTheme}) {
   if (!active || !Array.isArray(payload) || !payload.length) {
     return null
   }
@@ -91,15 +93,23 @@ function AlertDistributionTooltip({active, payload, fullAlerts = [], patientId})
   const typesText = typeLabels.length ? typeLabels.join(", ") : "--"
 
   return (
-    <div className="rounded-xl border border-[#4b5563] bg-[#0b1118] px-3 py-2 shadow-lg">
-      <p className="text-base font-bold text-white">{label}: {count}</p>
-      <p className="mt-1 text-sm font-medium text-[#d1d5db]">Types: {typesText}</p>
+    <div
+      className="rounded-xl px-3 py-2 shadow-lg"
+      style={{
+        border: `1px solid ${chartTheme.tooltipBorder}`,
+        backgroundColor: chartTheme.tooltipBg,
+      }}
+    >
+      <p className="text-base font-bold text-[var(--text-primary)]">{label}: {count}</p>
+      <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">Types: {typesText}</p>
     </div>
   )
 }
 
 export default function PatientPage() {
   const {notifyError, notifySuccess} = useNotifications()
+  const {theme} = useTheme()
+  const chartTheme = getChartTheme(theme)
   const {token} = useAuth()
   const {id} = useParams()
   const [currentDoctor, setCurrentDoctor] = useState(null)
@@ -476,7 +486,7 @@ export default function PatientPage() {
 
   if (isLoadingPatient) {
     return (
-      <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+      <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
           <LoadingSpinner/>
         </div>
@@ -486,16 +496,16 @@ export default function PatientPage() {
 
   if (isPatientNotFound) {
     return (
-      <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+      <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
           <div className="console-topbar rounded-3xl p-6 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Patient Monitoring</p>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Patient not found</h1>
-            <p className="mt-2 text-sm text-[#b6bec9]">This patient record does not exist or is no longer available.</p>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">Patient not found</h1>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">This patient record does not exist or is no longer available.</p>
             <div className="mt-5">
               <Link
                 to="/dashboard"
-                className="inline-flex rounded-full border border-[#3b424b] px-4 py-2 text-sm font-semibold text-[#d5dbdb] transition hover:border-[#ff9900] hover:text-white"
+                className="inline-flex rounded-full border border-[var(--border-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[#ff9900] hover:text-[var(--text-primary)]"
               >
                 Back to dashboard
               </Link>
@@ -507,7 +517,7 @@ export default function PatientPage() {
   }
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="console-topbar rounded-3xl p-6 sm:p-8">
           <div className="space-y-4">
@@ -518,29 +528,29 @@ export default function PatientPage() {
             <div>
               <div className="mt-2 flex w-full items-start justify-between">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">{pageTitle}</h1>
+                  <h1 className="text-4xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-5xl">{pageTitle}</h1>
 
                   <div className="group relative flex items-center">
                     <button
                       type="button"
                       onClick={() => setIsTransferDialogOpen(true)}
                       disabled={!canEditPatientRecord}
-                      className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d5dbdb] transition hover:border-[#ff9900] hover:text-white disabled:cursor-not-allowed disabled:border-[#31363f] disabled:bg-[#10151c] disabled:text-[#6b7280]"
+                      className="inline-flex rounded-full border border-[var(--border-primary)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-primary)] transition hover:border-[#ff9900] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:bg-[var(--surface-3)] disabled:text-[var(--text-subtle)]"
                     >
                       {department || "--"}
                     </button>
 
                     <span
-                      className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs font-medium text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                      className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs font-medium text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
         Move patient
       </span>
                   </div>
 
                   <span
-                    className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                    className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
                       patient?.is_discharged
-                        ? "border-[#7f1d1d] bg-[#3b1010] text-[#fecaca]"
-                        : "border-[#1f4d36] bg-[#0e2519] text-[#bbf7d0]"
+                        ? "status-pill status-pill-danger"
+                        : "status-pill status-pill-success"
                     }`}
                   >
       {patient?.is_discharged ? "Discharged" : "Admitted"}
@@ -549,14 +559,14 @@ export default function PatientPage() {
                     <button
                       onClick={handleAssignToMe}
                       disabled={!canAssignToCurrentPatient || isPatientLocked}
-                      className="inline-flex rounded-full border border-[#3b424b] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:border-[#9dccff] hover:bg-[#15202b] disabled:cursor-not-allowed disabled:border-[#31363f] disabled:bg-[#10151c] disabled:text-[#6b7280]"
+                      className="inline-flex rounded-full border border-[var(--border-primary)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--link)] transition hover:border-[var(--link)] hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:bg-[var(--surface-3)] disabled:text-[var(--text-subtle)]"
                     >
                       Assign to Me
                     </button>
                   )}
                   {isDoctorAssigned && currentDoctor && !isLoadingDoctors && (
                     <span
-                      className="inline-flex rounded-full border border-[#1f4d36] bg-[#0e2519] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#bbf7d0]">
+                      className="status-pill status-pill-success inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]">
                      Assigned
                    </span>
                   )}
@@ -570,21 +580,21 @@ export default function PatientPage() {
                   type="button"
                   onClick={() => canEditPatientRecord && setIsEditDialogOpen(true)}
                   disabled={!canEditPatientRecord}
-                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:text-white disabled:cursor-not-allowed disabled:text-[#6b7280]"
+                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--link)] transition hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:text-[var(--text-subtle)]"
                 >
                   Edit patient
                 </button>
 
                 <Link
                   to={`/patients/${id}/medical-history`}
-                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#ffcc80] transition hover:text-white"
+                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#ffcc80] transition hover:text-[var(--text-primary)]"
                 >
                   Clinical Records
                 </Link>
 
                 <Link
                   to={`/patients/${id}/admission-history`}
-                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#b8f5c8] transition hover:text-white"
+                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#b8f5c8] transition hover:text-[var(--text-primary)]"
                 >
                   Admission history
                 </Link>
@@ -597,7 +607,7 @@ export default function PatientPage() {
                 </Link>
               </div>
 
-              <div className="mt-4 border-t border-[#2b3139] pt-4">
+              <div className="mt-4 border-t border-[var(--border-subtle)] pt-4">
                 <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
                   {patientMetadata.map((item) => (
                     <div
@@ -605,13 +615,13 @@ export default function PatientPage() {
                       className={item.isWide ? "xl:col-span-2" : ""}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#879196]">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
                           {item.label}
                         </p>
                         {item.label === "Phone Number"}
                       </div>
                       <p
-                        className={`mt-1 text-base font-semibold text-white ${item.isWide ? "wrap-break-word whitespace-normal leading-relaxed" : ""}`}
+                        className={`mt-1 text-base font-semibold text-[var(--text-primary)] ${item.isWide ? "wrap-break-word whitespace-normal leading-relaxed" : ""}`}
                       >
                         {item.value}
                       </p>
@@ -620,16 +630,16 @@ export default function PatientPage() {
                 </div>
 
                 {patient?.is_discharged && (
-                  <div className="mt-6 rounded-2xl border border-[#6b1d1d] bg-[#241212] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#fca5a5]">Discharge Summary</p>
+                  <div className="discharge-summary-banner mt-6 rounded-2xl p-4">
+                    <p className="discharge-summary-title text-xs font-semibold uppercase tracking-[0.24em]">Discharge Summary</p>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#bfa7a7]">Date</p>
-                        <p className="mt-1 text-sm font-medium text-white">{formatDateTime(patient.discharge_date)}</p>
+                        <p className="discharge-summary-label text-[11px] font-semibold uppercase tracking-[0.18em]">Date</p>
+                        <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">{formatDateTime(patient.discharge_date)}</p>
                       </div>
                       <div className="sm:col-span-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#bfa7a7]">Reason</p>
-                        <p className="mt-1 text-sm font-medium text-white">{patient.discharge_reason || "--"}</p>
+                        <p className="discharge-summary-label text-[11px] font-semibold uppercase tracking-[0.18em]">Reason</p>
+                        <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">{patient.discharge_reason || "--"}</p>
                       </div>
                     </div>
                   </div>
@@ -641,23 +651,23 @@ export default function PatientPage() {
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="monitor-card rounded-3xl p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Heart Rate</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Heart Rate</p>
             <p className="mt-3 text-3xl font-semibold text-[#ffb84d]">{averageHeartRate}</p>
           </div>
 
           <div className="monitor-card rounded-3xl p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">O2 Saturation</p>
-            <p className="mt-3 text-3xl font-semibold text-[#9dccff]">{averageOxygen}</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">O2 Saturation</p>
+            <p className="mt-3 text-3xl font-semibold text-[var(--link)]">{averageOxygen}</p>
           </div>
 
           <div className="monitor-card rounded-3xl p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Temperature</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Temperature</p>
             <p className="mt-3 text-3xl font-semibold text-[#ffd699]">{averageTemperature}</p>
           </div>
 
           <div className="monitor-card rounded-3xl p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Blood Pressure</p>
-            <p className="mt-3 text-3xl font-semibold text-white">{averageBloodPressure}</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Blood Pressure</p>
+            <p className="mt-3 text-3xl font-semibold text-[var(--text-primary)]">{averageBloodPressure}</p>
           </div>
         </section>
 
@@ -666,14 +676,14 @@ export default function PatientPage() {
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Vitals</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Vitals Timeline</h2>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Vitals Timeline</h2>
               </div>
             </div>
 
             {chartData.length > 0 ? (
               <VitalsChart data={chartData}/>
             ) : (
-              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+              <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
                 No vital samples available for visualization.
               </div>
             )}
@@ -683,26 +693,26 @@ export default function PatientPage() {
               <div className="mb-5 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Escalations</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Patient Alerts</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Patient Alerts</h2>
                 </div>
               </div>
 
-              <div className="h-64 rounded-2xl border border-[#3b424b] bg-[#151b22] p-3">
+              <div className="h-64 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-3">
                 {alerts === null ? (
-                  <div className="flex h-full items-center justify-center text-sm text-[#b6bec9]">
+                  <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
                     Loading alerts...
                   </div>
                 ) : alertDistributionData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-sm text-[#b6bec9]">
+                  <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
                     No alerts available
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={alertDistributionData} margin={{top: 8, right: 8, left: 0, bottom: 6}}>
-                      <XAxis dataKey="name" stroke="#879196" tick={{fill: "#b6bec9", fontSize: 12}}/>
-                      <YAxis allowDecimals={false} stroke="#879196" tick={{fill: "#b6bec9", fontSize: 12}}/>
+                      <XAxis dataKey="name" stroke={chartTheme.axis} tick={{fill: chartTheme.axisTickFill, fontSize: 12}}/>
+                      <YAxis allowDecimals={false} stroke={chartTheme.axis} tick={{fill: chartTheme.axisTickFill, fontSize: 12}}/>
                       <Tooltip
-                        content={<AlertDistributionTooltip fullAlerts={alerts || []} patientId={id}/>}
+                        content={<AlertDistributionTooltip fullAlerts={alerts || []} patientId={id} chartTheme={chartTheme}/>}
                       />
                       <Bar dataKey="count" radius={[8, 8, 0, 0]}>
                         {alertDistributionData.map((entry) => (

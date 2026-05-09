@@ -134,7 +134,7 @@ export default function EditPatientDialog({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">{"Patient Record"}</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">{"Edit Patient Details"}</h2>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{"Edit Patient Details"}</h2>
           </div>
           <button
             type="button"
@@ -146,15 +146,15 @@ export default function EditPatientDialog({
           </button>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+        <div className="mt-5 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">{"Current Patient"}</p>
-              <p className="mt-2 text-lg font-semibold text-white">{patient.last_name} {patient.first_name}</p>
-              <p className="mt-1 text-sm text-[#879196]">CNP: {patient.cnp}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">{"Current Patient"}</p>
+              <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{patient.last_name} {patient.first_name}</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">CNP: {patient.cnp}</p>
             </div>
             <div
-              className="rounded-full border border-[#3b424b] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">
+              className="rounded-full border border-[var(--border-primary)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
               {"Step"} {step} / {TOTAL_STEPS}
             </div>
           </div>
@@ -163,7 +163,7 @@ export default function EditPatientDialog({
         <div className="mt-5 space-y-5">
           {step === 1 && (
             <div className="space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">{"Basic Info"}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">{"Basic Info"}</p>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="login-field">
@@ -222,7 +222,7 @@ export default function EditPatientDialog({
 
           {step === 2 && (
             <div className="space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">{"Address"}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">{"Address"}</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="login-field">
                   <label className="login-label" htmlFor="edit-street">{"Street"}</label>
@@ -299,7 +299,7 @@ export default function EditPatientDialog({
                   type="button"
                   onClick={handleNext}
                   disabled={!isStepOneValid}
-                  className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                  className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                 >
                   {"Next"}
                 </button>
@@ -311,7 +311,7 @@ export default function EditPatientDialog({
                     onSubmit(normalizedCurrentValues)
                   }}
                   disabled={!canSubmit || !isStepTwoValid}
-                  className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                  className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                 >
                   {isSubmitting ? "Saving..." : "Save Changes"}
                 </button>

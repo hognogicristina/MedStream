@@ -174,7 +174,7 @@ export default function RegisterPage() {
               </p>
 
               <div
-                className="mt-4 inline-flex rounded-full border border-[#3b424b] bg-[#151b22] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">
+                className="mt-4 inline-flex rounded-full border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
                 {"Step"} {step} / 3
               </div>
             </div>

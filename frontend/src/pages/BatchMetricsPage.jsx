@@ -14,6 +14,8 @@ import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import {useTheme} from "../components/ThemeContext.jsx"
+import {getChartTheme} from "../utils/theme.js"
 
 const POLL_INTERVAL_MS = 30000
 const STATUS_POLL_INTERVAL_MS = 2500
@@ -75,13 +77,13 @@ function formatMetric(value, unit = "", hasData = false) {
 function MetricTile({label, value}) {
   return (
     <div className="monitor-panel rounded-2xl px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+      <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{value}</p>
     </div>
   )
 }
 
-function SimpleCasesTooltip({active, payload}) {
+function SimpleCasesTooltip({active, payload, chartTheme}) {
   if (!active || !Array.isArray(payload) || !payload.length) {
     return null
   }
@@ -93,10 +95,10 @@ function SimpleCasesTooltip({active, payload}) {
   return (
     <div
       style={{
-        backgroundColor: "#111827",
-        border: "1px solid #334155",
+        backgroundColor: chartTheme.tooltipBg,
+        border: `1px solid ${chartTheme.tooltipBorder}`,
         borderRadius: "12px",
-        color: "#fff",
+        color: chartTheme.tooltipText,
         padding: "8px 10px",
         fontSize: "12px",
         fontWeight: 600,
@@ -165,6 +167,8 @@ function formatScheduleSummary(schedule) {
 
 export default function BatchMetricsPage() {
   const {notifyError, notifySuccess} = useNotifications()
+  const {theme} = useTheme()
+  const chartTheme = getChartTheme(theme)
   const [metrics, setMetrics] = useState(null)
   const [insights, setInsights] = useState(null)
   const [comparison, setComparison] = useState(null)
@@ -578,7 +582,7 @@ export default function BatchMetricsPage() {
 
   if (isLoading) {
     return (
-      <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+      <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
           <LoadingSpinner/>
         </div>
@@ -587,7 +591,7 @@ export default function BatchMetricsPage() {
   }
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <div className="flex flex-col gap-4">
@@ -597,7 +601,7 @@ export default function BatchMetricsPage() {
                   Demo View
                 </p>
 
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">
                   Batch Metrics
                 </h1>
               </div>
@@ -614,7 +618,7 @@ export default function BatchMetricsPage() {
                 <BackButton fallbackTo="/dashboard"/>
               </div>
             </div>
-            <p className="mt-4 text-[#b6bec9]">
+            <p className="mt-4 text-[var(--text-secondary)]">
               This view shows aggregated data computed over a time window (e.g., last 5 minutes).
               Batch processing analyzes large volumes of historical data, providing more stable and accurate insights.
             </p>
@@ -623,22 +627,22 @@ export default function BatchMetricsPage() {
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Batch Control</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Scheduling</h2>
-            <p className="mt-2 text-sm text-[#b6bec9]">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Control</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Scheduling</h2>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
               Configure how often batch analytics should run. All timestamps are shown in Europe/Bucharest.
             </p>
 
             <div className="mt-6 monitor-panel rounded-2xl px-4 py-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Current Schedule</p>
-              <p className="mt-2 text-lg font-semibold text-white">{scheduleSummary}</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Current Schedule</p>
+              <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{scheduleSummary}</p>
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.2em] text-[#879196]">Run Frequency</span>
+                <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Run Frequency</span>
                 <select
-                  className="mt-3 rounded-xl border border-[#4d5661] bg-[#161b22] px-3 py-2 text-sm font-semibold text-white outline-none"
+                  className="mt-3 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
                   value={scheduleType}
                   onChange={(event) => setScheduleType(event.target.value)}
                 >
@@ -652,7 +656,7 @@ export default function BatchMetricsPage() {
 
               {(scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") ? (
                 <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
-                  <span className="text-xs uppercase tracking-[0.2em] text-[#879196]">
+                  <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
                     {scheduleType === "seconds" ? "Seconds" : scheduleType === "minutes" ? "Minutes" : "Hours"}
                   </span>
                   <input
@@ -660,19 +664,19 @@ export default function BatchMetricsPage() {
                     min="1"
                     value={scheduleValue}
                     onChange={(event) => setScheduleValue(event.target.value)}
-                    className="mt-3 rounded-xl border border-[#4d5661] bg-[#161b22] px-3 py-2 text-sm font-semibold text-white outline-none"
+                    className="mt-3 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
                   />
                 </label>
               ) : null}
 
               {(scheduleType === "daily" || scheduleType === "weekly") ? (
                 <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
-                  <span className="text-xs uppercase tracking-[0.2em] text-[#879196]">Time</span>
+                  <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Time</span>
                   <input
                     type="time"
                     value={scheduleTime}
                     onChange={(event) => setScheduleTime(event.target.value)}
-                    className="mt-3 rounded-xl border border-[#4d5661] bg-[#161b22] px-3 py-2 text-sm font-semibold text-white outline-none"
+                    className="mt-3 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
                   />
                 </label>
               ) : null}
@@ -680,7 +684,7 @@ export default function BatchMetricsPage() {
 
             {scheduleType === "weekly" ? (
               <div className="mt-3 monitor-panel rounded-2xl px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Days</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Days</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {WEEKDAY_OPTIONS.map((day) => {
                     const isSelected = scheduleDays.includes(day)
@@ -692,7 +696,7 @@ export default function BatchMetricsPage() {
                         className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
                           isSelected
                             ? "border border-[#ff9900] bg-[#2b2217] text-[#ffd08a]"
-                            : "border border-[#4d5661] bg-[#161b22] text-[#d5dbdb]"
+                            : "border border-[var(--border-strong)] bg-[var(--surface-2)] text-[var(--text-primary)]"
                         }`}
                       >
                         {day.slice(0, 3)}
@@ -724,25 +728,25 @@ export default function BatchMetricsPage() {
           </div>
 
           <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Batch Job Status</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Execution Progress</h2>
-            <p className="mt-2 text-sm text-[#b6bec9]">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Job Status</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Execution Progress</h2>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
               The batch job executes in stages (loading, aggregating, computing, finalizing),
               each representing a phase of data processing.
             </p>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Status</p>
-                <p className="mt-2 text-lg font-semibold text-white">{progressLabel}</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Status</p>
+                <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{progressLabel}</p>
               </div>
               <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Stage</p>
-                <p className="mt-2 text-sm font-semibold text-white">{batchProgress.stage || "Idle"}</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Stage</p>
+                <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">{batchProgress.stage || "Idle"}</p>
               </div>
               <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Next Run In</p>
-                <p className="mt-2 text-sm font-semibold text-white">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Next Run In</p>
+                <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">
                   {batchProgress.is_running
                     ? "Running now"
                     : batchProgress.next_run_in_seconds == null
@@ -751,8 +755,8 @@ export default function BatchMetricsPage() {
                 </p>
               </div>
               <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Last Run</p>
-                <p className="mt-2 text-sm font-semibold text-white">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Last Run</p>
+                <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">
                   {formatBatchTimestamp(batchProgress.last_run)}
                 </p>
               </div>
@@ -760,10 +764,10 @@ export default function BatchMetricsPage() {
 
             <div className="mt-6 monitor-panel rounded-2xl px-4 py-4">
               <div className="flex items-center justify-between gap-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">Progress</p>
-                <p className="text-sm font-semibold text-white">{progressDisplay}%</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Progress</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">{progressDisplay}%</p>
               </div>
-              <div className="mt-3 h-3 rounded-full bg-[#0f141a]">
+              <div className="mt-3 h-3 rounded-full bg-[var(--surface-4)]">
                 <div
                   className="h-3 rounded-full bg-[#ff9900] transition-all duration-500 ease-out"
                   style={{width: `${progressDisplay}%`}}
@@ -774,8 +778,8 @@ export default function BatchMetricsPage() {
         </section>
 
         <section className="monitor-card rounded-[24px] p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Batch Snapshot</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Latest Metrics</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Snapshot</p>
+          <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Latest Metrics</h2>
 
           <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <MetricTile label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm", hasBatchData)}/>
@@ -785,8 +789,8 @@ export default function BatchMetricsPage() {
             <MetricTile label="Execution Time" value={formatMetric(data.execution_time_ms, " ms", hasBatchData)}/>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-[#2a3441] bg-[#11161c] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">Post-Discharge Clinical Summary</p>
+          <div className="mt-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Post-Discharge Clinical Summary</p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <MetricTile
                 label="Generated Summaries"
@@ -802,21 +806,21 @@ export default function BatchMetricsPage() {
 
         <section className="grid gap-6 lg:grid-cols-2">
           <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Batch Insight</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Patients per Department</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Insight</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Patients per Department</h2>
 
             <div className="mt-6 space-y-3">
               {patientsPerDepartment.items?.length ? patientsPerDepartment.items.map((entry) => (
                 <div key={entry.department} className="monitor-panel rounded-2xl px-4 py-3">
                   <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm font-semibold text-white">{entry.department}</p>
-                    <div className="rounded-full border border-[#4d5661] bg-[#232f3e] px-3 py-1 text-xs font-semibold text-[#d5dbdb]">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">{entry.department}</p>
+                    <div className="rounded-full border border-[var(--border-strong)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)]">
                       {entry.patients} patients
                     </div>
                   </div>
                 </div>
               )) : (
-                <div className="monitor-panel rounded-2xl px-4 py-6 text-sm text-[#b6bec9]">
+                <div className="monitor-panel rounded-2xl px-4 py-6 text-sm text-[var(--text-secondary)]">
                   No department snapshot available yet.
                 </div>
               )}
@@ -831,7 +835,7 @@ export default function BatchMetricsPage() {
               >
                 Previous
               </button>
-              <p className="text-sm text-[#b6bec9]">
+              <p className="text-sm text-[var(--text-secondary)]">
                 Page {patientsPerDepartment.page || 1} of {departmentsTotalPages}
               </p>
               <button
@@ -846,30 +850,30 @@ export default function BatchMetricsPage() {
           </div>
 
           <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Batch Insight</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Top Diagnosis</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Insight</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Top Diagnosis</h2>
 
             <div className="mt-6 space-y-3">
               {topDiagnosis.items?.length ? topDiagnosis.items.map((diagnosis) => (
                 <div key={diagnosis.name} className="monitor-panel rounded-2xl px-4 py-3">
                   <div className="flex items-center justify-between gap-4">
                     <div className="group relative flex flex-1 min-w-0 items-center">
-                      <p className="flex-1 min-w-0 truncate text-sm font-semibold text-white">
+                      <p className="flex-1 min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">
                         {diagnosis.name}
                       </p>
                       <span
-                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs font-medium text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs font-medium text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                         {diagnosis.name}
                       </span>
                     </div>
                     <div
-                      className="shrink-0 w-[110px] text-center rounded-full border border-[#4d5661] bg-[#232f3e] px-3 py-1 text-xs font-semibold text-[#d5dbdb]">
+                      className="shrink-0 w-[110px] text-center rounded-full border border-[var(--border-strong)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)]">
                       {diagnosis.patients} patients
                     </div>
                   </div>
                 </div>
               )) : (
-                <div className="monitor-panel rounded-2xl px-4 py-6 text-sm text-[#b6bec9]">
+                <div className="monitor-panel rounded-2xl px-4 py-6 text-sm text-[var(--text-secondary)]">
                   No diagnosis snapshot available yet.
                 </div>
               )}
@@ -884,7 +888,7 @@ export default function BatchMetricsPage() {
               >
                 Previous
               </button>
-              <p className="text-sm text-[#b6bec9]">
+              <p className="text-sm text-[var(--text-secondary)]">
                 Page {topDiagnosis.page || 1} of {diagnosesTotalPages}
               </p>
               <button
@@ -902,8 +906,8 @@ export default function BatchMetricsPage() {
         <section className="monitor-card rounded-[24px] p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Treatment Analysis</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Treatment Effectiveness</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Treatment Analysis</p>
+              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Treatment Effectiveness</h2>
             </div>
             {treatmentMode === "medication" && selectedMedication ? (
               <button
@@ -918,14 +922,14 @@ export default function BatchMetricsPage() {
             ) : null}
           </div>
 
-          <div className="mt-5 inline-flex rounded-xl border border-[#2a3441] bg-[#11161c] p-1">
+          <div className="mt-5 inline-flex rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-1">
             <button
               type="button"
               onClick={() => setTreatmentMode("medication")}
               className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
                 treatmentMode === "medication"
-                  ? "bg-[#232f3e] text-white"
-                  : "text-[#b6bec9] hover:text-white"
+                  ? "bg-[var(--surface-muted)] text-[var(--text-primary)]"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
               Medication
@@ -935,8 +939,8 @@ export default function BatchMetricsPage() {
               onClick={() => setTreatmentMode("overall")}
               className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
                 treatmentMode === "overall"
-                  ? "bg-[#232f3e] text-white"
-                  : "text-[#b6bec9] hover:text-white"
+                  ? "bg-[var(--surface-muted)] text-[var(--text-primary)]"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
               Overall
@@ -945,30 +949,30 @@ export default function BatchMetricsPage() {
 
           {treatmentMode === "medication" ? (
             <div className="mt-6 space-y-5">
-              <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-                <p className="text-sm font-semibold text-white">What this chart measures</p>
-                <p className="mt-2 text-sm text-[#b6bec9]">
+              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">What this chart measures</p>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
                   The chart shows treatment outcomes for the selected medication across all recorded treatment instances.
                 </p>
                 <div className="mt-3 grid gap-2">
                   {medicationBarData.map((item) => (
-                    <div key={`explain-${item.label}`} className="rounded-lg border border-[#2a3441] bg-[#151b22] px-3 py-2">
+                    <div key={`explain-${item.label}`} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2">
                       <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{color: item.fill}}>
                         {item.label}: {item.count}
                       </p>
-                      <p className="mt-1 text-xs text-[#b6bec9]">{item.description}</p>
+                      <p className="mt-1 text-xs text-[var(--text-secondary)]">{item.description}</p>
                     </div>
                   ))}
                 </div>
               </div>
 
               <div className="monitor-panel rounded-2xl p-4">
-                <label htmlFor="medication-select" className="text-xs uppercase tracking-[0.2em] text-[#879196]">
+                <label htmlFor="medication-select" className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
                   Select medication
                 </label>
                 <select
                   id="medication-select"
-                  className="mt-3 w-full rounded-xl border border-[#4d5661] bg-[#161b22] px-3 py-2 text-sm font-semibold text-white outline-none"
+                  className="mt-3 w-full rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
                   value={selectedMedication}
                   onChange={(event) => setSelectedMedication(event.target.value)}
                   disabled={!medicationEffectiveness.length}
@@ -981,15 +985,15 @@ export default function BatchMetricsPage() {
                 </select>
               </div>
 
-              <div className="h-[280px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
+              <div className="h-[280px] rounded-2xl border p-3" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={medicationBarData} margin={{top: 8, right: 10, left: 0, bottom: 8}}>
-                    <CartesianGrid stroke="#1f2937" strokeDasharray="3 3"/>
-                    <XAxis dataKey="label" stroke="#879196" tick={{fontSize: 11}}/>
-                    <YAxis allowDecimals={false} stroke="#879196" tick={{fontSize: 11}}/>
-                    <Tooltip content={<SimpleCasesTooltip/>}/>
+                    <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3"/>
+                    <XAxis dataKey="label" stroke={chartTheme.axis} tick={{fontSize: 11}}/>
+                    <YAxis allowDecimals={false} stroke={chartTheme.axis} tick={{fontSize: 11}}/>
+                    <Tooltip content={<SimpleCasesTooltip chartTheme={chartTheme}/>}/>
                     <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                      <LabelList dataKey="count" position="top" fill="#d5dbdb" fontSize={12}/>
+                      <LabelList dataKey="count" position="top" fill={chartTheme.label} fontSize={12}/>
                       {medicationBarData.map((item) => (
                         <Cell key={item.label} fill={item.fill}/>
                       ))}
@@ -999,10 +1003,10 @@ export default function BatchMetricsPage() {
               </div>
             </div>
           ) : (
-            <div className="mt-6 rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
-              <div className="mb-3 rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-                <p className="text-sm font-semibold text-white">What this chart measures</p>
-                <p className="mt-2 text-sm text-[#b6bec9]">
+            <div className="mt-6 rounded-2xl border p-3" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
+              <div className="mb-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">What this chart measures</p>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
                   This chart summarizes treatment outcomes across all medications and patients in the selected batch window.
                 </p>
               </div>
@@ -1018,7 +1022,7 @@ export default function BatchMetricsPage() {
                         startAngle={90}
                         endAngle={-270}
                         paddingAngle={4}
-                        stroke="#0b1220"
+                        stroke={chartTheme.pieStroke}
                         strokeWidth={2}
                       >
                         {overallEffectivenessData.map((entry) => (
@@ -1026,17 +1030,17 @@ export default function BatchMetricsPage() {
                         ))}
                       </Pie>
                       <Tooltip
-                        content={<SimpleCasesTooltip/>}
+                        content={<SimpleCasesTooltip chartTheme={chartTheme}/>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-[#b6bec9]">
+                  <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
                     No treatment data available yet.
                   </div>
                 )}
               </div>
-              <div className="mt-3 flex items-center justify-center gap-5 text-sm text-[#b6bec9]">
+              <div className="mt-3 flex items-center justify-center gap-5 text-sm text-[var(--text-secondary)]">
                 <span className="inline-flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]"/>
                   Effective: {treatmentEffectiveness.effective}
@@ -1055,10 +1059,10 @@ export default function BatchMetricsPage() {
         </section>
 
         <section className="monitor-card rounded-[24px] p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding Batch Processing</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">How Batch Processing Works</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Understanding Batch Processing</p>
+          <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">How Batch Processing Works</h2>
 
-          <div className="mt-4 space-y-4 text-sm text-[#b6bec9] leading-6">
+          <div className="mt-4 space-y-4 text-sm text-[var(--text-secondary)] leading-6">
             <p>
               This page represents the batch processing layer of the system. Data is collected over time and processed in intervals rather
               than instantly.
@@ -1069,8 +1073,8 @@ export default function BatchMetricsPage() {
               generate more stable and reliable insights.
             </p>
 
-            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="font-semibold text-white mb-2">What you are seeing:</p>
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
+              <p className="font-semibold text-[var(--text-primary)] mb-2">What you are seeing:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Aggregated metrics computed over a time window</li>
                 <li>Stable averages across multiple patients</li>
@@ -1079,8 +1083,8 @@ export default function BatchMetricsPage() {
               </ul>
             </div>
 
-            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="font-semibold text-white mb-2">Why batch processing matters:</p>
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
+              <p className="font-semibold text-[var(--text-primary)] mb-2">Why batch processing matters:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Provides more accurate and consistent results</li>
                 <li>Enables long-term trend analysis</li>
@@ -1089,8 +1093,8 @@ export default function BatchMetricsPage() {
               </ul>
             </div>
 
-            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="font-semibold text-white mb-2">Technical flow:</p>
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
+              <p className="font-semibold text-[var(--text-primary)] mb-2">Technical flow:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Data is collected over time (streaming layer)</li>
                 <li>Events are accumulated into a dataset</li>
@@ -1100,8 +1104,8 @@ export default function BatchMetricsPage() {
               </ul>
             </div>
 
-            <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-              <p className="font-semibold text-white mb-2">Trade-offs:</p>
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
+              <p className="font-semibold text-[var(--text-primary)] mb-2">Trade-offs:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Higher latency (results are delayed)</li>
                 <li>More stable and reliable outputs</li>

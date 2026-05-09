@@ -127,7 +127,7 @@ export default function AddPatientPage() {
   }, [token])
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <div className="flex flex-col gap-3">
@@ -136,8 +136,8 @@ export default function AddPatientPage() {
               <BackButton/>
             </div>
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{"Add Patient"}</h1>
-              <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">{"Create a patient admission record."}</p>
+              <h1 className="text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{"Add Patient"}</h1>
+              <p className="mt-2 max-w-2xl text-sm text-[var(--text-secondary)] sm:text-base">{"Create a patient admission record."}</p>
             </div>
           </div>
         </header>
@@ -146,10 +146,10 @@ export default function AddPatientPage() {
           <div className="mb-5 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">{"Admission Form"}</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">{"Create Patient Record"}</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{"Create Patient Record"}</h2>
             </div>
             <div
-              className="rounded-full border border-[#3b424b] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#879196]">
+              className="rounded-full border border-[var(--border-primary)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
               {"Step"} {step} / {TOTAL_STEPS}
             </div>
           </div>
@@ -157,7 +157,7 @@ export default function AddPatientPage() {
           <form className="space-y-5" onSubmit={handleSubmit}>
             {step === 1 && (
               <div className="space-y-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">{"Basic Info"}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">{"Basic Info"}</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-first-name">{"First Name"}</label>
@@ -229,7 +229,7 @@ export default function AddPatientPage() {
 
             {step === 2 && (
               <div className="space-y-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#879196]">{"Address"}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">{"Address"}</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-street">{"Street"}</label>
@@ -303,12 +303,12 @@ export default function AddPatientPage() {
 
                 {step < TOTAL_STEPS ? (
                   <button type="button" onClick={() => setStep(2)} disabled={!isStepOneValid || isSubmitting}
-                          className="console-button-primary rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]">
+                          className="console-button-primary rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
                     {"Next"}
                   </button>
                 ) : (
                   <button type="submit" disabled={!isStepTwoValid || isSubmitting}
-                          className="console-button-primary rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]">
+                          className="console-button-primary rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
                     {isSubmitting ? ("Creating patient...") : ("Create Patient")}
                   </button>
                 )}
