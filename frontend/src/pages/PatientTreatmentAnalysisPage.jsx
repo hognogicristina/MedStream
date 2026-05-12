@@ -52,14 +52,14 @@ export default function PatientTreatmentAnalysisPage() {
   }, [notifyError, patientId])
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Patient View</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">{patientName}</h1>
-              <p className="mt-2 text-sm text-[#b6bec9]">
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{patientName}</h1>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
                 Timeline and reasoning for patient medications, alerts, diagnosis, and conditions.
               </p>
             </div>

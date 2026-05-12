@@ -706,7 +706,7 @@ export default function ProfilePage() {
   }, [activities])
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <div className="flex flex-col gap-4">
@@ -716,22 +716,22 @@ export default function ProfilePage() {
             </div>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{"Doctor Control Panel"}</h1>
+                <h1 className="text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{"Doctor Control Panel"}</h1>
                 <p
-                  className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">{"Manage profile details, patient assignments, and account status from one workspace."}</p>
+                  className="mt-2 max-w-2xl text-sm text-[var(--text-secondary)] sm:text-base">{"Manage profile details, patient assignments, and account status from one workspace."}</p>
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div className="monitor-panel rounded-2xl p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Status</p>
-                  <p className="mt-3 text-lg font-semibold text-white">{doctor ? (doctor.is_active ? "Active" : "Inactive") : "--"}</p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Status</p>
+                  <p className="mt-3 text-lg font-semibold text-[var(--text-primary)]">{doctor ? (doctor.is_active ? "Active" : "Inactive") : "--"}</p>
                 </div>
                 <div className="monitor-panel rounded-2xl p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Assigned</p>
-                  <p className="mt-3 text-lg font-semibold text-white"><CountValue value={assignedPatients.length}/></p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Assigned</p>
+                  <p className="mt-3 text-lg font-semibold text-[var(--text-primary)]"><CountValue value={assignedPatients.length}/></p>
                 </div>
                 <div className="monitor-panel rounded-2xl p-4 sm:col-span-2 lg:col-span-1">
-                  <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Available</p>
-                  <p className="mt-3 text-lg font-semibold text-white"><CountValue value={filteredAssignedPatients.length}/></p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Available</p>
+                  <p className="mt-3 text-lg font-semibold text-[var(--text-primary)]"><CountValue value={filteredAssignedPatients.length}/></p>
                 </div>
               </div>
             </div>
@@ -749,7 +749,7 @@ export default function ProfilePage() {
                 <div className="mb-6 flex items-center justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patients</p>
-                    <h2 className="mt-2 text-2xl font-semibold text-white">Assigned Patients</h2>
+                    <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Assigned Patients</h2>
                   </div>
                   <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
                     <CountValue value={assignedPatients.length}/>
@@ -766,7 +766,7 @@ export default function ProfilePage() {
                   shellClassName="space-y-3"
                   bodyClassName="space-y-3"
                   renderRow={(patient) => (
-                    <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
+                    <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
                       <div className="flex flex-col gap-4">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -775,13 +775,13 @@ export default function ProfilePage() {
                             </Link>
                             {patient.is_discharged && (
                               <span
-                                className="rounded-full border border-[#a33a45] bg-[#3a1f25] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#ffd8dc]">
+                                className="status-pill status-pill-danger rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]">
                                 Discharged
                               </span>
                             )}
                           </div>
-                          <p className="mt-2 text-xs uppercase tracking-[0.22em] text-[#879196]">{patient.department}</p>
-                          <p className="mt-2 text-sm text-[#b6bec9]">{patient.cnp}</p>
+                          <p className="mt-2 text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">{patient.department}</p>
+                          <p className="mt-2 text-sm text-[var(--text-secondary)]">{patient.cnp}</p>
                         </div>
                         {(() => {
                           const hasCount = Object.prototype.hasOwnProperty.call(patientDoctorCounts, patient.id)
@@ -798,7 +798,7 @@ export default function ProfilePage() {
                                 setPatientPendingRemoval(patient)
                               }}
                               disabled={removingPatientId === patient.id || isTransferringPatient}
-                              className="console-button-secondary w-max rounded-2xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                              className="console-button-secondary w-max rounded-2xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                             >
                               {shouldTransfer ? "Transfer Patient" : (removingPatientId === patient.id ? "Removing..." : "Remove Patient")}
                             </button>
@@ -814,7 +814,7 @@ export default function ProfilePage() {
                 <div className="mb-6 flex items-center justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Activities</p>
-                    <h2 className="mt-2 text-2xl font-semibold text-white">Upcoming Activities</h2>
+                    <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Upcoming Activities</h2>
                   </div>
                   <button
                     type="button"
@@ -824,7 +824,7 @@ export default function ProfilePage() {
                       setIsActivityDialogOpen(true)
                     }}
                     disabled={activityPatients.length === 0}
-                    className="console-button-secondary rounded-2xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                    className="console-button-secondary rounded-2xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                   >
                     Add Activity
                   </button>
@@ -853,7 +853,7 @@ export default function ProfilePage() {
                       Previous
                     </button>
 
-                    <span className="text-sm text-[#b6bec9]">
+                    <span className="text-sm text-[var(--text-secondary)]">
       Page {activityPage} of {totalActivityPages}
     </span>
 
@@ -874,7 +874,7 @@ export default function ProfilePage() {
                 <div className="mb-6 flex items-center justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Profile</p>
-                    <h2 className="mt-2 text-2xl font-semibold text-white">Editable Doctor Info</h2>
+                    <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Editable Doctor Info</h2>
                   </div>
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${doctor.is_active ? "console-chip-success" : "console-chip-danger"}`}>
@@ -935,7 +935,7 @@ export default function ProfilePage() {
 
                   <div className="flex justify-end">
                     <button type="submit" disabled={!isProfileFormValid || !isProfileDirty || isSavingProfile}
-                            className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]">
+                            className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
                       {isSavingProfile ? "Updating..." : "Update Profile"}
                     </button>
                   </div>
@@ -945,7 +945,7 @@ export default function ProfilePage() {
               <section className="monitor-card rounded-[28px] p-6">
                 <div className="mb-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Assignment</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Assign Patient</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Assign Patient</h2>
                 </div>
 
                 <form className="space-y-4" onSubmit={handleAssignPatient}>
@@ -968,24 +968,24 @@ export default function ProfilePage() {
 
                     {isAssignDropdownOpen && assignmentSuggestions.length > 0 && (
                       <div
-                        className="w-full mt-2 max-h-40 overflow-y-auto rounded-xl border border-[#3b424b] bg-[#161b22] py-2 custom-scrollbar">
+                        className="w-full mt-2 max-h-40 overflow-y-auto rounded-xl border border-[var(--border-primary)] bg-[var(--surface-2)] py-2 custom-scrollbar">
                         {assignmentSuggestions.map((patient) => (
                           <div
                             key={patient.id}
-                            className="cursor-pointer px-4 py-2 hover:bg-[#232f3e] text-sm text-[#d5dbdb]"
+                            className="cursor-pointer px-4 py-2 hover:bg-[var(--surface-muted)] text-sm text-[var(--text-primary)]"
                             onClick={() => {
                               setAssignmentQuery(`${patient.cnp} | ${formatPatientFullName(patient)}`)
                               setIsAssignDropdownOpen(false)
                             }}
                           >
-                            <span className="font-semibold text-white">{patient.cnp}</span>
-                            <span className="text-[#879196]"> | {formatPatientFullName(patient)}</span>
+                            <span className="font-semibold text-[var(--text-primary)]">{patient.cnp}</span>
+                            <span className="text-[var(--text-muted)]"> | {formatPatientFullName(patient)}</span>
                           </div>
                         ))}
                       </div>
                     )}
 
-                    <p className="mt-2 text-xs text-[#879196]">
+                    <p className="mt-2 text-xs text-[var(--text-muted)]">
                       Start with CNP or full name. Suggestions show both identifiers together.
                     </p>
                   </div>
@@ -993,7 +993,7 @@ export default function ProfilePage() {
                   <button
                     type="submit"
                     disabled={!selectedPatient || isAssigningPatient}
-                    className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                    className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                   >
                     {isAssigningPatient ? "Assigning..." : "Assign Patient"}
                   </button>
@@ -1005,7 +1005,7 @@ export default function ProfilePage() {
                 <div className="mb-6">
                   <p
                     className={`text-xs font-semibold uppercase tracking-[0.3em] ${isEmailUnverified ? "text-[#ff7a7a]" : "text-[#ff9900]"}`}>Email</p>
-                  <h2 className={`mt-2 text-2xl font-semibold ${isEmailUnverified ? "text-[#ffd1d6]" : "text-white"}`}>Account Email</h2>
+                  <h2 className={`mt-2 text-2xl font-semibold ${isEmailUnverified ? "text-[#ffd1d6]" : "text-[var(--text-primary)]"}`}>Account Email</h2>
                 </div>
 
                 <form className="space-y-4" onSubmit={handleEmailUpdate}>
@@ -1034,7 +1034,7 @@ export default function ProfilePage() {
                         type="button"
                         onClick={handleResendVerification}
                         disabled={isResendingVerification}
-                        className="rounded-2xl border border-[#facc15] bg-[#facc15] px-5 py-3 text-sm font-semibold text-[#1f2937] transition hover:border-[#eab308] hover:bg-[#eab308] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                        className="rounded-2xl border border-[#facc15] bg-[#facc15] px-5 py-3 text-sm font-semibold text-[#1f2937] transition hover:border-[#eab308] hover:bg-[#eab308] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                       >
                         {isResendingVerification ? "Resending..." : "Resend Email"}
                       </button>
@@ -1042,7 +1042,7 @@ export default function ProfilePage() {
                     <button
                       type="submit"
                       disabled={!isEmailDirty || isSavingEmail}
-                      className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                      className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                     >
                       {isSavingEmail ? "Sending confirmation..." : "Update Email"}
                     </button>
@@ -1053,15 +1053,15 @@ export default function ProfilePage() {
               <section className="monitor-card rounded-[28px] p-6">
                 <div className="mb-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Account</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Account Status</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Account Status</h2>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Current State</p>
+                  <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">Current State</p>
                     <p
-                      className="mt-2 text-lg font-semibold text-white">{doctor.is_active ? "Active doctor account" : "Inactive doctor account"}</p>
-                    <p className="mt-2 text-sm text-[#b6bec9]">
+                      className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{doctor.is_active ? "Active doctor account" : "Inactive doctor account"}</p>
+                    <p className="mt-2 text-sm text-[var(--text-secondary)]">
                       {doctor.deleted_at ? `Deactivated at ${new Date(doctor.deleted_at).toLocaleString()}` : "Account is available for normal login and patient management."}
                     </p>
                   </div>
@@ -1076,13 +1076,13 @@ export default function ProfilePage() {
                       }}
                       disabled={isDeletingAccount || isOnlyDoctorInDepartment || hasIncomingActivities}
                       title={isOnlyDoctorInDepartment ? "You are the only doctor in this department. Account cannot be deleted." : ""}
-                      className="w-full rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                      className="w-full rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                     >
                       {isDeletingAccount ? "Deactivating..." : "Delete Account"}
                     </button>
                     {hasIncomingActivities && (
                       <span
-                        className="pointer-events-none absolute bottom-[120%] left-1/2 z-20 -translate-x-1/2 rounded-md bg-[#111827] px-2.5 py-1.5 text-xs text-white opacity-0 transition-opacity duration-200 whitespace-nowrap group-hover:opacity-100"
+                        className="pointer-events-none absolute bottom-[120%] left-1/2 z-20 -translate-x-1/2 rounded-md bg-[#111827] px-2.5 py-1.5 text-xs text-[var(--text-primary)] opacity-0 transition-opacity duration-200 whitespace-nowrap group-hover:opacity-100"
                         role="tooltip"
                       >
                         This account has incoming activities yet
@@ -1100,7 +1100,7 @@ export default function ProfilePage() {
           </section>
         ) : (
           <section className="monitor-card rounded-[28px] p-6">
-            <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+            <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
               No doctor workspace information is available for this session.
             </div>
           </section>
@@ -1112,12 +1112,12 @@ export default function ProfilePage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Account Deactivation</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Deactivate Doctor Account</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Deactivate Doctor Account</h2>
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                <p className="text-sm text-[#d5dbdb]">
+              <div className="mt-5 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
+                <p className="text-sm text-[var(--text-primary)]">
                   This action deactivates the doctor account and automatically reassigns your patients to another doctor from the same
                   department.
                 </p>
@@ -1135,7 +1135,7 @@ export default function ProfilePage() {
                   type="button"
                   onClick={handleDeleteAccount}
                   disabled={isDeletingAccount}
-                  className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                  className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                 >
                   {isDeletingAccount ? "Deactivating..." : "Confirm"}
                 </button>
@@ -1150,18 +1150,18 @@ export default function ProfilePage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patient Assignment</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Transfer Assigned Patient</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Transfer Assigned Patient</h2>
                 </div>
               </div>
 
               {!showTransferActivityConfirmation ? (
                 <>
-                  <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                    <p className="text-sm text-[#d5dbdb]">
+                  <div className="mt-5 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
+                    <p className="text-sm text-[var(--text-primary)]">
                       Select another doctor from {patientPendingTransfer.department} to
                       transfer {formatPatientFullName(patientPendingTransfer)}.
                     </p>
-                    <p className="mt-2 text-sm text-[#879196]">CNP: {patientPendingTransfer.cnp}</p>
+                    <p className="mt-2 text-sm text-[var(--text-muted)]">CNP: {patientPendingTransfer.cnp}</p>
                   </div>
 
                   <div className="mt-5">
@@ -1201,7 +1201,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={handleTransferPatient}
                       disabled={!selectedTransferDoctorId || isTransferringPatient || isCheckingTransferActivities || transferDoctorOptions.length === 0}
-                      className="rounded-2xl border border-[#34506b] bg-[#1d2f3f] px-4 py-3 text-sm font-semibold text-[#cce6ff] transition hover:bg-[#22394d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                      className="rounded-2xl border border-[#34506b] bg-[#1d2f3f] px-4 py-3 text-sm font-semibold text-[#cce6ff] transition hover:bg-[#22394d] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                     >
                       {isTransferringPatient ? "Transferring..." : (isCheckingTransferActivities ? "Checking..." : "Transfer")}
                     </button>
@@ -1209,11 +1209,11 @@ export default function ProfilePage() {
                 </>
               ) : (
                 <>
-                  <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                    <p className="text-sm text-[#d5dbdb]">
+                  <div className="mt-5 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
+                    <p className="text-sm text-[var(--text-primary)]">
                       Are you sure you want to transfer this patient?
                     </p>
-                    <p className="mt-2 text-sm text-[#879196]">
+                    <p className="mt-2 text-sm text-[var(--text-muted)]">
                       Existing activities will be canceled and reassigned.
                     </p>
                   </div>
@@ -1231,7 +1231,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={handleConfirmTransferPatient}
                       disabled={isTransferringPatient}
-                      className="rounded-2xl border border-[#34506b] bg-[#1d2f3f] px-4 py-3 text-sm font-semibold text-[#cce6ff] transition hover:bg-[#22394d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                      className="rounded-2xl border border-[#34506b] bg-[#1d2f3f] px-4 py-3 text-sm font-semibold text-[#cce6ff] transition hover:bg-[#22394d] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                     >
                       {isTransferringPatient ? "Transferring..." : "Confirm Transfer"}
                     </button>
@@ -1248,15 +1248,15 @@ export default function ProfilePage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patient Assignment</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Remove Assigned Patient</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Remove Assigned Patient</h2>
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-[#3b424b] bg-[#151b22] p-4">
-                <p className="text-sm text-[#d5dbdb]">
+              <div className="mt-5 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
+                <p className="text-sm text-[var(--text-primary)]">
                   Remove {formatPatientFullName(patientPendingRemoval)} from this doctor&apos;s assigned patient list?
                 </p>
-                <p className="mt-2 text-sm text-[#879196]">CNP: {patientPendingRemoval.cnp}</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">CNP: {patientPendingRemoval.cnp}</p>
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
@@ -1272,7 +1272,7 @@ export default function ProfilePage() {
                   onClick={() => handleRemovePatient(patientPendingRemoval.id)}
                   disabled={hasIncomingActivities || removingPatientId === patientPendingRemoval.id}
                   title={hasIncomingActivities ? "Cannot modify patients while there are incoming activities." : ""}
-                  className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                  className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                 >
                   {removingPatientId === patientPendingRemoval.id ? "Removing..." : "Yes, Remove Patient"}
                 </button>
@@ -1286,8 +1286,8 @@ export default function ProfilePage() {
             <div className="console-modal monitor-card rounded-[28px] p-6 w-full max-w-md">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Activities</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Cancel Activity</h2>
-                <p className="mt-3 text-sm text-[#b6bec9]">Are you sure you want to cancel this activity?</p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Cancel Activity</h2>
+                <p className="mt-3 text-sm text-[var(--text-secondary)]">Are you sure you want to cancel this activity?</p>
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
@@ -1303,7 +1303,7 @@ export default function ProfilePage() {
                   type="button"
                   onClick={handleCancelActivity}
                   disabled={isSubmittingActivity}
-                  className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                  className="activity-action-danger rounded-2xl border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                 >
                   {isSubmittingActivity ? "Canceling..." : "Yes, Cancel Activity"}
                 </button>

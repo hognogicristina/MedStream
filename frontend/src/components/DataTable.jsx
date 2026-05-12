@@ -14,7 +14,7 @@ export default function DataTable({
                                     renderRow,
                                     rowClassName,
                                     bodyClassName = "divide-y divide-[#3b424b]",
-                                    shellClassName = "overflow-hidden rounded-[24px] border border-[#3b424b] bg-[#151b22]",
+                                    shellClassName = "overflow-hidden rounded-[24px] border border-[var(--border-primary)] bg-[var(--surface-2)]",
                                     controlsLayoutClassName,
                                     bottomControls,
                                     simplePagination = false,
@@ -86,10 +86,10 @@ export default function DataTable({
 
   return (
     <>
-      <div className={controlsLayoutClassName ?? "mb-6 grid gap-4 rounded-[24px] border border-[#3b424b] bg-[#151b22] p-4 lg:grid-cols-4"}>
+      <div className={controlsLayoutClassName ?? "mb-6 grid gap-4 rounded-[24px] border border-[var(--border-primary)] bg-[var(--surface-2)] p-4 lg:grid-cols-4"}>
         {filters.map((filter) => (
           <div key={filter.id}>
-            <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[#879196]" htmlFor={filter.id}>
+            <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]" htmlFor={filter.id}>
               {filter.label}
             </label>
             {filter.type === "text" ? (
@@ -103,7 +103,7 @@ export default function DataTable({
                 }}
                 placeholder={filter.placeholder}
                 disabled={filter.disabled}
-                className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[#6b7280]"
+                className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[var(--text-subtle)]"
               />
             ) : (
               <select
@@ -114,7 +114,7 @@ export default function DataTable({
                   filter.onChange?.(event.target.value)
                 }}
                 disabled={filter.disabled}
-                className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[#6b7280]"
+                className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[var(--text-subtle)]"
               >
                 {filter.options.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -128,7 +128,7 @@ export default function DataTable({
 
         {sortOptions.length > 0 && (
           <div>
-            <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[#879196]" htmlFor="dataTableSort">
+            <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]" htmlFor="dataTableSort">
               Sort Order
             </label>
             <select
@@ -147,7 +147,7 @@ export default function DataTable({
         )}
 
         <div>
-          <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[#879196]" htmlFor="dataTablePageSize">
+          <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]" htmlFor="dataTablePageSize">
             Page Size
           </label>
           <select
@@ -169,13 +169,13 @@ export default function DataTable({
         {renderHeader?.()}
 
         {loading && (
-          <div className="px-4 py-5 text-sm text-[#b6bec9]">
+          <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
             {loadingMessage}
           </div>
         )}
 
         {!loading && paginatedItems.length === 0 && (
-          <div className="px-4 py-5 text-sm text-[#b6bec9]">
+          <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
             {emptyMessage}
           </div>
         )}

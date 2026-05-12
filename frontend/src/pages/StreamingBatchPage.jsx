@@ -14,6 +14,8 @@ import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import {useTheme} from "../components/ThemeContext.jsx"
+import {getChartTheme} from "../utils/theme.js"
 
 const POLL_INTERVAL_MS = 4000
 const MAX_HISTORY_POINTS = 30
@@ -26,18 +28,18 @@ function formatFixed(value, digits = 2) {
 function MetricCard({label, value, hint}) {
   return (
     <div className="monitor-panel rounded-2xl px-4 py-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-[#879196]">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
-      <p className="mt-1 text-xs text-[#b6bec9]">{hint}</p>
+      <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{value}</p>
+      <p className="mt-1 text-xs text-[var(--text-secondary)]">{hint}</p>
     </div>
   )
 }
 
-function SectionHeader({title, subtitle, accentClass = "text-[#879196]"}) {
+function SectionHeader({title, subtitle, accentClass = "text-[var(--text-muted)]"}) {
   return (
     <div>
       <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${accentClass}`}>{title}</p>
-      <p className="mt-2 text-sm text-[#b6bec9]">{subtitle}</p>
+      <p className="mt-2 text-sm text-[var(--text-secondary)]">{subtitle}</p>
     </div>
   )
 }
@@ -52,6 +54,8 @@ function DownloadIcon() {
 
 export default function StreamingBatchPage() {
   const {notifyError} = useNotifications()
+  const {theme} = useTheme()
+  const chartTheme = getChartTheme(theme)
   const [comparison, setComparison] = useState(null)
   const [streamingMetricsSnapshot, setStreamingMetricsSnapshot] = useState(null)
   const [batchMetricsSnapshot, setBatchMetricsSnapshot] = useState(null)
@@ -127,13 +131,13 @@ export default function StreamingBatchPage() {
   const batchLatencyMinutes = (Number(data.batch_latency_avg) || 0) / 60
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Streaming vs Batch</h1>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">Streaming vs Batch</h1>
             </div>
             <div className="flex gap-2">
               <button
@@ -189,13 +193,13 @@ export default function StreamingBatchPage() {
             </div>
           </div>
           <div className="w-full">
-            <p className="mt-4 text-[#b6bec9]">
+            <p className="mt-4 text-[var(--text-secondary)]">
               This view compares real-time streaming data with batch-processed results.
               Streaming is fast and responsive, while batch is slower but more accurate.
               This demonstrates the trade-off between speed and accuracy in data processing systems.
             </p>
 
-            <p className="mt-2 text-sm text-[#b6bec9]">
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
               Each metric displays the current value and the difference compared to the other processing model.
               Positive values indicate that streaming is higher, while negative values indicate that batch results are higher.
             </p>
@@ -231,7 +235,7 @@ export default function StreamingBatchPage() {
                   <SectionHeader
                     title="Batch (Delayed Analytics)"
                     subtitle="Periodic processing with delayed but broader analysis."
-                    accentClass="text-[#9dccff]"
+                    accentClass="text-[var(--link)]"
                   />
                   <div className="grid gap-3 sm:grid-cols-3">
                     <MetricCard
@@ -255,26 +259,26 @@ export default function StreamingBatchPage() {
             </section>
 
             <section className="monitor-card rounded-[24px] p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Time Behavior</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Streaming Activity vs Batch Snapshots</h2>
-              <p className="mt-2 text-sm text-[#b6bec9]">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Time Behavior</p>
+              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Streaming Activity vs Batch Snapshots</h2>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
                 Orange updates represent real-time streaming alerts. Blue updates represent periodic batch snapshot totals, so changes
                 appear in delayed steps.
               </p>
 
               <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                <div className="h-[260px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
+                <div className="h-[260px] rounded-2xl border p-4" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={history}>
-                      <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false}/>
-                      <XAxis dataKey="time" stroke="#6b7280" tick={{fontSize: 11}} minTickGap={24}/>
-                      <YAxis stroke="#6b7280" tick={{fontSize: 11}} domain={["auto", "auto"]}/>
+                      <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
+                      <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={24}/>
+                      <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={["auto", "auto"]}/>
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: "#0f172a",
-                          border: "1px solid #334155",
+                          backgroundColor: chartTheme.tooltipBg,
+                          border: `1px solid ${chartTheme.tooltipBorder}`,
                           borderRadius: "12px",
-                          color: "#fff",
+                          color: chartTheme.tooltipText,
                         }}
                       />
                       <Line type="monotone" dataKey="streaming_alerts" name="Streaming Alerts" stroke="#f97316" strokeWidth={3}
@@ -283,18 +287,18 @@ export default function StreamingBatchPage() {
                   </ResponsiveContainer>
                 </div>
 
-                <div className="h-[260px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
+                <div className="h-[260px] rounded-2xl border p-4" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={history}>
-                      <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false}/>
-                      <XAxis dataKey="time" stroke="#6b7280" tick={{fontSize: 11}} minTickGap={24}/>
-                      <YAxis stroke="#6b7280" tick={{fontSize: 11}} domain={["auto", "auto"]}/>
+                      <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
+                      <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={24}/>
+                      <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={["auto", "auto"]}/>
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: "#0f172a",
-                          border: "1px solid #334155",
+                          backgroundColor: chartTheme.tooltipBg,
+                          border: `1px solid ${chartTheme.tooltipBorder}`,
                           borderRadius: "12px",
-                          color: "#fff",
+                          color: chartTheme.tooltipText,
                         }}
                       />
                       <Line type="monotone" dataKey="batch_alerts" name="Batch Alerts (Delayed)" stroke="#60a5fa" strokeWidth={3}
@@ -306,10 +310,10 @@ export default function StreamingBatchPage() {
             </section>
 
             <section className="monitor-card rounded-[24px] p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Understanding the Comparison</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Streaming vs Batch Processing</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Understanding the Comparison</p>
+              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Streaming vs Batch Processing</h2>
 
-              <div className="mt-4 space-y-4 text-sm text-[#b6bec9] leading-6">
+              <div className="mt-4 space-y-4 text-sm text-[var(--text-secondary)] leading-6">
                 <p>
                   This page provides a direct comparison between <strong>streaming (real-time)</strong> processing
                   and <strong>batch (periodic)</strong> processing using the same underlying data.
@@ -320,8 +324,8 @@ export default function StreamingBatchPage() {
                   streaming processes events instantly, while batch processes accumulated data over a time window.
                 </p>
 
-                <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-                  <p className="font-semibold text-white mb-2">Streaming (Real-Time)</p>
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
+                  <p className="font-semibold text-[var(--text-primary)] mb-2">Streaming (Real-Time)</p>
                   <ul className="list-disc pl-5 space-y-1">
                     <li>Processes data immediately as it arrives</li>
                     <li>Very low latency (near-instant updates)</li>
@@ -330,8 +334,8 @@ export default function StreamingBatchPage() {
                   </ul>
                 </div>
 
-                <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-                  <p className="font-semibold text-white mb-2">Batch Processing</p>
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
+                  <p className="font-semibold text-[var(--text-primary)] mb-2">Batch Processing</p>
                   <ul className="list-disc pl-5 space-y-1">
                     <li>Processes data periodically (e.g., every few minutes)</li>
                     <li>Higher latency but more stable results</li>
@@ -340,8 +344,8 @@ export default function StreamingBatchPage() {
                   </ul>
                 </div>
 
-                <div className="rounded-xl border border-[#2a3441] bg-[#11161c] p-4">
-                  <p className="font-semibold text-white mb-2">Key Insight</p>
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
+                  <p className="font-semibold text-[var(--text-primary)] mb-2">Key Insight</p>
                   <p>
                     Streaming prioritizes <strong>speed</strong>, while batch prioritizes <strong>accuracy</strong>.
                     The difference values shown on this page highlight how real-time metrics can deviate

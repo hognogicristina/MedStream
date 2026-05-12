@@ -5,7 +5,9 @@ import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {getPatient, getPatientPostDischargeSummary, getPatientTreatmentAnalysis} from "../services/patientApi.js"
 import {createWebSocket} from "../services/ws.js"
 import LoadingSpinner from "./LoadingSpinner.jsx"
+import {useTheme} from "./ThemeContext.jsx"
 import {alertTypeToVital, getAlertSeverityLevel, isNormalizedAlertType, normalizeAlertType} from "../utils/alerts.js"
+import {getChartTheme} from "../utils/theme.js"
 import {formatAlertFriendlyTime} from "../utils/time.js"
 import PostDischargeClinicalSummaryCard from "./PostDischargeClinicalSummaryCard.jsx"
 
@@ -110,7 +112,29 @@ function compareTreatmentsAscending(left, right) {
   return leftAction - rightAction
 }
 
-function getLatestSummaryStylesBySeverity(severity) {
+function getLatestSummaryStylesBySeverity(severity, isLightTheme) {
+  if (isLightTheme) {
+    if (severity === "critical") {
+      return {
+        card: "border-[#ef9aa7] bg-[#fee7ec]",
+        value: "text-[#9f1239]",
+        time: "text-[#be123c]",
+      }
+    }
+    if (severity === "high") {
+      return {
+        card: "border-[#f4b96a] bg-[#fff0db]",
+        value: "text-[#9a3412]",
+        time: "text-[#b45309]",
+      }
+    }
+    return {
+      card: "border-[#8ed8b3] bg-[#e9f8ef]",
+      value: "text-[#166534]",
+      time: "text-[#15803d]",
+    }
+  }
+
   if (severity === "critical") {
     return {
       card: "border-[#4e1d26] bg-[#1c1217]",
@@ -134,9 +158,9 @@ function getLatestSummaryStylesBySeverity(severity) {
 
 function getLatestSummaryNeutralStyles() {
   return {
-    card: "border-[#2a3441] bg-[#151b22]",
-    value: "text-white",
-    time: "text-[#b6bec9]",
+    card: "border-[var(--border-subtle)] bg-[var(--surface-2)]",
+    value: "text-[var(--text-primary)]",
+    time: "text-[var(--text-secondary)]",
   }
 }
 
@@ -171,7 +195,7 @@ function renderHistoryMessageWithColoredLabel(message, labelClassName) {
   const text = String(message || "--")
   const separatorIndex = text.indexOf(":")
   if (separatorIndex <= 0) {
-    return <span className="text-[#d5dbdb]">{text}</span>
+    return <span className="text-[var(--text-primary)]">{text}</span>
   }
 
   const label = text.slice(0, separatorIndex)
@@ -179,7 +203,7 @@ function renderHistoryMessageWithColoredLabel(message, labelClassName) {
   return (
     <>
       <span className={labelClassName}>{label}</span>
-      <span className="text-[#d5dbdb]">{rest}</span>
+      <span className="text-[var(--text-primary)]">{rest}</span>
     </>
   )
 }
@@ -210,7 +234,7 @@ function buildCleanAlertHistoryLabel(alert) {
   return String(alert.message || "--")
 }
 
-function TreatmentOutcomeTooltip({active, payload}) {
+function TreatmentOutcomeTooltip({active, payload, chartTheme}) {
   if (!active || !payload?.length) {
     return null
   }
@@ -220,7 +244,14 @@ function TreatmentOutcomeTooltip({active, payload}) {
   }
 
   return (
-    <div className="rounded-xl border border-[#334155] bg-[#111827] p-3 text-xs text-white">
+    <div
+      className="rounded-xl p-3 text-xs"
+      style={{
+        border: `1px solid ${chartTheme.tooltipBorder}`,
+        backgroundColor: chartTheme.tooltipBg,
+        color: chartTheme.tooltipText,
+      }}
+    >
       <p className="font-semibold">Treatment #{point.treatmentIndex}</p>
       <p
         className={`mt-1 font-semibold ${
@@ -233,7 +264,7 @@ function TreatmentOutcomeTooltip({active, payload}) {
       >
         Outcome: {point.outcome}
       </p>
-      {point.decisionTimeLabel ? <p className="mt-1 text-[#d5dbdb]">Time: {point.decisionTimeLabel}</p> : null}
+      {point.decisionTimeLabel ? <p className="mt-1 text-[var(--text-primary)]">Time: {point.decisionTimeLabel}</p> : null}
     </div>
   )
 }
@@ -352,9 +383,12 @@ const getStatusVitals = (alert) => {
 }
 
 export default function PatientTreatmentAnalysisSection({
-                                                          selectedPatientId = null,
-                                                          showSelectedPatientSummary = false,
-                                                        }) {
+  selectedPatientId = null,
+  showSelectedPatientSummary = false,
+}) {
+  const {theme} = useTheme()
+  const isLightTheme = theme === "light"
+  const chartTheme = getChartTheme(theme)
   const {notifyError} = useNotifications()
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [analysis, setAnalysis] = useState(null)
@@ -789,10 +823,10 @@ export default function PatientTreatmentAnalysisSection({
 
   return (
     <section className="monitor-card rounded-[24px] p-6">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#879196]">Treatment Insights</p>
-      <h2 className="mt-2 text-2xl font-semibold text-white">Patient Treatment Analysis</h2>
+      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Treatment Insights</p>
+      <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Patient Treatment Analysis</h2>
       {showSelectedPatientSummary && selectedPatient ? (
-        <p className="mt-2 text-sm text-[#b6bec9]">{selectedPatient.cnp} - {selectedPatient.full_name}</p>
+        <p className="mt-2 text-sm text-[var(--text-secondary)]">{selectedPatient.cnp} - {selectedPatient.full_name}</p>
       ) : null}
 
       {isLoadingAnalysis ? (
@@ -800,7 +834,7 @@ export default function PatientTreatmentAnalysisSection({
       ) : null}
 
       {!isLoadingAnalysis && !analysis ? (
-        <div className="mt-6 rounded-2xl border border-[#2a3441] bg-[#11161c] px-4 py-6 text-sm text-[#b6bec9]">
+        <div className="mt-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-3)] px-4 py-6 text-sm text-[var(--text-secondary)]">
           Patient treatment analysis is not available.
         </div>
       ) : null}
@@ -808,9 +842,9 @@ export default function PatientTreatmentAnalysisSection({
       {!isLoadingAnalysis && analysis ? (
         <div className="mt-6 space-y-6">
           <div>
-            <h3 className="text-xl font-semibold text-white">Treatment Timeline</h3>
+            <h3 className="text-xl font-semibold text-[var(--text-primary)]">Treatment Timeline</h3>
           </div>
-          <div className="h-[320px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-3">
+          <div className="h-[320px] rounded-2xl border p-3" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{top: 10, right: 12, left: 8, bottom: 4}}>
                 <defs>
@@ -823,10 +857,10 @@ export default function PatientTreatmentAnalysisSection({
                 <ReferenceArea y1={0} y2={0.66} fill="#ef4444" fillOpacity={0.14} strokeOpacity={0}/>
                 <ReferenceArea y1={0.66} y2={1.33} fill="#f59e0b" fillOpacity={0.11} strokeOpacity={0}/>
                 <ReferenceArea y1={1.33} y2={2} fill="#22c55e" fillOpacity={0.11} strokeOpacity={0}/>
-                <CartesianGrid stroke="#1f2937" strokeDasharray="3 3"/>
-                <XAxis dataKey="treatmentIndex" stroke="#879196" tick={{fontSize: 11}}/>
+                <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3"/>
+                <XAxis dataKey="treatmentIndex" stroke={chartTheme.axis} tick={{fontSize: 11}}/>
                 <YAxis
-                  stroke="#879196"
+                  stroke={chartTheme.axis}
                   tick={{fontSize: 11}}
                   allowDecimals={false}
                   domain={[0, 2]}
@@ -841,25 +875,25 @@ export default function PatientTreatmentAnalysisSection({
                     return "Ineffective"
                   }}
                 />
-                <ReferenceLine y={1} stroke="#385269" strokeDasharray="4 4"/>
-                <Tooltip content={<TreatmentOutcomeTooltip/>}/>
+                <ReferenceLine y={1} stroke={chartTheme.reference} strokeDasharray="4 4"/>
+                <Tooltip content={<TreatmentOutcomeTooltip chartTheme={chartTheme}/>}/>
                 <Area
                   type="monotone"
                   dataKey="outcomeValue"
                   name="Outcome"
-                  stroke="#e5e7eb"
+                  stroke={chartTheme.lineContrast}
                   fill="url(#treatmentOutcomeFill)"
                   strokeWidth={3}
                   isAnimationActive={true}
                   animationDuration={460}
-                  activeDot={{r: 6, stroke: "#0f141a", strokeWidth: 2}}
+                  activeDot={{r: 6, stroke: chartTheme.lineDotStroke, strokeWidth: 2}}
                   dot={({cx, cy, payload}) => (
                     <circle
                       cx={cx}
                       cy={cy}
                       r={4}
                       fill={payload?.outcomeColor || "#ef4444"}
-                      stroke="#0f141a"
+                      stroke={chartTheme.lineDotStroke}
                       strokeWidth={1}
                     />
                   )}
@@ -869,9 +903,9 @@ export default function PatientTreatmentAnalysisSection({
           </div>
 
           <div>
-            <h3 className="text-xl font-semibold text-white">Treatment Summary & Clinical Reasoning</h3>
+            <h3 className="text-xl font-semibold text-[var(--text-primary)]">Treatment Summary & Clinical Reasoning</h3>
             {hasInconsistentDischarge ? (
-              <div className="mt-3 rounded-xl border border-[#7f1d1d] bg-[#2b1212] px-3 py-2 text-sm text-[#fecaca]">
+              <div className="warning-banner warning-banner-danger mt-3 rounded-xl px-3 py-2 text-sm">
                 Inconsistency detected: patient is discharged but the final treatment outcome is not Effective.
               </div>
             ) : null}
@@ -879,53 +913,53 @@ export default function PatientTreatmentAnalysisSection({
               {displayedMedication ? (
                 <div className="monitor-panel rounded-2xl px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-white">Medication: {displayedMedication.medication_name || "--"}</p>
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">Medication: {displayedMedication.medication_name || "--"}</p>
                     <p
-                      className="text-xs text-[#b6bec9]">Date: {displayedMedication.displayed_date}</p>
+                      className="text-xs text-[var(--text-secondary)]">Date: {displayedMedication.displayed_date}</p>
                   </div>
-                  <p className="mt-2 text-sm text-[#d5dbdb]">Dosage: {displayedMedication.dosage || "--"}</p>
-                  <p className="mt-1 text-sm text-[#d5dbdb]">Frequency: {displayedMedication.frequency || "--"}</p>
+                  <p className="mt-2 text-sm text-[var(--text-primary)]">Dosage: {displayedMedication.dosage || "--"}</p>
+                  <p className="mt-1 text-sm text-[var(--text-primary)]">Frequency: {displayedMedication.frequency || "--"}</p>
                   {displayedMedication.notes ? (
-                    <p className="mt-1 text-sm text-[#d5dbdb]">Notes: {displayedMedication.notes}</p>
+                    <p className="mt-1 text-sm text-[var(--text-primary)]">Notes: {displayedMedication.notes}</p>
                   ) : null}
                   {displayedMedication.modified_by ? (
-                    <p className="mt-1 text-sm text-[#d5dbdb]">Modified by doctor: {displayedMedication.modified_by}</p>
+                    <p className="mt-1 text-sm text-[var(--text-primary)]">Modified by doctor: {displayedMedication.modified_by}</p>
                   ) : null}
                   <div className="mt-3 flex items-center justify-between">
                     <button
                       type="button"
                       onClick={() => setMedicationPage((page) => Math.max(1, page - 1))}
                       disabled={medicationPage === 1}
-                      className="rounded-lg border border-[#2a3441] px-3 py-1 text-xs font-semibold text-[#d5dbdb] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Previous
                     </button>
-                    <span className="text-xs text-[#b6bec9]">
+                    <span className="text-xs text-[var(--text-secondary)]">
                       {medicationPage} / {totalMedicationPages}
                     </span>
                     <button
                       type="button"
                       onClick={() => setMedicationPage((page) => Math.min(totalMedicationPages, page + 1))}
                       disabled={medicationPage >= totalMedicationPages}
-                      className="rounded-lg border border-[#2a3441] px-3 py-1 text-xs font-semibold text-[#d5dbdb] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Next
                     </button>
                   </div>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Reason</p>
-                      <p className="mt-2 text-sm text-white">{displayedMedication.reasonText}</p>
+                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Reason</p>
+                      <p className="mt-2 text-sm text-[var(--text-primary)]">{displayedMedication.reasonText}</p>
                     </div>
-                    <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Selected Treatment Outcome</p>
+                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Selected Treatment Outcome</p>
                       <p className={`mt-2 text-sm font-semibold ${outcomeTextClass(selectedTreatmentOutcome)}`}>
                         {selectedTreatmentOutcome}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Final Treatment Outcome</p>
+                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Final Treatment Outcome</p>
                       <p className={`mt-2 text-sm font-semibold ${outcomeTextClass(finalOutcome)}`}>
                         {finalOutcome}
                       </p>
@@ -933,22 +967,22 @@ export default function PatientTreatmentAnalysisSection({
                   </div>
 
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
+                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
                       <div className="flex items-start justify-between gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Latest Alert Summary</p>
-                        <p className="text-[11px] text-[#879196]">Last update: {latestAlertSummary.lastUpdated}</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Latest Alert Summary</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">Last update: {latestAlertSummary.lastUpdated}</p>
                       </div>
                       <div className="mt-2 grid gap-2 sm:grid-cols-3">
                         {(() => {
                           const heartRateHasData = hasRealVitalData(latestAlertSummary.heartRate)
                           const heartRateSeverity = getAlertSeverityLevel(latestAlertSummary.latestVitalAlerts.heartRate)
                           const heartRateStyles = heartRateHasData
-                            ? getLatestSummaryStylesBySeverity(heartRateSeverity)
+                            ? getLatestSummaryStylesBySeverity(heartRateSeverity, isLightTheme)
                             : getLatestSummaryNeutralStyles()
                           return (
                         <div
                           className={`rounded-lg border px-3 py-2 ${heartRateStyles.card}`}>
-                          <p className="text-[11px] uppercase tracking-[0.14em] text-[#9aa5b1]">Heart Rate</p>
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Heart Rate</p>
                           <p className={`mt-1 text-sm font-semibold ${heartRateStyles.value}`}>
                             {latestAlertSummary.heartRate != null ? `${latestAlertSummary.heartRate} bpm` : "--"}
                           </p>
@@ -962,12 +996,12 @@ export default function PatientTreatmentAnalysisSection({
                           const oxygenHasData = hasRealVitalData(latestAlertSummary.oxygen)
                           const oxygenSeverity = getAlertSeverityLevel(latestAlertSummary.latestVitalAlerts.oxygen)
                           const oxygenStyles = oxygenHasData
-                            ? getLatestSummaryStylesBySeverity(oxygenSeverity)
+                            ? getLatestSummaryStylesBySeverity(oxygenSeverity, isLightTheme)
                             : getLatestSummaryNeutralStyles()
                           return (
                         <div
                           className={`rounded-lg border px-3 py-2 ${oxygenStyles.card}`}>
-                          <p className="text-[11px] uppercase tracking-[0.14em] text-[#9aa5b1]">Oxygen</p>
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Oxygen</p>
                           <p className={`mt-1 text-sm font-semibold ${oxygenStyles.value}`}>
                             {latestAlertSummary.oxygen != null ? `${latestAlertSummary.oxygen}%` : "--"}
                           </p>
@@ -981,12 +1015,12 @@ export default function PatientTreatmentAnalysisSection({
                           const temperatureHasData = hasRealVitalData(latestAlertSummary.temperature)
                           const temperatureSeverity = getAlertSeverityLevel(latestAlertSummary.latestVitalAlerts.temperature)
                           const temperatureStyles = temperatureHasData
-                            ? getLatestSummaryStylesBySeverity(temperatureSeverity)
+                            ? getLatestSummaryStylesBySeverity(temperatureSeverity, isLightTheme)
                             : getLatestSummaryNeutralStyles()
                           return (
                         <div
                           className={`rounded-lg border px-3 py-2 ${temperatureStyles.card}`}>
-                          <p className="text-[11px] uppercase tracking-[0.14em] text-[#9aa5b1]">Temperature</p>
+                          <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Temperature</p>
                           <p className={`mt-1 text-sm font-semibold ${temperatureStyles.value}`}>
                             {latestAlertSummary.temperature != null ? `${latestAlertSummary.temperature}°C` : "--"}
                           </p>
@@ -997,7 +1031,7 @@ export default function PatientTreatmentAnalysisSection({
                           )
                         })()}
                       </div>
-                      <p className="mt-3 text-sm text-[#d5dbdb]">{latestAlertSummary.summary}</p>
+                      <p className="mt-3 text-sm text-[var(--text-primary)]">{latestAlertSummary.summary}</p>
                       {fullAlertHistory.length ? (
                         <div className="mt-3">
                           <button
@@ -1009,7 +1043,7 @@ export default function PatientTreatmentAnalysisSection({
                                 return next
                               })
                             }}
-                            className="text-xs font-semibold uppercase tracking-[0.14em] text-[#9dccff] transition hover:text-[#c5e4ff]"
+                            className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--link)] transition hover:text-[#c5e4ff]"
                           >
                             {showFullAlertHistory ? "Hide Full History" : "View Full History"}
                           </button>
@@ -1028,7 +1062,7 @@ export default function PatientTreatmentAnalysisSection({
                                         <div className="flex items-start gap-2">
                                           {renderHistoryMessageWithColoredLabel(alert.message, historyStyles.label)}
                                         </div>
-                                        <span className="whitespace-nowrap text-xs font-semibold text-[#d5dbdb]">
+                                        <span className="whitespace-nowrap text-xs font-semibold text-[var(--text-primary)]">
                                           {formatAlertFriendlyTime(alert.createdAt)}
                                         </span>
                                       </div>
@@ -1042,16 +1076,16 @@ export default function PatientTreatmentAnalysisSection({
                                     type="button"
                                     onClick={() => setAlertHistoryPage((page) => Math.max(1, page - 1))}
                                     disabled={alertHistoryPage === 1}
-                                    className="rounded-lg border border-[#2a3441] px-3 py-1 text-xs font-semibold text-[#d5dbdb] disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
                                   >
                                     Prev
                                   </button>
-                                  <span className="text-xs text-[#b6bec9]">Page {alertHistoryPage}</span>
+                                  <span className="text-xs text-[var(--text-secondary)]">Page {alertHistoryPage}</span>
                                   <button
                                     type="button"
                                     onClick={() => setAlertHistoryPage((page) => Math.min(totalAlertHistoryPages, page + 1))}
                                     disabled={alertHistoryPage >= totalAlertHistoryPages}
-                                    className="rounded-lg border border-[#2a3441] px-3 py-1 text-xs font-semibold text-[#d5dbdb] disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
                                   >
                                     Next
                                   </button>
@@ -1061,20 +1095,20 @@ export default function PatientTreatmentAnalysisSection({
                           ) : null}
                         </div>
                       ) : (
-                        <p className="mt-3 text-sm text-white">No linked alerts</p>
+                        <p className="mt-3 text-sm text-[var(--text-primary)]">No linked alerts</p>
                       )}
                     </div>
-                    <div className="rounded-xl border border-[#2a3441] bg-[#151b22] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Diagnosis</p>
+                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Diagnosis</p>
                       {diagnosisStatusDetails.length ? (
                         <div className="mt-2 divide-y divide-[#26303d]">
                           {paginatedDiagnosisStatusDetails.map((diagnosis) => (
                             <div key={diagnosis.id} className="py-2">
-                              <p className="text-sm font-semibold text-white">{diagnosis.diagnosis}</p>
-                              <p className="mt-1 text-xs text-[#b6bec9]">Status: {diagnosis.status || "--"}</p>
-                              {diagnosis.status_note ? <p className="mt-1 text-xs text-[#d5dbdb]">{diagnosis.status_note}</p> : null}
-                              {diagnosis.notes ? <p className="mt-1 text-xs text-[#9aa5b1]">{diagnosis.notes}</p> : null}
-                              {diagnosis.modified_by ? <p className="mt-1 text-xs text-[#d5dbdb]">Modified by doctor: {diagnosis.modified_by}</p> : null}
+                              <p className="text-sm font-semibold text-[var(--text-primary)]">{diagnosis.diagnosis}</p>
+                              <p className="mt-1 text-xs text-[var(--text-secondary)]">Status: {diagnosis.status || "--"}</p>
+                              {diagnosis.status_note ? <p className="mt-1 text-xs text-[var(--text-primary)]">{diagnosis.status_note}</p> : null}
+                              {diagnosis.notes ? <p className="mt-1 text-xs text-[var(--text-muted)]">{diagnosis.notes}</p> : null}
+                              {diagnosis.modified_by ? <p className="mt-1 text-xs text-[var(--text-primary)]">Modified by doctor: {diagnosis.modified_by}</p> : null}
                             </div>
                           ))}
                           {diagnosisStatusDetails.length > diagnosisPageSize ? (
@@ -1083,16 +1117,16 @@ export default function PatientTreatmentAnalysisSection({
                                 type="button"
                                 onClick={() => setDiagnosisPage((page) => Math.max(1, page - 1))}
                                 disabled={diagnosisPage === 1}
-                                className="rounded-lg border border-[#2a3441] px-3 py-1 text-xs font-semibold text-[#d5dbdb] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 Prev
                               </button>
-                              <span className="text-xs text-[#b6bec9]">Page {diagnosisPage}</span>
+                              <span className="text-xs text-[var(--text-secondary)]">Page {diagnosisPage}</span>
                               <button
                                 type="button"
                                 onClick={() => setDiagnosisPage((page) => Math.min(totalDiagnosisPages, page + 1))}
                                 disabled={diagnosisPage >= totalDiagnosisPages}
-                                className="rounded-lg border border-[#2a3441] px-3 py-1 text-xs font-semibold text-[#d5dbdb] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 Next
                               </button>
@@ -1100,7 +1134,7 @@ export default function PatientTreatmentAnalysisSection({
                           ) : null}
                         </div>
                       ) : (
-                        <p className="mt-2 text-sm text-white">
+                        <p className="mt-2 text-sm text-[var(--text-primary)]">
                           {displayedMedication.related_diagnoses.length ? displayedMedication.related_diagnoses.join(", ") : "No linked diagnosis"}
                         </p>
                       )}
@@ -1108,15 +1142,15 @@ export default function PatientTreatmentAnalysisSection({
                   </div>
 
                   <div className="mt-3 p-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b6bec9]">Conditions</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Conditions</p>
                     {conditionStatusDetails.length ? (
                       <div className="mt-2 divide-y divide-[#26303d]">
                         {paginatedConditionStatusDetails.map((condition) => (
                           <div key={condition.id} className="py-2">
-                            <p className="text-sm font-semibold text-white">{condition.name}</p>
-                            <p className="mt-1 text-xs text-[#b6bec9]">Status: {condition.status || "--"}</p>
-                            {condition.notes ? <p className="mt-1 text-xs text-[#d5dbdb]">{condition.notes}</p> : null}
-                            {condition.modified_by ? <p className="mt-1 text-xs text-[#d5dbdb]">Modified by doctor: {condition.modified_by}</p> : null}
+                            <p className="text-sm font-semibold text-[var(--text-primary)]">{condition.name}</p>
+                            <p className="mt-1 text-xs text-[var(--text-secondary)]">Status: {condition.status || "--"}</p>
+                            {condition.notes ? <p className="mt-1 text-xs text-[var(--text-primary)]">{condition.notes}</p> : null}
+                            {condition.modified_by ? <p className="mt-1 text-xs text-[var(--text-primary)]">Modified by doctor: {condition.modified_by}</p> : null}
                           </div>
                         ))}
                         {conditionStatusDetails.length > CONDITION_PAGE_SIZE ? (
@@ -1125,16 +1159,16 @@ export default function PatientTreatmentAnalysisSection({
                               type="button"
                               onClick={() => setConditionPage((page) => Math.max(1, page - 1))}
                               disabled={conditionPage === 1}
-                              className="rounded-lg border border-[#2a3441] px-3 py-1 text-xs font-semibold text-[#d5dbdb] disabled:cursor-not-allowed disabled:opacity-40"
+                              className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               Prev
                             </button>
-                            <span className="text-xs text-[#b6bec9]">Page {conditionPage}</span>
+                            <span className="text-xs text-[var(--text-secondary)]">Page {conditionPage}</span>
                             <button
                               type="button"
                               onClick={() => setConditionPage((page) => Math.min(totalConditionPages, page + 1))}
                               disabled={conditionPage >= totalConditionPages}
-                              className="rounded-lg border border-[#2a3441] px-3 py-1 text-xs font-semibold text-[#d5dbdb] disabled:cursor-not-allowed disabled:opacity-40"
+                              className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               Next
                             </button>
@@ -1142,14 +1176,14 @@ export default function PatientTreatmentAnalysisSection({
                         ) : null}
                       </div>
                     ) : (
-                      <p className="mt-2 text-sm text-white">
+                      <p className="mt-2 text-sm text-[var(--text-primary)]">
                         {displayedMedication.related_conditions.length ? displayedMedication.related_conditions.join(", ") : "No linked conditions"}
                       </p>
                     )}
                   </div>
                 </div>
               ) : (
-                <div className="monitor-panel rounded-2xl px-4 py-4 text-sm text-[#b6bec9]">
+                <div className="monitor-panel rounded-2xl px-4 py-4 text-sm text-[var(--text-secondary)]">
                   No treatment history available.
                 </div>
               )}

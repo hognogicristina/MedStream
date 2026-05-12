@@ -562,7 +562,7 @@ export default function PatientMedicalHistoryPage() {
 
   if (isLoading) {
     return (
-      <div className="app-shell min-h-screen px-4 py-6 text-slate-100">
+      <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)]">
         <div className="mx-auto max-w-6xl flex flex-col gap-6">
           <LoadingSpinner/>
         </div>
@@ -571,7 +571,7 @@ export default function PatientMedicalHistoryPage() {
   }
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-slate-100">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)]">
       <div className="mx-auto max-w-6xl flex flex-col gap-6">
         <header className="console-topbar rounded-3xl p-6 sm:p-8">
           <div className="space-y-4">
@@ -582,7 +582,7 @@ export default function PatientMedicalHistoryPage() {
             <div>
               <div className="mt-2 flex w-full items-start justify-between">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">{patientName}</h1>
+                  <h1 className="text-4xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-5xl">{patientName}</h1>
                 </div>
                 <BackButton/>
               </div>
@@ -591,18 +591,18 @@ export default function PatientMedicalHistoryPage() {
                 <button
                   type="button"
                   onClick={() => setShowDoctorsModal(true)}
-                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9dccff] transition hover:text-white"
+                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--link)] transition hover:text-[var(--text-primary)]"
                 >
                   View Assigned Doctors
                 </button>
               </div>
 
-              <div className="mt-4 border-t border-[#2b3139] pt-4 overflow-x-auto min-h-[70px] custom-scrollbar">
+              <div className="mt-4 border-t border-[var(--border-subtle)] pt-4 overflow-x-auto min-h-[70px] custom-scrollbar">
                 <div className="flex items-center gap-3 w-full pb-2">
                   <select
                     value={filter}
                     onChange={(event) => setFilter(event.target.value)}
-                    className="console-input flex-1 min-w-[180px] px-4 py-2 rounded-full text-sm font-semibold border border-[#3b424b] bg-transparent"
+                    className="console-input flex-1 min-w-[180px] px-4 py-2 rounded-full text-sm font-semibold border border-[var(--border-primary)] bg-transparent"
                   >
                     <option value="all">All Records</option>
                     <option value="diagnosis">Diagnosis</option>
@@ -610,26 +610,26 @@ export default function PatientMedicalHistoryPage() {
                     <option value="allergy">Allergy</option>
                     <option value="condition">Condition</option>
                   </select>
-                  <div className="h-6 w-px bg-[#3b424b] mx-2"></div>
+                  <div className="h-6 w-px bg-[var(--border-primary)] mx-2"></div>
                   <div className="flex items-center gap-3 flex-wrap">
                     <button onClick={() => setShowDialog("diagnosis")}
                             disabled={!canMutateRecords}
-                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]">
+                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
                       Add Diagnosis
                     </button>
                     <button onClick={() => setShowDialog("medication")}
                             disabled={!canMutateRecords}
-                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]">
+                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
                       Add Medication
                     </button>
                     <button onClick={() => setShowDialog("allergy")}
                             disabled={!canMutateRecords}
-                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]">
+                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
                       Add Allergy
                     </button>
                     <button onClick={() => setShowDialog("condition")}
                             disabled={!canMutateRecords}
-                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]">
+                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
                       Add Condition
                     </button>
                   </div>
@@ -639,7 +639,7 @@ export default function PatientMedicalHistoryPage() {
           </div>
         </header>
 
-        <div className="monitor-card rounded-[28px] p-6 border border-[#3b424b] mt-6">
+        <div className="monitor-card rounded-[28px] p-6 border border-[var(--border-primary)] mt-6">
           <DataTable
             items={items}
             loading={isLoading}
@@ -659,16 +659,16 @@ export default function PatientMedicalHistoryPage() {
               const statusMeta = getRecordStatusMeta(item)
 
               return (
-                <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4 flex flex-col sm:flex-row justify-between gap-4">
+                <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-4 flex flex-col sm:flex-row justify-between gap-4">
                   <div className="max-w-xl">
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80] mb-1">{item.type}</p>
-                    <p className="text-sm font-semibold text-white">{item.label}</p>
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">{item.label}</p>
                     {item.type === "diagnosis" && item.notes && (
-                      <p className="text-sm text-[#b6bec9] mt-1">{item.notes}</p>
+                      <p className="text-sm text-[var(--text-secondary)] mt-1">{item.notes}</p>
                     )}
 
                     {item.type === "medication" && item.dosage && (
-                      <p className="text-sm text-[#b6bec9] mt-1">{item.dosage}</p>
+                      <p className="text-sm text-[var(--text-secondary)] mt-1">{item.dosage}</p>
                     )}
                     {(
                       (item.type === "diagnosis" && item.status_note)
@@ -693,7 +693,7 @@ export default function PatientMedicalHistoryPage() {
                           : null
 
                       return (
-                        <div className="text-xs text-[#879196] mt-2 shadow-inner bg-[#0f141a] px-3 py-2 rounded-md space-y-1">
+                        <div className="text-xs text-[var(--text-muted)] mt-2 shadow-inner bg-[var(--surface-4)] px-3 py-2 rounded-md space-y-1">
                           {mainText && <p>{mainText}</p>}
                           {doctorText && <p className="italic">{doctorText}</p>}
                         </div>
@@ -717,17 +717,17 @@ export default function PatientMedicalHistoryPage() {
 
                   <div className="flex sm:flex-col justify-between sm:justify-end items-end gap-3 text-right">
                     <div>
-                      <span className="block text-xs uppercase tracking-wider text-[#879196] font-medium mb-1">
+                      <span className="block text-xs uppercase tracking-wider text-[var(--text-muted)] font-medium mb-1">
                         Doc: {involvedDoctorStr}
                       </span>
-                      <span className="block text-xs text-[#879196]">Last updated: {formatDateTime(item.timestamp)}</span>
+                      <span className="block text-xs text-[var(--text-muted)]">Last updated: {formatDateTime(item.timestamp)}</span>
                     </div>
 
                     {["diagnosis", "medication", "allergy", "condition"].includes(item.type) && (
                       <button
                         onClick={() => openEdit(item)}
                         disabled={!isDoctorAssigned || Boolean(patient?.is_discharged)}
-                        className="console-button-secondary rounded-xl text-xs font-semibold px-3 py-1.5 transition mt-2 disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                        className="console-button-secondary rounded-xl text-xs font-semibold px-3 py-1.5 transition mt-2 disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                       >
                         Edit
                       </button>
@@ -745,7 +745,7 @@ export default function PatientMedicalHistoryPage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Clinical Records</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white capitalize">
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)] capitalize">
                     {showDialog.startsWith("edit_") ? `Update ${showDialog.replace("edit_", "").replaceAll("_", " ")}` : `Add ${showDialog.replaceAll("_", " ")}`}
                   </h2>
                 </div>
@@ -1050,25 +1050,25 @@ export default function PatientMedicalHistoryPage() {
                         || (showDialog === "diagnosis" && (!trimValue(diagnosisForm.diagnosis) || !trimValue(diagnosisForm.status)))
                         || (showDialog === "allergy" && ((!trimValue(allergyForm.name) || !trimValue(allergyForm.severity)) || isDuplicateAllergy))
                       }
-                      className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+                      className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                     >
                       {isSubmitting ? "Saving..." : "Submit"}
                     </button>
                     {showDialog === "medication" && isDuplicateMedication ? (
                       <span
-                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                         This medication already exists for this patient
                       </span>
                     ) : null}
                     {showDialog === "condition" && isDuplicateCondition ? (
                       <span
-                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                         This condition already exists for this patient
                       </span>
                     ) : null}
                     {showDialog === "allergy" && isDuplicateAllergy ? (
                       <span
-                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[#454c55] bg-[#0f141a] px-2 py-1 text-xs text-[#d5dbdb] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                         This allergy already exists for this patient
                       </span>
                     ) : null}
@@ -1083,7 +1083,7 @@ export default function PatientMedicalHistoryPage() {
           <div className="console-modal-overlay z-50">
             <div className="console-modal monitor-card rounded-[28px] p-6 w-[600px] max-w-full">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-white">Assigned Doctors</h2>
+                <h2 className="text-xl font-semibold text-[var(--text-primary)]">Assigned Doctors</h2>
                 <button onClick={() => setShowDoctorsModal(false)}
                         className="console-button-secondary px-3 py-1.5 rounded-xl text-sm">
                   Close
@@ -1100,12 +1100,12 @@ export default function PatientMedicalHistoryPage() {
                 bodyClassName="space-y-3"
                 renderRow={(doctor) => (
                   <div
-                    className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                    className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center">
                     <div>
-                      <p className="text-sm font-semibold text-white">Dr. {doctor.first_name} {doctor.last_name}</p>
+                      <p className="text-sm font-semibold text-[var(--text-primary)]">Dr. {doctor.first_name} {doctor.last_name}</p>
                       <p className="text-xs uppercase tracking-[0.2em] text-[#ffcc80] mt-1">{doctor.specialization}</p>
                     </div>
-                    <p className="text-sm text-[#b6bec9] font-medium">{doctor.email}</p>
+                    <p className="text-sm text-[var(--text-secondary)] font-medium">{doctor.email}</p>
                   </div>
                 )}
               />

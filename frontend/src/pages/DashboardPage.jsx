@@ -8,6 +8,7 @@ import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import VitalsChart from "../components/VitalsChart.jsx"
 import {formatPatientFullName} from "../utils/patients.js"
+import {useTheme} from "../components/ThemeContext.jsx"
 
 const MAX_PREVIEW_ALERTS = 7
 const MAX_ALERTS = 60
@@ -68,8 +69,36 @@ const areSameAlerts = (left, right) => {
   })
 }
 
+function getPreviewAlertClasses(severity, isLightTheme) {
+  const normalizedSeverity = String(severity || "").trim().toLowerCase()
+  if (normalizedSeverity === "critical") {
+    return {
+      cardClass: "alert-item alert-critical",
+      labelClass: isLightTheme ? "text-[#9f1239]" : "text-[#ffe5ea]",
+      messageClass: isLightTheme ? "text-[#881337]" : "text-[#fff4f7]",
+      timeClass: isLightTheme ? "text-[#be123c]" : "text-[#ffd6df]",
+    }
+  }
+  if (normalizedSeverity === "high") {
+    return {
+      cardClass: "alert-item alert-high",
+      labelClass: isLightTheme ? "text-[#92400e]" : "text-[#ffecc8]",
+      messageClass: isLightTheme ? "text-[#9a3412]" : "text-[#fff7e6]",
+      timeClass: isLightTheme ? "text-[#b45309]" : "text-[#ffe2b2]",
+    }
+  }
+  return {
+    cardClass: "alert-item alert-normal",
+    labelClass: isLightTheme ? "text-[#166534]" : "text-[#e6f4ff]",
+    messageClass: isLightTheme ? "text-[#14532d]" : "text-[#f3faff]",
+    timeClass: isLightTheme ? "text-[#15803d]" : "text-[#d8ecff]",
+  }
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const {theme} = useTheme()
+  const isLightTheme = theme === "light"
   const {notifyError} = useNotifications()
   const [vitals, setVitals] = useState([])
   const [previewAlerts, setPreviewAlerts] = useState(null)
@@ -247,16 +276,16 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-3">
               <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">MedStream Console</p>
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Hospital Monitoring
+                <h1 className="text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">Hospital Monitoring
                   Dashboard</h1>
-                <p className="mt-2 max-w-2xl text-sm text-[#b6bec9] sm:text-base">
+                <p className="mt-2 max-w-2xl text-sm text-[var(--text-secondary)] sm:text-base">
                   Operational overview for clinical telemetry, admissions, department load, and alert escalation.
                 </p>
               </div>
@@ -264,16 +293,16 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:min-w-[36rem]">
               <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Patients</p>
-                <p className="mt-3 text-3xl font-semibold text-white"><CountValue value={patients.length}/></p>
+                <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Patients</p>
+                <p className="mt-3 text-3xl font-semibold text-[var(--text-primary)]"><CountValue value={patients.length}/></p>
               </div>
               <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Alerts</p>
+                <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Alerts</p>
                 <p className="mt-3 text-3xl font-semibold text-[#ffb3bc]"><CountValue tooltipLabel={String(alertCount)} value={alertCount}/>
                 </p>
               </div>
               <div className="monitor-panel h-full min-h-[132px] rounded-2xl p-4">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Doctors</p>
+                <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Doctors</p>
                 <p className="mt-3 text-3xl font-semibold text-[#ffb84d]"><CountValue value={doctorCount}/></p>
               </div>
             </div>
@@ -284,50 +313,50 @@ export default function DashboardPage() {
             <div className="mb-6 flex flex-col gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Vitals Monitoring</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Vitals Overview</h2>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Vitals Overview</h2>
               </div>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <div className="monitor-panel rounded-2xl px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Heart Rate</p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Heart Rate</p>
                   <p className="mt-2 text-xl font-semibold text-[#ffb84d]">{latestVital ? latestVital.heart_rate : "--"}</p>
                 </div>
                 <div className="monitor-panel rounded-2xl px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">O2 Sat</p>
-                  <p className="mt-2 text-xl font-semibold text-[#9dccff]">{latestVital ? latestVital.oxygen_saturation : "--"}</p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">O2 Sat</p>
+                  <p className="mt-2 text-xl font-semibold text-[var(--link)]">{latestVital ? latestVital.oxygen_saturation : "--"}</p>
                 </div>
                 <div className="monitor-panel rounded-2xl px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Temp</p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Temp</p>
                   <p className="mt-2 text-xl font-semibold text-[#ffd699]">{latestVital ? latestVital.temperature : "--"}</p>
                 </div>
                 <div className="monitor-panel rounded-2xl px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.25em] text-[#879196]">Readings</p>
-                  <p className="mt-2 text-xl font-semibold text-white"><CountValue value={vitals.length}/></p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Readings</p>
+                  <p className="mt-2 text-xl font-semibold text-[var(--text-primary)]"><CountValue value={vitals.length}/></p>
                 </div>
               </div>
             </div>
 
             <div className="mb-6 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Current Patient State</p>
-                <p className="mt-2 text-base font-semibold text-white">{currentPatientState}</p>
+              <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">Current Patient State</p>
+                <p className="mt-2 text-base font-semibold text-[var(--text-primary)]">{currentPatientState}</p>
               </div>
-              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Active Alerts</p>
-                <p className="mt-2 text-base font-semibold text-white"><CountValue tooltipLabel={String(alertCount)} value={alertCount}/>
+              <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">Active Alerts</p>
+                <p className="mt-2 text-base font-semibold text-[var(--text-primary)]"><CountValue tooltipLabel={String(alertCount)} value={alertCount}/>
                 </p>
               </div>
-              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Feed Status</p>
-                <p className="mt-2 text-base font-semibold text-white">{latestVital ? "Connected" : "Waiting for feed"}</p>
+              <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">Feed Status</p>
+                <p className="mt-2 text-base font-semibold text-[var(--text-primary)]">{latestVital ? "Connected" : "Waiting for feed"}</p>
               </div>
             </div>
 
             {isLoadingDashboard ? (
-              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-10 text-center text-sm text-[#b6bec9]">
+              <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-10 text-center text-sm text-[var(--text-secondary)]">
                 Loading dashboard data...
               </div>
             ) : vitals.length === 0 ? (
-              <div className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-10 text-center text-sm text-[#b6bec9]">
+              <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-10 text-center text-sm text-[var(--text-secondary)]">
                 Waiting for vitals. Keep the backend running and telemetry will appear here.
               </div>
             ) : (
@@ -335,30 +364,30 @@ export default function DashboardPage() {
                 <VitalsChart data={chartData}/>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <div className="monitor-panel rounded-2xl px-4 py-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">HR Trend</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">HR Trend</p>
                     <p
-                      className="mt-2 text-xl font-semibold text-white">{recentVitals.length ? recentHeartRateAverage.toFixed(1) : "--"}</p>
+                      className="mt-2 text-xl font-semibold text-[var(--text-primary)]">{recentVitals.length ? recentHeartRateAverage.toFixed(1) : "--"}</p>
                     <p
-                      className="mt-2 text-sm text-[#b6bec9]">{recentVitals.length ? `${formatDelta(heartRateDelta)} over last ${recentVitals.length} samples` : "Waiting for samples"}</p>
+                      className="mt-2 text-sm text-[var(--text-secondary)]">{recentVitals.length ? `${formatDelta(heartRateDelta)} over last ${recentVitals.length} samples` : "Waiting for samples"}</p>
                   </div>
                   <div className="monitor-panel rounded-2xl px-4 py-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">O2 Trend</p>
-                    <p className="mt-2 text-xl font-semibold text-white">{recentVitals.length ? recentOxygenAverage.toFixed(1) : "--"}</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">O2 Trend</p>
+                    <p className="mt-2 text-xl font-semibold text-[var(--text-primary)]">{recentVitals.length ? recentOxygenAverage.toFixed(1) : "--"}</p>
                     <p
-                      className="mt-2 text-sm text-[#b6bec9]">{recentVitals.length ? `${formatDelta(oxygenDelta)} over last ${recentVitals.length} samples` : "Waiting for samples"}</p>
+                      className="mt-2 text-sm text-[var(--text-secondary)]">{recentVitals.length ? `${formatDelta(oxygenDelta)} over last ${recentVitals.length} samples` : "Waiting for samples"}</p>
                   </div>
                   <div className="monitor-panel rounded-2xl px-4 py-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Temp Trend</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">Temp Trend</p>
                     <p
-                      className="mt-2 text-xl font-semibold text-white">{recentVitals.length ? recentTemperatureAverage.toFixed(1) : "--"}</p>
+                      className="mt-2 text-xl font-semibold text-[var(--text-primary)]">{recentVitals.length ? recentTemperatureAverage.toFixed(1) : "--"}</p>
                     <p
-                      className="mt-2 text-sm text-[#b6bec9]">{recentVitals.length ? `${formatDelta(temperatureDelta)} over last ${recentVitals.length} samples` : "Waiting for samples"}</p>
+                      className="mt-2 text-sm text-[var(--text-secondary)]">{recentVitals.length ? `${formatDelta(temperatureDelta)} over last ${recentVitals.length} samples` : "Waiting for samples"}</p>
                   </div>
                   <div className="monitor-panel rounded-2xl px-4 py-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#879196]">Latest BP</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">Latest BP</p>
                     <p
-                      className="mt-2 text-xl font-semibold text-white">{latestVital ? `${latestVital.systolic_bp}/${latestVital.diastolic_bp}` : "--"}</p>
-                    <p className="mt-2 text-sm text-[#b6bec9]">{latestVital ? `Recorded at ${latestVital.time}` : "Waiting for samples"}</p>
+                      className="mt-2 text-xl font-semibold text-[var(--text-primary)]">{latestVital ? `${latestVital.systolic_bp}/${latestVital.diastolic_bp}` : "--"}</p>
+                    <p className="mt-2 text-sm text-[var(--text-secondary)]">{latestVital ? `Recorded at ${latestVital.time}` : "Waiting for samples"}</p>
                   </div>
                 </div>
               </div>
@@ -370,38 +399,43 @@ export default function DashboardPage() {
               <div className="mb-5 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Alerts</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Alert Preview</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Alert Preview</h2>
                 </div>
               </div>
               <ul className="space-y-3">
                 {previewAlerts === null && (
-                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                  <li className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
                     Loading alerts...
                   </li>
                 )}
                 {previewAlerts !== null && limitedVisiblePreviewAlerts.length === 0 && (
-                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                  <li className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
                     No critical or high alerts at the moment.
                   </li>
                 )}
                 {previewAlerts !== null && limitedVisiblePreviewAlerts.map((a) => (
-                  <li
-                    key={a.id}
-                    onClick={() => handleAlertClick(a)}
-                    className={`alert-item alert-${a.severity} ${newAlertIds.includes(a.id) ? "alert-new" : ""} hover:border-[#ff9900] transition-all duration-200 cursor-pointer`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.28em] text-white/70">{a.severity} severity</p>
-                        <p className="mt-2 text-sm font-medium text-inherit">
-                          {patientNameById[a.patient_id]} - {a.message}
-                        </p>
-                      </div>
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                        {new Date(a.created_at || Date.now()).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </li>
+                  (() => {
+                    const previewClasses = getPreviewAlertClasses(a.severity, isLightTheme)
+                    return (
+                      <li
+                        key={a.id}
+                        onClick={() => handleAlertClick(a)}
+                        className={`${previewClasses.cardClass} ${newAlertIds.includes(a.id) ? "alert-new" : ""} hover:border-[#ff9900] transition-all duration-200 cursor-pointer`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className={`text-xs uppercase tracking-[0.28em] ${previewClasses.labelClass}`}>{a.severity} severity</p>
+                            <p className={`mt-2 text-sm font-medium ${previewClasses.messageClass}`}>
+                              {patientNameById[a.patient_id]} - {a.message}
+                            </p>
+                          </div>
+                          <span className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${previewClasses.timeClass}`}>
+                            {new Date(a.created_at || Date.now()).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      </li>
+                    )
+                  })()
                 ))}
               </ul>
               <div className="mt-5">

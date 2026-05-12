@@ -108,14 +108,14 @@ export default function PatientAdmissionHistoryPage() {
   }, [loadDischargeTypes])
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <header className="console-topbar rounded-[24px] p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Admission History</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">{patientName}</h1>
-              <p className="mt-2 text-sm text-[#b6bec9]">Admission, discharge, and readmission activity for this patient.</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{patientName}</h1>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">Admission, discharge, and readmission activity for this patient.</p>
             </div>
             <BackButton/>
           </div>
@@ -128,7 +128,7 @@ export default function PatientAdmissionHistoryPage() {
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Timeline</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Admissions and Discharges</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Admissions and Discharges</h2>
                 </div>
                 <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
                 {total} total
@@ -142,7 +142,7 @@ export default function PatientAdmissionHistoryPage() {
 
                 <div className="flex items-center gap-2">
                   <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
+                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:text-[var(--text-subtle)]"
                     onClick={() => setPage((current) => Math.max(1, current - 1))}
                     disabled={page === 1}
                     type="button"
@@ -150,7 +150,7 @@ export default function PatientAdmissionHistoryPage() {
                     Previous
                   </button>
                   <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[#31363f] disabled:text-[#6b7280]"
+                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:text-[var(--text-subtle)]"
                     onClick={() => setPage((current) => current + 1)}
                     disabled={page >= maxPage}
                     type="button"
@@ -162,19 +162,19 @@ export default function PatientAdmissionHistoryPage() {
 
               <ul className="space-y-3">
                 {entries.length === 0 && (
-                  <li className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-5 text-sm text-[#b6bec9]">
+                  <li className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
                     {isLoading ? "Loading admission history..." : "No admission history recorded for this patient."}
                   </li>
                 )}
 
                 {entries.map((entry) => (
-                  <li key={entry.id} className="rounded-2xl border border-[#3b424b] bg-[#151b22] px-4 py-4">
+                  <li key={entry.id} className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-sm font-semibold text-white">{formatAdmissionType(entry.type)}</p>
-                        <p className="mt-2 text-sm text-[#c4ccd5]">{entry.note || entry.reason || "--"}</p>
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">{formatAdmissionType(entry.type)}</p>
+                        <p className="mt-2 text-sm text-[var(--text-secondary)]">{entry.note || entry.reason || "--"}</p>
                       </div>
-                      <span className="text-xs text-[#879196]">{formatDateTime(entry.created_at)}</span>
+                      <span className="text-xs text-[var(--text-muted)]">{formatDateTime(entry.created_at)}</span>
                     </div>
                   </li>
                 ))}

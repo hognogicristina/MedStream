@@ -22,7 +22,7 @@ export default function PatientAdmissionActionCard({
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">
           {patient?.is_discharged ? "Readmission" : "Discharge"}
         </p>
-        <h2 className="mt-2 text-2xl font-semibold text-white">
+        <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">
           {patient?.is_discharged ? "Readmit Patient" : "Discharge Patient"}
         </h2>
       </div>
@@ -43,13 +43,13 @@ export default function PatientAdmissionActionCard({
               <option value="ambulance">Ambulance</option>
             </select>
           </div>
-          <p className="text-xs text-[#879196]">
+          <p className="text-xs text-[var(--text-muted)]">
             Admission note is generated automatically from arrival method.
           </p>
           <button
             type="submit"
             disabled={!canSubmitReadmit || isSubmittingReadmit}
-            className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+            className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
           >
             {isSubmittingReadmit ? "Submitting..." : "Readmit Patient"}
           </button>
@@ -84,7 +84,7 @@ export default function PatientAdmissionActionCard({
           <button
             type="submit"
             disabled={!canSubmitDischarge || isSubmittingDischarge}
-            className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[#4d5661] disabled:bg-[#3b424b] disabled:text-[#b6bec9]"
+            className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
           >
             {isSubmittingDischarge ? "Submitting..." : "Discharge Patient"}
           </button>

@@ -8,36 +8,40 @@ import {
   Line,
   LineChart,
 } from "recharts"
+import {useTheme} from "./ThemeContext.jsx"
+import {getChartTheme} from "../utils/theme.js"
 
 export default function VitalsChart({data}) {
+  const {theme} = useTheme()
+  const chartTheme = getChartTheme(theme)
   return (
-    <div className="w-full h-[320px] rounded-2xl border border-[#2a3441] bg-[#0f141a] p-4">
+    <div className="w-full h-[320px] rounded-2xl border p-4" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
           <CartesianGrid
-            stroke="#1f2937"
+            stroke={chartTheme.grid}
             strokeDasharray="3 3"
             vertical={false}
           />
 
           <XAxis
             dataKey="time"
-            stroke="#6b7280"
+            stroke={chartTheme.axis}
             tick={{fontSize: 11}}
           />
 
           <YAxis
-            stroke="#6b7280"
+            stroke={chartTheme.axis}
             tick={{fontSize: 11}}
             domain={["auto", "auto"]}
           />
 
           <Tooltip
             contentStyle={{
-              backgroundColor: "#0f172a",
-              border: "1px solid #334155",
+              backgroundColor: chartTheme.tooltipBg,
+              border: `1px solid ${chartTheme.tooltipBorder}`,
               borderRadius: "12px",
-              color: "#fff",
+              color: chartTheme.tooltipText,
             }}
           />
           <Legend wrapperStyle={{fontSize: "12px"}}/>
