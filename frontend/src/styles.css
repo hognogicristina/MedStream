@@ -264,6 +264,12 @@ body {
   margin-top: 8px;
 }
 
+.medstream-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
 @media (max-width: 768px) {
   .medstream-main-frame {
     gap: 12px;
@@ -289,6 +295,10 @@ body {
 
   .medstream-how-card-wide {
     grid-column: auto;
+  }
+
+  .medstream-controls-grid {
+    grid-template-columns: 1fr;
   }
 }
 
