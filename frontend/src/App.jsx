@@ -12,6 +12,7 @@ import BatchMetricsPage from "./pages/BatchMetricsPage.jsx"
 import DepartmentPage from "./pages/DepartmentPage.jsx"
 import DashboardPage from "./pages/DashboardPage.jsx"
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx"
+import HomePage from "./pages/HomePage.jsx"
 import HowItWorksPage from "./pages/HowItWorksPage.jsx"
 import LoginPage from "./pages/LoginPage.jsx"
 import PatientPage from "./pages/PatientPage.jsx"
@@ -179,7 +180,7 @@ function App() {
       <TitleManager/>
       <ApiAuthBridge/>
       <Routes>
-        <Route path="/" element={<RootRoute/>}/>
+        <Route path="/" element={<HomePage/>}/>
 
         <Route
           path="/login"

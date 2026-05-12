@@ -1,7 +1,7 @@
 import {useEffect, useState} from "react"
 import {Link, useNavigate, useSearchParams} from "react-router-dom"
 import {resendVerificationEmail, verifyEmailToken} from "../services/authApi.js"
-import {getErrorMessage} from "../services/apiMessages.js"
+import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 import {VERIFICATION_LINK_EXPIRED_MESSAGE} from "../services/appMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 
@@ -85,7 +85,6 @@ export default function VerifyEmailPage() {
           </aside>
 
           <div className="auth-divider" aria-hidden="true"/>
-          <div className="hidden lg:block w-px bg-[var(--border-subtle)] mx-6"/>
 
           <div className="login-panel">
             <div className="login-header">

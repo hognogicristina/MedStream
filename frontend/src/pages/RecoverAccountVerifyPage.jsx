@@ -49,7 +49,7 @@ export default function RecoverAccountVerifyPage() {
     return () => {
       active = false
     }
-  }, [token])
+  }, [notifyError, notifySuccess, token])
 
   return (
     <div className="app-shell login-page login-page-centered">
@@ -67,7 +67,6 @@ export default function RecoverAccountVerifyPage() {
           </aside>
 
           <div className="auth-divider" aria-hidden="true"/>
-          <div className="hidden lg:block w-px bg-[var(--border-subtle)] mx-6"/>
 
           <div className="login-panel">
             <div className="login-header">

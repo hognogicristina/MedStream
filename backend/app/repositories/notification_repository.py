@@ -34,22 +34,25 @@ def _render_html_email(title: str, message: str, action_label: str, action_url: 
     return f"""\
 <!doctype html>
 <html lang=\"en\">
-  <body style=\"margin:0;padding:0;background:#16191f;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif;color:#f2f3f3;\">
-    <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"padding:32px 16px;background:#16191f;\">
+  <body style=\"margin:0;padding:0;background:#f7f8fa;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif;color:#232f3e;\">
+    <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"padding:32px 16px;background:#f7f8fa;\">
       <tr>
         <td align=\"center\">
-          <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:600px;border:1px solid #3b424b;background:#1b2430;border-radius:20px;overflow:hidden;\">
+          <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:600px;border:1px solid #d5dbdb;background:#ffffff;border-radius:8px;overflow:hidden;\">
+            <tr>
+              <td style=\"height:4px;background:#ff9900;font-size:0;line-height:0;\">&nbsp;</td>
+            </tr>
             <tr>
               <td style=\"padding:32px;\">
-                <p style=\"margin:0 0 12px;font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#ff9900;font-weight:700;\">MedStream</p>
-                <h1 style=\"margin:0 0 16px;font-size:28px;line-height:1.2;color:#ffffff;\">{title}</h1>
-                <p style=\"margin:0 0 24px;font-size:16px;line-height:1.6;color:#d5dbdb;\">{message}</p>
-                <a href=\"{action_url}\" style=\"display:inline-block;padding:14px 22px;border-radius:14px;background:#ec7211;color:#16191f;text-decoration:none;font-weight:700;\">
+                <p style=\"margin:0 0 12px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#5f6b7a;font-weight:700;\">MedStream</p>
+                <h1 style=\"margin:0 0 16px;font-size:26px;line-height:1.2;color:#232f3e;\">{title}</h1>
+                <p style=\"margin:0 0 24px;font-size:15px;line-height:1.6;color:#5f6b7a;\">{message}</p>
+                <a href=\"{action_url}\" style=\"display:inline-block;padding:10px 18px;border-radius:8px;background:#0972d3;color:#ffffff;text-decoration:none;font-weight:700;\">
                   {action_label}
                 </a>
-                <p style=\"margin:24px 0 8px;font-size:13px;color:#879196;\">If the button does not work, use this link:</p>
+                <p style=\"margin:24px 0 8px;font-size:13px;color:#5f6b7a;\">If the button does not work, use this link:</p>
                 <p style=\"margin:0;font-size:13px;line-height:1.6;word-break:break-all;\">
-                  <a href=\"{action_url}\" style=\"color:#9dccff;text-decoration:none;\">{action_url}</a>
+                  <a href=\"{action_url}\" style=\"color:#0972d3;text-decoration:none;\">{action_url}</a>
                 </p>
               </td>
             </tr>
