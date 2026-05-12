@@ -1,263 +1,128 @@
-import {useEffect, useRef, useState} from "react"
-import {NavLink, useLocation, useNavigate} from "react-router-dom"
+import {useMemo} from "react"
+import {useLocation, useNavigate} from "react-router-dom"
+import {
+  Box,
+  Button,
+  Input,
+  SideNavigation,
+  SpaceBetween,
+  StatusIndicator,
+  TopNavigation,
+} from "@cloudscape-design/components"
 import {useAuth} from "./AuthContext.jsx"
 import {useTheme} from "./ThemeContext.jsx"
-import {getResponseData} from "../services/apiMessages.js";
-import {getDepartments} from "../services/patientApi.js";
 
-function DepartmentsIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      <path
-        d="M10 16.2 4.8 11.4a3.5 3.5 0 0 1 0-5 3.35 3.35 0 0 1 4.85.06L10 6.9l.35-.44a3.35 3.35 0 0 1 4.85-.06 3.5 3.5 0 0 1 0 5L10 16.2Z"
-        stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M5.9 10h1.55l.95-1.6 1.35 3.1 1.15-2.15h3.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-            strokeLinejoin="round"/>
-    </svg>
-  )
+const NAV_ITEMS = [
+  {type: "link", text: "Dashboard", href: "/dashboard"},
+  {type: "link", text: "Live Monitoring", href: "/metrics/streaming"},
+  {type: "link", text: "Patients", href: "/patients/new"},
+  {type: "link", text: "Alerts", href: "/alerts"},
+  {type: "link", text: "Batch Analytics", href: "/metrics/batch"},
+  {type: "link", text: "Streaming vs Batch", href: "/metrics/comparison"},
+  {type: "link", text: "How it works", href: "/metrics/comparison"},
+]
+
+function resolveActiveHref(pathname) {
+  if (pathname.startsWith("/metrics/streaming")) {
+    return "/metrics/streaming"
+  }
+  if (pathname.startsWith("/metrics/batch")) {
+    return "/metrics/batch"
+  }
+  if (pathname.startsWith("/metrics/comparison")) {
+    return "/metrics/comparison"
+  }
+  if (pathname.startsWith("/alerts")) {
+    return "/alerts"
+  }
+  if (pathname.startsWith("/patients/new") || pathname.startsWith("/patient/") || pathname.startsWith("/patients/")) {
+    return "/patients/new"
+  }
+  return "/dashboard"
 }
 
-function AlertIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      <path d="M10 4.5v6.5M10 14.5h.01M10 2.5l7 13H3l7-13Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
-            strokeLinejoin="round"/>
-    </svg>
-  )
-}
-
-function UserPlusIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      <path d="M14.5 7V3.5M12.75 5.25h3.5M5.5 15.5c0-2.1 1.9-3.5 4.5-3.5s4.5 1.4 4.5 3.5M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-            stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-}
-
-function UserIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      <path d="M5.5 15.5c0-2.1 1.9-3.5 4.5-3.5s4.5 1.4 4.5 3.5M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" strokeWidth="1.7"
-            strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-}
-
-function MetricsIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      <path d="M4 14.5V10M10 14.5V6.5M16 14.5V3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
-            strokeLinejoin="round"/>
-      <path d="M2.75 16.5h14.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
-    </svg>
-  )
-}
-
-function NavTooltip({label, children}) {
-  return (
-    <div className="group relative flex items-center">
-      {children}
-      <span
-        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs font-medium text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-        {label}
-      </span>
-    </div>
-  )
-}
-
-export default function Navbar() {
-  const location = useLocation()
+export function AppTopNavigation() {
   const navigate = useNavigate()
   const {logout} = useAuth()
   const {theme, toggleTheme} = useTheme()
-  const [openMenu, setOpenMenu] = useState("")
-  const navRef = useRef(null)
-  const [departments, setDepartments] = useState([])
-
-  const handleLogout = () => {
-    setOpenMenu("")
-    logout()
-    navigate("/")
-  }
-
-  const navLinkClassName = ({isActive}) =>
-    `inline-flex h-11 w-11 items-center justify-center rounded-md ${isActive ? "console-button-primary" : "console-button-secondary"}`
-  const departmentsActive = location.pathname.startsWith("/departments")
-  const profileActive = location.pathname.startsWith("/profile")
-  const metricsActive = location.pathname.startsWith("/metrics")
-
-  useEffect(() => {
-    const handlePointerDown = (event) => {
-      if (!navRef.current?.contains(event.target)) {
-        setOpenMenu("")
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown)
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown)
-    }
-  }, [])
-
-  useEffect(() => {
-    const loadDepartments = async () => {
-      try {
-        const res = await getDepartments()
-        setDepartments(getResponseData(res))
-      } catch {
-      }
-    }
-
-    loadDepartments()
-  }, [])
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--border-primary)] bg-[var(--app-bg)]">
-      <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-4">
-          <NavTooltip label={"Dashboard"}>
-            <NavLink
-              className={`text-xs font-semibold uppercase tracking-[0.35em] ${location.pathname === "/dashboard" ? "console-eyebrow" : "text-[var(--text-secondary)]"}`}
-              to="/dashboard">
-              MedStream
-            </NavLink>
-          </NavTooltip>
-        </div>
+    <TopNavigation
+      identity={{
+        href: "/dashboard",
+        title: "MedStream",
+        logo: {src: "/medstream-icon-small.svg", alt: "MedStream"},
+      }}
+      search={
+        <Input
+          placeholder="Search patients or alerts"
+          type="search"
+          disabled
+          ariaLabel="Search"
+        />
+      }
+      utilities={[
+        {
+          type: "button",
+          text: theme === "light" ? "Light" : "Dark",
+          onClick: toggleTheme,
+        },
+        {
+          type: "menu-dropdown",
+          text: "Account",
+          items: [
+            {id: "profile", text: "Profile"},
+            {id: "logout", text: "Sign out"},
+          ],
+          onItemClick: ({detail}) => {
+            if (detail.id === "profile") {
+              navigate("/profile")
+            }
+            if (detail.id === "logout") {
+              logout()
+              navigate("/")
+            }
+          },
+        },
+      ]}
+      i18nStrings={{
+        searchIconAriaLabel: "Search",
+        searchDismissIconAriaLabel: "Close search",
+        overflowMenuTriggerText: "More",
+        overflowMenuTitleText: "All",
+      }}
+    />
+  )
+}
 
-        <nav ref={navRef} className="flex flex-wrap items-center gap-2">
+export function AppSideNavigation() {
+  const navigate = useNavigate()
+  const location = useLocation()
 
-          <div className="relative flex items-center">
-            <NavTooltip label={"Departments"}>
-              <button
-                type="button"
-                aria-label={"Departments"}
-                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${openMenu === "departments" ? "console-button-active" : departmentsActive ? "console-button-primary" : "console-button-secondary"}`}
-                onClick={() => setOpenMenu((current) => current === "departments" ? "" : "departments")}
-              >
-                <DepartmentsIcon/>
-                <span className="sr-only">{"Departments"}</span>
-              </button>
-            </NavTooltip>
-            <div
-              className={`absolute right-0 top-full z-40 mt-2 w-56 rounded-[16px] border border-[var(--border-primary)] bg-[var(--surface-2)] p-2 ${openMenu === "departments" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
-              <div className="space-y-1 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
-                {departments.map((department) => (
-                  <NavLink
-                    key={department}
-                    className="block rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
-                    to={`/departments/${encodeURIComponent(department)}`}
-                    onClick={() => setOpenMenu("")}
-                  >
-                    {department}
-                  </NavLink>
-                ))}
-              </div>
-            </div>
-          </div>
+  const activeHref = useMemo(() => resolveActiveHref(location.pathname), [location.pathname])
 
-          <NavTooltip label={"Alerts"}>
-            <NavLink aria-label={"Alerts"} className={navLinkClassName} to="/alerts">
-              <AlertIcon/>
-              <span className="sr-only">{"Alerts"}</span>
-            </NavLink>
-          </NavTooltip>
+  return (
+    <SideNavigation
+      activeHref={activeHref}
+      header={{href: "/dashboard", text: "Navigation"}}
+      items={NAV_ITEMS}
+      onFollow={(event) => {
+        event.preventDefault()
+        const href = event.detail.href
+        if (href) {
+          navigate(href)
+        }
+      }}
+    />
+  )
+}
 
-          <div className="relative flex items-center">
-            <NavTooltip label={"Metrics"}>
-              <button
-                type="button"
-                aria-label={"Metrics"}
-                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${openMenu === "metrics" ? "console-button-active" : metricsActive ? "console-button-primary" : "console-button-secondary"}`}
-                onClick={() => setOpenMenu((current) => current === "metrics" ? "" : "metrics")}
-              >
-                <MetricsIcon/>
-                <span className="sr-only">{"Metrics"}</span>
-              </button>
-            </NavTooltip>
-            <div
-              className={`absolute right-0 top-full z-40 mt-2 w-48 rounded-[16px] border border-[var(--border-primary)] bg-[var(--surface-2)] p-2 ${openMenu === "metrics" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
-              <div className="space-y-1">
-                <NavLink
-                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
-                  to="/metrics/streaming"
-                  onClick={() => setOpenMenu("")}
-                >
-                  {"Streaming"}
-                </NavLink>
-                <NavLink
-                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
-                  to="/metrics/batch"
-                  onClick={() => setOpenMenu("")}
-                >
-                  {"Batch"}
-                </NavLink>
-                <NavLink
-                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
-                  to="/metrics/comparison"
-                  onClick={() => setOpenMenu("")}
-                >
-                  {"Comparison"}
-                </NavLink>
-              </div>
-            </div>
-          </div>
-
-          <NavTooltip label={"Add Patient"}>
-            <NavLink aria-label={"Add Patient"} className={navLinkClassName} to="/patients/new">
-              <UserPlusIcon/>
-              <span className="sr-only">{"Add Patient"}</span>
-            </NavLink>
-          </NavTooltip>
-
-          <div className="relative flex items-center">
-            <NavTooltip label={"Doctor Profile"}>
-              <button
-                type="button"
-                aria-label={"Doctor Profile"}
-                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${openMenu === "profile" ? "console-button-active" : profileActive ? "console-button-primary" : "console-button-secondary"}`}
-                onClick={() => setOpenMenu((current) => current === "profile" ? "" : "profile")}
-              >
-                <UserIcon/>
-                <span className="sr-only">{"Doctor Profile"}</span>
-              </button>
-            </NavTooltip>
-            <div
-              className={`absolute right-0 top-full z-40 mt-2 w-48 rounded-[16px] border border-[var(--border-primary)] bg-[var(--surface-2)] p-2 ${openMenu === "profile" ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}>
-              <div className="space-y-1">
-                <NavLink
-                  className="block rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
-                  to="/profile"
-                  onClick={() => setOpenMenu("")}
-                >
-                  {"Profile"}
-                </NavLink>
-                <button
-                  className="block w-full rounded-xl px-4 py-2 text-left text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
-                  onClick={handleLogout}
-                >
-                  {"Logout"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <NavTooltip label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={theme === "light"}
-              aria-label="Toggle theme"
-              className={`theme-switch ${theme === "light" ? "theme-switch-light" : "theme-switch-dark"}`}
-              onClick={toggleTheme}
-            >
-              <span className={`theme-switch-knob ${theme === "light" ? "theme-switch-knob-light" : ""}`}/>
-              <span className="sr-only">{theme === "dark" ? "Dark mode enabled" : "Light mode enabled"}</span>
-            </button>
-          </NavTooltip>
-        </nav>
-      </div>
-    </header>
+export function AppNavigationFooter() {
+  return (
+    <SpaceBetween size="xs">
+      <Box color="text-body-secondary" fontSize="body-s">Clinical dashboard</Box>
+      <StatusIndicator type="success">System connected</StatusIndicator>
+      <Button variant="inline-link" href="/alerts">View all alerts</Button>
+    </SpaceBetween>
   )
 }
