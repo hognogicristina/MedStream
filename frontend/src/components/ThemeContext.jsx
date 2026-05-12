@@ -1,4 +1,5 @@
 import {createContext, useContext, useEffect, useMemo, useState} from "react"
+import {applyMode, Mode} from "@cloudscape-design/global-styles"
 
 const THEME_STORAGE_KEY = "medstream-theme"
 const DEFAULT_THEME = "light"
@@ -24,6 +25,7 @@ export function ThemeProvider({children}) {
     document.documentElement.setAttribute("data-theme", normalizedTheme)
     document.documentElement.classList.toggle("theme-light", normalizedTheme === "light")
     document.documentElement.classList.toggle("theme-dark", normalizedTheme === "dark")
+    applyMode(normalizedTheme === "light" ? Mode.Light : Mode.Dark)
     window.localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme)
 
     const metaTheme = document.querySelector('meta[name="theme-color"]')

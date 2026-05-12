@@ -1,7 +1,6 @@
 import {Outlet, useLocation} from "react-router-dom"
 import {useCallback, useEffect, useMemo, useState} from "react"
-import AppLayout from "@cloudscape-design/components/app-layout"
-import {AppSideNavigation, AppTopNavigation} from "./Navbar.jsx"
+import {AppIconRail, AppSideNavigation, AppTopNavigation} from "./Navbar.jsx"
 import {useAuth} from "./AuthContext.jsx"
 import {resendVerificationEmail} from "../services/authApi.js"
 import {getCurrentDoctor} from "../services/doctorApi.js"
@@ -37,7 +36,8 @@ export default function AuthenticatedLayout() {
           return
         }
         setDoctor(getResponseData(response))
-      } catch {
+      } catch (error) {
+        void error
       }
     }
 
@@ -57,7 +57,8 @@ export default function AuthenticatedLayout() {
       try {
         const response = await getCurrentDoctor(authHeaders)
         setDoctor(getResponseData(response))
-      } catch {
+      } catch (error) {
+        void error
       }
     }, EMAIL_STATUS_REFRESH_MS)
 
@@ -110,15 +111,18 @@ export default function AuthenticatedLayout() {
       <div id="top-nav">
         <AppTopNavigation/>
       </div>
-      <AppLayout
-      navigationOpen={navigationOpen}
-      onNavigationChange={({detail}) => setNavigationOpen(detail.open)}
-      navigation={<AppSideNavigation/>}
-      toolsHide
-      content={<Outlet/>}
-      disableContentPaddings
-      notifications={null}
-      />
+      <div className="medstream-main-frame">
+        {navigationOpen ? (
+          <aside className="medstream-sidebar">
+            <AppSideNavigation onCollapse={() => setNavigationOpen(false)}/>
+          </aside>
+        ) : (
+          <AppIconRail onOpen={() => setNavigationOpen(true)}/>
+        )}
+        <main className="medstream-content-inner">
+          <Outlet/>
+        </main>
+      </div>
     </div>
   )
 }

@@ -3,7 +3,6 @@ import {useNavigate} from "react-router-dom"
 import {
   Badge,
   Box,
-  BreadcrumbGroup,
   Button,
   ColumnLayout,
   Container,
@@ -22,7 +21,7 @@ import {createWebSocket} from "../services/ws.js"
 import VitalsChart from "../components/VitalsChart.jsx"
 import {formatPatientFullName} from "../utils/patients.js"
 
-const MAX_PREVIEW_ALERTS = 7
+const MAX_PREVIEW_ALERTS = 4
 const MAX_ALERTS = 60
 const isCriticalHighAlert = (alert) => alert?.severity === "critical" || alert?.severity === "high"
 
@@ -210,6 +209,16 @@ export default function DashboardPage() {
   const averageHeartRate = recentVitals.length
     ? (recentVitals.reduce((sum, vital) => sum + vital.heart_rate, 0) / recentVitals.length).toFixed(1)
     : "--"
+  const recentOxygenAverage = recentVitals.length
+    ? (recentVitals.reduce((sum, vital) => sum + vital.oxygen_saturation, 0) / recentVitals.length).toFixed(1)
+    : "--"
+  const recentTemperatureAverage = recentVitals.length
+    ? (recentVitals.reduce((sum, vital) => sum + vital.temperature, 0) / recentVitals.length).toFixed(1)
+    : "--"
+  const heartRateDelta = recentVitals.length >= 2 ? recentVitals[0].heart_rate - recentVitals[recentVitals.length - 1].heart_rate : 0
+  const oxygenDelta = recentVitals.length >= 2 ? recentVitals[0].oxygen_saturation - recentVitals[recentVitals.length - 1].oxygen_saturation : 0
+  const temperatureDelta = recentVitals.length >= 2 ? recentVitals[0].temperature - recentVitals[recentVitals.length - 1].temperature : 0
+  const formatDelta = (value) => value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1)
 
   const patientStatusById = useMemo(() => {
     const map = new Map()
@@ -234,25 +243,13 @@ export default function DashboardPage() {
   })
 
   return (
-    <ContentLayout
-      header={
-        <SpaceBetween size="xs">
-          <BreadcrumbGroup
-            items={[
-              {text: "Dashboard", href: "/dashboard"},
-            ]}
-            onFollow={(event) => {
-              event.preventDefault()
-              navigate(event.detail.href)
-            }}
-          />
-          <Header variant="h1" description="Real-time patient monitoring and batch analytics overview">
-            MedStream Dashboard
-          </Header>
-        </SpaceBetween>
-      }
-    >
+    <ContentLayout>
       <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <h1 className="medstream-page-title">MedStream Dashboard</h1>
+          <p>Real-time patient monitoring and batch analytics overview</p>
+        </div>
+
         <Container>
           <ColumnLayout columns={3} variant="text-grid">
             <SpaceBetween size="xs">
@@ -270,47 +267,80 @@ export default function DashboardPage() {
           </ColumnLayout>
         </Container>
 
-        <ColumnLayout columns={2}>
-          <Container
-            header={<Header variant="h2">Live patient monitoring</Header>}
-          >
-            {isLoadingDashboard ? (
-              <Box color="text-body-secondary">Loading dashboard data...</Box>
-            ) : vitals.length === 0 ? (
-              <Box color="text-body-secondary">Waiting for live vitals stream.</Box>
-            ) : (
-              <VitalsChart data={chartData}/>
-            )}
-          </Container>
+        <div className="medstream-dashboard-split">
+          <div className="medstream-stretch-container">
+            <Container
+              header={<Header variant="h2">Live patient monitoring</Header>}
+            >
+              <SpaceBetween size="m">
+                {isLoadingDashboard ? (
+                  <Box color="text-body-secondary">Loading dashboard data...</Box>
+                ) : vitals.length === 0 ? (
+                  <Box color="text-body-secondary">Waiting for live vitals stream.</Box>
+                ) : (
+                  <VitalsChart data={chartData}/>
+                )}
+                <div className="medstream-vitals-insights">
+                  <ColumnLayout columns={4} variant="text-grid">
+                    <SpaceBetween size="xxs">
+                      <Box color="text-body-secondary" variant="awsui-key-label">HR trend</Box>
+                      <Box variant="h3">{averageHeartRate}</Box>
+                      <Box color="text-body-secondary" variant="small">{formatDelta(heartRateDelta)} over last {recentVitals.length || 0} samples</Box>
+                    </SpaceBetween>
+                    <SpaceBetween size="xxs">
+                      <Box color="text-body-secondary" variant="awsui-key-label">O2 trend</Box>
+                      <Box variant="h3">{recentOxygenAverage}</Box>
+                      <Box color="text-body-secondary" variant="small">{formatDelta(oxygenDelta)} over last {recentVitals.length || 0} samples</Box>
+                    </SpaceBetween>
+                    <SpaceBetween size="xxs">
+                      <Box color="text-body-secondary" variant="awsui-key-label">Temp trend</Box>
+                      <Box variant="h3">{recentTemperatureAverage}</Box>
+                      <Box color="text-body-secondary" variant="small">{formatDelta(temperatureDelta)} over last {recentVitals.length || 0} samples</Box>
+                    </SpaceBetween>
+                    <SpaceBetween size="xxs">
+                      <Box color="text-body-secondary" variant="awsui-key-label">Latest BP</Box>
+                      <Box variant="h3">{latestVital ? `${latestVital.systolic_bp}/${latestVital.diastolic_bp}` : "--"}</Box>
+                      <Box color="text-body-secondary" variant="small">
+                        {latestVital ? `Recorded at ${latestVital.time}` : "Waiting for samples"}
+                      </Box>
+                    </SpaceBetween>
+                  </ColumnLayout>
+                </div>
+              </SpaceBetween>
+            </Container>
+          </div>
 
-          <Container
-            header={<Header variant="h2" actions={<Button onClick={() => navigate("/alerts")}>View all</Button>}>Latest alerts</Header>}
-          >
-            <SpaceBetween size="xs">
-              {previewAlerts === null && <Box color="text-body-secondary">Loading alerts...</Box>}
-              {previewAlerts !== null && limitedVisiblePreviewAlerts.length === 0 && (
-                <Box color="text-body-secondary">No critical or high alerts at the moment.</Box>
-              )}
-              {previewAlerts !== null && limitedVisiblePreviewAlerts.map((alert) => (
-                <Container key={alert.id} fitHeight>
-                  <SpaceBetween size="xxs">
-                    <Box variant="small">
-                      <StatusIndicator type={getSeverityType(alert.severity)}>
-                        {alert.severity === "critical" ? "Critical" : "Warning"}
-                      </StatusIndicator>
-                    </Box>
-                    <Box variant="small">{patientNameById[alert.patient_id] || `Patient #${alert.patient_id}`}</Box>
-                    <Box color="text-body-secondary" variant="small">{alert.message}</Box>
-                    <Box color="text-body-secondary" variant="small">{new Date(alert.created_at || Date.now()).toLocaleString()}</Box>
-                  </SpaceBetween>
-                </Container>
-              ))}
-            </SpaceBetween>
-          </Container>
-        </ColumnLayout>
+          <div className="medstream-stretch-container">
+            <Container
+              header={<Header variant="h2" actions={<Button onClick={() => navigate("/alerts")}>View all</Button>}>Latest alerts</Header>}
+            >
+              <SpaceBetween size="xs">
+                {previewAlerts === null && <Box color="text-body-secondary">Loading alerts...</Box>}
+                {previewAlerts !== null && limitedVisiblePreviewAlerts.length === 0 && (
+                  <Box color="text-body-secondary">No critical or high alerts at the moment.</Box>
+                )}
+                {previewAlerts !== null && limitedVisiblePreviewAlerts.map((alert) => (
+                  <Container key={alert.id} fitHeight>
+                    <SpaceBetween size="xxs">
+                      <Box variant="small">
+                        <StatusIndicator type={getSeverityType(alert.severity)}>
+                          {alert.severity === "critical" ? "Critical" : "Warning"}
+                        </StatusIndicator>
+                      </Box>
+                      <Box variant="small">{patientNameById[alert.patient_id] || `Patient #${alert.patient_id}`}</Box>
+                      <Box color="text-body-secondary" variant="small">{alert.message}</Box>
+                      <Box color="text-body-secondary" variant="small">{new Date(alert.created_at || Date.now()).toLocaleString()}</Box>
+                    </SpaceBetween>
+                  </Container>
+                ))}
+              </SpaceBetween>
+            </Container>
+          </div>
+        </div>
 
         <Container header={<Header variant="h2">Patients</Header>}>
           <Table
+            variant="borderless"
             items={patientRows}
             trackBy="id"
             loading={isLoadingDashboard}
@@ -393,18 +423,13 @@ export default function DashboardPage() {
                     <Box variant="h3">How it works</Box>
                     <Box color="text-body-secondary">Patient vitals are ingested in real time for immediate alerting, then reprocessed in batch for broader analytics and validation.</Box>
                     <Badge color="blue">Total alerts tracked: <CountValue value={totalAlerts}/></Badge>
+                    <Button onClick={() => navigate("/how-it-works")}>Open how it works</Button>
                   </SpaceBetween>
                 ),
               },
             ]}
           />
         </Container>
-
-        {latestVital && (
-          <Box color="text-body-secondary" variant="small">
-            Latest live sample: HR {latestVital.heart_rate}, O2 {latestVital.oxygen_saturation}, Temp {latestVital.temperature}
-          </Box>
-        )}
       </SpaceBetween>
     </ContentLayout>
   )

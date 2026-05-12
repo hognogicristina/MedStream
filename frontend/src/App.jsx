@@ -12,6 +12,7 @@ import BatchMetricsPage from "./pages/BatchMetricsPage.jsx"
 import DepartmentPage from "./pages/DepartmentPage.jsx"
 import DashboardPage from "./pages/DashboardPage.jsx"
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx"
+import HowItWorksPage from "./pages/HowItWorksPage.jsx"
 import LoginPage from "./pages/LoginPage.jsx"
 import PatientPage from "./pages/PatientPage.jsx"
 import PatientDiagnosisPage from "./pages/PatientDiagnosisPage.jsx"
@@ -83,6 +84,9 @@ function resolveStaticTitle(pathname) {
   if (pathname === "/metrics/comparison") {
     return "Streaming vs Batch"
   }
+  if (pathname === "/how-it-works") {
+    return "How it works"
+  }
   if (pathname === "/login") {
     return "Login"
   }
@@ -151,7 +155,8 @@ function useDocumentTitle() {
         }
         const patientName = formatPatientFullName(getResponseData(response))
         document.title = sectionTitle ? `Patient: ${patientName} - ${sectionTitle}` : `Patient: ${patientName}`
-      } catch {
+      } catch (error) {
+        void error
       }
     }
 
@@ -249,6 +254,7 @@ function App() {
           <Route path="/metrics/streaming" element={<StreamingMetricsPage/>}/>
           <Route path="/metrics/batch" element={<BatchMetricsPage/>}/>
           <Route path="/metrics/comparison" element={<StreamingBatchPage/>}/>
+          <Route path="/how-it-works" element={<HowItWorksPage/>}/>
           <Route path="/patients/new" element={<AddPatientPage/>}/>
           <Route path="/profile" element={<ProfilePage/>}/>
         </Route>

@@ -75,6 +75,223 @@ body {
   min-height: 100vh;
 }
 
+.medstream-shell {
+  min-height: 100vh;
+  background: var(--app-bg);
+}
+
+.medstream-main-frame {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  min-height: calc(100vh - 56px);
+  padding: 0;
+}
+
+.medstream-sidebar {
+  position: sticky;
+  top: 0;
+  width: 280px;
+  flex: 0 0 280px;
+  align-self: stretch;
+  min-height: calc(100vh - 56px);
+}
+
+.medstream-sidebar-panel {
+  background: var(--surface-1);
+  border-right: 1px solid var(--border-primary);
+  height: 100%;
+  min-height: calc(100vh - 56px);
+  padding: 16px 16px 24px;
+}
+
+.medstream-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.medstream-sidebar-title {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.medstream-content-inner {
+  flex: 1;
+  min-width: 0;
+  padding: 16px 24px 32px 0;
+}
+
+.medstream-icon-rail {
+  position: sticky;
+  top: 72px;
+  width: 48px;
+  flex: 0 0 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border-primary);
+  background: var(--surface-1);
+  border-radius: 8px;
+  padding: 8px 4px;
+}
+
+#top-nav {
+  min-width: 0;
+}
+
+#top-nav [class*="identity"] {
+  min-width: 220px;
+  flex: 0 0 auto;
+}
+
+#top-nav [class*="title"] {
+  max-width: none;
+}
+
+#top-nav [class*="title"],
+#top-nav [class*="identity"] span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.medstream-content-inner [class*="header-wrapper"],
+.medstream-content-inner [class*="background"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+.medstream-content-inner .awsui_background_5gtk3_16ebe_159 {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+.medstream-page-header {
+  background: none;
+  background-color: transparent;
+  padding: 0;
+}
+
+.medstream-page-title {
+  margin: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: var(--text-primary);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.medstream-page-header p {
+  margin: 4px 0 0;
+  background: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.medstream-content-inner [class*="awsui_layout"],
+.medstream-content-inner [class*="awsui_content"] {
+  background-color: transparent;
+}
+
+.medstream-how-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.medstream-how-list li + li {
+  margin-top: 6px;
+}
+
+.medstream-how-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.medstream-how-card,
+.medstream-how-card-wide {
+  display: flex;
+  min-width: 0;
+  min-height: 210px;
+}
+
+.medstream-how-card > div,
+.medstream-how-card-wide > div {
+  flex: 1;
+  width: 100%;
+}
+
+.medstream-how-card-wide {
+  grid-column: 1 / -1;
+  min-height: 170px;
+}
+
+.medstream-dashboard-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.92fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.medstream-stretch-container {
+  display: flex;
+  min-width: 0;
+}
+
+.medstream-stretch-container > div {
+  flex: 1;
+  width: 100%;
+}
+
+.medstream-vitals-insights {
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .medstream-main-frame {
+    gap: 12px;
+  }
+
+  .medstream-content-inner {
+    padding: 12px 12px 24px 0;
+  }
+
+  .medstream-sidebar {
+    position: static;
+    width: 240px;
+    flex-basis: 240px;
+  }
+
+  .medstream-dashboard-split {
+    grid-template-columns: 1fr;
+  }
+
+  .medstream-how-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .medstream-how-card-wide {
+    grid-column: auto;
+  }
+}
+
 a,
 button,
 input,
