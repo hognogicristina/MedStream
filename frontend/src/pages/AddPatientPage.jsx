@@ -6,6 +6,7 @@ import {
   Container,
   ContentLayout,
   Header,
+  Select,
   SpaceBetween,
   StatusIndicator,
 } from "@cloudscape-design/components"
@@ -21,6 +22,23 @@ import {buildEmptyPatientAddress, normalizePatientAddress} from "../utils/patien
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 
 const TOTAL_STEPS = 2
+const GENDER_OPTIONS = [
+  {label: "Male", value: "male"},
+  {label: "Female", value: "female"},
+  {label: "Other", value: "other"},
+]
+const PREGNANT_OPTIONS = [
+  {label: "No", value: "false"},
+  {label: "Yes", value: "true"},
+]
+const ARRIVAL_METHOD_OPTIONS = [
+  {label: "Self", value: "self"},
+  {label: "Ambulance", value: "ambulance"},
+]
+
+function getSelectedOption(options, value) {
+  return options.find((option) => option.value === value) || null
+}
 
 export default function AddPatientPage() {
   const navigate = useNavigate()
@@ -83,6 +101,8 @@ export default function AddPatientPage() {
 
   const countyOptions = getCountyOptions()
   const cityOptions = getCityOptions(address.county)
+  const countySelectOptions = countyOptions.map((county) => ({label: county.name, value: county.name}))
+  const citySelectOptions = cityOptions.map((city) => ({label: city, value: city}))
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -194,12 +214,13 @@ export default function AddPatientPage() {
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-gender">{"Gender"}</label>
-                    <select id="patient-gender" name="gender" value={form.gender} onChange={handleChange} className="login-input" required>
-                      <option value="">{"Gender"}</option>
-                      <option value="male">{"Male"}</option>
-                      <option value="female">{"Female"}</option>
-                      <option value="other">{"Other"}</option>
-                    </select>
+                    <Select
+                      selectedOption={getSelectedOption(GENDER_OPTIONS, form.gender)}
+                      onChange={({detail}) => handleChange({target: {name: "gender", value: detail.selectedOption.value}})}
+                      options={GENDER_OPTIONS}
+                      placeholder="Gender"
+                      selectedAriaLabel="Selected gender"
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-birth-date">{"Birth Date"}</label>
@@ -219,32 +240,22 @@ export default function AddPatientPage() {
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-pregnant">{"Pregnant"}</label>
-                    <select
-                      id="patient-pregnant"
-                      name="is_pregnant"
-                      value={String(form.is_pregnant)}
-                      onChange={handleChange}
-                      className="login-input"
+                    <Select
+                      selectedOption={getSelectedOption(PREGNANT_OPTIONS, String(form.is_pregnant))}
+                      onChange={({detail}) => handleChange({target: {name: "is_pregnant", value: detail.selectedOption.value}})}
+                      options={PREGNANT_OPTIONS}
+                      selectedAriaLabel="Selected pregnancy status"
                       disabled={!form.gender || form.gender === "male"}
-                      required
-                    >
-                      <option value="false">{"No"}</option>
-                      <option value="true">{"Yes"}</option>
-                    </select>
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-arrival-method">{"Arrival Method"}</label>
-                    <select
-                      id="patient-arrival-method"
-                      name="arrival_method"
-                      value={form.arrival_method}
-                      onChange={handleChange}
-                      className="login-input"
-                      required
-                    >
-                      <option value="self">{"Self"}</option>
-                      <option value="ambulance">{"Ambulance"}</option>
-                    </select>
+                    <Select
+                      selectedOption={getSelectedOption(ARRIVAL_METHOD_OPTIONS, form.arrival_method)}
+                      onChange={({detail}) => handleChange({target: {name: "arrival_method", value: detail.selectedOption.value}})}
+                      options={ARRIVAL_METHOD_OPTIONS}
+                      selectedAriaLabel="Selected arrival method"
+                    />
                   </div>
                 </div>
               </SpaceBetween>
@@ -271,27 +282,25 @@ export default function AddPatientPage() {
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-county">{"County"}</label>
-                    <select id="add-county" name="county" value={address.county} onChange={handleAddressChange} className="login-input"
-                            required disabled={countyOptions.length === 0}>
-                      <option value="">{"Select county"}</option>
-                      {countyOptions.map((county) => (
-                        <option key={county.name} value={county.name}>
-                          {county.name}
-                        </option>
-                      ))}
-                    </select>
+                    <Select
+                      selectedOption={getSelectedOption(countySelectOptions, address.county)}
+                      onChange={({detail}) => handleAddressChange({target: {name: "county", value: detail.selectedOption.value}})}
+                      options={countySelectOptions}
+                      placeholder="Select county"
+                      selectedAriaLabel="Selected county"
+                      disabled={countyOptions.length === 0}
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-city">{"City"}</label>
-                    <select id="add-city" name="city" value={address.city} onChange={handleAddressChange} className="login-input" required
-                            disabled={cityOptions.length === 0}>
-                      <option value="">{cityOptions.length === 0 ? ("Select county first") : ("Select city")}</option>
-                      {cityOptions.map((city) => (
-                        <option key={city} value={city}>
-                          {city}
-                        </option>
-                      ))}
-                    </select>
+                    <Select
+                      selectedOption={getSelectedOption(citySelectOptions, address.city)}
+                      onChange={({detail}) => handleAddressChange({target: {name: "city", value: detail.selectedOption.value}})}
+                      options={citySelectOptions}
+                      placeholder={cityOptions.length === 0 ? "Select county first" : "Select city"}
+                      selectedAriaLabel="Selected city"
+                      disabled={cityOptions.length === 0}
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-postal-code">{"Postal Code"}</label>
@@ -316,13 +325,13 @@ export default function AddPatientPage() {
                 {step > 1 ? (
                   <Button formAction="none" onClick={() => setStep(1)} disabled={isSubmitting}>Previous</Button>
                 ) : (
-                  <Button formAction="none" onClick={() => navigate("/dashboard")}>Cancel</Button>
+                  <Button formAction="none" className="medstream-cancel-button" onClick={() => navigate("/dashboard")}>Cancel</Button>
                 )}
 
                 {step < TOTAL_STEPS ? (
-                  <Button formAction="none" variant="primary" onClick={() => setStep(2)} disabled={!isStepOneValid || isSubmitting}>Next</Button>
+                  <Button formAction="none" variant="primary" className="medstream-submit-button" onClick={() => setStep(2)} disabled={!isStepOneValid || isSubmitting}>Next</Button>
                 ) : (
-                  <Button formAction="submit" variant="primary" disabled={!isStepTwoValid || isSubmitting}>
+                  <Button formAction="submit" variant="primary" className="medstream-submit-button" disabled={!isStepTwoValid || isSubmitting}>
                     {isSubmitting ? "Creating patient..." : "Create patient"}
                   </Button>
                 )}

@@ -1,3 +1,9 @@
+import {Button, Select} from "@cloudscape-design/components"
+
+function getSelectedOption(options, value) {
+  return options.find((option) => option.value === value) || null
+}
+
 export default function PatientAdmissionActionCard({
                                                      patient,
                                                      canManagePatient = true,
@@ -15,6 +21,11 @@ export default function PatientAdmissionActionCard({
                                                    }) {
   const canSubmitDischarge = canManagePatient && dischargeReason.trim().length > 0 && Boolean(dischargeType) && !patient?.is_discharged
   const canSubmitReadmit = canManagePatient && Boolean(readmitArrivalMethod) && Boolean(patient?.is_discharged)
+  const arrivalMethodOptions = [
+    {label: "Self", value: "self"},
+    {label: "Ambulance", value: "ambulance"},
+  ]
+  const dischargeTypeOptions = dischargeTypes.map((type) => ({label: type, value: type}))
 
   return (
     <section className="monitor-card rounded-[28px] p-6">
@@ -31,46 +42,38 @@ export default function PatientAdmissionActionCard({
         <form className="space-y-4" onSubmit={onReadmitSubmit}>
           <div className="login-field">
             <label className="login-label" htmlFor="readmit-arrival-method">Arrival Method</label>
-            <select
-              id="readmit-arrival-method"
-              value={readmitArrivalMethod}
-              onChange={(event) => onReadmitArrivalMethodChange(event.target.value)}
-              className="login-input"
-              required
+            <Select
+              selectedOption={getSelectedOption(arrivalMethodOptions, readmitArrivalMethod)}
+              onChange={({detail}) => onReadmitArrivalMethodChange(detail.selectedOption.value)}
+              options={arrivalMethodOptions}
+              selectedAriaLabel="Selected arrival method"
               disabled={!canManagePatient || isSubmittingReadmit}
-            >
-              <option value="self">Self</option>
-              <option value="ambulance">Ambulance</option>
-            </select>
+            />
           </div>
           <p className="text-xs text-[var(--text-muted)]">
             Admission note is generated automatically from arrival method.
           </p>
-          <button
-            type="submit"
+          <Button
+            formAction="submit"
+            variant="primary"
+            className="medstream-submit-button"
             disabled={!canSubmitReadmit || isSubmittingReadmit}
-            className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
           >
             {isSubmittingReadmit ? "Submitting..." : "Readmit Patient"}
-          </button>
+          </Button>
         </form>
       ) : (
         <form className="space-y-4" onSubmit={onDischargeSubmit}>
           <div className="login-field">
             <label className="login-label" htmlFor="discharge-type">Type</label>
-            <select
-              id="discharge-type"
-              value={dischargeType}
-              onChange={(event) => onDischargeTypeChange(event.target.value)}
-              className="login-input"
+            <Select
+              selectedOption={getSelectedOption(dischargeTypeOptions, dischargeType)}
+              onChange={({detail}) => onDischargeTypeChange(detail.selectedOption.value)}
+              options={dischargeTypeOptions}
+              placeholder="Select type"
+              selectedAriaLabel="Selected discharge type"
               disabled={!canManagePatient || isSubmittingDischarge}
-              required
-            >
-              <option value="">Select type</option>
-              {dischargeTypes.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
+            />
           </div>
           <textarea
             value={dischargeReason}
@@ -81,13 +84,14 @@ export default function PatientAdmissionActionCard({
             required
           />
 
-          <button
-            type="submit"
+          <Button
+            formAction="submit"
+            variant="primary"
+            className="medstream-submit-button"
             disabled={!canSubmitDischarge || isSubmittingDischarge}
-            className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
           >
             {isSubmittingDischarge ? "Submitting..." : "Discharge Patient"}
-          </button>
+          </Button>
         </form>
       )}
     </section>

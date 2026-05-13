@@ -26,16 +26,19 @@ MedStream is a hospital operations platform for patient workflows, live vitals m
 
 ## 5. Setup Instructions
 ### Prerequisites
-- Python 3.11+
-- Node.js 18+
 - Docker
 
-### Infrastructure
+### Run Everything With Docker
 ```bash
-docker compose up -d
+docker compose up --build
 ```
 
-### Backend
+This starts the frontend, backend, PostgreSQL, pgAdmin, Kafka, and Kafka UI together.
+
+### Optional: Run Services Manually
+If you prefer running the app outside Docker, use Python 3.11+ and Node.js 18+.
+
+#### Backend
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -43,7 +46,7 @@ pip install -r backend/requirements.txt
 uvicorn backend.app.main:app --reload
 ```
 
-### Frontend
+#### Frontend
 ```bash
 cd frontend
 npm install

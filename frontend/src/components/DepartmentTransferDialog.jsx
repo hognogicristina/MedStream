@@ -107,17 +107,17 @@ export default function DepartmentTransferDialog({
       footer={
         <Box float="right">
           <SpaceBetween direction="horizontal" size="xs">
-            <Button onClick={onClose} disabled={isSubmitting}>
+            <Button className="medstream-cancel-button" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              className="medstream-submit-button"
               onClick={handleSubmit}
               disabled={!canSubmit}
-              className="console-button-primary rounded-lg px-4 py-[9px] text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
             >
               {isSubmitting ? "Transferring..." : "Confirm Transfer"}
-            </button>
+            </Button>
           </SpaceBetween>
         </Box>
       }

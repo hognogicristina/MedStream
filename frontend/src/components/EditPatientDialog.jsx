@@ -175,32 +175,32 @@ export default function EditPatientDialog({
                 Previous
               </Button>
             ) : (
-              <Button onClick={onClose} disabled={isSubmitting}>
+              <Button className="medstream-cancel-button" onClick={onClose} disabled={isSubmitting}>
                 Cancel
               </Button>
             )}
 
             {step < TOTAL_STEPS ? (
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                className="medstream-submit-button"
                 onClick={handleNext}
                 disabled={!isStepOneValid}
-                className="console-button-primary rounded-lg px-4 py-[9px] text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
               >
                 Next
-              </button>
+              </Button>
             ) : (
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                className="medstream-submit-button"
                 onClick={() => {
                   if (!canSubmit || !isStepTwoValid) return
                   onSubmit(normalizedCurrentValues)
                 }}
                 disabled={!canSubmit || !isStepTwoValid}
-                className="console-button-primary rounded-lg px-4 py-[9px] text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
               >
                 {isSubmitting ? "Saving..." : "Save Changes"}
-              </button>
+              </Button>
             )}
           </SpaceBetween>
         </Box>

@@ -911,21 +911,21 @@ export default function PatientMedicalHistoryPage() {
             footer={
               <Box float="right">
                 <SpaceBetween direction="horizontal" size="xs">
-                  <Button onClick={handleCancelDialog} disabled={isSubmitting}>
+                  <Button className="medstream-cancel-button" onClick={handleCancelDialog} disabled={isSubmitting}>
                     Cancel
                   </Button>
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    className="medstream-submit-button"
                     onClick={() => {
                       if (canSubmitDialog) {
                         handleSubmit(showDialog)
                       }
                     }}
                     disabled={!canSubmitDialog}
-                    className="console-button-primary rounded-lg px-4 py-[9px] text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                   >
                     {isSubmitting ? "Saving..." : isEditDialog ? "Save Changes" : "Add Record"}
-                  </button>
+                  </Button>
                 </SpaceBetween>
               </Box>
             }

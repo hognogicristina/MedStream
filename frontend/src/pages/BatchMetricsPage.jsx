@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from "react"
-import {Pagination} from "@cloudscape-design/components"
+import {Pagination, Select} from "@cloudscape-design/components"
 import {Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {
   getBatchInsights,
@@ -23,6 +23,17 @@ const STATUS_POLL_INTERVAL_MS = 2500
 const PAGE_SIZE = 5
 const AGGREGATION_WINDOW_MINUTES = 60
 const WEEKDAY_OPTIONS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
+const SCHEDULE_TYPE_OPTIONS = [
+  {label: "Every X seconds", value: "seconds"},
+  {label: "Every X minutes", value: "minutes"},
+  {label: "Every X hours", value: "hours"},
+  {label: "Daily at", value: "daily"},
+  {label: "Weekly", value: "weekly"},
+]
+
+function getSelectedOption(options, value) {
+  return options.find((option) => option.value === value) || null
+}
 
 const EMPTY_METRICS = {
   avg_heart_rate: 0,
@@ -454,6 +465,7 @@ export default function BatchMetricsPage() {
   }, [medicationEffectiveness])
 
   const selectedMedicationEffectiveness = medicationEffectiveness.find((item) => item.name === selectedMedication) || null
+  const medicationSelectOptions = medicationEffectiveness.map((item) => ({label: item.name, value: item.name}))
   const medicationBarData = [
     {
       label: "Effective",
@@ -642,17 +654,14 @@ export default function BatchMetricsPage() {
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
                 <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Run Frequency</span>
-                <select
-                  className="mt-3 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
-                  value={scheduleType}
-                  onChange={(event) => setScheduleType(event.target.value)}
-                >
-                  <option value="seconds">Every X seconds</option>
-                  <option value="minutes">Every X minutes</option>
-                  <option value="hours">Every X hours</option>
-                  <option value="daily">Daily at</option>
-                  <option value="weekly">Weekly</option>
-                </select>
+                <div className="mt-3">
+                  <Select
+                    selectedOption={getSelectedOption(SCHEDULE_TYPE_OPTIONS, scheduleType)}
+                    onChange={({detail}) => setScheduleType(detail.selectedOption.value)}
+                    options={SCHEDULE_TYPE_OPTIONS}
+                    selectedAriaLabel="Selected run frequency"
+                  />
+                </div>
               </label>
 
               {(scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") ? (
@@ -943,19 +952,16 @@ export default function BatchMetricsPage() {
                 <label htmlFor="medication-select" className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
                   Select medication
                 </label>
-                <select
-                  id="medication-select"
-                  className="mt-3 w-full rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
-                  value={selectedMedication}
-                  onChange={(event) => setSelectedMedication(event.target.value)}
-                  disabled={!medicationEffectiveness.length}
-                >
-                  {medicationEffectiveness.length
-                    ? medicationEffectiveness.map((item) => (
-                      <option key={item.name} value={item.name}>{item.name}</option>
-                    ))
-                    : <option value="">No medication data available</option>}
-                </select>
+                <div className="mt-3">
+                  <Select
+                    selectedOption={getSelectedOption(medicationSelectOptions, selectedMedication)}
+                    onChange={({detail}) => setSelectedMedication(detail.selectedOption.value)}
+                    options={medicationSelectOptions}
+                    placeholder={medicationEffectiveness.length ? "Select medication" : "No medication data available"}
+                    selectedAriaLabel="Selected medication"
+                    disabled={!medicationEffectiveness.length}
+                  />
+                </div>
               </div>
 
               <div className="h-[280px] rounded-2xl border p-3" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>

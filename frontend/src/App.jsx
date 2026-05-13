@@ -1,6 +1,7 @@
 import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate} from "react-router-dom"
 import {useEffect} from "react"
 import AuthenticatedLayout from "./components/AuthenticatedLayout.jsx"
+import AwsInputEnhancer from "./components/AwsInputEnhancer.jsx"
 import {useAuth} from "./components/AuthContext.jsx"
 import ProtectedRoute from "./components/ProtectedRoute.jsx"
 import PublicOnlyRoute from "./components/PublicOnlyRoute.jsx"
@@ -12,7 +13,6 @@ import BatchMetricsPage from "./pages/BatchMetricsPage.jsx"
 import DepartmentPage from "./pages/DepartmentPage.jsx"
 import DashboardPage from "./pages/DashboardPage.jsx"
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx"
-import HomePage from "./pages/HomePage.jsx"
 import HowItWorksPage from "./pages/HowItWorksPage.jsx"
 import LoginPage from "./pages/LoginPage.jsx"
 import PatientPage from "./pages/PatientPage.jsx"
@@ -178,9 +178,10 @@ function App() {
   return (
     <BrowserRouter>
       <TitleManager/>
+      <AwsInputEnhancer/>
       <ApiAuthBridge/>
       <Routes>
-        <Route path="/" element={<HomePage/>}/>
+        <Route path="/" element={<RootRoute/>}/>
 
         <Route
           path="/login"

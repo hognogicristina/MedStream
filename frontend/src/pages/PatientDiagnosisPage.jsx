@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useState} from "react"
 import {useParams} from "react-router-dom"
-import {Pagination} from "@cloudscape-design/components"
+import {Button, Pagination} from "@cloudscape-design/components"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
@@ -145,13 +145,14 @@ export default function PatientDiagnosisPage() {
                   className="console-input min-h-28 w-full rounded-2xl px-4 py-3 outline-none"
                 />
 
-                <button
-                  type="submit"
+                <Button
+                  formAction="submit"
+                  variant="primary"
+                  className="medstream-submit-button"
                   disabled={!form.diagnosis.trim() || isSubmitting}
-                  className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                 >
                   {isSubmitting ? "Saving..." : "Add Diagnosis"}
-                </button>
+                </Button>
               </form>
             </div>
 

@@ -1,5 +1,9 @@
 import {useCallback, useEffect, useState} from "react"
-import {Pagination} from "@cloudscape-design/components"
+import {Pagination, Select} from "@cloudscape-design/components"
+
+function getSelectedOption(options, value) {
+  return options.find((option) => String(option.value) === String(value)) || null
+}
 
 export default function DataTable({
                                     items,
@@ -92,22 +96,18 @@ export default function DataTable({
                 className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[var(--text-subtle)]"
               />
             ) : (
-              <select
-                id={filter.id}
-                value={filterValues[filter.id] ?? filter.defaultValue ?? "all"}
-                onChange={(event) => {
-                  setFilterValues((current) => ({...current, [filter.id]: event.target.value}))
-                  filter.onChange?.(event.target.value)
+              <Select
+                selectedOption={getSelectedOption(filter.options, filterValues[filter.id] ?? filter.defaultValue ?? "all")}
+                onChange={({detail}) => {
+                  const value = detail.selectedOption.value
+                  setFilterValues((current) => ({...current, [filter.id]: value}))
+                  filter.onChange?.(value)
                 }}
+                options={filter.options}
+                placeholder={filter.placeholder}
                 disabled={filter.disabled}
-                className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[var(--text-subtle)]"
-              >
-                {filter.options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                selectedAriaLabel={`Selected ${filter.label}`}
+              />
             )}
           </div>
         ))}
@@ -117,18 +117,12 @@ export default function DataTable({
             <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]" htmlFor="dataTableSort">
               Sort Order
             </label>
-            <select
-              id="dataTableSort"
-              value={sortOrder}
-              onChange={(event) => setSortOrder(event.target.value)}
-              className="console-input w-full rounded-2xl px-4 py-3 outline-none"
-            >
-              {sortOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <Select
+              selectedOption={getSelectedOption(sortOptions, sortOrder)}
+              onChange={({detail}) => setSortOrder(detail.selectedOption.value)}
+              options={sortOptions}
+              selectedAriaLabel="Selected sort order"
+            />
           </div>
         )}
 
@@ -136,18 +130,12 @@ export default function DataTable({
           <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]" htmlFor="dataTablePageSize">
             Page Size
           </label>
-          <select
-            id="dataTablePageSize"
-            value={activePageSize}
-            onChange={(event) => setActivePageSize(Number(event.target.value))}
-            className="console-input w-full rounded-2xl px-4 py-3 outline-none"
-          >
-            {pageSizeOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          <Select
+            selectedOption={getSelectedOption(pageSizeOptions.map((option) => ({label: String(option), value: String(option)})), activePageSize)}
+            onChange={({detail}) => setActivePageSize(Number(detail.selectedOption.value))}
+            options={pageSizeOptions.map((option) => ({label: String(option), value: String(option)}))}
+            selectedAriaLabel="Selected page size"
+          />
         </div>
       </div>
 

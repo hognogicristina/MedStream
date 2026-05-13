@@ -10,6 +10,7 @@ import {
   ContentLayout,
   Header,
   Pagination,
+  Select,
   SpaceBetween,
   StatusIndicator,
 } from "@cloudscape-design/components"
@@ -55,6 +56,10 @@ const buildDoctorProfileForm = (doctor) => ({
   license_number: doctor?.license_number || "",
   birth_date: doctor?.birth_date || "",
 })
+
+function getSelectedOption(options, value) {
+  return options.find((option) => String(option.value) === String(value)) || null
+}
 
 function normalizeActivity(activity, patientOptions = [], doctorOptions = []) {
   const patientIds = Array.isArray(activity.patient_ids) ? activity.patient_ids : []
@@ -262,17 +267,16 @@ export default function ProfilePage() {
   const [selectedActivity, setSelectedActivity] = useState(null)
   const [activityPendingCancellation, setActivityPendingCancellation] = useState(null)
   const [activityPage, setActivityPage] = useState(1)
-  const ACTIVITY_PAGE_SIZE = 2
+  const activityPageSize = assignedPatients.length >= 4 ? 2 : 1
   const paginatedActivities = useMemo(() => {
-    const start = (activityPage - 1) * ACTIVITY_PAGE_SIZE
-    return activities.slice(start, start + ACTIVITY_PAGE_SIZE)
-  }, [activities, activityPage])
-  const totalActivityPages = Math.ceil(activities.length / ACTIVITY_PAGE_SIZE)
+    const start = (activityPage - 1) * activityPageSize
+    return activities.slice(start, start + activityPageSize)
+  }, [activities, activityPage, activityPageSize])
+  const totalActivityPages = Math.ceil(activities.length / activityPageSize)
 
   const authHeaders = useMemo(() => ({
     Authorization: `Bearer ${token}`,
   }), [token])
-  const hasAssignedPatients = assignedPatients.length > 0
   const hasIncomingActivities = activities.some((activity) => activity.status === "incoming")
   const isOnlyDoctorInDepartment = Boolean(
     doctor
@@ -398,6 +402,11 @@ export default function ProfilePage() {
   )
   const activityPatients = assignedPatients.filter((patient) => patient.department === doctor?.specialization)
   const activityDoctors = allDoctors.filter((item) => item.specialization === doctor?.specialization)
+  const departmentOptions = departments.map((department) => ({label: department, value: department}))
+  const transferDoctorSelectOptions = transferDoctorOptions.map((item) => ({
+    label: `Dr. ${item.first_name} ${item.last_name}`,
+    value: String(item.id),
+  }))
   const isProfileFormValid = Boolean(
     form.first_name.trim()
     && form.last_name.trim()
@@ -752,7 +761,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     setActivityPage(1)
-  }, [activities])
+  }, [activities, activityPageSize])
 
   return (
     <>
@@ -992,13 +1001,13 @@ export default function ProfilePage() {
                         </div>
                         <div className="login-field">
                           <label className="login-label" htmlFor="specialization">Specialization</label>
-                          <select id="specialization" name="specialization" value={form.specialization} onChange={handleFormChange}
-                                  className="login-input" required disabled={hasAssignedPatients}>
-                            <option value="">Select specialization</option>
-                            {departments.map((department) => (
-                              <option key={department} value={department}>{department}</option>
-                            ))}
-                          </select>
+                          <Select
+                            selectedOption={getSelectedOption(departmentOptions, form.specialization)}
+                            onChange={({detail}) => handleFormChange({target: {name: "specialization", value: detail.selectedOption.value}})}
+                            options={departmentOptions}
+                            placeholder="Select specialization"
+                            selectedAriaLabel="Selected specialization"
+                          />
                         </div>
                         <div className="login-field">
                           <label className="login-label" htmlFor="license_number">License Number</label>
@@ -1024,10 +1033,14 @@ export default function ProfilePage() {
                       </div>
 
                       <div className="medstream-form-actions">
-                        <button type="submit" disabled={!isProfileFormValid || !isProfileDirty || isSavingProfile}
-                                className="console-button-primary rounded-lg px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
+                        <Button
+                          formAction="submit"
+                          variant="primary"
+                          className="medstream-submit-button"
+                          disabled={!isProfileFormValid || !isProfileDirty || isSavingProfile}
+                        >
                           {isSavingProfile ? "Updating..." : "Update profile"}
-                        </button>
+                        </Button>
                       </div>
                     </form>
                   </Container>
@@ -1083,13 +1096,14 @@ export default function ProfilePage() {
                       </div>
 
                       <div className="medstream-form-actions">
-                        <button
-                          type="submit"
+                        <Button
+                          formAction="submit"
+                          variant="primary"
+                          className="medstream-submit-button"
                           disabled={!selectedPatient || isAssigningPatient}
-                          className="console-button-primary w-full rounded-lg px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                         >
                           {isAssigningPatient ? "Assigning..." : "Assign patient"}
-                        </button>
+                        </Button>
                       </div>
                     </form>
                   </Container>
@@ -1141,13 +1155,14 @@ export default function ProfilePage() {
                             {isResendingVerification ? "Resending..." : "Resend email"}
                           </button>
                         )}
-                        <button
-                          type="submit"
+                        <Button
+                          formAction="submit"
+                          variant="primary"
+                          className="medstream-submit-button"
                           disabled={!isEmailDirty || isSavingEmail}
-                          className="console-button-primary rounded-lg px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                         >
                           {isSavingEmail ? "Sending confirmation..." : "Update email"}
-                        </button>
+                        </Button>
                       </div>
                     </form>
                   </Container>
@@ -1181,8 +1196,9 @@ export default function ProfilePage() {
                         </Alert>
                       )}
 
-                      <button
-                        type="button"
+                      <Button
+                        variant="primary"
+                        className="medstream-submit-button"
                         onClick={() => {
                           if (!isOnlyDoctorInDepartment && !hasIncomingActivities) {
                             setShowDeleteModal(true)
@@ -1190,10 +1206,9 @@ export default function ProfilePage() {
                         }}
                         disabled={isDeletingAccount || isOnlyDoctorInDepartment || hasIncomingActivities}
                         title={isOnlyDoctorInDepartment ? "You are the only doctor in this department. Account cannot be deleted." : ""}
-                        className="medstream-danger-button w-full rounded-lg px-4 py-3 text-sm font-semibold"
                       >
                         {isDeletingAccount ? "Deactivating..." : "Delete account"}
-                      </button>
+                      </Button>
                     </SpaceBetween>
                   </Container>
                 </div>
@@ -1227,21 +1242,20 @@ export default function ProfilePage() {
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
+                <Button
+                  className="medstream-cancel-button"
                   onClick={() => setShowDeleteModal(false)}
-                  className="console-button-secondary rounded-lg px-4 py-3 text-sm font-semibold"
                 >
                   Cancel
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="primary"
+                  className="medstream-submit-button"
                   onClick={handleDeleteAccount}
                   disabled={isDeletingAccount}
-                  className="medstream-danger-button rounded-lg px-4 py-3 text-sm font-semibold"
                 >
                   {isDeletingAccount ? "Deactivating..." : "Confirm"}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1267,47 +1281,40 @@ export default function ProfilePage() {
                     <p className="mt-2 text-sm text-[var(--text-muted)]">CNP: {patientPendingTransfer.cnp}</p>
                   </div>
 
-                  <div className="mt-5">
+                  <div className="login-field mt-5">
                     <label className="login-label" htmlFor="transfer-doctor">Available Doctors</label>
-                    <select
-                      id="transfer-doctor"
-                      value={selectedTransferDoctorId}
-                      onChange={(event) => setSelectedTransferDoctorId(event.target.value)}
-                      disabled={isLoadingTransferDoctors || isTransferringPatient || transferDoctorOptions.length === 0}
-                      className="login-input mt-2"
-                    >
-                      <option value="">
-                        {isLoadingTransferDoctors
+                    <Select
+                      selectedOption={getSelectedOption(transferDoctorSelectOptions, selectedTransferDoctorId)}
+                      onChange={({detail}) => setSelectedTransferDoctorId(detail.selectedOption.value)}
+                      options={transferDoctorSelectOptions}
+                      placeholder={
+                        isLoadingTransferDoctors
                           ? "Loading doctors..."
                           : transferDoctorOptions.length > 0
                             ? "Select a doctor"
-                            : "No available doctors"}
-                      </option>
-                      {transferDoctorOptions.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          Dr. {item.first_name} {item.last_name}
-                        </option>
-                      ))}
-                    </select>
+                            : "No available doctors"
+                      }
+                      selectedAriaLabel="Selected transfer doctor"
+                      disabled={isLoadingTransferDoctors || isTransferringPatient || transferDoctorOptions.length === 0}
+                    />
                   </div>
 
                   <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      type="button"
+                    <Button
+                      className="medstream-cancel-button"
                       onClick={closeTransferDialog}
                       disabled={isTransferringPatient}
-                      className="console-button-secondary rounded-lg px-4 py-3 text-sm font-semibold"
                     >
                       Cancel
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="medstream-submit-button"
                       onClick={handleTransferPatient}
                       disabled={!selectedTransferDoctorId || isTransferringPatient || isCheckingTransferActivities || transferDoctorOptions.length === 0}
-                      className="console-button-primary rounded-lg px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                     >
                       {isTransferringPatient ? "Transferring..." : (isCheckingTransferActivities ? "Checking..." : "Transfer")}
-                    </button>
+                    </Button>
                   </div>
                 </>
               ) : (
@@ -1322,22 +1329,21 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      type="button"
+                    <Button
+                      className="medstream-cancel-button"
                       onClick={() => setShowTransferActivityConfirmation(false)}
                       disabled={isTransferringPatient}
-                      className="console-button-secondary rounded-lg px-4 py-3 text-sm font-semibold"
                     >
                       Cancel
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="medstream-submit-button"
                       onClick={handleConfirmTransferPatient}
                       disabled={isTransferringPatient}
-                      className="console-button-primary rounded-lg px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                     >
                       {isTransferringPatient ? "Transferring..." : "Confirm Transfer"}
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -1363,22 +1369,21 @@ export default function ProfilePage() {
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
+                <Button
+                  className="medstream-cancel-button"
                   onClick={() => setPatientPendingRemoval(null)}
-                  className="console-button-secondary rounded-lg px-4 py-3 text-sm font-semibold"
                 >
-                  Keep Patient
-                </button>
-                <button
-                  type="button"
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  className="medstream-submit-button"
                   onClick={() => handleRemovePatient(patientPendingRemoval.id)}
                   disabled={hasIncomingActivities || removingPatientId === patientPendingRemoval.id}
                   title={hasIncomingActivities ? "Cannot modify patients while there are incoming activities." : ""}
-                  className="medstream-danger-button rounded-lg px-4 py-3 text-sm font-semibold"
                 >
                   {removingPatientId === patientPendingRemoval.id ? "Removing..." : "Yes, Remove Patient"}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1394,22 +1399,21 @@ export default function ProfilePage() {
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
+                <Button
+                  className="medstream-cancel-button"
                   onClick={() => setActivityPendingCancellation(null)}
                   disabled={isSubmittingActivity}
-                  className="console-button-secondary rounded-lg px-4 py-3 text-sm font-semibold"
                 >
-                  Keep Activity
-                </button>
-                <button
-                  type="button"
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  className="medstream-submit-button"
                   onClick={handleCancelActivity}
                   disabled={isSubmittingActivity}
-                  className="medstream-danger-button rounded-lg px-4 py-3 text-sm font-semibold"
                 >
                   {isSubmittingActivity ? "Canceling..." : "Yes, Cancel Activity"}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
