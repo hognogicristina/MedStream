@@ -1,5 +1,6 @@
 import {createContext, useContext, useEffect, useMemo, useState} from "react"
 import {getCurrentDoctor} from "../services/doctorApi.js"
+import {getResponseData} from "../services/apiMessages.js"
 
 const AUTH_STORAGE_KEY = "medstream_token"
 
@@ -47,35 +48,26 @@ export function AuthProvider({children}) {
     }
     return storedToken
   })
-  const [isAuthResolved, setIsAuthResolved] = useState(false)
+  const [isAuthResolved, setIsAuthResolved] = useState(() => !token)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [currentDoctor, setCurrentDoctor] = useState(null)
 
   useEffect(() => {
     if (!token) {
       localStorage.removeItem(AUTH_STORAGE_KEY)
-      setIsAuthenticated(false)
-      setIsAuthResolved(true)
-      return
-    }
-
-    if (isTokenExpired(token)) {
-      localStorage.removeItem(AUTH_STORAGE_KEY)
-      setToken(null)
-      setIsAuthenticated(false)
-      setIsAuthResolved(true)
       return
     }
 
     localStorage.setItem(AUTH_STORAGE_KEY, token)
-    setIsAuthResolved(false)
     let active = true
 
     const validateToken = async () => {
       try {
-        await getCurrentDoctor({Authorization: `Bearer ${token}`})
+        const response = await getCurrentDoctor({Authorization: `Bearer ${token}`})
         if (!active) {
           return
         }
+        setCurrentDoctor(getResponseData(response))
         setIsAuthenticated(true)
         setIsAuthResolved(true)
       } catch {
@@ -84,6 +76,7 @@ export function AuthProvider({children}) {
         }
         localStorage.removeItem(AUTH_STORAGE_KEY)
         setToken(null)
+        setCurrentDoctor(null)
         setIsAuthenticated(false)
         setIsAuthResolved(true)
       }
@@ -99,25 +92,39 @@ export function AuthProvider({children}) {
   const value = useMemo(
     () => ({
       token,
+      currentDoctor,
       isAuthenticated,
       isAuthResolved,
       login(nextToken) {
+        if (isTokenExpired(nextToken)) {
+          localStorage.removeItem(AUTH_STORAGE_KEY)
+          setCurrentDoctor(null)
+          setIsAuthenticated(false)
+          setIsAuthResolved(true)
+          setToken(null)
+          return
+        }
+        setCurrentDoctor(null)
+        setIsAuthenticated(false)
+        setIsAuthResolved(false)
         setToken(nextToken)
       },
       logout() {
         localStorage.removeItem(AUTH_STORAGE_KEY)
+        setCurrentDoctor(null)
         setIsAuthenticated(false)
         setIsAuthResolved(true)
         setToken(null)
       },
       clearToken() {
         localStorage.removeItem(AUTH_STORAGE_KEY)
+        setCurrentDoctor(null)
         setIsAuthenticated(false)
         setIsAuthResolved(true)
         setToken(null)
       },
     }),
-    [isAuthenticated, isAuthResolved, token],
+    [currentDoctor, isAuthenticated, isAuthResolved, token],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

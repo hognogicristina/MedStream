@@ -1,14 +1,24 @@
 import {useEffect, useState} from "react"
-import BackButton from "../components/BackButton.jsx"
+import {
+  Box,
+  Button,
+  ColumnLayout,
+  Container,
+  ContentLayout,
+  Header,
+  SpaceBetween,
+  StatusIndicator,
+} from "@cloudscape-design/components"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
-import {Link, useNavigate} from "react-router-dom"
+import {useNavigate} from "react-router-dom"
 import {createPatient} from "../services/patientApi.js"
 import {assignPatientToDoctor, getCurrentDoctor} from "../services/doctorApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {buildPatientPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone.js"
 import {getCityOptions, getCountyOptions} from "../utils/addressOptions.js"
 import {buildEmptyPatientAddress, normalizePatientAddress} from "../utils/patientAddress.js"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 
 const TOTAL_STEPS = 2
 
@@ -127,38 +137,51 @@ export default function AddPatientPage() {
   }, [token])
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">{"Patient Intake"}</p>
-              <BackButton/>
-            </div>
+    <ContentLayout>
+      <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <AppBreadcrumbs/>
+          <div className="medstream-page-heading-row">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{"Add Patient"}</h1>
-              <p className="mt-2 max-w-2xl text-sm text-[var(--text-secondary)] sm:text-base">{"Create a patient admission record."}</p>
+              <h1 className="medstream-page-title">Add Patient</h1>
+              <p>Create a patient admission record for the current department.</p>
             </div>
           </div>
-        </header>
+        </div>
 
-        <section className="monitor-card rounded-[28px] p-6">
-          <div className="mb-5 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">{"Admission Form"}</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{"Create Patient Record"}</h2>
-            </div>
-            <div
-              className="rounded-full border border-[var(--border-primary)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
-              {"Step"} {step} / {TOTAL_STEPS}
-            </div>
-          </div>
+        <Container>
+          <ColumnLayout columns={3} variant="text-grid">
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Workflow</Box>
+              <Box variant="h2">Patient intake</Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Department</Box>
+              <Box variant="h2">{currentDoctor?.specialization || "ER"}</Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Step</Box>
+              <Box variant="h2">{step} / {TOTAL_STEPS}</Box>
+            </SpaceBetween>
+          </ColumnLayout>
+        </Container>
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description={step === 1 ? "Enter identity, contact, and arrival details." : "Enter the patient's address details."}
+              actions={<StatusIndicator type={step === 1 ? "pending" : "in-progress"}>{step === 1 ? "Basic info" : "Address"}</StatusIndicator>}
+            >
+              Create patient record
+            </Header>
+          }
+        >
+          <form className="medstream-form" onSubmit={handleSubmit}>
             {step === 1 && (
-              <div className="space-y-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">{"Basic Info"}</p>
-                <div className="grid gap-4 sm:grid-cols-2">
+              <SpaceBetween size="m">
+                <Header variant="h3">Basic info</Header>
+                <div className="medstream-form-grid">
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-first-name">{"First Name"}</label>
                     <input id="patient-first-name" type="text" name="first_name" value={form.first_name} onChange={handleChange}
@@ -224,13 +247,13 @@ export default function AddPatientPage() {
                     </select>
                   </div>
                 </div>
-              </div>
+              </SpaceBetween>
             )}
 
             {step === 2 && (
-              <div className="space-y-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">{"Address"}</p>
-                <div className="grid gap-4 sm:grid-cols-2">
+              <SpaceBetween size="m">
+                <Header variant="h3">Address</Header>
+                <div className="medstream-form-grid">
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-street">{"Street"}</label>
                     <input id="add-street" type="text" name="street" value={address.street} onChange={handleAddressChange}
@@ -276,47 +299,38 @@ export default function AddPatientPage() {
                            onChange={(event) => handleAddressChange({
                              target: {
                                name: "postal_code",
-                               value: event.target.value.replace(/\D/g, "")
+                               value: event.target.value.replace(/\D/g, ""),
                              }
                            })} placeholder="010101" className="login-input" required/>
                   </div>
-                  <div className="login-field sm:col-span-2">
+                  <div className="login-field medstream-form-field-wide">
                     <label className="login-label" htmlFor="add-country">{"Country"}</label>
                     <input id="add-country" type="text" value={"Romania"} className="login-input" disabled/>
                   </div>
                 </div>
-              </div>
+              </SpaceBetween>
             )}
 
-            <div className="form-action-block">
-              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <div className="medstream-form-actions">
+              <SpaceBetween direction="horizontal" size="xs">
                 {step > 1 ? (
-                  <button type="button" onClick={() => setStep(1)} disabled={isSubmitting}
-                          className="console-button-secondary rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:opacity-60">
-                    {"Previous"}
-                  </button>
+                  <Button formAction="none" onClick={() => setStep(1)} disabled={isSubmitting}>Previous</Button>
                 ) : (
-                  <Link className="console-button-secondary rounded-2xl px-4 py-3 text-center font-semibold" to="/dashboard">
-                    {"Cancel"}
-                  </Link>
+                  <Button formAction="none" onClick={() => navigate("/dashboard")}>Cancel</Button>
                 )}
 
                 {step < TOTAL_STEPS ? (
-                  <button type="button" onClick={() => setStep(2)} disabled={!isStepOneValid || isSubmitting}
-                          className="console-button-primary rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
-                    {"Next"}
-                  </button>
+                  <Button formAction="none" variant="primary" onClick={() => setStep(2)} disabled={!isStepOneValid || isSubmitting}>Next</Button>
                 ) : (
-                  <button type="submit" disabled={!isStepTwoValid || isSubmitting}
-                          className="console-button-primary rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
-                    {isSubmitting ? ("Creating patient...") : ("Create Patient")}
-                  </button>
+                  <Button formAction="submit" variant="primary" disabled={!isStepTwoValid || isSubmitting}>
+                    {isSubmitting ? "Creating patient..." : "Create patient"}
+                  </Button>
                 )}
-              </div>
+              </SpaceBetween>
             </div>
           </form>
-        </section>
-      </div>
-    </div>
+        </Container>
+      </SpaceBetween>
+    </ContentLayout>
   )
 }

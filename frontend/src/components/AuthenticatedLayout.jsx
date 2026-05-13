@@ -117,7 +117,9 @@ export default function AuthenticatedLayout() {
             <AppSideNavigation onCollapse={() => setNavigationOpen(false)}/>
           </aside>
         ) : (
-          <AppIconRail onOpen={() => setNavigationOpen(true)}/>
+          <aside className="medstream-sidebar medstream-sidebar-collapsed">
+            <AppIconRail onOpen={() => setNavigationOpen(true)}/>
+          </aside>
         )}
         <main className="medstream-content-inner">
           <Outlet/>

@@ -91,10 +91,18 @@ body {
 .medstream-sidebar {
   position: sticky;
   top: 0;
+  z-index: 30;
   width: 280px;
   flex: 0 0 280px;
   align-self: stretch;
   min-height: calc(100vh - 56px);
+  overflow: visible;
+}
+
+.medstream-sidebar-collapsed {
+  z-index: 120;
+  width: 64px;
+  flex-basis: 64px;
 }
 
 .medstream-sidebar-panel {
@@ -128,22 +136,279 @@ body {
 }
 
 .medstream-icon-rail {
-  position: sticky;
-  top: 72px;
-  width: 48px;
-  flex: 0 0 48px;
+  position: relative;
+  z-index: 120;
   display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: calc(100vh - 56px);
   flex-direction: column;
-  gap: 8px;
   align-items: center;
-  border: 1px solid var(--border-primary);
+  gap: 8px;
+  border-right: 1px solid var(--border-primary);
   background: var(--surface-1);
-  border-radius: 8px;
-  padding: 8px 4px;
+  overflow: visible;
+  padding: 16px 8px 24px;
+}
+
+.medstream-rail-dropdown-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.medstream-rail-dropdown-wrapper {
+  display: inline-flex;
+}
+
+.medstream-icon-rail .medstream-rail-button,
+.medstream-rail-dropdown-wrapper button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text-secondary) !important;
+  padding: 0 !important;
+}
+
+.medstream-icon-rail .medstream-rail-button:hover,
+.medstream-rail-dropdown-wrapper button:hover {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--link) !important;
+}
+
+.medstream-icon-rail .medstream-rail-button-active,
+.medstream-icon-rail .medstream-rail-button-active:hover,
+.medstream-icon-rail .medstream-rail-dropdown-active button,
+.medstream-icon-rail .medstream-rail-dropdown-active button:hover {
+  border: 0 !important;
+  background: var(--accent-strong) !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
+.medstream-rail-dropdown-wrapper [class*="button-dropdown"],
+.medstream-rail-dropdown-wrapper [class*="dropdown-trigger"] {
+  display: inline-flex;
+}
+
+.medstream-rail-dropdown-wrapper [class*="trigger-button"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  justify-content: center !important;
+  padding: 0 !important;
+}
+
+.medstream-rail-dropdown-wrapper [class*="trigger-button"] [class*="icon-right"] {
+  display: none !important;
+}
+
+.medstream-rail-dropdown-wrapper [class*="trigger-button"] [class*="content"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.medstream-rail-dropdown-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.medstream-rail-dropdown-icon [class*="icon"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.medstream-rail-caret {
+  display: block;
+  width: 0;
+  height: 0;
+}
+
+.medstream-rail-caret-down {
+  border-top: 5px solid currentColor;
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+}
+
+.medstream-rail-caret-up {
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid currentColor;
+  border-left: 4px solid transparent;
 }
 
 #top-nav {
   min-width: 0;
+}
+
+#top-nav [class*="top-navigation"] {
+  background: var(--surface-1) !important;
+  border-bottom: 1px solid var(--border-primary) !important;
+}
+
+#top-nav [class*="identity-link"],
+#top-nav [class*="title"],
+#top-nav [class*="utility"] {
+  color: var(--text-primary) !important;
+  text-decoration: none !important;
+}
+
+#top-nav [class*="utility"] *,
+#top-nav [class*="utility"] button,
+#top-nav [class*="utility"] a,
+#top-nav [class*="utility"] span {
+  color: var(--text-primary) !important;
+  text-decoration: none !important;
+  border-bottom: 0 !important;
+}
+
+#top-nav [class*="utility"] button:hover,
+#top-nav [class*="utility"] a:hover,
+#top-nav [class*="utility"] button:hover *,
+#top-nav [class*="utility"] a:hover * {
+  color: var(--link) !important;
+  text-decoration: none !important;
+  border-bottom: 0 !important;
+}
+
+[data-theme="light"] #top-nav [class*="utility"] *,
+[data-theme="light"] #top-nav [class*="utility"] button,
+[data-theme="light"] #top-nav [class*="utility"] a,
+[data-theme="light"] #top-nav [class*="utility"] span {
+  color: #16191f !important;
+  text-decoration: none !important;
+  border-bottom: 0 !important;
+}
+
+[data-theme="light"] #top-nav [class*="utility"] button:hover,
+[data-theme="light"] #top-nav [class*="utility"] a:hover,
+[data-theme="light"] #top-nav [class*="utility"] button:hover *,
+[data-theme="light"] #top-nav [class*="utility"] a:hover * {
+  color: var(--link) !important;
+  text-decoration: none !important;
+  border-bottom: 0 !important;
+}
+
+#top-nav img[alt="MedStream"] {
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 6px !important;
+  background: var(--surface-1) !important;
+  box-shadow: none !important;
+  padding: 2px !important;
+}
+
+[data-theme="light"] [class*="dropdown-content-wrapper"],
+[data-theme="light"] [class*="selectable-item"] {
+  background-color: var(--surface-1) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] [class*="dropdown-content-wrapper"] *,
+[data-theme="light"] [class*="selectable-item"] *,
+[data-theme="light"] [class*="option-content"] {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] [class*="selectable-item"][class*="highlighted"],
+[data-theme="light"] [class*="selectable-item"][class*="has-background"] {
+  background-color: var(--surface-3) !important;
+}
+
+[class*="dropdown"][class*="use-portal"],
+[class*="dropdown-content-wrapper"] {
+  z-index: 10000 !important;
+}
+
+[class*="dropdown-content-wrapper"] [class*="selectable-item"],
+[class*="dropdown-content-wrapper"] [class*="selectable-item"] * {
+  text-decoration: none !important;
+  border-bottom: 0 !important;
+}
+
+#top-nav .medstream-account-dropdown [class*="dropdown-content-wrapper"] {
+  min-width: 160px !important;
+  box-sizing: border-box !important;
+  border: 1px solid var(--border-primary) !important;
+  border-radius: 6px !important;
+  background: var(--surface-1) !important;
+  box-shadow: none !important;
+  color: var(--text-primary) !important;
+  overflow: hidden !important;
+}
+
+#top-nav .medstream-account-dropdown [class*="dropdown-content"],
+#top-nav .medstream-account-dropdown [class*="options-list"],
+#top-nav .medstream-account-dropdown [class*="items-list-container"] {
+  border: 0 !important;
+  background: var(--surface-1) !important;
+  box-shadow: none !important;
+  color: var(--text-primary) !important;
+}
+
+#top-nav .medstream-account-dropdown [class*="items-list-container"] {
+  box-sizing: border-box !important;
+  padding: 4px !important;
+}
+
+#top-nav .medstream-account-dropdown [data-account-option="true"] {
+  box-sizing: border-box !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  overflow: hidden !important;
+}
+
+#top-nav .medstream-account-dropdown [data-account-option="true"] [class*="menu-item"] {
+  box-sizing: border-box !important;
+  min-height: 32px !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 7px 12px !important;
+  transform: none !important;
+}
+
+#top-nav .medstream-account-dropdown [data-account-option="true"],
+#top-nav .medstream-account-dropdown [data-account-option="true"] * {
+  color: var(--text-primary) !important;
+}
+
+#top-nav .medstream-account-dropdown [data-account-option="true"]:hover,
+#top-nav .medstream-account-dropdown [data-account-option="true"][class*="highlighted"],
+#top-nav .medstream-account-dropdown [data-account-option="true"]:hover [class*="menu-item"],
+#top-nav .medstream-account-dropdown [data-account-option="true"][class*="highlighted"] [class*="menu-item"] {
+  background: transparent !important;
+  border: 0 !important;
+  transform: none !important;
+}
+
+#top-nav .medstream-account-dropdown [data-account-option="true"]:hover *,
+#top-nav .medstream-account-dropdown [data-account-option="true"][class*="highlighted"] * {
+  color: var(--link) !important;
 }
 
 #top-nav [class*="identity"] {
@@ -181,6 +446,29 @@ body {
   padding: 0;
 }
 
+.medstream-breadcrumbs {
+  margin-bottom: 10px;
+}
+
+.medstream-breadcrumbs a {
+  color: var(--link) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 2px;
+}
+
+.medstream-breadcrumbs a:hover {
+  color: var(--link-hover) !important;
+}
+
+.medstream-breadcrumbs li:last-child a,
+.medstream-breadcrumbs li:last-child span,
+.medstream-breadcrumbs [aria-current="page"],
+.medstream-breadcrumbs [class*="last"] {
+  color: var(--text-secondary) !important;
+  font-weight: 700 !important;
+  text-decoration: none !important;
+}
+
 .medstream-page-title {
   margin: 0;
   background: transparent !important;
@@ -198,6 +486,21 @@ body {
   background-color: transparent;
   color: var(--text-secondary);
   font-size: 14px;
+}
+
+.medstream-page-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.medstream-page-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .medstream-content-inner [class*="awsui_layout"],
@@ -261,13 +564,172 @@ body {
 }
 
 .medstream-vitals-insights {
-  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  margin-top: 18px;
+  padding: 8px 0 2px;
+}
+
+.medstream-vitals-insights > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.medstream-vital-primary {
+  color: var(--accent-strong);
+}
+
+.medstream-department-badge {
+  display: inline-flex;
+  cursor: help;
+}
+
+.medstream-department-tooltip {
+  position: relative;
+  display: inline-flex;
+  outline: none;
+}
+
+.medstream-department-tooltip::after {
+  position: absolute;
+  z-index: 50;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 260px;
+  transform: translateY(4px);
+  border: 1px solid var(--chart-tooltip-border);
+  border-radius: 8px;
+  background: var(--chart-tooltip-bg);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  color: var(--chart-tooltip-text);
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  opacity: 0;
+  padding: 8px 10px;
+  pointer-events: none;
+  text-align: left;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  white-space: normal;
+}
+
+.medstream-department-tooltip::before {
+  position: absolute;
+  z-index: 51;
+  left: 12px;
+  bottom: calc(100% + 3px);
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  border-right: 1px solid var(--chart-tooltip-border);
+  border-bottom: 1px solid var(--chart-tooltip-border);
+  background: var(--chart-tooltip-bg);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.medstream-department-tooltip:hover::after,
+.medstream-department-tooltip:hover::before,
+.medstream-department-tooltip:focus-visible::after,
+.medstream-department-tooltip:focus-visible::before {
+  opacity: 1;
+}
+
+.medstream-department-tooltip:hover::after,
+.medstream-department-tooltip:focus-visible::after {
+  transform: translateY(0);
+}
+
+.medstream-chart-panel {
+  height: 260px;
+  min-height: 260px;
+}
+
+.medstream-alerts-container,
+.medstream-alerts-container [class*="content-wrapper"],
+.medstream-alerts-container [class*="content"],
+.medstream-alerts-container [class*="content-inner"] {
+  height: 100%;
+}
+
+.medstream-alerts-container [class*="content-inner"] {
+  padding: 0 !important;
+}
+
+.medstream-alert-chart-panel {
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 320px;
+  padding: 0;
+}
+
+.medstream-alert-chart-panel > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.medstream-patient-details-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px 24px;
+}
+
+.medstream-patient-detail-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.medstream-patient-detail-text {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .medstream-controls-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.medstream-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.medstream-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.medstream-form-field-wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.medstream-form-field-wide > *,
+.medstream-form-field-wide [class*="awsui_form-field"],
+.medstream-form-field-wide [class*="awsui_control"],
+.medstream-form-field-wide [class*="awsui_textarea"],
+.medstream-form-field-wide [class*="awsui_input"] {
+  width: 100%;
+  max-width: none;
+}
+
+.medstream-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 16px;
 }
 
 @media (max-width: 768px) {
@@ -285,6 +747,11 @@ body {
     flex-basis: 240px;
   }
 
+  .medstream-sidebar-collapsed {
+    width: 64px;
+    flex-basis: 64px;
+  }
+
   .medstream-dashboard-split {
     grid-template-columns: 1fr;
   }
@@ -299,6 +766,22 @@ body {
 
   .medstream-controls-grid {
     grid-template-columns: 1fr;
+  }
+
+  .medstream-patient-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .medstream-page-heading-row {
+    flex-direction: column;
+  }
+
+  .medstream-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .medstream-form-actions {
+    justify-content: flex-start;
   }
 }
 
@@ -396,14 +879,15 @@ textarea {
 }
 
 .console-button-primary {
-  border: 1px solid var(--accent-strong);
-  background: var(--accent-strong);
+  border: 1px solid var(--accent);
+  background: var(--accent);
   color: #16191f;
   font-weight: 700;
 }
 
 .console-button-primary:hover {
-  background: var(--accent);
+  border-color: #ec7211;
+  background: #ec7211;
 }
 
 .console-button-active {

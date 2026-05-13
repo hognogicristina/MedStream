@@ -1,7 +1,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import {useNavigate} from "react-router-dom"
 import {
-  Badge,
   Box,
   Button,
   ColumnLayout,
@@ -16,6 +15,7 @@ import {
 import CountValue from "../components/CountValue.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {getAlertDashboardSummary, listPatients} from "../services/patientApi.js"
+import {listDoctors} from "../services/doctorApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import VitalsChart from "../components/VitalsChart.jsx"
@@ -97,6 +97,7 @@ export default function DashboardPage() {
   const [previewAlerts, setPreviewAlerts] = useState(null)
   const [totalAlerts, setTotalAlerts] = useState(0)
   const [patients, setPatients] = useState([])
+  const [doctors, setDoctors] = useState([])
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
   const alertAudioRef = useRef(null)
   const [chartData, setChartData] = useState([])
@@ -122,12 +123,14 @@ export default function DashboardPage() {
 
   const loadDashboardData = useCallback(async () => {
     try {
-      const [patientsRes, alertsSummaryRes] = await Promise.all([
+      const [patientsRes, doctorsRes, alertsSummaryRes] = await Promise.all([
         listPatients({page: 1, limit: 100}),
+        listDoctors(),
         getAlertDashboardSummary(),
       ])
 
       setPatients(getResponseData(patientsRes))
+      setDoctors(getResponseData(doctorsRes) || [])
       const summary = getResponseData(alertsSummaryRes)
       setTotalAlerts(Number(summary?.total_alerts || 0))
       upsertPreviewAlerts(summary?.preview_alerts)
@@ -251,7 +254,7 @@ export default function DashboardPage() {
         </div>
 
         <Container>
-          <ColumnLayout columns={3} variant="text-grid">
+          <ColumnLayout columns={4} variant="text-grid">
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Active patients</Box>
               <Box variant="h2"><CountValue value={patients.length}/></Box>
@@ -261,8 +264,12 @@ export default function DashboardPage() {
               <Box variant="h2"><CountValue value={criticalAlerts}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
-              <Box color="text-body-secondary" variant="awsui-key-label">Average heart rate</Box>
-              <Box variant="h2">{averageHeartRate}</Box>
+              <Box color="text-body-secondary" variant="awsui-key-label">Total doctors</Box>
+              <Box variant="h2"><CountValue value={doctors.length}/></Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Total alerts tracked</Box>
+              <Box variant="h2"><CountValue value={totalAlerts}/></Box>
             </SpaceBetween>
           </ColumnLayout>
         </Container>
@@ -284,22 +291,22 @@ export default function DashboardPage() {
                   <ColumnLayout columns={4} variant="text-grid">
                     <SpaceBetween size="xxs">
                       <Box color="text-body-secondary" variant="awsui-key-label">HR trend</Box>
-                      <Box variant="h3">{averageHeartRate}</Box>
+                      <Box variant="h3"><span className="medstream-vital-primary">{averageHeartRate}</span></Box>
                       <Box color="text-body-secondary" variant="small">{formatDelta(heartRateDelta)} over last {recentVitals.length || 0} samples</Box>
                     </SpaceBetween>
                     <SpaceBetween size="xxs">
                       <Box color="text-body-secondary" variant="awsui-key-label">O2 trend</Box>
-                      <Box variant="h3">{recentOxygenAverage}</Box>
+                      <Box variant="h3"><span className="medstream-vital-primary">{recentOxygenAverage}</span></Box>
                       <Box color="text-body-secondary" variant="small">{formatDelta(oxygenDelta)} over last {recentVitals.length || 0} samples</Box>
                     </SpaceBetween>
                     <SpaceBetween size="xxs">
                       <Box color="text-body-secondary" variant="awsui-key-label">Temp trend</Box>
-                      <Box variant="h3">{recentTemperatureAverage}</Box>
+                      <Box variant="h3"><span className="medstream-vital-primary">{recentTemperatureAverage}</span></Box>
                       <Box color="text-body-secondary" variant="small">{formatDelta(temperatureDelta)} over last {recentVitals.length || 0} samples</Box>
                     </SpaceBetween>
                     <SpaceBetween size="xxs">
                       <Box color="text-body-secondary" variant="awsui-key-label">Latest BP</Box>
-                      <Box variant="h3">{latestVital ? `${latestVital.systolic_bp}/${latestVital.diastolic_bp}` : "--"}</Box>
+                      <Box variant="h3"><span className="medstream-vital-primary">{latestVital ? `${latestVital.systolic_bp}/${latestVital.diastolic_bp}` : "--"}</span></Box>
                       <Box color="text-body-secondary" variant="small">
                         {latestVital ? `Recorded at ${latestVital.time}` : "Waiting for samples"}
                       </Box>
@@ -422,7 +429,6 @@ export default function DashboardPage() {
                   <SpaceBetween size="xs">
                     <Box variant="h3">How it works</Box>
                     <Box color="text-body-secondary">Patient vitals are ingested in real time for immediate alerting, then reprocessed in batch for broader analytics and validation.</Box>
-                    <Badge color="blue">Total alerts tracked: <CountValue value={totalAlerts}/></Badge>
                     <Button onClick={() => navigate("/how-it-works")}>Open how it works</Button>
                   </SpaceBetween>
                 ),

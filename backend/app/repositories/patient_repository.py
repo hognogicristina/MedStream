@@ -1480,8 +1480,6 @@ class PatientRepository:
             updates["phone_number"] = normalize_phone_value(payload.get("phone_number"))
         if "gender" in payload:
             updates["gender"] = validate_required_text(payload.get("gender"), "Gender")
-        if "arrival_method" in payload:
-            updates["arrival_method"] = validate_arrival_method(payload.get("arrival_method"))
         if "birth_date" in payload:
             updates["birth_date"] = payload.get("birth_date")
         if "is_pregnant" in payload:

@@ -1,5 +1,18 @@
 import {useEffect, useState} from "react"
 import {
+  Box,
+  Button,
+  ColumnLayout,
+  DateInput,
+  FormField,
+  Header,
+  Input,
+  Modal,
+  Select,
+  SpaceBetween,
+  StatusIndicator,
+} from "@cloudscape-design/components"
+import {
   buildPatientPhoneNumber,
   normalizeRomanianPhoneNumber,
   ROMANIA_PHONE_PLACEHOLDER,
@@ -9,6 +22,21 @@ import {buildPatientAddressForm, normalizePatientAddress} from "../utils/patient
 
 const TOTAL_STEPS = 2
 
+const genderOptions = [
+  {value: "male", label: "Male"},
+  {value: "female", label: "Female"},
+  {value: "other", label: "Other"},
+]
+
+const pregnantOptions = [
+  {value: "false", label: "No"},
+  {value: "true", label: "Yes"},
+]
+
+function getSelectedOption(options, value) {
+  return options.find((option) => option.value === value) || null
+}
+
 function buildPatientEditForm(patient) {
   return {
     first_name: patient?.first_name || "",
@@ -16,7 +44,6 @@ function buildPatientEditForm(patient) {
     gender: patient?.gender || "",
     birth_date: patient?.birth_date || "",
     is_pregnant: Boolean(patient?.is_pregnant),
-    arrival_method: patient?.arrival_method || "self",
   }
 }
 
@@ -58,7 +85,6 @@ export default function EditPatientDialog({
     gender: form.gender.trim(),
     birth_date: form.birth_date,
     is_pregnant: Boolean(form.is_pregnant),
-    arrival_method: form.arrival_method,
     phone_number: normalizedPhoneNumber,
     address: normalizePatientAddress(address),
   }
@@ -68,7 +94,6 @@ export default function EditPatientDialog({
     gender: (patient.gender || "").trim(),
     birth_date: patient.birth_date || "",
     is_pregnant: Boolean(patient.is_pregnant),
-    arrival_method: patient.arrival_method || "self",
     phone_number: normalizeRomanianPhoneNumber(patient.phone_number),
     address: normalizePatientAddress(patient.address),
   }
@@ -81,7 +106,6 @@ export default function EditPatientDialog({
     && normalizedCurrentValues.last_name
     && normalizedCurrentValues.gender
     && normalizedCurrentValues.birth_date
-    && normalizedCurrentValues.arrival_method
     && normalizedCurrentValues.phone_number,
   )
   const isStepTwoValid = Boolean(
@@ -93,8 +117,7 @@ export default function EditPatientDialog({
   )
   const canSubmit = isDirty && !isSubmitting
 
-  const handleChange = (event) => {
-    const {name, value} = event.target
+  const handleFormValueChange = (name, value) => {
     setForm((current) => {
       const next = {...current, [name]: value}
 
@@ -127,204 +150,188 @@ export default function EditPatientDialog({
 
   const countyOptions = getCountyOptions()
   const cityOptions = getCityOptions(address.county)
+  const countySelectOptions = countyOptions.map((county) => ({value: county.name, label: county.name}))
+  const citySelectOptions = cityOptions.map((city) => ({value: city, label: city}))
 
   return (
-    <div className="console-modal-overlay">
-      <div className="console-modal monitor-card rounded-[28px] p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">{"Patient Record"}</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{"Edit Patient Details"}</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {"Cancel"}
-          </button>
-        </div>
+    <Modal
+      visible={isOpen}
+      onDismiss={isSubmitting ? undefined : onClose}
+      size="large"
+      header={
+        <Header
+          variant="h2"
+          description="Update identity, contact, and address information."
+          actions={<StatusIndicator type={step === 1 ? "pending" : "in-progress"}>Step {step} / {TOTAL_STEPS}</StatusIndicator>}
+        >
+          Edit Patient Details
+        </Header>
+      }
+      footer={
+        <Box float="right">
+          <SpaceBetween direction="horizontal" size="xs">
+            {step > 1 ? (
+              <Button onClick={() => setStep(1)} disabled={isSubmitting}>
+                Previous
+              </Button>
+            ) : (
+              <Button onClick={onClose} disabled={isSubmitting}>
+                Cancel
+              </Button>
+            )}
 
-        <div className="mt-5 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">{"Current Patient"}</p>
-              <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{patient.last_name} {patient.first_name}</p>
-              <p className="mt-1 text-sm text-[var(--text-muted)]">CNP: {patient.cnp}</p>
-            </div>
-            <div
-              className="rounded-full border border-[var(--border-primary)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
-              {"Step"} {step} / {TOTAL_STEPS}
-            </div>
-          </div>
-        </div>
+            {step < TOTAL_STEPS ? (
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!isStepOneValid}
+                className="console-button-primary rounded-lg px-4 py-[9px] text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canSubmit || !isStepTwoValid) return
+                  onSubmit(normalizedCurrentValues)
+                }}
+                disabled={!canSubmit || !isStepTwoValid}
+                className="console-button-primary rounded-lg px-4 py-[9px] text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+              >
+                {isSubmitting ? "Saving..." : "Save Changes"}
+              </button>
+            )}
+          </SpaceBetween>
+        </Box>
+      }
+    >
+      <SpaceBetween size="m">
+        <ColumnLayout columns={2} variant="text-grid">
+          <SpaceBetween size="xxs">
+            <Box color="text-body-secondary" variant="awsui-key-label">Current Patient</Box>
+            <Box variant="h3">{patient.last_name} {patient.first_name}</Box>
+          </SpaceBetween>
+          <SpaceBetween size="xxs">
+            <Box color="text-body-secondary" variant="awsui-key-label">CNP</Box>
+            <Box variant="h3">{patient.cnp}</Box>
+          </SpaceBetween>
+        </ColumnLayout>
 
-        <div className="mt-5 space-y-5">
+        <SpaceBetween size="m">
           {step === 1 && (
-            <div className="space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">{"Basic Info"}</p>
+            <SpaceBetween size="m">
+              <Header variant="h3">Basic Info</Header>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-first-name">{"First Name"}</label>
-                  <input id="edit-first-name" name="first_name" type="text" value={form.first_name} onChange={handleChange}
-                         className="login-input" placeholder={"Example: Andrei"} required/>
-                </div>
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-last-name">{"Last Name"}</label>
-                  <input id="edit-last-name" name="last_name" type="text" value={form.last_name} onChange={handleChange}
-                         className="login-input" placeholder={"Example: Popescu"} required/>
-                </div>
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-gender">{"Gender"}</label>
-                  <select id="edit-gender" name="gender" value={form.gender} onChange={handleChange} className="login-input" required>
-                    <option value="">{"Gender"}</option>
-                    <option value="male">{"Male"}</option>
-                    <option value="female">{"Female"}</option>
-                    <option value="other">{"Other"}</option>
-                  </select>
-                </div>
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-birth-date">{"Birth Date"}</label>
-                  <input id="edit-birth-date" name="birth_date" type="date" value={form.birth_date} onChange={handleChange}
-                         className="login-input" required/>
-                </div>
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-phone-number">{"Phone Number"}</label>
-                  <input
-                    id="edit-phone-number"
+              <div className="medstream-form-grid">
+                <FormField label="First Name">
+                  <Input
+                    value={form.first_name}
+                    onChange={({detail}) => handleFormValueChange("first_name", detail.value)}
+                    placeholder="Example: Andrei"
+                  />
+                </FormField>
+                <FormField label="Last Name">
+                  <Input
+                    value={form.last_name}
+                    onChange={({detail}) => handleFormValueChange("last_name", detail.value)}
+                    placeholder="Example: Popescu"
+                  />
+                </FormField>
+                <FormField label="Gender">
+                  <Select
+                    selectedOption={getSelectedOption(genderOptions, form.gender)}
+                    onChange={({detail}) => handleFormValueChange("gender", detail.selectedOption.value)}
+                    options={genderOptions}
+                    placeholder="Gender"
+                  />
+                </FormField>
+                <FormField label="Birth Date">
+                  <DateInput
+                    value={form.birth_date}
+                    onChange={({detail}) => handleFormValueChange("birth_date", detail.value)}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </FormField>
+                <FormField label="Phone Number">
+                  <Input
                     type="tel"
                     value={phoneNumber}
-                    onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, ""))}
+                    onChange={({detail}) => setPhoneNumber(detail.value.replace(/\D/g, ""))}
                     placeholder={ROMANIA_PHONE_PLACEHOLDER}
-                    className="login-input"
-                    required
                   />
-                </div>
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-is-pregnant">Pregnant</label>
-                  <select
-                    id="edit-is-pregnant"
-                    name="is_pregnant"
-                    value={form.is_pregnant ? "true" : "false"}
-                    onChange={(event) => setForm((current) => ({...current, is_pregnant: event.target.value === "true"}))}
-                    className="login-input"
+                </FormField>
+                <FormField label="Pregnant">
+                  <Select
+                    selectedOption={getSelectedOption(pregnantOptions, form.is_pregnant ? "true" : "false")}
+                    onChange={({detail}) => setForm((current) => ({...current, is_pregnant: detail.selectedOption.value === "true"}))}
+                    options={pregnantOptions}
                     disabled={form.gender !== "female"}
-                  >
-                    <option value="false">No</option>
-                    <option value="true">Yes</option>
-                  </select>
-                </div>
+                  />
+                </FormField>
               </div>
-            </div>
+            </SpaceBetween>
           )}
 
           {step === 2 && (
-            <div className="space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">{"Address"}</p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-street">{"Street"}</label>
-                  <input id="edit-street" type="text" name="street" value={address.street} onChange={handleAddressChange}
-                         className="login-input" placeholder={"Example: Liberty Street"} required/>
-                </div>
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-number">{"Number"}</label>
-                  <input id="edit-number" type="text" name="number" value={address.number} onChange={handleAddressChange}
-                         className="login-input" placeholder={"Example: 12A"} required/>
-                </div>
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-apartment">{"Apartment"}</label>
-                  <input id="edit-apartment" type="text" name="apartment" value={address.apartment} onChange={handleAddressChange}
-                         className="login-input" placeholder={"Example: 24"}/>
-                </div>
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-city">{"City"}</label>
-                  <select id="edit-city" name="city" value={address.city} onChange={handleAddressChange} className="login-input" required
-                          disabled={cityOptions.length === 0}>
-                    <option value="">{cityOptions.length === 0 ? ("Select county first") : ("Select city")}</option>
-                    {cityOptions.map((city) => (
-                      <option key={city} value={city}>
-                        {city}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-county">{"County"}</label>
-                  <select id="edit-county" name="county" value={address.county} onChange={handleAddressChange} className="login-input"
-                          required>
-                    <option value="">{"Select county"}</option>
-                    {countyOptions.map((county) => (
-                      <option key={county.name} value={county.name}>
-                        {county.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="login-field">
-                  <label className="login-label" htmlFor="edit-postal-code">{"Postal Code"}</label>
-                  <input id="edit-postal-code" type="text" name="postal_code" value={address.postal_code}
-                         onChange={(event) => handleAddressChange({
-                           target: {
-                             name: "postal_code",
-                             value: event.target.value.replace(/\D/g, "")
-                           }
-                         })} className="login-input" placeholder="010101" required/>
-                </div>
-                <div className="login-field sm:col-span-2">
-                  <label className="login-label" htmlFor="edit-country">{"Country"}</label>
-                  <input id="edit-country" type="text" value={"Romania"} className="login-input" disabled/>
+            <SpaceBetween size="m">
+              <Header variant="h3">Address</Header>
+              <div className="medstream-form-grid">
+                <FormField label="Street">
+                  <Input
+                    value={address.street}
+                    onChange={({detail}) => handleAddressChange({target: {name: "street", value: detail.value}})}
+                    placeholder="Example: Liberty Street"
+                  />
+                </FormField>
+                <FormField label="Number">
+                  <Input
+                    value={address.number}
+                    onChange={({detail}) => handleAddressChange({target: {name: "number", value: detail.value}})}
+                    placeholder="Example: 12A"
+                  />
+                </FormField>
+                <FormField label="Apartment">
+                  <Input
+                    value={address.apartment}
+                    onChange={({detail}) => handleAddressChange({target: {name: "apartment", value: detail.value}})}
+                    placeholder="Example: 24"
+                  />
+                </FormField>
+                <FormField label="County">
+                  <Select
+                    selectedOption={getSelectedOption(countySelectOptions, address.county)}
+                    onChange={({detail}) => handleAddressChange({target: {name: "county", value: detail.selectedOption.value}})}
+                    options={countySelectOptions}
+                    placeholder="Select county"
+                  />
+                </FormField>
+                <FormField label="City">
+                  <Select
+                    selectedOption={getSelectedOption(citySelectOptions, address.city)}
+                    onChange={({detail}) => handleAddressChange({target: {name: "city", value: detail.selectedOption.value}})}
+                    options={citySelectOptions}
+                    placeholder={cityOptions.length === 0 ? "Select county first" : "Select city"}
+                    disabled={cityOptions.length === 0}
+                  />
+                </FormField>
+                <FormField label="Postal Code">
+                  <Input
+                    value={address.postal_code}
+                    onChange={({detail}) => handleAddressChange({target: {name: "postal_code", value: detail.value.replace(/\D/g, "")}})}
+                    placeholder="010101"
+                  />
+                </FormField>
+                <div className="medstream-form-field-wide">
+                  <FormField label="Country" stretch>
+                    <Input value="Romania" disabled/>
+                  </FormField>
                 </div>
               </div>
-            </div>
+            </SpaceBetween>
           )}
-
-          <div className="form-action-block">
-            <div className="flex justify-end gap-3">
-              {step > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  disabled={isSubmitting}
-                  className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {"Previous"}
-                </button>
-              )}
-
-              {step < TOTAL_STEPS ? (
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  disabled={!isStepOneValid}
-                  className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-                >
-                  {"Next"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!canSubmit || !isStepTwoValid) return
-                    onSubmit(normalizedCurrentValues)
-                  }}
-                  disabled={!canSubmit || !isStepTwoValid}
-                  className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-                >
-                  {isSubmitting ? "Saving..." : "Save Changes"}
-                </button>
-              )}
-            </div>
-            <p className="form-action-message">
-              {step === 1
-                ? ("Next opens the address page.")
-                : ("Back returns to basic info.")}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+        </SpaceBetween>
+      </SpaceBetween>
+    </Modal>
   )
 }
