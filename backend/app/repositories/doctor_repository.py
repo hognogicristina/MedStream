@@ -280,6 +280,7 @@ class DoctorRepository:
             db.commit()
             db.refresh(doctor)
             raw_token, _ = create_email_verification_token(db, doctor, normalized_email)
+            db.refresh(doctor)
             return doctor, raw_token
 
     def request_password_reset(self, payload):
@@ -597,14 +598,17 @@ class DoctorRepository:
 
             if verification is None:
                 raise ValidationError("INVALID_VERIFICATION_TOKEN")
-            if verification.used_at is not None:
-                raise ValidationError("INVALID_VERIFICATION_TOKEN")
             if to_utc(verification.expires_at) < now_utc():
                 raise ValidationError("EXPIRED_VERIFICATION_TOKEN")
 
             doctor = db.get(Doctor, verification.doctor_id)
             if doctor is None:
                 raise NotFoundError("DOCTOR_NOT_FOUND")
+
+            if verification.used_at is not None:
+                if doctor.email_confirmed and not doctor.pending_email and verification.target_email == doctor.email:
+                    return
+                raise ValidationError("INVALID_VERIFICATION_TOKEN")
 
             if doctor.pending_email and verification.target_email == doctor.pending_email:
                 doctor.email = doctor.pending_email
