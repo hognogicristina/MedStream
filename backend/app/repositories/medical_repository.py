@@ -12,7 +12,9 @@ def _load_csv_column(filename, index):
         next(reader, None)
         for row in reader:
             if len(row) > index:
-                values.append(row[index].strip())
+                value = row[index].strip()
+                if value:
+                    values.append(value)
     return sorted(set(values))
 
 

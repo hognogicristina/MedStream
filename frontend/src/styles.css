@@ -352,7 +352,7 @@ body {
 #top-nav .medstream-account-dropdown [class*="dropdown-content-wrapper"] {
   min-width: 160px !important;
   box-sizing: border-box !important;
-  border: 1px solid var(--border-primary) !important;
+  border: 2px solid var(--border-strong) !important;
   border-radius: 6px !important;
   background: var(--surface-1) !important;
   box-shadow: none !important;
@@ -377,37 +377,63 @@ body {
 #top-nav .medstream-account-dropdown [data-account-option="true"] {
   box-sizing: border-box !important;
   border: 0 !important;
-  border-radius: 4px !important;
+  border-radius: 0 !important;
   background: transparent !important;
   color: var(--text-primary) !important;
   overflow: hidden !important;
 }
 
+#top-nav .medstream-account-dropdown [role="menuitem"],
 #top-nav .medstream-account-dropdown [data-account-option="true"] [class*="menu-item"] {
   box-sizing: border-box !important;
   min-height: 32px !important;
   background: transparent !important;
   border: 0 !important;
+  border-radius: 0 !important;
   padding: 7px 12px !important;
   transform: none !important;
+  outline: 0 !important;
 }
 
+#top-nav .medstream-account-dropdown [role="menuitem"] [class*="content-wrapper"],
+#top-nav .medstream-account-dropdown [role="menuitem"] [class*="main-row"],
 #top-nav .medstream-account-dropdown [data-account-option="true"],
 #top-nav .medstream-account-dropdown [data-account-option="true"] * {
+  background: transparent !important;
   color: var(--text-primary) !important;
 }
 
+#top-nav .medstream-account-dropdown [role="menuitem"]:hover,
+#top-nav .medstream-account-dropdown [role="menuitem"]:focus,
+#top-nav .medstream-account-dropdown [role="menuitem"]:focus-visible,
+#top-nav .medstream-account-dropdown [role="menuitem"][tabindex="0"],
+#top-nav .medstream-account-dropdown [role="menuitem"][class*="highlighted"],
+#top-nav .medstream-account-dropdown [role="menuitem"][class*="active"],
+#top-nav .medstream-account-dropdown [role="menuitem"][class*="selected"],
+#top-nav .medstream-account-dropdown [role="menuitem"]:hover [class*="content-wrapper"],
+#top-nav .medstream-account-dropdown [role="menuitem"]:focus [class*="content-wrapper"],
+#top-nav .medstream-account-dropdown [role="menuitem"]:focus-visible [class*="content-wrapper"],
+#top-nav .medstream-account-dropdown [role="menuitem"][tabindex="0"] [class*="content-wrapper"],
+#top-nav .medstream-account-dropdown [role="menuitem"][class*="highlighted"] [class*="content-wrapper"],
 #top-nav .medstream-account-dropdown [data-account-option="true"]:hover,
 #top-nav .medstream-account-dropdown [data-account-option="true"][class*="highlighted"],
 #top-nav .medstream-account-dropdown [data-account-option="true"]:hover [class*="menu-item"],
 #top-nav .medstream-account-dropdown [data-account-option="true"][class*="highlighted"] [class*="menu-item"] {
   background: transparent !important;
   border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
   transform: none !important;
 }
 
+#top-nav .medstream-account-dropdown [role="menuitem"]:hover *,
+#top-nav .medstream-account-dropdown [role="menuitem"]:focus *,
+#top-nav .medstream-account-dropdown [role="menuitem"]:focus-visible *,
+#top-nav .medstream-account-dropdown [role="menuitem"][tabindex="0"] *,
+#top-nav .medstream-account-dropdown [role="menuitem"][class*="highlighted"] *,
 #top-nav .medstream-account-dropdown [data-account-option="true"]:hover *,
 #top-nav .medstream-account-dropdown [data-account-option="true"][class*="highlighted"] * {
+  background: transparent !important;
   color: var(--link) !important;
 }
 
@@ -699,6 +725,44 @@ body {
   gap: 12px;
 }
 
+.medstream-clinical-controls-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+
+.medstream-clinical-controls-grid > *,
+.medstream-clinical-controls-grid [class*="awsui_root"],
+.medstream-clinical-controls-grid [aria-haspopup="listbox"] {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.medstream-clinical-record-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 16px;
+}
+
+.medstream-clinical-record-type {
+  margin: 0 0 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.medstream-dialog-panel {
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+
 .medstream-form {
   display: flex;
   flex-direction: column;
@@ -720,7 +784,8 @@ body {
 .medstream-form-field-wide [class*="awsui_form-field"],
 .medstream-form-field-wide [class*="awsui_control"],
 .medstream-form-field-wide [class*="awsui_textarea"],
-.medstream-form-field-wide [class*="awsui_input"] {
+.medstream-form-field-wide [class*="awsui_input"],
+.medstream-form-field-wide [aria-haspopup="listbox"] {
   width: 100%;
   max-width: none;
 }
@@ -768,6 +833,10 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .medstream-clinical-record-row {
+    align-items: stretch;
+  }
+
   .medstream-patient-details-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -782,6 +851,13 @@ body {
 
   .medstream-form-actions {
     justify-content: flex-start;
+  }
+}
+
+@media (min-width: 640px) {
+  .medstream-clinical-record-row {
+    flex-direction: row;
+    align-items: flex-start;
   }
 }
 

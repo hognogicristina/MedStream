@@ -98,9 +98,14 @@ def serialize_condition_rows(rows, doctor_names: dict[int, str] | None = None):
 
 
 @router.get("", response_model=ApiResponse[list[PatientRead]])
-def list_patients(condition_id: int | None = Query(default=None, ge=1)):
+def list_patients(
+    condition_id: int | None = Query(default=None, ge=1),
+    department: str | None = Query(default=None),
+    alert_presence: str | None = Query(default="all", pattern="^(all|critical|high|normal|any|none)$"),
+    status: str | None = Query(default="all", pattern="^(all|admitted|discharged)$"),
+):
     try:
-        patients = patient_service.list_patients(condition_id)
+        patients = patient_service.list_patients(condition_id, department, alert_presence, status)
         return success_response("Patients retrieved successfully.", serialize_many(patients, PatientRead))
     except Exception as error:
         raise_http_from_error(error)

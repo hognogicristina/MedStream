@@ -18,7 +18,7 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import {getAlerts, getBatchStatusStats, getDepartments, getStats, listPatients} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {formatPatientFullName} from "../utils/patients.js"
-import {alertTypeToVital, normalizeAlertType} from "../utils/alerts.js"
+import {alertTypeToVital, getAlertSeverityLevel, normalizeAlertType} from "../utils/alerts.js"
 
 const PAGE_SIZE = 10
 
@@ -171,7 +171,11 @@ export default function DepartmentPage() {
 
       try {
         const [patientsRes, statsRes, alertsRes, batchStatusRes] = await Promise.all([
-          listPatients({page: 1, limit: 100}),
+          listPatients({
+            department: departmentName,
+            alert_presence: severityFilter,
+            status: statusFilter,
+          }),
           getStats(),
           getAlerts(),
           getBatchStatusStats(),
@@ -194,7 +198,7 @@ export default function DepartmentPage() {
     }
 
     loadDepartmentData()
-  }, [departmentName, notifyError])
+  }, [departmentName, notifyError, severityFilter, statusFilter])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -213,7 +217,7 @@ export default function DepartmentPage() {
     }
 
     current.count += 1
-    current.severities.add(alert.severity)
+    current.severities.add(getAlertSeverityLevel(alert))
     accumulator[alert.patient_id] = current
     return accumulator
   }, {}), [alerts])

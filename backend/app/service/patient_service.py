@@ -7,8 +7,19 @@ class PatientService:
     def __init__(self, repository: PatientRepository | None = None):
         self.repository = repository or PatientRepository()
 
-    def list_patients(self, condition_id: int | None = None):
-        return self.repository.list_patients(condition_id)
+    def list_patients(
+        self,
+        condition_id: int | None = None,
+        department: str | None = None,
+        alert_presence: str | None = None,
+        status: str | None = None,
+    ):
+        return self.repository.list_patients(
+            condition_id=condition_id,
+            department=department,
+            alert_presence=alert_presence,
+            status=status,
+        )
 
     def search_patients_by_cnp(self, cnp: str):
         return self.repository.search_patients_by_cnp(cnp)

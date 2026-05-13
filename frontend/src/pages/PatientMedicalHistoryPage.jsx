@@ -1,8 +1,27 @@
 import {useCallback, useEffect, useMemo, useState} from "react"
 import {useParams} from "react-router-dom"
-import BackButton from "../components/BackButton.jsx"
+import {
+  Alert,
+  Badge,
+  Box,
+  Button,
+  ButtonDropdown,
+  ColumnLayout,
+  Container,
+  ContentLayout,
+  FormField,
+  Header,
+  Input,
+  Modal,
+  Select,
+  SpaceBetween,
+  StatusIndicator,
+  Table,
+  Textarea,
+} from "@cloudscape-design/components"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import DataTable from "../components/DataTable.jsx"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {getCurrentDoctor} from "../services/doctorApi.js"
@@ -84,7 +103,7 @@ const INITIAL_FORMS = {
   editDiagnosis: {diagnosis: "", notes: "", status: "", note: ""},
   medication: {name: "", dosage: "", frequency: ""},
   editMedication: {dosage: "", frequency: "", note: ""},
-  allergy: {name: "", severity: "mild"},
+  allergy: {name: "", severity: ""},
   editAllergy: {name: "", severity: "mild"},
   editCondition: {status: "", notes: ""},
 }
@@ -110,6 +129,46 @@ const STATUS_COLORS = {
     resolved: "#BAE6FD",
     chronic: "#E9D5FF",
   },
+}
+
+const FILTER_OPTIONS = [
+  {label: "All records", value: "all"},
+  {label: "Diagnosis", value: "diagnosis"},
+  {label: "Medication", value: "medication"},
+  {label: "Allergy", value: "allergy"},
+  {label: "Condition", value: "condition"},
+]
+
+const DIAGNOSIS_STATUS_OPTIONS = ["active", "resolved", "chronic", "inactive"].map((status) => ({
+  label: status,
+  value: status,
+}))
+
+const ALLERGY_SEVERITY_OPTIONS = ["mild", "moderate", "severe"].map((severity) => ({
+  label: severity,
+  value: severity,
+}))
+
+const RECORD_TYPE_LABELS = {
+  diagnosis: "Diagnosis",
+  medication: "Medication",
+  allergy: "Allergy",
+  condition: "Condition",
+}
+
+function getSelectedOption(options, value) {
+  if (!trimValue(value)) {
+    return null
+  }
+
+  return options.find((option) => option.value === value) || null
+}
+
+function mapValueOptions(values) {
+  return values
+    .map((value) => trimValue(value))
+    .filter(Boolean)
+    .map((value) => ({label: value, value}))
 }
 
 export default function PatientMedicalHistoryPage() {
@@ -286,6 +345,45 @@ export default function PatientMedicalHistoryPage() {
   const patientName = patient ? `${patient.last_name} ${patient.first_name}` : "Patient"
   const isDoctorAssigned = Boolean(currentDoctor && doctors.some((doctor) => doctor.id === currentDoctor.id))
   const canMutateRecords = Boolean(isDoctorAssigned && !patient?.is_discharged)
+  const recordCounts = {
+    diagnosis: diagnosis.length,
+    medication: medications.length,
+    allergy: allergies.length,
+    condition: patientConditions.length,
+  }
+  const totalRecords = items.length
+  const patientStatusText = patient?.is_discharged ? "Discharged" : "Admitted"
+  const actionItems = [
+    {id: "view-doctors", text: "View assigned doctors"},
+    {id: "add-diagnosis", text: "Add diagnosis", disabled: !canMutateRecords},
+    {id: "add-medication", text: "Add medication", disabled: !canMutateRecords},
+    {id: "add-allergy", text: "Add allergy", disabled: !canMutateRecords},
+    {id: "add-condition", text: "Add condition", disabled: !canMutateRecords},
+  ]
+
+  const handleRecordAction = ({detail}) => {
+    if (detail.id === "view-doctors") {
+      setShowDoctorsModal(true)
+      return
+    }
+
+    const dialogByAction = {
+      "add-diagnosis": "diagnosis",
+      "add-medication": "medication",
+      "add-allergy": "allergy",
+      "add-condition": "condition",
+    }
+
+    if (dialogByAction[detail.id]) {
+      setShowDialog(dialogByAction[detail.id])
+    }
+  }
+
+  const recordActions = (
+    <ButtonDropdown items={actionItems} onItemClick={handleRecordAction}>
+      Actions
+    </ButtonDropdown>
+  )
 
   const initialMedicationValues = editItem && showDialog === "edit_medication"
     ? normalizeMedicationUpdateForm({
@@ -361,6 +459,52 @@ export default function PatientMedicalHistoryPage() {
     }
     return patientConditions.some((item) => normalize(item.name) === name)
   }, [patientConditions, selectedConditionName])
+
+  const medicationSelectOptions = medicationOptions.map((medication) => ({
+    label: medication.name,
+    value: medication.name,
+    description: medication.pregnancy_category ? `Pregnancy category ${medication.pregnancy_category}` : undefined,
+  }))
+  const dosageSelectOptions = mapValueOptions(dosageOptions)
+  const frequencySelectOptions = mapValueOptions(frequencyOptions)
+  const allergySelectOptions = mapValueOptions(allergyOptions)
+  const conditionSelectOptions = filteredConditionOptions.map((condition) => ({
+    label: condition.name,
+    value: String(condition.id),
+  }))
+  const conditionStatusSelectOptions = mapValueOptions(conditionStatusOptions)
+  const selectedMedicationOption = getSelectedOption(medicationSelectOptions, medicationForm.name)
+  const selectedMedicationDosageOption = getSelectedOption(dosageSelectOptions, medicationForm.dosage)
+  const selectedMedicationFrequencyOption = getSelectedOption(frequencySelectOptions, medicationForm.frequency)
+  const selectedAllergyOption = getSelectedOption(allergySelectOptions, allergyForm.name)
+  const selectedAllergySeverityOption = getSelectedOption(ALLERGY_SEVERITY_OPTIONS, allergyForm.severity)
+  const selectedConditionOption = getSelectedOption(conditionSelectOptions, String(conditionId))
+  const selectedDiagnosisStatusOption = getSelectedOption(DIAGNOSIS_STATUS_OPTIONS, diagnosisForm.status)
+  const selectedEditDiagnosisStatusOption = getSelectedOption(DIAGNOSIS_STATUS_OPTIONS, editDiagnosisForm.status)
+  const selectedEditAllergySeverityOption = getSelectedOption(ALLERGY_SEVERITY_OPTIONS, editAllergyForm.severity)
+  const selectedEditMedicationDosageOption = getSelectedOption(dosageSelectOptions, editMedicationForm.dosage)
+  const selectedEditMedicationFrequencyOption = getSelectedOption(frequencySelectOptions, editMedicationForm.frequency)
+  const selectedEditConditionStatusOption = getSelectedOption(conditionStatusSelectOptions, editConditionForm.status)
+  const isEditDialog = Boolean(showDialog?.startsWith("edit_"))
+  const dialogRecordType = showDialog
+    ? showDialog.replace("edit_", "").replaceAll("_", " ")
+    : ""
+  const dialogTitle = showDialog
+    ? `${isEditDialog ? "Update" : "Add"} ${dialogRecordType}`
+    : ""
+  const canSubmitDialog = Boolean(
+    showDialog
+    && !isSubmitting
+    && canMutateRecords
+    && !(showDialog === "edit_diagnosis" && (!trimValue(editDiagnosisForm.status) || !trimValue(editDiagnosisForm.note)))
+    && !(showDialog === "medication" && (!canSubmitAddMedication || isDuplicateMedication))
+    && !(showDialog === "edit_medication" && !canSubmitEditMedication)
+    && !(showDialog === "edit_allergy" && !canSubmitAllergy)
+    && !(showDialog === "edit_condition" && !canSubmitCondition)
+    && !(showDialog === "condition" && (!conditionId || isDuplicateCondition))
+    && !(showDialog === "diagnosis" && (!trimValue(diagnosisForm.diagnosis) || !trimValue(diagnosisForm.status)))
+    && !(showDialog === "allergy" && ((!trimValue(allergyForm.name) || !trimValue(allergyForm.severity)) || isDuplicateAllergy))
+  )
 
   const appendDoctorNote = (note) => {
     const doctorName = currentDoctor
@@ -440,7 +584,7 @@ export default function PatientMedicalHistoryPage() {
           allergy_name: allergyForm.name,
           severity: allergyForm.severity,
         }, authHeaders)
-        setAllergyForm({name: "", severity: "mild"})
+        setAllergyForm(INITIAL_FORMS.allergy)
       }
 
       if (type === "edit_allergy") {
@@ -562,557 +706,526 @@ export default function PatientMedicalHistoryPage() {
 
   if (isLoading) {
     return (
-      <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)]">
-        <div className="mx-auto max-w-6xl flex flex-col gap-6">
+      <ContentLayout>
+        <Container>
           <LoadingSpinner/>
-        </div>
-      </div>
+        </Container>
+      </ContentLayout>
     )
   }
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)]">
-      <div className="mx-auto max-w-6xl flex flex-col gap-6">
-        <header className="console-topbar rounded-3xl p-6 sm:p-8">
-          <div className="space-y-4">
+    <ContentLayout>
+      <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <AppBreadcrumbs/>
+          <div className="medstream-page-heading-row">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Clinical Records</p>
-            </div>
-
-            <div>
-              <div className="mt-2 flex w-full items-start justify-between">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <h1 className="text-4xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-5xl">{patientName}</h1>
-                </div>
-                <BackButton/>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                <button
-                  type="button"
-                  onClick={() => setShowDoctorsModal(true)}
-                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--link)] transition hover:text-[var(--text-primary)]"
-                >
-                  View Assigned Doctors
-                </button>
-              </div>
-
-              <div className="mt-4 border-t border-[var(--border-subtle)] pt-4 overflow-x-auto min-h-[70px] custom-scrollbar">
-                <div className="flex items-center gap-3 w-full pb-2">
-                  <select
-                    value={filter}
-                    onChange={(event) => setFilter(event.target.value)}
-                    className="console-input flex-1 min-w-[180px] px-4 py-2 rounded-full text-sm font-semibold border border-[var(--border-primary)] bg-transparent"
-                  >
-                    <option value="all">All Records</option>
-                    <option value="diagnosis">Diagnosis</option>
-                    <option value="medication">Medication</option>
-                    <option value="allergy">Allergy</option>
-                    <option value="condition">Condition</option>
-                  </select>
-                  <div className="h-6 w-px bg-[var(--border-primary)] mx-2"></div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <button onClick={() => setShowDialog("diagnosis")}
-                            disabled={!canMutateRecords}
-                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
-                      Add Diagnosis
-                    </button>
-                    <button onClick={() => setShowDialog("medication")}
-                            disabled={!canMutateRecords}
-                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
-                      Add Medication
-                    </button>
-                    <button onClick={() => setShowDialog("allergy")}
-                            disabled={!canMutateRecords}
-                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
-                      Add Allergy
-                    </button>
-                    <button onClick={() => setShowDialog("condition")}
-                            disabled={!canMutateRecords}
-                            className="console-button-secondary rounded-full px-4 py-2 text-sm font-semibold transition whitespace-nowrap shrink-0 hover:!bg-[#ff9900] hover:!text-[#16191f] hover:!border-[#ff9900] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
-                      Add Condition
-                    </button>
-                  </div>
-                </div>
+              <h1 className="medstream-page-title">{patientName}</h1>
+              <p>Clinical Records</p>
+              <div className="medstream-page-filter-row">
+                <StatusIndicator type={patient?.is_discharged ? "stopped" : "success"}>
+                  {patientStatusText}
+                </StatusIndicator>
+                <StatusIndicator type={isDoctorAssigned ? "success" : "pending"}>
+                  {isDoctorAssigned ? "Assigned" : "Unassigned"}
+                </StatusIndicator>
+                <span className="medstream-department-badge">
+                  <Badge color="blue">{patient?.department || "--"}</Badge>
+                </span>
               </div>
             </div>
           </div>
-        </header>
-
-        <div className="monitor-card rounded-[28px] p-6 border border-[var(--border-primary)] mt-6">
-          <DataTable
-            items={items}
-            loading={isLoading}
-            pageSize={8}
-            emptyMessage="No records match the current filter."
-            controlsLayoutClassName="hidden"
-            shellClassName="space-y-3"
-            bodyClassName="space-y-3"
-            getItemKey={(item) => `${item.type}-${item.id}`}
-            renderRow={(item) => {
-              const involvedDoctorStr = item.doctor_id
-                ? doctorNameById[item.doctor_id] || "--"
-                : "--"
-              const itemDoctorName = trimValue(item.modified_by) || (
-                item.doctor_id ? doctorNameById[item.doctor_id] || "" : ""
-              )
-              const statusMeta = getRecordStatusMeta(item)
-
-              return (
-                <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-4 flex flex-col sm:flex-row justify-between gap-4">
-                  <div className="max-w-xl">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80] mb-1">{item.type}</p>
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">{item.label}</p>
-                    {item.type === "diagnosis" && item.notes && (
-                      <p className="text-sm text-[var(--text-secondary)] mt-1">{item.notes}</p>
-                    )}
-
-                    {item.type === "medication" && item.dosage && (
-                      <p className="text-sm text-[var(--text-secondary)] mt-1">{item.dosage}</p>
-                    )}
-                    {(
-                      (item.type === "diagnosis" && item.status_note)
-                      || (item.type === "medication" && item.last_updated_note)
-                      || (item.type === "condition" && item.notes)
-                      || ((item.type === "diagnosis" || item.type === "condition") && itemDoctorName)
-                    ) && (() => {
-                      const raw =
-                        item.type === "diagnosis"
-                          ? item.status_note
-                          : item.type === "medication"
-                            ? item.last_updated_note
-                            : item.notes
-                      const normalizedRaw = typeof raw === "string" ? raw : ""
-                      const splitIndex = normalizedRaw.indexOf("Modified by doctor:")
-
-                      const mainText = splitIndex !== -1 ? normalizedRaw.slice(0, splitIndex).trim() : normalizedRaw
-                      const doctorText = splitIndex !== -1
-                        ? normalizedRaw.slice(splitIndex).trim()
-                        : itemDoctorName
-                          ? `Modified by doctor: ${itemDoctorName}`
-                          : null
-
-                      return (
-                        <div className="text-xs text-[var(--text-muted)] mt-2 shadow-inner bg-[var(--surface-4)] px-3 py-2 rounded-md space-y-1">
-                          {mainText && <p>{mainText}</p>}
-                          {doctorText && <p className="italic">{doctorText}</p>}
-                        </div>
-                      )
-                    })()}
-                    {statusMeta && (
-                      <div className="mt-2">
-                        <span
-                          className="inline-block px-2 py-0.5 rounded text-xs font-medium uppercase tracking-wider border"
-                          style={{
-                            color: statusMeta.color,
-                            borderColor: statusMeta.color,
-                            backgroundColor: `${statusMeta.color}1A`,
-                          }}
-                        >
-                          {statusMeta.label}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex sm:flex-col justify-between sm:justify-end items-end gap-3 text-right">
-                    <div>
-                      <span className="block text-xs uppercase tracking-wider text-[var(--text-muted)] font-medium mb-1">
-                        Doc: {involvedDoctorStr}
-                      </span>
-                      <span className="block text-xs text-[var(--text-muted)]">Last updated: {formatDateTime(item.timestamp)}</span>
-                    </div>
-
-                    {["diagnosis", "medication", "allergy", "condition"].includes(item.type) && (
-                      <button
-                        onClick={() => openEdit(item)}
-                        disabled={!isDoctorAssigned || Boolean(patient?.is_discharged)}
-                        className="console-button-secondary rounded-xl text-xs font-semibold px-3 py-1.5 transition mt-2 disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-                      >
-                        Edit
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            }}
-          />
         </div>
 
-        {showDialog && (
-          <div className="console-modal-overlay">
-            <div className="console-modal monitor-card rounded-[28px] p-6 w-full max-w-md">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Clinical Records</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)] capitalize">
-                    {showDialog.startsWith("edit_") ? `Update ${showDialog.replace("edit_", "").replaceAll("_", " ")}` : `Add ${showDialog.replaceAll("_", " ")}`}
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCancelDialog}
-                  disabled={isSubmitting}
-                  className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Cancel
-                </button>
-              </div>
+        <Container>
+          <ColumnLayout columns={4} variant="text-grid">
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Diagnosis</Box>
+              <Box variant="h2">{recordCounts.diagnosis}</Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Medication</Box>
+              <Box variant="h2">{recordCounts.medication}</Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Allergy</Box>
+              <Box variant="h2">{recordCounts.allergy}</Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Condition</Box>
+              <Box variant="h2">{recordCounts.condition}</Box>
+            </SpaceBetween>
+          </ColumnLayout>
+        </Container>
 
-              <form
-                className="mt-5 space-y-4"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  handleSubmit(showDialog)
-                }}
+        {patient?.is_discharged || (currentDoctor && !isDoctorAssigned) ? (
+          <Alert type={patient?.is_discharged ? "info" : "warning"}>
+            {patient?.is_discharged
+              ? "This patient is discharged, so clinical records are read-only."
+              : "This patient is not assigned to you. Clinical records are read-only until assignment."}
+          </Alert>
+        ) : null}
+
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Review diagnosis, medication, allergy, and condition records."
+              actions={recordActions}
+            >
+              Clinical records
+            </Header>
+          }
+        >
+          <SpaceBetween size="m">
+            <div className="medstream-controls-grid medstream-clinical-controls-grid">
+              <SpaceBetween size="xxs">
+                <Box color="text-body-secondary" variant="awsui-key-label">Record type</Box>
+                <Select
+                  selectedOption={getSelectedOption(FILTER_OPTIONS, filter)}
+                  onChange={({detail}) => setFilter(detail.selectedOption.value)}
+                  options={FILTER_OPTIONS}
+                  ariaLabel="Filter clinical records"
+                />
+              </SpaceBetween>
+              <SpaceBetween size="xxs">
+                <Box color="text-body-secondary" variant="awsui-key-label">Visible records</Box>
+                <Box variant="h2">{totalRecords}</Box>
+              </SpaceBetween>
+            </div>
+
+            <DataTable
+              items={items}
+              loading={isLoading}
+              pageSize={8}
+              emptyMessage="No records match the current filter."
+              controlsLayoutClassName="hidden"
+              shellClassName="space-y-3"
+              bodyClassName="space-y-3"
+              getItemKey={(item) => `${item.type}-${item.id}`}
+              renderRow={(item) => {
+                const involvedDoctorStr = item.doctor_id
+                  ? doctorNameById[item.doctor_id] || "--"
+                  : "--"
+                const itemDoctorName = trimValue(item.modified_by) || (
+                  item.doctor_id ? doctorNameById[item.doctor_id] || "" : ""
+                )
+                const statusMeta = getRecordStatusMeta(item)
+
+                return (
+                  <div className="medstream-clinical-record-row">
+                    <div className="max-w-xl">
+                      <p className="medstream-clinical-record-type">{RECORD_TYPE_LABELS[item.type] || item.type}</p>
+                      <p className="text-sm font-semibold text-[var(--text-primary)]">{item.label}</p>
+                      {item.type === "diagnosis" && item.notes && (
+                        <p className="text-sm text-[var(--text-secondary)] mt-1">{item.notes}</p>
+                      )}
+
+                      {item.type === "medication" && item.dosage && (
+                        <p className="text-sm text-[var(--text-secondary)] mt-1">{item.dosage}</p>
+                      )}
+                      {(
+                        (item.type === "diagnosis" && item.status_note)
+                        || (item.type === "medication" && item.last_updated_note)
+                        || (item.type === "condition" && item.notes)
+                        || ((item.type === "diagnosis" || item.type === "condition") && itemDoctorName)
+                      ) && (() => {
+                        const raw =
+                          item.type === "diagnosis"
+                            ? item.status_note
+                            : item.type === "medication"
+                              ? item.last_updated_note
+                              : item.notes
+                        const normalizedRaw = typeof raw === "string" ? raw : ""
+                        const splitIndex = normalizedRaw.indexOf("Modified by doctor:")
+
+                        const mainText = splitIndex !== -1 ? normalizedRaw.slice(0, splitIndex).trim() : normalizedRaw
+                        const doctorText = splitIndex !== -1
+                          ? normalizedRaw.slice(splitIndex).trim()
+                          : itemDoctorName
+                            ? `Modified by doctor: ${itemDoctorName}`
+                            : null
+
+                        return (
+                          <div className="text-xs text-[var(--text-muted)] mt-2 shadow-inner bg-[var(--surface-4)] px-3 py-2 rounded-md space-y-1">
+                            {mainText && <p>{mainText}</p>}
+                            {doctorText && <p className="italic">{doctorText}</p>}
+                          </div>
+                        )
+                      })()}
+                      {statusMeta && (
+                        <div className="mt-2">
+                          <span
+                            className="inline-block rounded-md border px-2 py-0.5 text-xs font-medium uppercase"
+                            style={{
+                              color: statusMeta.color,
+                              borderColor: statusMeta.color,
+                              backgroundColor: `${statusMeta.color}1A`,
+                            }}
+                          >
+                            {statusMeta.label}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex sm:flex-col justify-between sm:justify-end items-end gap-3 text-right">
+                      <div>
+                        <span className="block text-xs uppercase tracking-wider text-[var(--text-muted)] font-medium mb-1">
+                          Doc: {involvedDoctorStr}
+                        </span>
+                        <span className="block text-xs text-[var(--text-muted)]">Last updated: {formatDateTime(item.timestamp)}</span>
+                      </div>
+
+                      {["diagnosis", "medication", "allergy", "condition"].includes(item.type) && (
+                        <Button
+                          onClick={() => openEdit(item)}
+                          disabled={!isDoctorAssigned || Boolean(patient?.is_discharged)}
+                        >
+                          Edit
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              }}
+            />
+          </SpaceBetween>
+        </Container>
+
+        {showDialog && (
+          <Modal
+            visible={Boolean(showDialog)}
+            onDismiss={isSubmitting ? undefined : handleCancelDialog}
+            size="medium"
+            header={
+              <Header
+                variant="h2"
+                description={isEditDialog ? "Update the selected clinical record." : "Create a new clinical record for this patient."}
+                actions={<StatusIndicator type={isEditDialog ? "in-progress" : "pending"}>{isEditDialog ? "Update" : "New record"}</StatusIndicator>}
               >
+                {dialogTitle}
+              </Header>
+            }
+            footer={
+              <Box float="right">
+                <SpaceBetween direction="horizontal" size="xs">
+                  <Button onClick={handleCancelDialog} disabled={isSubmitting}>
+                    Cancel
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (canSubmitDialog) {
+                        handleSubmit(showDialog)
+                      }
+                    }}
+                    disabled={!canSubmitDialog}
+                    className="console-button-primary rounded-lg px-4 py-[9px] text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                  >
+                    {isSubmitting ? "Saving..." : isEditDialog ? "Save Changes" : "Add Record"}
+                  </button>
+                </SpaceBetween>
+              </Box>
+            }
+          >
+            <SpaceBetween size="m">
+              <ColumnLayout columns={2} variant="text-grid">
+                <SpaceBetween size="xxs">
+                  <Box color="text-body-secondary" variant="awsui-key-label">Patient</Box>
+                  <Box variant="h3">{patientName}</Box>
+                </SpaceBetween>
+                <SpaceBetween size="xxs">
+                  <Box color="text-body-secondary" variant="awsui-key-label">Record Type</Box>
+                  <Box variant="h3" textTransform="capitalize">{dialogRecordType}</Box>
+                </SpaceBetween>
+              </ColumnLayout>
+
+              <div className="medstream-form-grid">
                 {showDialog === "diagnosis" && (
                   <>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="diagnosis-name">Diagnosis</label>
-                      <input
-                        id="diagnosis-name"
-                        className="login-input"
+                    <FormField label="Diagnosis">
+                      <Input
                         value={diagnosisForm.diagnosis}
-                        onChange={(event) => setDiagnosisForm({...diagnosisForm, diagnosis: event.target.value})}
+                        onChange={({detail}) => setDiagnosisForm({...diagnosisForm, diagnosis: detail.value})}
+                        placeholder="Enter diagnosis"
+                        disabled={isSubmitting}
                       />
-                    </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="diagnosis-status">Status</label>
-                      <select
-                        id="diagnosis-status"
-                        className="login-input"
-                        value={diagnosisForm.status}
-                        onChange={(event) => setDiagnosisForm({...diagnosisForm, status: event.target.value})}
-                      >
-                        <option value="">Select status</option>
-                        {["active", "resolved", "chronic", "inactive"].map((status) => (
-                          <option key={status} value={status}>{status}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="diagnosis-notes">Notes</label>
-                      <textarea
-                        id="diagnosis-notes"
-                        className="login-input min-h-24"
-                        value={diagnosisForm.notes}
-                        onChange={(event) => setDiagnosisForm({...diagnosisForm, notes: event.target.value})}
+                    </FormField>
+                    <FormField label="Status">
+                      <Select
+                        selectedOption={selectedDiagnosisStatusOption}
+                        onChange={({detail}) => setDiagnosisForm({...diagnosisForm, status: detail.selectedOption.value})}
+                        options={DIAGNOSIS_STATUS_OPTIONS}
+                        placeholder="Select status"
+                        disabled={isSubmitting}
                       />
+                    </FormField>
+                    <div className="medstream-form-field-wide">
+                      <FormField label="Notes" stretch>
+                        <Textarea
+                          value={diagnosisForm.notes}
+                          onChange={({detail}) => setDiagnosisForm({...diagnosisForm, notes: detail.value})}
+                          placeholder="Optional clinical notes"
+                          rows={3}
+                          disabled={isSubmitting}
+                        />
+                      </FormField>
                     </div>
                   </>
                 )}
 
                 {showDialog === "medication" && (
                   <>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="medication-name">Medication</label>
-                      <select
-                        id="medication-name"
-                        className={`login-input ${isDuplicateMedication ? "border-red-500" : ""}`}
-                        value={medicationForm.name}
-                        onChange={(event) => setMedicationForm({...medicationForm, name: event.target.value})}
+                    <div className="medstream-form-field-wide">
+                      <FormField
+                        label="Medication"
+                        errorText={isDuplicateMedication ? "This medication already exists for this patient." : undefined}
+                        stretch
                       >
-                        <option value="">Select medication</option>
-                        {medicationOptions.map((medication) => (
-                          <option key={`${medication.name}-${medication.pregnancy_category}`} value={medication.name}>
-                            {medication.name} ({medication.pregnancy_category})
-                          </option>
-                        ))}
-                      </select>
+                        <Select
+                          selectedOption={selectedMedicationOption}
+                          onChange={({detail}) => setMedicationForm({...medicationForm, name: detail.selectedOption.value})}
+                          options={medicationSelectOptions}
+                          placeholder="Select medication"
+                          statusType={isDuplicateMedication ? "error" : "finished"}
+                          disabled={isSubmitting}
+                        />
+                      </FormField>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="login-field">
-                        <label className="login-label" htmlFor="medication-dosage">Dosage</label>
-                        <select
-                          id="medication-dosage"
-                          className="login-input"
-                          value={medicationForm.dosage}
-                          onChange={(event) => setMedicationForm({...medicationForm, dosage: event.target.value})}
-                        >
-                          <option value="">Select dosage</option>
-                          {dosageOptions.map((dosage) => (
-                            <option key={dosage} value={dosage}>{dosage}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="login-field">
-                        <label className="login-label" htmlFor="medication-frequency">Frequency</label>
-                        <select
-                          id="medication-frequency"
-                          className="login-input"
-                          value={medicationForm.frequency}
-                          onChange={(event) => setMedicationForm({...medicationForm, frequency: event.target.value})}
-                        >
-                          <option value="">Select frequency</option>
-                          {frequencyOptions.map((frequency) => (
-                            <option key={frequency} value={frequency}>{frequency}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
+                    <FormField label="Dosage">
+                      <Select
+                        selectedOption={selectedMedicationDosageOption}
+                        onChange={({detail}) => setMedicationForm({...medicationForm, dosage: detail.selectedOption.value})}
+                        options={dosageSelectOptions}
+                        placeholder="Select dosage"
+                        disabled={isSubmitting}
+                      />
+                    </FormField>
+                    <FormField label="Frequency">
+                      <Select
+                        selectedOption={selectedMedicationFrequencyOption}
+                        onChange={({detail}) => setMedicationForm({...medicationForm, frequency: detail.selectedOption.value})}
+                        options={frequencySelectOptions}
+                        placeholder="Select frequency"
+                        disabled={isSubmitting}
+                      />
+                    </FormField>
                   </>
                 )}
 
                 {showDialog === "allergy" && (
-                  <div className="space-y-4">
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="allergy-name">Allergy</label>
-                      <select
-                        id="allergy-name"
-                        className={`login-input ${isDuplicateAllergy ? "border-red-500" : ""}`}
-                        value={allergyForm.name}
-                        onChange={(event) => setAllergyForm({...allergyForm, name: event.target.value})}
-                      >
-                        <option value="">Select allergy</option>
-                        {allergyOptions.map((allergy) => (
-                          <option key={allergy} value={allergy}>{allergy}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="allergy-severity">Severity</label>
-                      <select
-                        id="allergy-severity"
-                        className="login-input"
-                        value={allergyForm.severity}
-                        onChange={(event) => setAllergyForm({...allergyForm, severity: event.target.value})}
-                      >
-                        <option value="mild">Mild</option>
-                        <option value="moderate">Moderate</option>
-                        <option value="severe">Severe</option>
-                      </select>
-                    </div>
-                  </div>
+                  <>
+                    <FormField
+                      label="Allergy"
+                      errorText={isDuplicateAllergy ? "This allergy already exists for this patient." : undefined}
+                    >
+                      <Select
+                        selectedOption={selectedAllergyOption}
+                        onChange={({detail}) => setAllergyForm({...allergyForm, name: detail.selectedOption.value})}
+                        options={allergySelectOptions}
+                        placeholder="Select allergy"
+                        statusType={isDuplicateAllergy ? "error" : "finished"}
+                        disabled={isSubmitting}
+                      />
+                    </FormField>
+                    <FormField label="Severity">
+                      <Select
+                        selectedOption={selectedAllergySeverityOption}
+                        onChange={({detail}) => setAllergyForm({...allergyForm, severity: detail.selectedOption.value})}
+                        options={ALLERGY_SEVERITY_OPTIONS}
+                        placeholder="Select severity"
+                        disabled={isSubmitting}
+                      />
+                    </FormField>
+                  </>
                 )}
 
                 {showDialog === "condition" && (
-                  <div className="space-y-4">
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="condition-search">Search condition</label>
-                      <input
-                        id="condition-search"
-                        className="login-input"
+                  <>
+                    <FormField label="Search condition">
+                      <Input
                         value={conditionSearch}
-                        onChange={(event) => setConditionSearch(event.target.value)}
+                        onChange={({detail}) => setConditionSearch(detail.value)}
                         placeholder="Search by condition name"
+                        disabled={isSubmitting}
                       />
-                    </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="condition-select">Condition</label>
-                      <select
-                        className={`login-input ${isDuplicateCondition ? "border-red-500" : ""}`}
-                        id="condition-select"
-                        value={conditionId}
-                        onChange={(event) => setConditionId(event.target.value)}
-                      >
-                        <option value="">Select condition</option>
-                        {filteredConditionOptions.map((condition) => (
-                          <option key={condition.id} value={condition.id}>{condition.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                    </FormField>
+                    <FormField
+                      label="Condition"
+                      errorText={isDuplicateCondition ? "This condition already exists for this patient." : undefined}
+                    >
+                      <Select
+                        selectedOption={selectedConditionOption}
+                        onChange={({detail}) => setConditionId(detail.selectedOption.value)}
+                        options={conditionSelectOptions}
+                        placeholder="Select condition"
+                        statusType={isDuplicateCondition ? "error" : "finished"}
+                        disabled={isSubmitting}
+                      />
+                    </FormField>
+                  </>
                 )}
 
                 {showDialog === "edit_diagnosis" && (
                   <>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="edit-diagnosis-status">Status</label>
-                      <select
-                        id="edit-diagnosis-status"
-                        className="login-input"
-                        value={editDiagnosisForm.status}
-                        onChange={(event) => setEditDiagnosisForm({...editDiagnosisForm, status: event.target.value})}
-                      >
-                        <option value="">Keep current status</option>
-                        {["active", "resolved", "chronic", "inactive"].map((status) => (
-                          <option key={status} value={status}>{status}</option>
-                        ))}
-                      </select>
+                    <div className="medstream-form-field-wide">
+                      <FormField label="Status" stretch>
+                        <Select
+                          selectedOption={selectedEditDiagnosisStatusOption}
+                          onChange={({detail}) => setEditDiagnosisForm({...editDiagnosisForm, status: detail.selectedOption.value})}
+                          options={DIAGNOSIS_STATUS_OPTIONS}
+                          placeholder="Keep current status"
+                          disabled={isSubmitting}
+                        />
+                      </FormField>
                     </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="edit-diagnosis-status-note">Status Note</label>
-                      <textarea
-                        id="edit-diagnosis-status-note"
-                        className="login-input min-h-24"
-                        value={editDiagnosisForm.note}
-                        onChange={(event) => setEditDiagnosisForm({...editDiagnosisForm, note: event.target.value})}
-                      />
+                    <div className="medstream-form-field-wide">
+                      <FormField label="Status Note" stretch>
+                        <Textarea
+                          value={editDiagnosisForm.note}
+                          onChange={({detail}) => setEditDiagnosisForm({...editDiagnosisForm, note: detail.value})}
+                          placeholder="Document the reason for the status update."
+                          rows={3}
+                          disabled={isSubmitting}
+                        />
+                      </FormField>
                     </div>
                   </>
                 )}
 
                 {showDialog === "edit_allergy" && (
-                  <div className="space-y-4">
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="edit-allergy-severity">Severity</label>
-                      <select
-                        id="edit-allergy-severity"
-                        className="login-input"
-                        value={editAllergyForm.severity}
-                        onChange={(event) => setEditAllergyForm({...editAllergyForm, severity: event.target.value})}
-                      >
-                        <option value="mild">Mild</option>
-                        <option value="moderate">Moderate</option>
-                        <option value="severe">Severe</option>
-                      </select>
-                    </div>
+                  <div className="medstream-form-field-wide">
+                    <FormField label="Severity" stretch>
+                      <Select
+                        selectedOption={selectedEditAllergySeverityOption}
+                        onChange={({detail}) => setEditAllergyForm({...editAllergyForm, severity: detail.selectedOption.value})}
+                        options={ALLERGY_SEVERITY_OPTIONS}
+                        placeholder="Select severity"
+                        disabled={isSubmitting}
+                      />
+                    </FormField>
                   </div>
                 )}
 
                 {showDialog === "edit_medication" && (
                   <>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="login-field">
-                        <label className="login-label" htmlFor="edit-medication-dosage">Dosage</label>
-                        <select
-                          id="edit-medication-dosage"
-                          className="login-input"
-                          value={editMedicationForm.dosage}
-                          onChange={(event) => setEditMedicationForm({...editMedicationForm, dosage: event.target.value})}
-                        >
-                          <option value="">Select dosage</option>
-                          {dosageOptions.map((dosage) => (
-                            <option key={dosage} value={dosage}>{dosage}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="login-field">
-                        <label className="login-label" htmlFor="edit-medication-frequency">Frequency</label>
-                        <select
-                          id="edit-medication-frequency"
-                          className="login-input"
-                          value={editMedicationForm.frequency}
-                          onChange={(event) => setEditMedicationForm({...editMedicationForm, frequency: event.target.value})}
-                        >
-                          <option value="">Select frequency</option>
-                          {frequencyOptions.map((frequency) => (
-                            <option key={frequency} value={frequency}>{frequency}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="edit-medication-notes">Reason / Notes</label>
-                      <textarea
-                        id="edit-medication-notes"
-                        className="login-input min-h-24"
-                        required
-                        value={editMedicationForm.note}
-                        onChange={(event) => setEditMedicationForm({...editMedicationForm, note: event.target.value})}
+                    <FormField label="Dosage">
+                      <Select
+                        selectedOption={selectedEditMedicationDosageOption}
+                        onChange={({detail}) => setEditMedicationForm({...editMedicationForm, dosage: detail.selectedOption.value})}
+                        options={dosageSelectOptions}
+                        placeholder="Select dosage"
+                        disabled={isSubmitting}
                       />
+                    </FormField>
+                    <FormField label="Frequency">
+                      <Select
+                        selectedOption={selectedEditMedicationFrequencyOption}
+                        onChange={({detail}) => setEditMedicationForm({...editMedicationForm, frequency: detail.selectedOption.value})}
+                        options={frequencySelectOptions}
+                        placeholder="Select frequency"
+                        disabled={isSubmitting}
+                      />
+                    </FormField>
+                    <div className="medstream-form-field-wide">
+                      <FormField label="Reason / Notes" stretch>
+                        <Textarea
+                          value={editMedicationForm.note}
+                          onChange={({detail}) => setEditMedicationForm({...editMedicationForm, note: detail.value})}
+                          placeholder="Document the reason for this medication update."
+                          rows={3}
+                          disabled={isSubmitting}
+                        />
+                      </FormField>
                     </div>
                   </>
                 )}
 
                 {showDialog === "edit_condition" && (
                   <>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="edit-condition-status">Status</label>
-                      <select
-                        id="edit-condition-status"
-                        className="login-input w-full"
-                        value={editConditionForm.status}
-                        onChange={(event) => setEditConditionForm({...editConditionForm, status: event.target.value})}
-                      >
-                        <option value="">Select status</option>
-                        {conditionStatusOptions.map((status) => (
-                          <option key={status} value={status}>{status}</option>
-                        ))}
-                      </select>
+                    <div className="medstream-form-field-wide">
+                      <FormField label="Status" stretch>
+                        <Select
+                          selectedOption={selectedEditConditionStatusOption}
+                          onChange={({detail}) => setEditConditionForm({...editConditionForm, status: detail.selectedOption.value})}
+                          options={conditionStatusSelectOptions}
+                          placeholder="Select status"
+                          disabled={isSubmitting}
+                        />
+                      </FormField>
                     </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="edit-condition-notes">Reason / Notes</label>
-                      <textarea
-                        id="edit-condition-notes"
-                        className="login-input min-h-24"
-                        value={editConditionForm.notes}
-                        onChange={(event) => setEditConditionForm({...editConditionForm, notes: event.target.value})}
-                      />
+                    <div className="medstream-form-field-wide">
+                      <FormField label="Reason / Notes" stretch>
+                        <Textarea
+                          value={editConditionForm.notes}
+                          onChange={({detail}) => setEditConditionForm({...editConditionForm, notes: detail.value})}
+                          placeholder="Document the reason for this condition update."
+                          rows={3}
+                          disabled={isSubmitting}
+                        />
+                      </FormField>
                     </div>
                   </>
                 )}
-
-                <div className="flex justify-end gap-3">
-                  <div className="group relative inline-flex">
-                    <button
-                      type="submit"
-                      disabled={
-                        isSubmitting
-                        || !canMutateRecords
-                        || (showDialog === "edit_diagnosis" && (!trimValue(editDiagnosisForm.status) || !trimValue(editDiagnosisForm.note)))
-                        || (showDialog === "medication" && (!canSubmitAddMedication || isDuplicateMedication))
-                        || (showDialog === "edit_medication" && !canSubmitEditMedication)
-                        || (showDialog === "edit_allergy" && !canSubmitAllergy)
-                        || (showDialog === "edit_condition" && !canSubmitCondition)
-                        || (showDialog === "condition" && (!conditionId || isDuplicateCondition))
-                        || (showDialog === "diagnosis" && (!trimValue(diagnosisForm.diagnosis) || !trimValue(diagnosisForm.status)))
-                        || (showDialog === "allergy" && ((!trimValue(allergyForm.name) || !trimValue(allergyForm.severity)) || isDuplicateAllergy))
-                      }
-                      className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-                    >
-                      {isSubmitting ? "Saving..." : "Submit"}
-                    </button>
-                    {showDialog === "medication" && isDuplicateMedication ? (
-                      <span
-                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                        This medication already exists for this patient
-                      </span>
-                    ) : null}
-                    {showDialog === "condition" && isDuplicateCondition ? (
-                      <span
-                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                        This condition already exists for this patient
-                      </span>
-                    ) : null}
-                    {showDialog === "allergy" && isDuplicateAllergy ? (
-                      <span
-                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                        This allergy already exists for this patient
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {showDoctorsModal && (
-          <div className="console-modal-overlay z-50">
-            <div className="console-modal monitor-card rounded-[28px] p-6 w-[600px] max-w-full">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-[var(--text-primary)]">Assigned Doctors</h2>
-                <button onClick={() => setShowDoctorsModal(false)}
-                        className="console-button-secondary px-3 py-1.5 rounded-xl text-sm">
-                  Close
-                </button>
               </div>
-              <DataTable
-                items={doctors}
-                loading={isLoading}
-                pageSize={100}
-                controlsLayoutClassName="hidden"
-                emptyMessage="No doctors are assigned."
-                getItemKey={(doctor) => doctor.id}
-                shellClassName="space-y-3"
-                bodyClassName="space-y-3"
-                renderRow={(doctor) => (
-                  <div
-                    className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center">
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--text-primary)]">Dr. {doctor.first_name} {doctor.last_name}</p>
-                      <p className="text-xs uppercase tracking-[0.2em] text-[#ffcc80] mt-1">{doctor.specialization}</p>
-                    </div>
-                    <p className="text-sm text-[var(--text-secondary)] font-medium">{doctor.email}</p>
-                  </div>
-                )}
-              />
-            </div>
-          </div>
+            </SpaceBetween>
+          </Modal>
         )}
-      </div>
-    </div>
+
+        <Modal
+          visible={showDoctorsModal}
+          onDismiss={() => setShowDoctorsModal(false)}
+          size="medium"
+          header={
+            <Header
+              variant="h2"
+              description="Doctors currently assigned to this patient."
+              actions={
+                <StatusIndicator type={doctors.length > 0 ? "success" : "pending"}>
+                  {doctors.length} assigned
+                </StatusIndicator>
+              }
+            >
+              Assigned Doctors
+            </Header>
+          }
+          footer={
+            <Box float="right">
+              <Button onClick={() => setShowDoctorsModal(false)}>
+                Close
+              </Button>
+            </Box>
+          }
+        >
+          <Table
+            variant="borderless"
+            items={doctors}
+            trackBy="id"
+            loading={isLoading}
+            loadingText="Loading assigned doctors"
+            empty={<Box color="text-body-secondary">No doctors are assigned.</Box>}
+            columnDefinitions={[
+              {
+                id: "doctor",
+                header: "Doctor",
+                cell: (doctor) => `Dr. ${doctor.first_name} ${doctor.last_name}`,
+              },
+              {
+                id: "specialization",
+                header: "Specialization",
+                cell: (doctor) => doctor.specialization || "--",
+              },
+              {
+                id: "email",
+                header: "Email",
+                cell: (doctor) => doctor.email || "--",
+              },
+            ]}
+          />
+        </Modal>
+      </SpaceBetween>
+    </ContentLayout>
   )
 }

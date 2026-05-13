@@ -1488,7 +1488,13 @@ class PatientRepository:
         address_updates = payload.get("address") if "address" in payload else None
         return updates, address_updates
 
-    def list_patients(self, condition_id: int | None = None) -> list[Patient]:
+    def list_patients(
+        self,
+        condition_id: int | None = None,
+        department: str | None = None,
+        alert_presence: str | None = None,
+        status: str | None = None,
+    ) -> list[Patient]:
         with SessionLocal() as db:
             patient_query = select(Patient).options(joinedload(Patient.address))
 
@@ -1497,6 +1503,51 @@ class PatientRepository:
                     PatientConditionAssignment,
                     PatientConditionAssignment.patient_id == Patient.id,
                 ).where(PatientConditionAssignment.condition_id == condition_id)
+
+            if department:
+                patient_query = patient_query.where(Patient.department == validate_department_value(department))
+
+            normalized_status = str(status or "all").strip().lower()
+            if normalized_status == "admitted":
+                patient_query = patient_query.where(Patient.is_discharged.is_(False))
+            elif normalized_status == "discharged":
+                patient_query = patient_query.where(Patient.is_discharged.is_(True))
+
+            normalized_alert_presence = str(alert_presence or "all").strip().lower()
+            alert_patient_ids = select(Alert.patient_id).where(Alert.patient_id.is_not(None))
+            severity = func.lower(func.trim(Alert.severity))
+
+            if normalized_alert_presence == "any":
+                patient_query = patient_query.where(Patient.id.in_(alert_patient_ids))
+            elif normalized_alert_presence == "none":
+                patient_query = patient_query.where(Patient.id.not_in(alert_patient_ids))
+            elif normalized_alert_presence == "critical":
+                patient_query = patient_query.where(
+                    Patient.id.in_(
+                        select(Alert.patient_id).where(
+                            Alert.patient_id.is_not(None),
+                            severity == "critical",
+                        )
+                    )
+                )
+            elif normalized_alert_presence == "high":
+                patient_query = patient_query.where(
+                    Patient.id.in_(
+                        select(Alert.patient_id).where(
+                            Alert.patient_id.is_not(None),
+                            severity.in_(("high", "warning")),
+                        )
+                    )
+                )
+            elif normalized_alert_presence == "normal":
+                patient_query = patient_query.where(
+                    Patient.id.in_(
+                        select(Alert.patient_id).where(
+                            Alert.patient_id.is_not(None),
+                            severity.not_in(("critical", "high", "warning")),
+                        )
+                    )
+                )
 
             return db.execute(patient_query.order_by(desc(Patient.id))).scalars().all()
 
