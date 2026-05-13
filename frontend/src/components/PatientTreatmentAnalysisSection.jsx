@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from "react"
+import {Pagination} from "@cloudscape-design/components"
 import {Area, AreaChart, CartesianGrid, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
@@ -925,26 +926,12 @@ export default function PatientTreatmentAnalysisSection({
                   {displayedMedication.modified_by ? (
                     <p className="mt-1 text-sm text-[var(--text-primary)]">Modified by doctor: {displayedMedication.modified_by}</p>
                   ) : null}
-                  <div className="mt-3 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setMedicationPage((page) => Math.max(1, page - 1))}
-                      disabled={medicationPage === 1}
-                      className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Previous
-                    </button>
-                    <span className="text-xs text-[var(--text-secondary)]">
-                      {medicationPage} / {totalMedicationPages}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setMedicationPage((page) => Math.min(totalMedicationPages, page + 1))}
-                      disabled={medicationPage >= totalMedicationPages}
-                      className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Next
-                    </button>
+                  <div className="mt-3 flex justify-end">
+                    <Pagination
+                      currentPageIndex={medicationPage}
+                      pagesCount={totalMedicationPages}
+                      onChange={({detail}) => setMedicationPage(detail.currentPageIndex)}
+                    />
                   </div>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -1071,24 +1058,12 @@ export default function PatientTreatmentAnalysisSection({
                                 })()
                               ))}
                               {fullAlertHistory.length > ALERT_HISTORY_EXPANDED_PAGE_SIZE ? (
-                                <div className="mt-3 flex items-center justify-between">
-                                  <button
-                                    type="button"
-                                    onClick={() => setAlertHistoryPage((page) => Math.max(1, page - 1))}
-                                    disabled={alertHistoryPage === 1}
-                                    className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-                                  >
-                                    Prev
-                                  </button>
-                                  <span className="text-xs text-[var(--text-secondary)]">Page {alertHistoryPage}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setAlertHistoryPage((page) => Math.min(totalAlertHistoryPages, page + 1))}
-                                    disabled={alertHistoryPage >= totalAlertHistoryPages}
-                                    className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-                                  >
-                                    Next
-                                  </button>
+                                <div className="mt-3 flex justify-end">
+                                  <Pagination
+                                    currentPageIndex={alertHistoryPage}
+                                    pagesCount={totalAlertHistoryPages}
+                                    onChange={({detail}) => setAlertHistoryPage(detail.currentPageIndex)}
+                                  />
                                 </div>
                               ) : null}
                             </div>
@@ -1112,24 +1087,12 @@ export default function PatientTreatmentAnalysisSection({
                             </div>
                           ))}
                           {diagnosisStatusDetails.length > diagnosisPageSize ? (
-                            <div className="mt-3 flex items-center justify-between">
-                              <button
-                                type="button"
-                                onClick={() => setDiagnosisPage((page) => Math.max(1, page - 1))}
-                                disabled={diagnosisPage === 1}
-                                className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-                              >
-                                Prev
-                              </button>
-                              <span className="text-xs text-[var(--text-secondary)]">Page {diagnosisPage}</span>
-                              <button
-                                type="button"
-                                onClick={() => setDiagnosisPage((page) => Math.min(totalDiagnosisPages, page + 1))}
-                                disabled={diagnosisPage >= totalDiagnosisPages}
-                                className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-                              >
-                                Next
-                              </button>
+                            <div className="mt-3 flex justify-end">
+                              <Pagination
+                                currentPageIndex={diagnosisPage}
+                                pagesCount={totalDiagnosisPages}
+                                onChange={({detail}) => setDiagnosisPage(detail.currentPageIndex)}
+                              />
                             </div>
                           ) : null}
                         </div>
@@ -1154,24 +1117,12 @@ export default function PatientTreatmentAnalysisSection({
                           </div>
                         ))}
                         {conditionStatusDetails.length > CONDITION_PAGE_SIZE ? (
-                          <div className="mt-3 flex items-center justify-between">
-                            <button
-                              type="button"
-                              onClick={() => setConditionPage((page) => Math.max(1, page - 1))}
-                              disabled={conditionPage === 1}
-                              className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              Prev
-                            </button>
-                            <span className="text-xs text-[var(--text-secondary)]">Page {conditionPage}</span>
-                            <button
-                              type="button"
-                              onClick={() => setConditionPage((page) => Math.min(totalConditionPages, page + 1))}
-                              disabled={conditionPage >= totalConditionPages}
-                              className="rounded-lg border border-[var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              Next
-                            </button>
+                          <div className="mt-3 flex justify-end">
+                            <Pagination
+                              currentPageIndex={conditionPage}
+                              pagesCount={totalConditionPages}
+                              onChange={({detail}) => setConditionPage(detail.currentPageIndex)}
+                            />
                           </div>
                         ) : null}
                       </div>

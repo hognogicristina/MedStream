@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useState} from "react"
+import {Pagination} from "@cloudscape-design/components"
 
 export default function DataTable({
                                     items,
@@ -58,21 +59,6 @@ export default function DataTable({
   const sortedItems = activeSort ? [...filteredItems].sort(activeSort.compare) : filteredItems
   const maxPage = Math.max(1, Math.ceil(sortedItems.length / activePageSize))
   const paginatedItems = sortedItems.slice((currentPage - 1) * activePageSize, currentPage * activePageSize)
-  const pageNumbers = (() => {
-    if (maxPage <= 7) {
-      return Array.from({length: maxPage}, (_, index) => index + 1)
-    }
-
-    if (currentPage <= 4) {
-      return [1, 2, 3, 4, 5, "...", maxPage]
-    }
-
-    if (currentPage >= maxPage - 3) {
-      return [1, "...", maxPage - 4, maxPage - 3, maxPage - 2, maxPage - 1, maxPage]
-    }
-
-    return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", maxPage]
-  })()
 
   useEffect(() => {
     if (currentPage > maxPage) {
@@ -193,52 +179,14 @@ export default function DataTable({
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4 flex-wrap">
-          <div className="console-chip rounded-full px-4 py-2 text-sm font-medium">
-            Page {currentPage} of {maxPage}
-          </div>
           {bottomControls}
         </div>
-        <div className="console-pagination">
-          <button
-            className="console-pagination-button"
-            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-            aria-label="Previous page"
-          >
-            <span className="console-pagination-arrow" aria-hidden="true">‹</span>
-            <span className="console-pagination-label">Prev</span>
-          </button>
-          {!simplePagination && (
-            <div className="console-pagination-pages">
-              {pageNumbers.map((pageNumber, index) => (
-                pageNumber === "..." ? (
-                  <span key={`ellipsis-${index}`} className="console-pagination-ellipsis">
-                    ...
-                  </span>
-                ) : (
-                  <button
-                    key={pageNumber}
-                    type="button"
-                    className={`console-pagination-page ${pageNumber === currentPage ? "console-pagination-page-active" : ""}`}
-                    onClick={() => setCurrentPage(pageNumber)}
-                    aria-current={pageNumber === currentPage ? "page" : undefined}
-                  >
-                    {pageNumber}
-                  </button>
-                )
-              ))}
-            </div>
-          )}
-          <button
-            className="console-pagination-button"
-            onClick={() => setCurrentPage((prev) => Math.min(maxPage, prev + 1))}
-            disabled={currentPage >= maxPage}
-            aria-label="Next page"
-          >
-            <span className="console-pagination-label">Next</span>
-            <span className="console-pagination-arrow" aria-hidden="true">›</span>
-          </button>
-        </div>
+        <Pagination
+          currentPageIndex={currentPage}
+          pagesCount={maxPage}
+          onChange={({detail}) => setCurrentPage(detail.currentPageIndex)}
+          openEnd={simplePagination}
+        />
       </div>
     </>
   )

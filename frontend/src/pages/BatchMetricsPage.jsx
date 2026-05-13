@@ -1,4 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from "react"
+import {Pagination} from "@cloudscape-design/components"
 import {Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {
   getBatchInsights,
@@ -826,26 +827,12 @@ export default function BatchMetricsPage() {
               )}
             </div>
 
-            <div className="mt-6 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                disabled={patientsPerDepartment.page <= 1}
-                onClick={() => setDepartmentsPage((current) => Math.max(1, current - 1))}
-              >
-                Previous
-              </button>
-              <p className="text-sm text-[var(--text-secondary)]">
-                Page {patientsPerDepartment.page || 1} of {departmentsTotalPages}
-              </p>
-              <button
-                type="button"
-                className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                disabled={(patientsPerDepartment.page || 1) >= departmentsTotalPages}
-                onClick={() => setDepartmentsPage((current) => Math.min(departmentsTotalPages, current + 1))}
-              >
-                Next
-              </button>
+            <div className="mt-6 flex justify-end">
+              <Pagination
+                currentPageIndex={patientsPerDepartment.page || 1}
+                pagesCount={departmentsTotalPages}
+                onChange={({detail}) => setDepartmentsPage(detail.currentPageIndex)}
+              />
             </div>
           </div>
 
@@ -879,26 +866,12 @@ export default function BatchMetricsPage() {
               )}
             </div>
 
-            <div className="mt-6 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                disabled={topDiagnosis.page <= 1}
-                onClick={() => setDiagnosesPage((current) => Math.max(1, current - 1))}
-              >
-                Previous
-              </button>
-              <p className="text-sm text-[var(--text-secondary)]">
-                Page {topDiagnosis.page || 1} of {diagnosesTotalPages}
-              </p>
-              <button
-                type="button"
-                className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                disabled={(topDiagnosis.page || 1) >= diagnosesTotalPages}
-                onClick={() => setDiagnosesPage((current) => Math.min(diagnosesTotalPages, current + 1))}
-              >
-                Next
-              </button>
+            <div className="mt-6 flex justify-end">
+              <Pagination
+                currentPageIndex={topDiagnosis.page || 1}
+                pagesCount={diagnosesTotalPages}
+                onChange={({detail}) => setDiagnosesPage(detail.currentPageIndex)}
+              />
             </div>
           </div>
         </section>

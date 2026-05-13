@@ -1,4 +1,5 @@
 import {useEffect, useState} from "react"
+import {Pagination} from "@cloudscape-design/components"
 import {
   getMetricsComparison,
   getStreamingAlerts,
@@ -78,7 +79,7 @@ export default function StreamingMetricsPage() {
   const [heartRateHistory, setHeartRateHistory] = useState([])
   const [alertsRateHistory, setAlertsRateHistory] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [seenAlertIds, setSeenAlertIds] = useState({})
+  const [, setSeenAlertIds] = useState({})
   const [lastAlertTime, setLastAlertTime] = useState(null)
 
   useEffect(() => {
@@ -335,26 +336,12 @@ export default function StreamingMetricsPage() {
                   )}
                 </div>
 
-                <div className="mt-6 flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                    disabled={(recentAlerts.page || 1) <= 1}
-                    onClick={() => setAlertsPage((current) => Math.max(1, current - 1))}
-                  >
-                    Previous
-                  </button>
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    Page {recentAlerts.page || 1} of {alertsTotalPages}
-                  </p>
-                  <button
-                    type="button"
-                    className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                    disabled={(recentAlerts.page || 1) >= alertsTotalPages}
-                    onClick={() => setAlertsPage((current) => Math.min(alertsTotalPages, current + 1))}
-                  >
-                    Next
-                  </button>
+                <div className="mt-6 flex justify-end">
+                  <Pagination
+                    currentPageIndex={recentAlerts.page || 1}
+                    pagesCount={alertsTotalPages}
+                    onChange={({detail}) => setAlertsPage(detail.currentPageIndex)}
+                  />
                 </div>
               </div>
 

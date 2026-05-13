@@ -1,4 +1,5 @@
 import {useMemo, useState} from "react"
+import {Pagination} from "@cloudscape-design/components"
 
 function toDateParts(value) {
   if (!value) {
@@ -278,24 +279,12 @@ export default function ActivityDialog({
                 </div>
 
                 {maxPatientPage > 1 && (
-                  <div className="mt-4 flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      className="console-button-secondary rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => setPatientPage((current) => Math.max(1, current - 1))}
-                      disabled={currentPatientPage === 1}
-                    >
-                      Previous
-                    </button>
-                    <span className="text-xs text-[var(--text-muted)]">Page {currentPatientPage} / {maxPatientPage}</span>
-                    <button
-                      type="button"
-                      className="console-button-secondary rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => setPatientPage((current) => Math.min(maxPatientPage, current + 1))}
-                      disabled={currentPatientPage >= maxPatientPage}
-                    >
-                      Next
-                    </button>
+                  <div className="mt-4 flex justify-end">
+                    <Pagination
+                      currentPageIndex={currentPatientPage}
+                      pagesCount={maxPatientPage}
+                      onChange={({detail}) => setPatientPage(detail.currentPageIndex)}
+                    />
                   </div>
                 )}
               </div>

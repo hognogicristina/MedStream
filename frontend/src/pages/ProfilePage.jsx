@@ -1,11 +1,23 @@
-import {useCallback, useEffect, useMemo, useState, useRef} from "react"
+import {useCallback, useEffect, useMemo, useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
-import ActivityList from "../components/ActivityList.jsx"
-import BackButton from "../components/BackButton.jsx"
+import {
+  Alert,
+  Badge,
+  Box,
+  Button,
+  ColumnLayout,
+  Container,
+  ContentLayout,
+  Header,
+  Pagination,
+  SpaceBetween,
+  StatusIndicator,
+} from "@cloudscape-design/components"
 import CountValue from "../components/CountValue.jsx"
 import DataTable from "../components/DataTable.jsx"
 import ActivityDialog from "../components/ActivityDialog.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {resendVerificationEmail} from "../services/authApi.js"
@@ -156,6 +168,55 @@ function sortAssignedPatients(items) {
     .map((entry) => entry.patient)
 }
 
+function formatActivityDateTime(value) {
+  if (!value) {
+    return "--"
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date(value))
+}
+
+function formatActivityPeople(items, prefix = "") {
+  if (!items || items.length === 0) {
+    return "--"
+  }
+
+  return items.map((item) => `${prefix}${item.first_name} ${item.last_name}`).join(", ")
+}
+
+function getActivityStatusType(status) {
+  if (status === "completed") {
+    return "success"
+  }
+  if (status === "canceled") {
+    return "stopped"
+  }
+  if (status === "incoming") {
+    return "pending"
+  }
+  return "info"
+}
+
+function getActivityStatusColor(status) {
+  return status === "incoming" ? "yellow" : undefined
+}
+
+function formatActivityStatus(status) {
+  if (!status) {
+    return "--"
+  }
+
+  return `${status.charAt(0).toUpperCase()}${status.slice(1)}`
+}
+
 export default function ProfilePage() {
   const EMAIL_VERIFICATION_STATUS_POLL_MS = 30000
   const navigate = useNavigate()
@@ -200,8 +261,6 @@ export default function ProfilePage() {
   const [activityDialogMode, setActivityDialogMode] = useState("create")
   const [selectedActivity, setSelectedActivity] = useState(null)
   const [activityPendingCancellation, setActivityPendingCancellation] = useState(null)
-  const [isAssignDropdownOpen, setIsAssignDropdownOpen] = useState(false)
-  const assignInputRef = useRef(null)
   const [activityPage, setActivityPage] = useState(1)
   const ACTIVITY_PAGE_SIZE = 2
   const paginatedActivities = useMemo(() => {
@@ -356,16 +415,6 @@ export default function ProfilePage() {
   const isEmailDirty = emailInput.trim() && emailInput.trim() !== displayedEmail
   const shouldShowResendVerification = Boolean(doctor?.email_confirmed === false && doctor?.email_verification_expired === true)
   const normalizedAssignmentQuery = assignmentQuery.trim().toLowerCase()
-  const assignmentSuggestions = filteredAssignedPatients
-    .filter((patient) => {
-      if (!normalizedAssignmentQuery) {
-        return true
-      }
-
-      const patientName = formatPatientFullName(patient).toLowerCase()
-      return patient.cnp.toLowerCase().includes(normalizedAssignmentQuery) || patientName.includes(normalizedAssignmentQuery)
-    })
-    .slice(0, 8)
   const selectedPatient = filteredAssignedPatients.find((patient) => {
     const patientName = formatPatientFullName(patient)
     const normalizedPatientName = patientName.toLowerCase()
@@ -376,16 +425,15 @@ export default function ProfilePage() {
       || optionLabel === normalizedAssignmentQuery
     )
   })
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (assignInputRef.current && !assignInputRef.current.contains(event.target)) {
-        setIsAssignDropdownOpen(false)
-      }
+  const matchingAssignmentSuggestions = filteredAssignedPatients.filter((patient) => {
+    if (!normalizedAssignmentQuery || selectedPatient) {
+      return true
     }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
+
+    const patientName = formatPatientFullName(patient).toLowerCase()
+    return patient.cnp.toLowerCase().includes(normalizedAssignmentQuery) || patientName.includes(normalizedAssignmentQuery)
+  })
+  const assignmentSuggestions = selectedPatient ? filteredAssignedPatients : matchingAssignmentSuggestions
 
   useEffect(() => {
     if (!doctor || doctor.email_confirmed) {
@@ -395,8 +443,8 @@ export default function ProfilePage() {
     const pollId = window.setInterval(async () => {
       try {
         await refetchDoctorProfile()
-      } catch {
-
+      } catch (error) {
+        void error
       }
     }, EMAIL_VERIFICATION_STATUS_POLL_MS)
 
@@ -554,7 +602,8 @@ export default function ProfilePage() {
       if (selectedPatient?.cnp) {
         try {
           await searchPatientsByCnp(selectedPatient.cnp)
-        } catch {
+        } catch (error) {
+          void error
         }
       }
       const response = await assignPatientToDoctor(doctor.id, selectedPatient.id, authHeaders)
@@ -706,417 +755,471 @@ export default function ProfilePage() {
   }, [activities])
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Doctor Workspace</p>
-              <BackButton/>
-            </div>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <>
+      <ContentLayout>
+        <SpaceBetween size="m">
+          <div className="medstream-page-header">
+            <AppBreadcrumbs/>
+            <div className="medstream-page-heading-row">
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{"Doctor Control Panel"}</h1>
-                <p
-                  className="mt-2 max-w-2xl text-sm text-[var(--text-secondary)] sm:text-base">{"Manage profile details, patient assignments, and account status from one workspace."}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <div className="monitor-panel rounded-2xl p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Status</p>
-                  <p className="mt-3 text-lg font-semibold text-[var(--text-primary)]">{doctor ? (doctor.is_active ? "Active" : "Inactive") : "--"}</p>
-                </div>
-                <div className="monitor-panel rounded-2xl p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Assigned</p>
-                  <p className="mt-3 text-lg font-semibold text-[var(--text-primary)]"><CountValue value={assignedPatients.length}/></p>
-                </div>
-                <div className="monitor-panel rounded-2xl p-4 sm:col-span-2 lg:col-span-1">
-                  <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Available</p>
-                  <p className="mt-3 text-lg font-semibold text-[var(--text-primary)]"><CountValue value={filteredAssignedPatients.length}/></p>
+                <h1 className="medstream-page-title">Doctor Control Panel</h1>
+                <p>Manage profile details, patient assignments, and account status from one workspace.</p>
+                <div className="medstream-page-filter-row">
+                  <StatusIndicator type={doctor ? (doctor.is_active ? "success" : "stopped") : "pending"}>
+                    {doctor ? (doctor.is_active ? "Active" : "Inactive") : "--"}
+                  </StatusIndicator>
+                  <StatusIndicator type={isEmailUnverified || isPendingEmail ? "pending" : "success"}>
+                    {isEmailUnverified || isPendingEmail ? "Email pending" : "Email verified"}
+                  </StatusIndicator>
+                  <span className="medstream-department-badge">
+                    <Badge color="blue">{doctor?.specialization || "No specialization"}</Badge>
+                  </span>
                 </div>
               </div>
             </div>
           </div>
-        </header>
 
-        {isLoading ? (
-          <section className="monitor-card rounded-[28px] p-6">
-            <LoadingSpinner/>
-          </section>
-        ) : doctor ? (
-          <section className="grid gap-6">
-            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-              <section className="monitor-card rounded-[28px] p-6">
-                <div className="mb-6 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patients</p>
-                    <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Assigned Patients</h2>
-                  </div>
-                  <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
-                    <CountValue value={assignedPatients.length}/>
-                  </span>
-                </div>
+          {isLoading ? (
+            <Container>
+              <LoadingSpinner/>
+            </Container>
+          ) : doctor ? (
+            <SpaceBetween size="l">
+              <Container>
+                <ColumnLayout columns={4} variant="text-grid">
+                  <SpaceBetween size="xs">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Account status</Box>
+                    <Box variant="h2">{doctor.is_active ? "Active" : "Inactive"}</Box>
+                  </SpaceBetween>
+                  <SpaceBetween size="xs">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Assigned patients</Box>
+                    <Box variant="h2"><CountValue value={assignedPatients.length}/></Box>
+                  </SpaceBetween>
+                  <SpaceBetween size="xs">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Available patients</Box>
+                    <Box variant="h2"><CountValue value={filteredAssignedPatients.length}/></Box>
+                  </SpaceBetween>
+                  <SpaceBetween size="xs">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Incoming activities</Box>
+                    <Box variant="h2"><CountValue value={activities.filter((activity) => activity.status === "incoming").length}/></Box>
+                  </SpaceBetween>
+                </ColumnLayout>
+              </Container>
 
-                <DataTable
-                  items={assignedPatients}
-                  loading={isLoading}
-                  emptyMessage="No patients are currently assigned to this doctor."
-                  pageSize={3}
-                  controlsLayoutClassName="hidden"
-                  getItemKey={(patient) => patient.id}
-                  shellClassName="space-y-3"
-                  bodyClassName="space-y-3"
-                  renderRow={(patient) => (
-                    <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
-                      <div className="flex flex-col gap-4">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}`}>
-                              {formatPatientFullName(patient)}
-                            </Link>
-                            {patient.is_discharged && (
-                              <span
-                                className="status-pill status-pill-danger rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]">
-                                Discharged
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-2 text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">{patient.department}</p>
-                          <p className="mt-2 text-sm text-[var(--text-secondary)]">{patient.cnp}</p>
-                        </div>
-                        {(() => {
-                          const hasCount = Object.prototype.hasOwnProperty.call(patientDoctorCounts, patient.id)
-                          const assignedDoctorCount = hasCount ? patientDoctorCounts[patient.id] : 2
-                          const shouldTransfer = assignedDoctorCount <= 1
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (shouldTransfer) {
-                                  openTransferDialog(patient)
-                                  return
-                                }
-                                setPatientPendingRemoval(patient)
-                              }}
-                              disabled={removingPatientId === patient.id || isTransferringPatient}
-                              className="console-button-secondary w-max rounded-2xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-                            >
-                              {shouldTransfer ? "Transfer Patient" : (removingPatientId === patient.id ? "Removing..." : "Remove Patient")}
-                            </button>
-                          )
-                        })()}
-                      </div>
-                    </div>
-                  )}
-                />
-              </section>
-
-              <section className="monitor-card rounded-[28px] p-6">
-                <div className="mb-6 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Activities</p>
-                    <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Upcoming Activities</h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActivityDialogMode("create")
-                      setSelectedActivity(null)
-                      setIsActivityDialogOpen(true)
-                    }}
-                    disabled={activityPatients.length === 0}
-                    className="console-button-secondary rounded-2xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-                  >
-                    Add Activity
-                  </button>
-                </div>
-
-                <ActivityList
-                  activities={paginatedActivities}
-                  emptyMessage="No future activities are scheduled for this doctor."
-                  isLoading={isLoading}
-                  loadingMessage="Loading doctor activities..."
-                  onCancel={(activity) => {
-                    if (activity.status === "completed") {
-                      return
+              <div className="medstream-dashboard-split">
+                <div className="medstream-stretch-container">
+                  <Container
+                    header={
+                      <Header
+                        variant="h2"
+                        description="Patients currently assigned to this doctor."
+                        counter={`(${assignedPatients.length})`}
+                      >
+                        Assigned patients
+                      </Header>
                     }
-                    setActivityPendingCancellation(activity)
-                  }}
-                  onEdit={handleActivityEdit}
-                />
-                {totalActivityPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <button
-                      onClick={() => setActivityPage((p) => Math.max(1, p - 1))}
-                      disabled={activityPage === 1}
-                      className="console-button-secondary px-4 py-2 rounded-xl text-sm"
-                    >
-                      Previous
-                    </button>
-
-                    <span className="text-sm text-[var(--text-secondary)]">
-      Page {activityPage} of {totalActivityPages}
-    </span>
-
-                    <button
-                      onClick={() => setActivityPage((p) => Math.min(totalActivityPages, p + 1))}
-                      disabled={activityPage === totalActivityPages}
-                      className="console-button-secondary px-4 py-2 rounded-xl text-sm"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
-              </section>
-            </div>
-
-            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-              <section className="monitor-card rounded-[28px] p-6">
-                <div className="mb-6 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Profile</p>
-                    <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Editable Doctor Info</h2>
-                  </div>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${doctor.is_active ? "console-chip-success" : "console-chip-danger"}`}>
-                    {doctor.is_active ? "Active" : "Inactive"}
-                  </span>
-                </div>
-
-                <form className="space-y-5" onSubmit={handleProfileUpdate}>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="first_name">First Name</label>
-                      <input id="first_name" name="first_name" type="text" value={form.first_name} onChange={handleFormChange}
-                             className="login-input" placeholder="Example: Elena" required/>
-                    </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="last_name">Last Name</label>
-                      <input id="last_name" name="last_name" type="text" value={form.last_name} onChange={handleFormChange}
-                             className="login-input" placeholder="Example: Popescu" required/>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="specialization">Specialization</label>
-                      <select id="specialization" name="specialization" value={form.specialization} onChange={handleFormChange}
-                              className="login-input" required disabled={hasAssignedPatients}>
-                        <option value="">Select specialization</option>
-                        {departments.map((department) => (
-                          <option key={department} value={department}>{department}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="license_number">License Number</label>
-                      <input id="license_number" name="license_number" type="text" value={form.license_number} onChange={handleFormChange}
-                             className="login-input" placeholder="Example: DOC-20458" required/>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="doctor-birth-date">Birth Date</label>
-                      <input id="doctor-birth-date" name="birth_date" type="date" value={form.birth_date} onChange={handleFormChange}
-                             className="login-input" required/>
-                    </div>
-                    <div className="login-field">
-                      <label className="login-label" htmlFor="doctor-phone-number">{"Phone Number"}</label>
-                      <input
-                        id="doctor-phone-number"
-                        type="tel"
-                        value={phoneNumber}
-                        onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, ""))}
-                        className="login-input"
-                        placeholder={ROMANIA_PHONE_PLACEHOLDER}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <button type="submit" disabled={!isProfileFormValid || !isProfileDirty || isSavingProfile}
-                            className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
-                      {isSavingProfile ? "Updating..." : "Update Profile"}
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="monitor-card rounded-[28px] p-6">
-                <div className="mb-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Assignment</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Assign Patient</h2>
-                </div>
-
-                <form className="space-y-4" onSubmit={handleAssignPatient}>
-                  <div className="login-field relative" ref={assignInputRef}>
-                    <label className="login-label" htmlFor="assigned_patient">Patient CNP or Full Name</label>
-                    <input
-                      id="assigned_patient"
-                      type="text"
-                      value={assignmentQuery}
-                      onChange={(event) => {
-                        setAssignmentQuery(event.target.value)
-                        setIsAssignDropdownOpen(true)
-                      }}
-                      onFocus={() => setIsAssignDropdownOpen(true)}
-                      className="login-input"
-                      placeholder="Example: 6010101123451 or Popescu Andrei"
-                      autoComplete="off"
-                      disabled={filteredAssignedPatients.length === 0 || isAssigningPatient}
-                    />
-
-                    {isAssignDropdownOpen && assignmentSuggestions.length > 0 && (
-                      <div
-                        className="w-full mt-2 max-h-40 overflow-y-auto rounded-xl border border-[var(--border-primary)] bg-[var(--surface-2)] py-2 custom-scrollbar">
-                        {assignmentSuggestions.map((patient) => (
-                          <div
-                            key={patient.id}
-                            className="cursor-pointer px-4 py-2 hover:bg-[var(--surface-muted)] text-sm text-[var(--text-primary)]"
-                            onClick={() => {
-                              setAssignmentQuery(`${patient.cnp} | ${formatPatientFullName(patient)}`)
-                              setIsAssignDropdownOpen(false)
-                            }}
-                          >
-                            <span className="font-semibold text-[var(--text-primary)]">{patient.cnp}</span>
-                            <span className="text-[var(--text-muted)]"> | {formatPatientFullName(patient)}</span>
+                  >
+                    <DataTable
+                      items={assignedPatients}
+                      loading={isLoading}
+                      emptyMessage="No patients are currently assigned to this doctor."
+                      pageSize={4}
+                      controlsLayoutClassName="hidden"
+                      getItemKey={(patient) => patient.id}
+                      shellClassName="medstream-profile-list-shell"
+                      bodyClassName="medstream-profile-list"
+                      renderRow={(patient) => (
+                        <div className="medstream-profile-list-row">
+                          <div className="medstream-profile-row-main">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}`}>
+                                  {formatPatientFullName(patient)}
+                                </Link>
+                                {patient.is_discharged && (
+                                  <StatusIndicator type="stopped">Discharged</StatusIndicator>
+                                )}
+                              </div>
+                              <p className="medstream-profile-row-meta">{patient.department}</p>
+                              <p className="mt-1 text-sm text-[var(--text-secondary)]">{patient.cnp}</p>
+                            </div>
+                            {(() => {
+                              const hasCount = Object.prototype.hasOwnProperty.call(patientDoctorCounts, patient.id)
+                              const assignedDoctorCount = hasCount ? patientDoctorCounts[patient.id] : 2
+                              const shouldTransfer = assignedDoctorCount <= 1
+                              return (
+                                <Button
+                                  onClick={() => {
+                                    if (shouldTransfer) {
+                                      openTransferDialog(patient)
+                                      return
+                                    }
+                                    setPatientPendingRemoval(patient)
+                                  }}
+                                  disabled={removingPatientId === patient.id || isTransferringPatient}
+                                >
+                                  {shouldTransfer ? "Transfer patient" : (removingPatientId === patient.id ? "Removing..." : "Remove patient")}
+                                </Button>
+                              )
+                            })()}
                           </div>
-                        ))}
+                        </div>
+                      )}
+                    />
+                  </Container>
+                </div>
+
+                <div className="medstream-stretch-container">
+                  <Container
+                    header={
+                      <Header
+                        variant="h2"
+                        description="Upcoming work linked to your assigned patients."
+                        actions={
+                          <Button
+                            onClick={() => {
+                              setActivityDialogMode("create")
+                              setSelectedActivity(null)
+                              setIsActivityDialogOpen(true)
+                            }}
+                            disabled={activityPatients.length === 0}
+                          >
+                            Add activity
+                          </Button>
+                        }
+                      >
+                        Upcoming activities
+                      </Header>
+                    }
+                  >
+                    <SpaceBetween size="xs">
+                      {isLoading ? (
+                        <Box color="text-body-secondary">Loading doctor activities...</Box>
+                      ) : paginatedActivities.length === 0 ? (
+                        <Box color="text-body-secondary">No future activities are scheduled for this doctor.</Box>
+                      ) : (
+                        paginatedActivities.map((activity) => {
+                          const isCanceled = activity.status === "canceled"
+                          const isCompleted = activity.status === "completed"
+                          const isReadOnly = isCanceled || isCompleted
+                          const canEdit = !isReadOnly
+                          const canCancel = !isReadOnly
+
+                          return (
+                            <Container key={activity.id} fitHeight>
+                              <SpaceBetween size="xxs">
+                                <Box variant="small">
+                                  <StatusIndicator
+                                    type={getActivityStatusType(activity.status)}
+                                    colorOverride={getActivityStatusColor(activity.status)}
+                                  >
+                                    {formatActivityStatus(activity.status)}
+                                  </StatusIndicator>
+                                </Box>
+                                <Box variant="h3">{activity.title}</Box>
+                                <Box color="text-body-secondary" variant="small">{activity.type}</Box>
+                                {activity.description && (
+                                  <Box color="text-body-secondary" variant="small">{activity.description}</Box>
+                                )}
+                                <Box color="text-body-secondary" variant="small">{formatActivityDateTime(activity.scheduled_at)}</Box>
+                                <Box color="text-body-secondary" variant="small">
+                                  Doctors: {formatActivityPeople(activity.doctors, "Dr. ")}
+                                </Box>
+                                <Box color="text-body-secondary" variant="small">
+                                  Patients: {formatActivityPeople(activity.patients)}
+                                </Box>
+                                <div className="medstream-profile-activity-actions">
+                                  <Button
+                                    onClick={() => canEdit && handleActivityEdit(activity)}
+                                    disabled={!canEdit}
+                                  >
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    onClick={() => canCancel && setActivityPendingCancellation(activity)}
+                                    disabled={!canCancel}
+                                  >
+                                    Cancel activity
+                                  </Button>
+                                </div>
+                              </SpaceBetween>
+                            </Container>
+                          )
+                        })
+                      )}
+                    </SpaceBetween>
+                    {totalActivityPages > 1 && (
+                      <div className="medstream-profile-pagination">
+                        <Pagination
+                          currentPageIndex={activityPage}
+                          pagesCount={totalActivityPages}
+                          onChange={({detail}) => setActivityPage(detail.currentPageIndex)}
+                        />
                       </div>
                     )}
-
-                    <p className="mt-2 text-xs text-[var(--text-muted)]">
-                      Start with CNP or full name. Suggestions show both identifiers together.
-                    </p>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={!selectedPatient || isAssigningPatient}
-                    className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-                  >
-                    {isAssigningPatient ? "Assigning..." : "Assign Patient"}
-                  </button>
-                </form>
-              </section>
-
-
-              <section className={`monitor-card rounded-[28px] p-6 ${isEmailUnverified ? "border border-[#a33a45] bg-[#2a1d23]" : ""}`}>
-                <div className="mb-6">
-                  <p
-                    className={`text-xs font-semibold uppercase tracking-[0.3em] ${isEmailUnverified ? "text-[#ff7a7a]" : "text-[#ff9900]"}`}>Email</p>
-                  <h2 className={`mt-2 text-2xl font-semibold ${isEmailUnverified ? "text-[#ffd1d6]" : "text-[var(--text-primary)]"}`}>Account Email</h2>
-                </div>
-
-                <form className="space-y-4" onSubmit={handleEmailUpdate}>
-                  <div className="login-field">
-                    <label className="login-label" htmlFor="doctor-email">Email</label>
-                    <input
-                      id="doctor-email"
-                      type="email"
-                      value={emailInput}
-                      onChange={(event) => setEmailInput(event.target.value)}
-                      className={`login-input ${isPendingEmail ? "border-[#a33a45] text-[#ffd8dc]" : ""}`}
-                      placeholder="Example: doctor@medstream.local"
-                      required
-                    />
-                  </div>
-
-                  {isPendingEmail && (
-                    <p className="text-sm text-[#ff9fa9]">
-                      Email not confirmed yet. Current confirmed login email remains {doctor.email}.
-                    </p>
-                  )}
-
-                  <div className="flex justify-end gap-3">
-                    {shouldShowResendVerification && (
-                      <button
-                        type="button"
-                        onClick={handleResendVerification}
-                        disabled={isResendingVerification}
-                        className="rounded-2xl border border-[#facc15] bg-[#facc15] px-5 py-3 text-sm font-semibold text-[#1f2937] transition hover:border-[#eab308] hover:bg-[#eab308] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-                      >
-                        {isResendingVerification ? "Resending..." : "Resend Email"}
-                      </button>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={!isEmailDirty || isSavingEmail}
-                      className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-                    >
-                      {isSavingEmail ? "Sending confirmation..." : "Update Email"}
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="monitor-card rounded-[28px] p-6">
-                <div className="mb-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Account</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Account Status</h2>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">Current State</p>
-                    <p
-                      className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{doctor.is_active ? "Active doctor account" : "Inactive doctor account"}</p>
-                    <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                      {doctor.deleted_at ? `Deactivated at ${new Date(doctor.deleted_at).toLocaleString()}` : "Account is available for normal login and patient management."}
-                    </p>
-                  </div>
-
-                  <div className="relative w-full group">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!isOnlyDoctorInDepartment && !hasIncomingActivities) {
-                          setShowDeleteModal(true)
-                        }
-                      }}
-                      disabled={isDeletingAccount || isOnlyDoctorInDepartment || hasIncomingActivities}
-                      title={isOnlyDoctorInDepartment ? "You are the only doctor in this department. Account cannot be deleted." : ""}
-                      className="w-full rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-                    >
-                      {isDeletingAccount ? "Deactivating..." : "Delete Account"}
-                    </button>
-                    {hasIncomingActivities && (
-                      <span
-                        className="pointer-events-none absolute bottom-[120%] left-1/2 z-20 -translate-x-1/2 rounded-md bg-[#111827] px-2.5 py-1.5 text-xs text-[var(--text-primary)] opacity-0 transition-opacity duration-200 whitespace-nowrap group-hover:opacity-100"
-                        role="tooltip"
-                      >
-                        This account has incoming activities yet
-                      </span>
-                    )}
-                  </div>
-                  {isOnlyDoctorInDepartment && (
-                    <p className="text-xs text-[#ffb3bc]">
-                      You are the only doctor in this department. Account cannot be deleted.
-                    </p>
-                  )}
-                </div>
-              </section>
-            </div>
-          </section>
-        ) : (
-          <section className="monitor-card rounded-[28px] p-6">
-            <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
-              No doctor workspace information is available for this session.
-            </div>
-          </section>
-        )}
-
-        {showDeleteModal && (
-          <div className="console-modal-overlay">
-            <div className="console-modal monitor-card rounded-[28px] p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Account Deactivation</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Deactivate Doctor Account</h2>
+                  </Container>
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
+              <div className="medstream-profile-settings-grid">
+                <div className="medstream-stretch-container">
+                  <Container
+                    header={
+                      <Header
+                        variant="h2"
+                        description="Identity, specialization, license, and contact details."
+                        actions={
+                          <StatusIndicator type={doctor.is_active ? "success" : "stopped"}>
+                            {doctor.is_active ? "Active" : "Inactive"}
+                          </StatusIndicator>
+                        }
+                      >
+                        Editable doctor info
+                      </Header>
+                    }
+                  >
+                    <form className="medstream-form" onSubmit={handleProfileUpdate}>
+                      <div className="medstream-form-grid">
+                        <div className="login-field">
+                          <label className="login-label" htmlFor="first_name">First Name</label>
+                          <input id="first_name" name="first_name" type="text" value={form.first_name} onChange={handleFormChange}
+                                 className="login-input" placeholder="Example: Elena" required/>
+                        </div>
+                        <div className="login-field">
+                          <label className="login-label" htmlFor="last_name">Last Name</label>
+                          <input id="last_name" name="last_name" type="text" value={form.last_name} onChange={handleFormChange}
+                                 className="login-input" placeholder="Example: Popescu" required/>
+                        </div>
+                        <div className="login-field">
+                          <label className="login-label" htmlFor="specialization">Specialization</label>
+                          <select id="specialization" name="specialization" value={form.specialization} onChange={handleFormChange}
+                                  className="login-input" required disabled={hasAssignedPatients}>
+                            <option value="">Select specialization</option>
+                            {departments.map((department) => (
+                              <option key={department} value={department}>{department}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="login-field">
+                          <label className="login-label" htmlFor="license_number">License Number</label>
+                          <input id="license_number" name="license_number" type="text" value={form.license_number} onChange={handleFormChange}
+                                 className="login-input" placeholder="Example: DOC-20458" required/>
+                        </div>
+                        <div className="login-field">
+                          <label className="login-label" htmlFor="doctor-birth-date">Birth Date</label>
+                          <input id="doctor-birth-date" name="birth_date" type="date" value={form.birth_date} onChange={handleFormChange}
+                                 className="login-input" required/>
+                        </div>
+                        <div className="login-field">
+                          <label className="login-label" htmlFor="doctor-phone-number">Phone Number</label>
+                          <input
+                            id="doctor-phone-number"
+                            type="tel"
+                            value={phoneNumber}
+                            onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, ""))}
+                            className="login-input"
+                            placeholder={ROMANIA_PHONE_PLACEHOLDER}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="medstream-form-actions">
+                        <button type="submit" disabled={!isProfileFormValid || !isProfileDirty || isSavingProfile}
+                                className="console-button-primary rounded-lg px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]">
+                          {isSavingProfile ? "Updating..." : "Update profile"}
+                        </button>
+                      </div>
+                    </form>
+                  </Container>
+                </div>
+
+                <div className="medstream-stretch-container">
+                  <Container
+                    header={
+                      <Header variant="h2" description="Assign an admitted patient from your specialization.">
+                        Assign patient
+                      </Header>
+                    }
+                  >
+                    <form className="medstream-form" onSubmit={handleAssignPatient}>
+                      <div className="login-field relative">
+                        <label className="login-label" htmlFor="assigned_patient">Patient CNP or Full Name</label>
+                        <input
+                          id="assigned_patient"
+                          type="text"
+                          value={assignmentQuery}
+                          onChange={(event) => setAssignmentQuery(event.target.value)}
+                          className="login-input"
+                          placeholder="Example: 6010101123451 or Popescu Andrei"
+                          autoComplete="off"
+                          disabled={filteredAssignedPatients.length === 0 || isAssigningPatient}
+                        />
+
+                        {assignmentSuggestions.length > 0 && (
+                          <div className="medstream-profile-suggestions custom-scrollbar">
+                            {assignmentSuggestions.map((patient) => {
+                              const isSelectedSuggestion = selectedPatient?.id === patient.id
+                              return (
+                                <button
+                                  type="button"
+                                  key={patient.id}
+                                  className={`medstream-profile-suggestion ${isSelectedSuggestion ? "medstream-profile-suggestion-selected" : ""}`}
+                                  aria-current={isSelectedSuggestion ? "true" : undefined}
+                                  onClick={() => {
+                                    setAssignmentQuery(`${patient.cnp} | ${formatPatientFullName(patient)}`)
+                                  }}
+                                >
+                                  <span className="font-semibold text-[var(--text-primary)]">{patient.cnp}</span>
+                                  <span className="text-[var(--text-muted)]"> | {formatPatientFullName(patient)}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        <p className="mt-2 text-xs text-[var(--text-muted)]">
+                          Start with CNP or full name. Suggestions show both identifiers together.
+                        </p>
+                      </div>
+
+                      <div className="medstream-form-actions">
+                        <button
+                          type="submit"
+                          disabled={!selectedPatient || isAssigningPatient}
+                          className="console-button-primary w-full rounded-lg px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                        >
+                          {isAssigningPatient ? "Assigning..." : "Assign patient"}
+                        </button>
+                      </div>
+                    </form>
+                  </Container>
+                </div>
+
+                <div className="medstream-stretch-container">
+                  <Container
+                    header={
+                      <Header
+                        variant="h2"
+                        description="Email used for login and verification."
+                        actions={
+                          <StatusIndicator type={isPendingEmail ? "pending" : "success"}>
+                            {isPendingEmail ? "Pending" : "Verified"}
+                          </StatusIndicator>
+                        }
+                      >
+                        Account email
+                      </Header>
+                    }
+                  >
+                    <form className="medstream-form" onSubmit={handleEmailUpdate}>
+                      {isPendingEmail && (
+                        <Alert type="warning">
+                          Email not confirmed yet.
+                        </Alert>
+                      )}
+                      <div className="login-field">
+                        <label className="login-label" htmlFor="doctor-email">Email</label>
+                        <input
+                          id="doctor-email"
+                          type="email"
+                          value={emailInput}
+                          onChange={(event) => setEmailInput(event.target.value)}
+                          className="login-input"
+                          placeholder="Example: doctor@medstream.local"
+                          required
+                        />
+                      </div>
+
+                      <div className="medstream-form-actions medstream-profile-actions">
+                        {shouldShowResendVerification && (
+                          <button
+                            type="button"
+                            onClick={handleResendVerification}
+                            disabled={isResendingVerification}
+                            className="console-button-secondary rounded-lg px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                          >
+                            {isResendingVerification ? "Resending..." : "Resend email"}
+                          </button>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={!isEmailDirty || isSavingEmail}
+                          className="console-button-primary rounded-lg px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                        >
+                          {isSavingEmail ? "Sending confirmation..." : "Update email"}
+                        </button>
+                      </div>
+                    </form>
+                  </Container>
+                </div>
+
+                <div className="medstream-stretch-container">
+                  <Container
+                    header={
+                      <Header variant="h2" description="Deactivate the current doctor account when policy allows it.">
+                        Account status
+                      </Header>
+                    }
+                  >
+                    <SpaceBetween size="m">
+                      <ColumnLayout columns={2} variant="text-grid">
+                        <SpaceBetween size="xs">
+                          <Box color="text-body-secondary" variant="awsui-key-label">Current state</Box>
+                          <Box variant="h3">{doctor.is_active ? "Active doctor account" : "Inactive doctor account"}</Box>
+                        </SpaceBetween>
+                        <SpaceBetween size="xs">
+                          <Box color="text-body-secondary" variant="awsui-key-label">Deactivated at</Box>
+                          <Box>{doctor.deleted_at ? new Date(doctor.deleted_at).toLocaleString() : "--"}</Box>
+                        </SpaceBetween>
+                      </ColumnLayout>
+
+                      {(isOnlyDoctorInDepartment || hasIncomingActivities) && (
+                        <Alert type="warning">
+                          {isOnlyDoctorInDepartment
+                            ? "You are the only doctor in this department. Account cannot be deleted."
+                            : "Cannot modify account while there are incoming activities."}
+                        </Alert>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isOnlyDoctorInDepartment && !hasIncomingActivities) {
+                            setShowDeleteModal(true)
+                          }
+                        }}
+                        disabled={isDeletingAccount || isOnlyDoctorInDepartment || hasIncomingActivities}
+                        title={isOnlyDoctorInDepartment ? "You are the only doctor in this department. Account cannot be deleted." : ""}
+                        className="medstream-danger-button w-full rounded-lg px-4 py-3 text-sm font-semibold"
+                      >
+                        {isDeletingAccount ? "Deactivating..." : "Delete account"}
+                      </button>
+                    </SpaceBetween>
+                  </Container>
+                </div>
+              </div>
+            </SpaceBetween>
+          ) : (
+            <Container>
+              <Alert type="error" header="Doctor workspace unavailable">
+                No doctor workspace information is available for this session.
+              </Alert>
+            </Container>
+          )}
+        </SpaceBetween>
+      </ContentLayout>
+
+        {showDeleteModal && (
+          <div className="console-modal-overlay">
+            <div className="console-modal monitor-card rounded-lg p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Account deactivation</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Deactivate doctor account</h2>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-lg border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
                 <p className="text-sm text-[var(--text-primary)]">
                   This action deactivates the doctor account and automatically reassigns your patients to another doctor from the same
                   department.
@@ -1127,7 +1230,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setShowDeleteModal(false)}
-                  className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+                  className="console-button-secondary rounded-lg px-4 py-3 text-sm font-semibold"
                 >
                   Cancel
                 </button>
@@ -1135,7 +1238,7 @@ export default function ProfilePage() {
                   type="button"
                   onClick={handleDeleteAccount}
                   disabled={isDeletingAccount}
-                  className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                  className="medstream-danger-button rounded-lg px-4 py-3 text-sm font-semibold"
                 >
                   {isDeletingAccount ? "Deactivating..." : "Confirm"}
                 </button>
@@ -1146,17 +1249,17 @@ export default function ProfilePage() {
 
         {patientPendingTransfer && (
           <div className="console-modal-overlay">
-            <div className="console-modal monitor-card rounded-[28px] p-6">
+            <div className="console-modal monitor-card rounded-lg p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patient Assignment</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Transfer Assigned Patient</h2>
+                  <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Patient assignment</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Transfer assigned patient</h2>
                 </div>
               </div>
 
               {!showTransferActivityConfirmation ? (
                 <>
-                  <div className="mt-5 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
+                  <div className="mt-5 rounded-lg border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
                     <p className="text-sm text-[var(--text-primary)]">
                       Select another doctor from {patientPendingTransfer.department} to
                       transfer {formatPatientFullName(patientPendingTransfer)}.
@@ -1193,7 +1296,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={closeTransferDialog}
                       disabled={isTransferringPatient}
-                      className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+                      className="console-button-secondary rounded-lg px-4 py-3 text-sm font-semibold"
                     >
                       Cancel
                     </button>
@@ -1201,7 +1304,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={handleTransferPatient}
                       disabled={!selectedTransferDoctorId || isTransferringPatient || isCheckingTransferActivities || transferDoctorOptions.length === 0}
-                      className="rounded-2xl border border-[#34506b] bg-[#1d2f3f] px-4 py-3 text-sm font-semibold text-[#cce6ff] transition hover:bg-[#22394d] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                      className="console-button-primary rounded-lg px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                     >
                       {isTransferringPatient ? "Transferring..." : (isCheckingTransferActivities ? "Checking..." : "Transfer")}
                     </button>
@@ -1209,7 +1312,7 @@ export default function ProfilePage() {
                 </>
               ) : (
                 <>
-                  <div className="mt-5 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
+                  <div className="mt-5 rounded-lg border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
                     <p className="text-sm text-[var(--text-primary)]">
                       Are you sure you want to transfer this patient?
                     </p>
@@ -1223,7 +1326,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={() => setShowTransferActivityConfirmation(false)}
                       disabled={isTransferringPatient}
-                      className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+                      className="console-button-secondary rounded-lg px-4 py-3 text-sm font-semibold"
                     >
                       Cancel
                     </button>
@@ -1231,7 +1334,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={handleConfirmTransferPatient}
                       disabled={isTransferringPatient}
-                      className="rounded-2xl border border-[#34506b] bg-[#1d2f3f] px-4 py-3 text-sm font-semibold text-[#cce6ff] transition hover:bg-[#22394d] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                      className="console-button-primary rounded-lg px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                     >
                       {isTransferringPatient ? "Transferring..." : "Confirm Transfer"}
                     </button>
@@ -1244,15 +1347,15 @@ export default function ProfilePage() {
 
         {patientPendingRemoval && (
           <div className="console-modal-overlay">
-            <div className="console-modal monitor-card rounded-[28px] p-6">
+            <div className="console-modal monitor-card rounded-lg p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Patient Assignment</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Remove Assigned Patient</h2>
+                  <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Patient assignment</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Remove assigned patient</h2>
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
+              <div className="mt-5 rounded-lg border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
                 <p className="text-sm text-[var(--text-primary)]">
                   Remove {formatPatientFullName(patientPendingRemoval)} from this doctor&apos;s assigned patient list?
                 </p>
@@ -1263,7 +1366,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setPatientPendingRemoval(null)}
-                  className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+                  className="console-button-secondary rounded-lg px-4 py-3 text-sm font-semibold"
                 >
                   Keep Patient
                 </button>
@@ -1272,7 +1375,7 @@ export default function ProfilePage() {
                   onClick={() => handleRemovePatient(patientPendingRemoval.id)}
                   disabled={hasIncomingActivities || removingPatientId === patientPendingRemoval.id}
                   title={hasIncomingActivities ? "Cannot modify patients while there are incoming activities." : ""}
-                  className="rounded-2xl border border-[#a33a45] bg-[#3a1f25] px-4 py-3 text-sm font-semibold text-[#ffd8dc] transition hover:bg-[#47262d] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                  className="medstream-danger-button rounded-lg px-4 py-3 text-sm font-semibold"
                 >
                   {removingPatientId === patientPendingRemoval.id ? "Removing..." : "Yes, Remove Patient"}
                 </button>
@@ -1283,10 +1386,10 @@ export default function ProfilePage() {
 
         {activityPendingCancellation && (
           <div className="console-modal-overlay z-50">
-            <div className="console-modal monitor-card rounded-[28px] p-6 w-full max-w-md">
+            <div className="console-modal monitor-card w-full max-w-md rounded-lg p-6">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Activities</p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Cancel Activity</h2>
+                <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Activities</p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Cancel activity</h2>
                 <p className="mt-3 text-sm text-[var(--text-secondary)]">Are you sure you want to cancel this activity?</p>
               </div>
 
@@ -1295,7 +1398,7 @@ export default function ProfilePage() {
                   type="button"
                   onClick={() => setActivityPendingCancellation(null)}
                   disabled={isSubmittingActivity}
-                  className="console-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+                  className="console-button-secondary rounded-lg px-4 py-3 text-sm font-semibold"
                 >
                   Keep Activity
                 </button>
@@ -1303,7 +1406,7 @@ export default function ProfilePage() {
                   type="button"
                   onClick={handleCancelActivity}
                   disabled={isSubmittingActivity}
-                  className="activity-action-danger rounded-2xl border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                  className="medstream-danger-button rounded-lg px-4 py-3 text-sm font-semibold"
                 >
                   {isSubmittingActivity ? "Canceling..." : "Yes, Cancel Activity"}
                 </button>
@@ -1329,7 +1432,6 @@ export default function ProfilePage() {
             patients={activityPatients}
           />
         )}
-      </div>
-    </div>
+    </>
   )
 }

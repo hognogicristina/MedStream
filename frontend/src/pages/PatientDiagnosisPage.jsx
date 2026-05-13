@@ -1,5 +1,6 @@
 import {useCallback, useEffect, useState} from "react"
 import {useParams} from "react-router-dom"
+import {Pagination} from "@cloudscape-design/components"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
@@ -165,30 +166,12 @@ export default function PatientDiagnosisPage() {
               </span>
               </div>
 
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
-                  Page {diagnosisPage}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:text-[var(--text-subtle)]"
-                    onClick={() => setDiagnosisPage((prev) => Math.max(1, prev - 1))}
-                    disabled={diagnosisPage === 1}
-                    type="button"
-                  >
-                    Previous
-                  </button>
-
-                  <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:text-[var(--text-subtle)]"
-                    onClick={() => setDiagnosisPage((prev) => prev + 1)}
-                    disabled={diagnosisPage >= maxDiagnosisPage}
-                    type="button"
-                  >
-                    Next
-                  </button>
-                </div>
+              <div className="mb-4 flex justify-end">
+                <Pagination
+                  currentPageIndex={diagnosisPage}
+                  pagesCount={maxDiagnosisPage}
+                  onChange={({detail}) => setDiagnosisPage(detail.currentPageIndex)}
+                />
               </div>
 
               <ul className="space-y-3">

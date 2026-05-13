@@ -1,5 +1,6 @@
 import {useCallback, useEffect, useState} from "react"
 import {Link, useParams} from "react-router-dom"
+import {Pagination} from "@cloudscape-design/components"
 
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
@@ -135,29 +136,12 @@ export default function PatientAdmissionHistoryPage() {
               </span>
               </div>
 
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
-                  Page {page}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:text-[var(--text-subtle)]"
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                    disabled={page === 1}
-                    type="button"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:text-[var(--text-subtle)]"
-                    onClick={() => setPage((current) => current + 1)}
-                    disabled={page >= maxPage}
-                    type="button"
-                  >
-                    Next
-                  </button>
-                </div>
+              <div className="mb-4 flex justify-end">
+                <Pagination
+                  currentPageIndex={page}
+                  pagesCount={maxPage}
+                  onChange={({detail}) => setPage(detail.currentPageIndex)}
+                />
               </div>
 
               <ul className="space-y-3">
