@@ -401,6 +401,8 @@ body {
 
 #top-nav {
   min-width: 0;
+  position: relative;
+  z-index: 110;
 }
 
 #top-nav [class*="top-navigation"] {
@@ -458,6 +460,113 @@ body {
   background: var(--surface-1) !important;
   box-shadow: none !important;
   padding: 2px !important;
+}
+
+.medstream-top-actions {
+  position: absolute;
+  top: 0;
+  right: 16px;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.medstream-top-action-button,
+.medstream-account-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 0 8px;
+  pointer-events: auto;
+}
+
+.medstream-top-action-button:hover,
+.medstream-account-trigger:hover,
+.medstream-account-trigger[aria-expanded="true"] {
+  color: var(--link);
+}
+
+.medstream-top-action-button:focus-visible,
+.medstream-account-trigger:focus-visible,
+.medstream-account-option:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--link) 30%, transparent);
+  outline-offset: 2px;
+}
+
+.medstream-account-selector {
+  position: relative;
+  pointer-events: auto;
+}
+
+.medstream-account-trigger-caret {
+  display: block;
+  width: 0;
+  height: 0;
+  border-top: 5px solid currentColor;
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+}
+
+.medstream-account-trigger-caret-open {
+  border-top: 0;
+  border-bottom: 5px solid currentColor;
+}
+
+.medstream-account-options {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10020;
+  display: flex;
+  width: 180px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-1);
+  box-shadow: none;
+  padding: 0;
+}
+
+.medstream-account-option {
+  display: block;
+  min-height: 32px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.35;
+  padding: 7px 12px;
+  text-align: left;
+}
+
+.medstream-account-option:last-child {
+  border-bottom: 0;
+}
+
+.medstream-account-option:hover {
+  background: transparent;
+  color: var(--link);
+}
+
+.medstream-account-option-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 [data-theme="light"] [class*="dropdown-content-wrapper"],
@@ -590,6 +699,27 @@ body {
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  #top-nav [class*="identity"] {
+    min-width: 160px;
+  }
+
+  .medstream-top-actions {
+    right: 8px;
+    gap: 4px;
+  }
+
+  .medstream-top-action-button,
+  .medstream-account-trigger {
+    font-size: 13px;
+    padding: 0 6px;
+  }
+
+  .medstream-account-options {
+    width: 168px;
+  }
 }
 
 .medstream-content-inner [class*="header-wrapper"],
@@ -1385,7 +1515,7 @@ body {
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   background: var(--surface-1);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  box-shadow: none;
   padding: 4px;
 }
 

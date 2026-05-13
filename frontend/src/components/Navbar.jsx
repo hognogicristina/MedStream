@@ -148,47 +148,91 @@ export function AppTopNavigation() {
   const navigate = useNavigate()
   const {logout} = useAuth()
   const {theme, toggleTheme} = useTheme()
-  const accountItems = [
-    {id: "profile", text: "Profile", dataAttributes: {"account-option": "true"}},
-    {id: "logout", text: "Sign out", dataAttributes: {"account-option": "true"}},
-  ]
+  const accountMenuRef = useRef(null)
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!isAccountMenuOpen) {
+      return undefined
+    }
+
+    const handleDocumentClick = (event) => {
+      if (!accountMenuRef.current?.contains(event.target)) {
+        setIsAccountMenuOpen(false)
+      }
+    }
+
+    const handleDocumentKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsAccountMenuOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleDocumentClick)
+    document.addEventListener("keydown", handleDocumentKeyDown)
+
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick)
+      document.removeEventListener("keydown", handleDocumentKeyDown)
+    }
+  }, [isAccountMenuOpen])
+
+  const handleAccountOption = (optionId) => {
+    setIsAccountMenuOpen(false)
+
+    if (optionId === "profile") {
+      navigate("/profile")
+    }
+    if (optionId === "logout") {
+      logout()
+      navigate("/")
+    }
+  }
 
   return (
-    <TopNavigation
-      identity={{
-        href: "/dashboard",
-        title: "MedStream",
-        logo: {src: "/medstream-icon-small.svg", alt: "MedStream"},
-      }}
-      utilities={[
-        {
-          type: "button",
-          text: theme === "light" ? "Dark mode" : "Light mode",
-          onClick: toggleTheme,
-        },
-        {
-          type: "menu-dropdown",
-          text: "Account",
-          className: "medstream-account-dropdown",
-          items: accountItems,
-          onItemClick: ({detail}) => {
-            if (detail.id === "profile") {
-              navigate("/profile")
-            }
-            if (detail.id === "logout") {
-              logout()
-              navigate("/")
-            }
-          },
-        },
-      ]}
-      i18nStrings={{
-        searchIconAriaLabel: "Search",
-        searchDismissIconAriaLabel: "Close search",
-        overflowMenuTriggerText: "More",
-        overflowMenuTitleText: "All",
-      }}
-    />
+    <>
+      <TopNavigation
+        identity={{
+          href: "/dashboard",
+          title: "MedStream",
+          logo: {src: "/medstream-icon-small.svg", alt: "MedStream"},
+        }}
+        utilities={[]}
+        i18nStrings={{
+          searchIconAriaLabel: "Search",
+          searchDismissIconAriaLabel: "Close search",
+          overflowMenuTriggerText: "More",
+          overflowMenuTitleText: "All",
+        }}
+      />
+      <div className="medstream-top-actions">
+        <button className="medstream-top-action-button" onClick={toggleTheme} type="button">
+          {theme === "light" ? "Dark mode" : "Light mode"}
+        </button>
+        <div ref={accountMenuRef} className="medstream-account-selector">
+          <button
+            aria-expanded={isAccountMenuOpen}
+            aria-haspopup="menu"
+            className="medstream-account-trigger"
+            onClick={() => setIsAccountMenuOpen((current) => !current)}
+            type="button"
+          >
+            <span>Account</span>
+            <span className={`medstream-account-trigger-caret${isAccountMenuOpen ? " medstream-account-trigger-caret-open" : ""}`} aria-hidden="true"/>
+          </button>
+          {isAccountMenuOpen && (
+            <div className="medstream-account-options" role="menu" aria-label="Account options">
+              <button className="medstream-account-option" onClick={() => handleAccountOption("profile")} role="menuitem" type="button">
+                <span className="medstream-account-option-text">Profile</span>
+              </button>
+              <button className="medstream-account-option" onClick={() => handleAccountOption("logout")} role="menuitem" type="button">
+                <span className="medstream-account-option-text">Sign out</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   )
 }
 
