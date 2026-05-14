@@ -8,6 +8,7 @@ import {
   FormField,
   Header,
   Input,
+  Multiselect,
   Pagination,
   Select,
   SpaceBetween,
@@ -15,7 +16,7 @@ import {
   Table,
   Tabs,
 } from "@cloudscape-design/components"
-import {Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
+import {Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Sector, Tooltip, XAxis, YAxis} from "recharts"
 import {
   getBatchInsights,
   getBatchMetrics,
@@ -83,6 +84,7 @@ const TREATMENT_CATEGORY_DESCRIPTION = {
   Improving: "Patients with partial recovery where at least one vital improved but unresolved issues remain.",
   Ineffective: "Patients whose condition showed no improvement or worsened after treatment.",
 }
+const OUTCOME_FILTER_IDS = ["effective", "improving", "ineffective"]
 
 function formatBatchTimestamp(value) {
   if (!value) {
@@ -133,6 +135,107 @@ function SimpleCasesTooltip({active, payload, chartTheme}) {
     >
       {label}: {value}
     </div>
+  )
+}
+
+function formatOutcomePercentage(value, total) {
+  if (!total) {
+    return "0%"
+  }
+
+  return `${((value / total) * 100).toFixed(0)}%`
+}
+
+function OverallOutcomeTooltip({active, payload, chartTheme, total}) {
+  if (!active || !Array.isArray(payload) || !payload.length) {
+    return null
+  }
+
+  const row = payload[0]?.payload || {}
+  const value = Number(row.rawValue ?? row.value ?? 0)
+  const percentage = formatOutcomePercentage(value, total)
+  const lastUpdate = row.timestamp ? new Date(row.timestamp).toLocaleDateString("en-US", {month: "short", day: "numeric", year: "numeric"}) : "No batch run"
+
+  return (
+    <div
+      className="medstream-overall-tooltip"
+      style={{
+        "--overall-tooltip-color": row.color,
+        backgroundColor: chartTheme.tooltipBg,
+        border: `1px solid ${chartTheme.tooltipBorder}`,
+        color: chartTheme.tooltipText,
+      }}
+    >
+      <div className="medstream-overall-tooltip-title">{row.name}</div>
+      <div className="medstream-overall-tooltip-row">
+        <span>Treatment count</span>
+        <strong>{value}</strong>
+      </div>
+      <div className="medstream-overall-tooltip-row">
+        <span>Percentage</span>
+        <strong>{percentage}</strong>
+      </div>
+      <div className="medstream-overall-tooltip-row">
+        <span>Last update on</span>
+        <strong>{lastUpdate}</strong>
+      </div>
+    </div>
+  )
+}
+
+function renderActivePieShape(props) {
+  const {cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, stroke} = props
+
+  return (
+    <g>
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={3}
+      />
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={outerRadius + 10}
+        outerRadius={outerRadius + 14}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={payload.color}
+      />
+      {renderOverallPieLabel(props)}
+    </g>
+  )
+}
+
+function renderOverallPieLabel(props) {
+  const {cx, cy, midAngle, outerRadius, percent, name, value} = props
+  const RADIAN = Math.PI / 180
+  const sin = Math.sin(-RADIAN * midAngle)
+  const cos = Math.cos(-RADIAN * midAngle)
+  const startX = cx + (outerRadius + 8) * cos
+  const startY = cy + (outerRadius + 8) * sin
+  const middleX = cx + (outerRadius + 34) * cos
+  const middleY = cy + (outerRadius + 34) * sin
+  const endX = middleX + (cos >= 0 ? 70 : -70)
+  const textAnchor = cos >= 0 ? "start" : "end"
+  const percentage = `${(percent * 100).toFixed(0)}%`
+
+  return (
+    <g className="medstream-overall-pie-label">
+      <polyline points={`${startX},${startY} ${middleX},${middleY} ${endX},${middleY}`}/>
+      <text x={endX + (cos >= 0 ? 8 : -8)} y={middleY - 8} textAnchor={textAnchor} className="medstream-overall-pie-label-name">
+        {name}
+      </text>
+      <text x={endX + (cos >= 0 ? 8 : -8)} y={middleY + 18} textAnchor={textAnchor} className="medstream-overall-pie-label-value">
+        {value} treatments, {percentage}
+      </text>
+    </g>
   )
 }
 
@@ -205,6 +308,8 @@ export default function BatchMetricsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [treatmentMode, setTreatmentMode] = useState("medication")
   const [selectedMedication, setSelectedMedication] = useState("")
+  const [visibleOutcomeIds, setVisibleOutcomeIds] = useState(OUTCOME_FILTER_IDS)
+  const [activeOutcomeId, setActiveOutcomeId] = useState("effective")
   const lastBatchTimestampRef = useRef(null)
   const hasLoadedInitialDataRef = useRef(false)
 
@@ -435,28 +540,63 @@ export default function BatchMetricsPage() {
   const departmentsTotalPages = Math.max(1, Math.ceil((patientsPerDepartment.total || 0) / PAGE_SIZE))
   const diagnosesTotalPages = Math.max(1, Math.ceil((topDiagnosis.total || 0) / PAGE_SIZE))
   const totalTreatments = treatmentEffectiveness.effective + treatmentEffectiveness.improving + treatmentEffectiveness.ineffective
-  const overallEffectivenessData = totalTreatments > 0
-    ? [
-      {
-        name: "Effective",
-        value: treatmentEffectiveness.effective,
-        rawValue: treatmentEffectiveness.effective,
-        color: "#22c55e",
-      },
-      {
-        name: "Improving",
-        value: treatmentEffectiveness.improving,
-        rawValue: treatmentEffectiveness.improving,
-        color: "#f59e0b",
-      },
-      {
-        name: "Ineffective",
-        value: treatmentEffectiveness.ineffective,
-        rawValue: treatmentEffectiveness.ineffective,
-        color: "#ef4444",
-      },
-    ]
-    : []
+  const overallEffectivenessData = useMemo(() => (
+    totalTreatments > 0
+      ? [
+        {
+          id: "effective",
+          name: "Effective",
+          value: treatmentEffectiveness.effective,
+          rawValue: treatmentEffectiveness.effective,
+          color: "var(--chart-outcome-effective)",
+          timestamp: data.timestamp,
+          description: TREATMENT_CATEGORY_DESCRIPTION.Effective,
+        },
+        {
+          id: "improving",
+          name: "Improving",
+          value: treatmentEffectiveness.improving,
+          rawValue: treatmentEffectiveness.improving,
+          color: "var(--chart-outcome-improving)",
+          timestamp: data.timestamp,
+          description: TREATMENT_CATEGORY_DESCRIPTION.Improving,
+        },
+        {
+          id: "ineffective",
+          name: "Ineffective",
+          value: treatmentEffectiveness.ineffective,
+          rawValue: treatmentEffectiveness.ineffective,
+          color: "var(--chart-outcome-ineffective)",
+          timestamp: data.timestamp,
+          description: TREATMENT_CATEGORY_DESCRIPTION.Ineffective,
+        },
+      ]
+      : []
+  ), [data.timestamp, totalTreatments, treatmentEffectiveness.effective, treatmentEffectiveness.improving, treatmentEffectiveness.ineffective])
+  const visibleOutcomeData = useMemo(
+    () => overallEffectivenessData.filter((entry) => visibleOutcomeIds.includes(entry.id)),
+    [overallEffectivenessData, visibleOutcomeIds],
+  )
+  const visibleOutcomeChartData = useMemo(
+    () => visibleOutcomeData.filter((entry) => entry.rawValue > 0),
+    [visibleOutcomeData],
+  )
+  const outcomeFilterOptions = useMemo(
+    () => overallEffectivenessData.map((entry) => ({
+      label: entry.name,
+      value: entry.id,
+      labelContent: (
+        <span className="medstream-overall-select-option">
+          <span className="medstream-overall-legend-swatch" style={{backgroundColor: entry.color}}/>
+          <span>{entry.name}</span>
+        </span>
+      ),
+    })),
+    [overallEffectivenessData],
+  )
+  const selectedOutcomeOptions = outcomeFilterOptions.filter((option) => visibleOutcomeIds.includes(option.value))
+  const visibleOutcomeTotal = visibleOutcomeData.reduce((sum, entry) => sum + entry.rawValue, 0)
+  const activeOutcomeIndex = visibleOutcomeChartData.findIndex((entry) => entry.id === activeOutcomeId)
 
   useEffect(() => {
     if (!medicationEffectiveness.length) {
@@ -470,6 +610,19 @@ export default function BatchMetricsPage() {
         : medicationEffectiveness[0].name
     ))
   }, [medicationEffectiveness])
+
+  useEffect(() => {
+    if (!visibleOutcomeChartData.length) {
+      setActiveOutcomeId("")
+      return
+    }
+
+    setActiveOutcomeId((current) => (
+      current && visibleOutcomeChartData.some((entry) => entry.id === current)
+        ? current
+        : visibleOutcomeChartData[0].id
+    ))
+  }, [visibleOutcomeChartData])
 
   const selectedMedicationEffectiveness = medicationEffectiveness.find((item) => item.name === selectedMedication) || null
   const medicationSelectOptions = medicationEffectiveness.map((item) => ({label: item.name, value: item.name}))
@@ -903,37 +1056,79 @@ export default function BatchMetricsPage() {
                     <Box color="text-body-secondary">
                       This chart summarizes treatment outcomes across all medications and patients in the selected batch window.
                     </Box>
-                    <div className="medstream-chart-panel">
+                    <div className="medstream-chart-panel medstream-overall-chart-panel">
                       {totalTreatments > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={overallEffectivenessData}
-                              dataKey="value"
-                              nameKey="name"
-                              outerRadius={112}
-                              startAngle={90}
-                              endAngle={-270}
-                              paddingAngle={4}
-                              stroke={chartTheme.pieStroke}
-                              strokeWidth={2}
-                            >
-                              {overallEffectivenessData.map((entry) => (
-                                <Cell key={entry.name} fill={entry.color}/>
-                              ))}
-                            </Pie>
-                            <Tooltip content={<SimpleCasesTooltip chartTheme={chartTheme}/>}/>
-                          </PieChart>
-                        </ResponsiveContainer>
+                        <>
+                          <div className="medstream-overall-filter">
+                            <FormField label="Filter displayed data">
+                              <Multiselect
+                                selectedOptions={selectedOutcomeOptions}
+                                onChange={({detail}) => {
+                                  setVisibleOutcomeIds(detail.selectedOptions.map((option) => option.value).filter(Boolean))
+                                }}
+                                options={outcomeFilterOptions}
+                                placeholder="Filter data"
+                                selectedAriaLabel="Selected"
+                                deselectAriaLabel={(option) => `Remove ${option.label}`}
+                                hideTokens
+                                keepOpen
+                              />
+                            </FormField>
+                          </div>
+
+                          {visibleOutcomeChartData.length ? (
+                            <div className="medstream-overall-pie" aria-label={`Overall treatment outcomes: ${visibleOutcomeTotal} visible treatments`}>
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart margin={{top: 58, right: 150, bottom: 56, left: 150}}>
+                                  <Pie
+                                    activeIndex={activeOutcomeIndex >= 0 ? activeOutcomeIndex : undefined}
+                                    activeShape={renderActivePieShape}
+                                    data={visibleOutcomeChartData}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    cx="50%"
+                                    cy="58%"
+                                    innerRadius={0}
+                                    outerRadius={126}
+                                    startAngle={90}
+                                    endAngle={-270}
+                                    paddingAngle={0}
+                                    label={renderOverallPieLabel}
+                                    labelLine={false}
+                                    isAnimationActive={false}
+                                    stroke={chartTheme.pieStroke}
+                                    strokeWidth={3}
+                                    onMouseEnter={(entry) => setActiveOutcomeId(entry.id)}
+                                  >
+                                    {visibleOutcomeChartData.map((entry) => (
+                                      <Cell key={entry.id} fill={entry.color}/>
+                                    ))}
+                                  </Pie>
+                                  <Tooltip content={<OverallOutcomeTooltip chartTheme={chartTheme} total={visibleOutcomeTotal}/>}/>
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          ) : (
+                            <div className="medstream-overall-empty">
+                              <Box color="text-body-secondary">No treatment data selected.</Box>
+                            </div>
+                          )}
+
+                          <div className="medstream-overall-legend" aria-label="Overall treatment outcome legend">
+                            {visibleOutcomeData.map((entry) => (
+                              <div className="medstream-overall-legend-item" key={entry.id}>
+                                <span className="medstream-overall-legend-swatch" style={{backgroundColor: entry.color}}/>
+                                <span>{entry.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
                       ) : (
-                        <Box color="text-body-secondary">No treatment data available yet.</Box>
+                        <div className="medstream-overall-empty">
+                          <Box color="text-body-secondary">No treatment data available yet.</Box>
+                        </div>
                       )}
                     </div>
-                    <ColumnLayout columns={3} variant="text-grid">
-                      <MetricTile label="Effective" value={String(treatmentEffectiveness.effective)}/>
-                      <MetricTile label="Improving" value={String(treatmentEffectiveness.improving)}/>
-                      <MetricTile label="Ineffective" value={String(treatmentEffectiveness.ineffective)}/>
-                    </ColumnLayout>
                   </SpaceBetween>
                 ),
               },

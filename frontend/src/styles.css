@@ -38,6 +38,9 @@
   --chart-tooltip-bg: #ffffff;
   --chart-tooltip-border: #d5dbdb;
   --chart-tooltip-text: #232f3e;
+  --chart-outcome-effective: #1f8104;
+  --chart-outcome-improving: #b2911c;
+  --chart-outcome-ineffective: #d13313;
   --status-critical-soft: #fdecea;
   --status-high-soft: #fff4e5;
   --status-normal-soft: #edf8ee;
@@ -82,6 +85,9 @@
   --chart-tooltip-bg: #0f172a;
   --chart-tooltip-border: #334155;
   --chart-tooltip-text: #ffffff;
+  --chart-outcome-effective: #67a353;
+  --chart-outcome-improving: #f0b429;
+  --chart-outcome-ineffective: #ea7158;
   --status-critical-soft: #2c1b21;
   --status-high-soft: #312719;
   --status-normal-soft: #1b2430;
@@ -1128,6 +1134,135 @@ body {
 
 .medstream-batch-metric-tile-compact .medstream-batch-metric-value {
   font-size: 16px;
+}
+
+.medstream-overall-chart-panel {
+  position: relative;
+  height: 480px;
+  min-height: 480px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.medstream-overall-filter {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  left: 0;
+  width: min(360px, 42%);
+}
+
+.medstream-overall-pie {
+  height: calc(100% - 34px);
+  min-height: 0;
+}
+
+.medstream-overall-select-option {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.medstream-overall-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 16%, transparent);
+}
+
+.medstream-overall-legend {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.medstream-overall-legend-item {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.medstream-overall-pie-label polyline {
+  fill: none;
+  stroke: var(--text-subtle);
+  stroke-width: 1.5px;
+}
+
+.medstream-overall-pie-label-name {
+  fill: var(--text-primary);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.medstream-overall-pie-label-value {
+  fill: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.medstream-overall-tooltip {
+  min-width: 270px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  padding: 18px 20px;
+  font-size: 14px;
+}
+
+.medstream-overall-tooltip-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.medstream-overall-tooltip-title::before {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--overall-tooltip-color);
+  content: "";
+}
+
+.medstream-overall-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 28px;
+  line-height: 1.45;
+}
+
+.medstream-overall-tooltip-row + .medstream-overall-tooltip-row {
+  margin-top: 4px;
+}
+
+.medstream-overall-tooltip-row span {
+  color: var(--text-secondary);
+}
+
+.medstream-overall-tooltip-row strong {
+  font-weight: 700;
+}
+
+.medstream-overall-empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  border: 1px dashed var(--border-primary);
+  border-radius: 8px;
+  background: var(--surface-muted);
 }
 
 .medstream-simple-list-table [class*="awsui_body-cell"] {
@@ -2703,6 +2838,27 @@ input[type="search"]::-webkit-search-cancel-button {
     border-left: 0;
     padding-top: 20px;
     padding-left: 0;
+  }
+
+  .medstream-overall-chart-panel {
+    height: 500px;
+    min-height: 500px;
+  }
+
+  .medstream-overall-filter {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+
+  .medstream-overall-pie {
+    height: 360px;
+  }
+
+  .medstream-overall-legend {
+    position: static;
   }
 
   .medstream-how-grid {
