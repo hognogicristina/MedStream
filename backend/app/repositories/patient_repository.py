@@ -2780,28 +2780,16 @@ class PatientRepository:
             validate_patient_assignment(db, doctor_id, medication.patient_id)
             validate_patient_editable(get_patient_or_raise(db, medication.patient_id))
 
-            latest_medication = db.execute(
-                select(PatientMedication)
-                .where(PatientMedication.patient_id == medication.patient_id)
-                .order_by(
-                    desc(func.coalesce(PatientMedication.updated_at, PatientMedication.created_at)),
-                    desc(PatientMedication.id),
-                )
-                .limit(1)
-            ).scalar_one_or_none()
-            if latest_medication is None:
-                raise NotFoundError("MEDICATION_NOT_FOUND")
-
             updated = False
             if dosage is not None:
-                latest_medication.dosage = self._clamp_text(
+                medication.dosage = self._clamp_text(
                     validate_dosage(dosage),
                     self.MEDICATION_DOSAGE_MAX_LENGTH,
                 )
                 updated = True
 
             if frequency is not None:
-                latest_medication.frequency = self._clamp_text(
+                medication.frequency = self._clamp_text(
                     validate_frequency(frequency),
                     self.MEDICATION_FREQUENCY_MAX_LENGTH,
                 )
@@ -2809,12 +2797,12 @@ class PatientRepository:
 
             validate_non_empty_update(updated, "NO_MEDICATION_UPDATES")
 
-            latest_medication.last_updated_note = validate_required_text(note, "Note")
-            latest_medication.updated_at = now_utc()
+            medication.last_updated_note = validate_required_text(note, "Note")
+            medication.updated_at = now_utc()
 
             db.commit()
-            db.refresh(latest_medication)
-            return latest_medication
+            db.refresh(medication)
+            return medication
 
     def get_patient_activities(self, patient_id: int) -> list[DoctorActivity]:
         with SessionLocal() as db:

@@ -346,44 +346,46 @@ export default function DashboardPage() {
         </div>
 
         <Container header={<Header variant="h2">Patients</Header>}>
-          <Table
-            variant="borderless"
-            items={patientRows}
-            trackBy="id"
-            loading={isLoadingDashboard}
-            loadingText="Loading patients"
-            empty={<Box color="text-body-secondary">No patients available.</Box>}
-            columnDefinitions={[
-              {
-                id: "name",
-                header: "Patient",
-                cell: (item) => item.fullName,
-              },
-              {
-                id: "status",
-                header: "Status",
-                cell: (item) => {
-                  if (item.clinicalStatus === "critical") {
-                    return <StatusIndicator type="error">Critical</StatusIndicator>
-                  }
-                  if (item.clinicalStatus === "warning") {
-                    return <StatusIndicator type="warning">Warning</StatusIndicator>
-                  }
-                  return <StatusIndicator type="success">Normal</StatusIndicator>
+          <div className="medstream-column-divider-table">
+            <Table
+              variant="borderless"
+              items={patientRows}
+              trackBy="id"
+              loading={isLoadingDashboard}
+              loadingText="Loading patients"
+              empty={<Box color="text-body-secondary">No patients available.</Box>}
+              columnDefinitions={[
+                {
+                  id: "name",
+                  header: "Patient",
+                  cell: (item) => item.fullName,
                 },
-              },
-              {
-                id: "cnp",
-                header: "CNP",
-                cell: (item) => item.cnp,
-              },
-              {
-                id: "actions",
-                header: "Actions",
-                cell: (item) => <Button variant="inline-link" onClick={() => navigate(`/patient/${item.id}`)}>Open</Button>,
-              },
-            ]}
-          />
+                {
+                  id: "status",
+                  header: "Status",
+                  cell: (item) => {
+                    if (item.clinicalStatus === "critical") {
+                      return <StatusIndicator type="error">Critical</StatusIndicator>
+                    }
+                    if (item.clinicalStatus === "warning") {
+                      return <StatusIndicator type="warning">Warning</StatusIndicator>
+                    }
+                    return <StatusIndicator type="success">Normal</StatusIndicator>
+                  },
+                },
+                {
+                  id: "cnp",
+                  header: "CNP",
+                  cell: (item) => item.cnp,
+                },
+                {
+                  id: "actions",
+                  header: "Actions",
+                  cell: (item) => <Button variant="inline-link" onClick={() => navigate(`/patient/${item.id}`)}>Open</Button>,
+                },
+              ]}
+            />
+          </div>
         </Container>
 
         <Container>

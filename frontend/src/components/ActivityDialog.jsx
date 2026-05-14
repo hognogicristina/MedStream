@@ -1,5 +1,8 @@
 import {useMemo, useState} from "react"
 import {Button, Pagination, Select} from "@cloudscape-design/components"
+import AwsDatePicker from "./AwsDatePicker.jsx"
+import AwsTimeInput from "./AwsTimeInput.jsx"
+import {isValidTime} from "../utils/time.js"
 
 function ClearableInput({disabled = false, onChange, required = false, type = "text", value, ...props}) {
   return (
@@ -157,12 +160,12 @@ export default function ActivityDialog({
   const isValid = form.title.trim()
     && form.type
     && form.scheduledDate
-    && form.scheduledTime
+    && isValidTime(form.scheduledTime)
     && form.doctorIds.length > 0
     && form.patientIds.length > 0
 
   return (
-    <div className="console-modal-overlay z-50">
+    <div className="console-modal-overlay medstream-activity-modal-overlay z-50">
       <div className="console-modal medstream-dialog-panel medstream-activity-dialog">
         <div className="medstream-activity-dialog-header">
           <div>
@@ -212,22 +215,23 @@ export default function ActivityDialog({
             <div className="medstream-activity-date-grid">
               <div className="login-field">
                 <label className="login-label" htmlFor="activity-date">Date</label>
-                <ClearableInput
+                <AwsDatePicker
                   id="activity-date"
-                  type="date"
                   value={form.scheduledDate}
                   onChange={(value) => setForm((current) => ({...current, scheduledDate: value}))}
+                  className="medstream-clearable-input"
+                  autoComplete="off"
                   required
                 />
               </div>
 
               <div className="login-field">
                 <label className="login-label" htmlFor="activity-time">Time</label>
-                <ClearableInput
+                <AwsTimeInput
                   id="activity-time"
-                  type="time"
                   value={form.scheduledTime}
                   onChange={(value) => setForm((current) => ({...current, scheduledTime: value}))}
+                  className="medstream-clearable-input"
                   required
                 />
               </div>
@@ -253,6 +257,7 @@ export default function ActivityDialog({
               value={form.description}
               onChange={(value) => setForm((current) => ({...current, description: value}))}
               placeholder="Optional details"
+              rows={2}
             />
           </div>
 

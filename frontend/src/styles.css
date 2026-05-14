@@ -822,6 +822,15 @@ body {
   display: none !important;
 }
 
+.medstream-column-divider-table [class*="awsui_header-cell"]:not(:first-child),
+.medstream-column-divider-table [class*="awsui_body-cell"]:not(:first-child) {
+  border-inline-start: 1px solid var(--border-subtle) !important;
+}
+
+.medstream-column-divider-table thead tr {
+  box-shadow: inset 0 -1px 0 var(--border-subtle);
+}
+
 .medstream-how-list {
   margin: 0;
   padding-left: 18px;
@@ -969,6 +978,164 @@ body {
 .medstream-chart-panel {
   height: 260px;
   min-height: 260px;
+}
+
+.medstream-streaming-vitals-spacer {
+  margin-top: 12px;
+}
+
+.medstream-streaming-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 0;
+  align-items: start;
+}
+
+.medstream-streaming-summary-tile {
+  min-width: 0;
+  padding: 0 16px;
+}
+
+.medstream-streaming-summary-tile:not(:nth-child(3n + 1)) {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.medstream-streaming-summary-tile:nth-child(3n + 1) {
+  padding-left: 0;
+}
+
+.medstream-streaming-summary-tile:nth-child(3n) {
+  padding-right: 0;
+}
+
+.medstream-streaming-summary-tile:nth-child(n + 4) {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
+}
+
+.medstream-streaming-summary-tile [class*="key-label"] {
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.medstream-streaming-summary-value {
+  margin-top: 6px;
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.medstream-comparison-page {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.medstream-comparison-page .medstream-page-header p,
+.medstream-comparison-page p {
+  font-size: 13px;
+}
+
+.medstream-comparison-snapshots-spacer {
+  margin-top: 12px;
+}
+
+.medstream-comparison-batch-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.medstream-comparison-metric-card {
+  min-width: 0;
+}
+
+.medstream-comparison-batch-metrics-grid .medstream-comparison-metric-card + .medstream-comparison-metric-card {
+  border-left: 1px solid var(--border-subtle);
+  padding-left: 12px;
+}
+
+.medstream-comparison-metric-card [class*="key-label"] {
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+}
+
+.medstream-comparison-metric-value {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.medstream-comparison-metric-card [class*="small"] {
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+}
+
+.medstream-comparison-chart-grid > .medstream-chart-panel + .medstream-chart-panel {
+  border-left: 1px solid var(--border-subtle);
+  padding-left: 24px;
+}
+
+.medstream-batch-metrics-page {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.medstream-batch-metrics-page .medstream-page-header p {
+  font-size: 13px;
+}
+
+.medstream-batch-metrics-page li,
+.medstream-batch-metrics-page p {
+  font-size: 13px;
+}
+
+.medstream-batch-latest-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.medstream-batch-metric-tile {
+  min-width: 0;
+}
+
+.medstream-batch-latest-metrics-grid .medstream-batch-metric-tile + .medstream-batch-metric-tile {
+  border-left: 1px solid var(--border-subtle);
+  padding-left: 16px;
+}
+
+.medstream-batch-metric-tile-compact [class*="key-label"] {
+  font-size: 10px !important;
+  line-height: 1.25 !important;
+}
+
+.medstream-batch-metric-value {
+  margin-top: 6px;
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.medstream-batch-metric-tile-compact .medstream-batch-metric-value {
+  font-size: 16px;
+}
+
+.medstream-simple-list-table [class*="awsui_body-cell"] {
+  border-block-start: 1px solid var(--border-subtle) !important;
+}
+
+.medstream-simple-list-table [class*="awsui_body-row"]:first-of-type [class*="awsui_body-cell"] {
+  border-block-start: 0 !important;
 }
 
 .medstream-alerts-container,
@@ -1849,6 +2016,14 @@ body {
   min-width: 0;
 }
 
+.medstream-alert-controls-grid > *,
+.medstream-alert-controls-grid [class*="awsui_root"],
+.medstream-alert-controls-grid [aria-haspopup="listbox"] {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
 .medstream-clinical-record-shell {
   overflow: hidden;
   border: 1px solid var(--border-primary);
@@ -1869,6 +2044,10 @@ body {
   border-bottom: 1px solid var(--border-subtle);
   background: transparent;
   padding: 14px 16px;
+}
+
+.medstream-clinical-record-row-medication {
+  align-items: center;
 }
 
 .medstream-clinical-record-list > div:last-child .medstream-clinical-record-row {
@@ -1902,6 +2081,21 @@ body {
   font-size: 14px;
   font-weight: 700;
   line-height: 1.35;
+}
+
+.medstream-clinical-record-medication-meta {
+  flex: 0 0 auto;
+  max-width: min(280px, 48%);
+  border: 1px solid var(--border-primary);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  padding: 3px 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .medstream-clinical-record-description {
@@ -1941,16 +2135,21 @@ body {
 
 .medstream-clinical-record-meta {
   display: grid;
-  gap: 8px;
+  gap: 4px;
 }
 
 .medstream-clinical-record-meta p {
-  margin: 2px 0 0;
+  margin: 0;
   overflow-wrap: anywhere;
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.35;
+}
+
+.medstream-clinical-record-meta-line span {
+  color: var(--text-secondary);
+  font-weight: 700;
 }
 
 .medstream-dialog-panel {
@@ -1962,9 +2161,15 @@ body {
 
 .medstream-activity-dialog {
   max-width: 760px;
-  max-height: calc(100vh - 48px);
+  max-height: calc(100vh - 112px);
   overflow: auto;
   padding: 0;
+}
+
+.medstream-activity-modal-overlay {
+  align-items: flex-start;
+  overflow: auto;
+  padding-top: 96px;
 }
 
 .medstream-activity-dialog-header {
@@ -2089,6 +2294,10 @@ input[type="search"]::-webkit-search-cancel-button {
   resize: vertical;
 }
 
+.medstream-clearable-textarea-field .medstream-activity-description {
+  min-height: 64px;
+}
+
 .medstream-activity-participants {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2104,7 +2313,7 @@ input[type="search"]::-webkit-search-cancel-button {
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   background: var(--surface-muted);
-  padding: 16px;
+  padding: 12px;
 }
 
 .medstream-activity-panel-header {
@@ -2130,37 +2339,37 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 .medstream-activity-search {
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .medstream-activity-choice-list {
   display: flex;
-  max-height: 176px;
+  max-height: 104px;
   flex-direction: column;
   gap: 0;
   overflow-y: auto;
-  margin-top: 14px;
+  margin-top: 10px;
   border-top: 1px solid var(--border-subtle);
   background: transparent;
   padding: 0;
 }
 
 .medstream-activity-doctor-list {
-  max-height: 214px;
+  max-height: 150px;
 }
 
 .medstream-activity-choice {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 40px;
+  min-height: 32px;
   border: 2px solid transparent;
   border-bottom: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: transparent;
   color: var(--text-primary);
   cursor: pointer;
-  padding: 8px 12px;
+  padding: 6px 10px;
 }
 
 .medstream-activity-choice:last-child {
@@ -2463,6 +2672,37 @@ input[type="search"]::-webkit-search-cancel-button {
   .medstream-dashboard-split,
   .medstream-profile-settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .medstream-batch-latest-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .medstream-streaming-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .medstream-streaming-summary-tile,
+  .medstream-streaming-summary-tile:nth-child(3n + 1),
+  .medstream-streaming-summary-tile:nth-child(3n),
+  .medstream-streaming-summary-tile:nth-child(n + 4) {
+    border-top: 0;
+    border-left: 0;
+    padding: 0;
+  }
+
+  .medstream-streaming-summary-tile + .medstream-streaming-summary-tile,
+  .medstream-comparison-batch-metrics-grid .medstream-comparison-metric-card + .medstream-comparison-metric-card,
+  .medstream-batch-latest-metrics-grid .medstream-batch-metric-tile + .medstream-batch-metric-tile {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .medstream-comparison-chart-grid > .medstream-chart-panel + .medstream-chart-panel {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+    padding-top: 20px;
+    padding-left: 0;
   }
 
   .medstream-how-grid {
@@ -3061,6 +3301,227 @@ textarea {
   border-color: var(--input-avc-border-hover);
 }
 
+.aws-date-picker {
+  position: relative;
+  width: 100%;
+}
+
+.aws-date-picker-input {
+  padding-right: 40px;
+}
+
+.aws-date-picker-trigger {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: calc(var(--aws-control-height) - 4px);
+  border: 0;
+  border-left: 1px solid transparent;
+  border-radius: 0 5px 5px 0;
+  background: transparent;
+  color: var(--link);
+  cursor: pointer;
+}
+
+.aws-date-picker-trigger:hover {
+  background: var(--avc-selection-bg-hover);
+  color: var(--link-hover);
+}
+
+.aws-date-picker-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--link) 35%, transparent);
+  outline-offset: -2px;
+}
+
+.aws-date-picker-trigger:disabled {
+  color: var(--input-clear-disabled);
+  cursor: not-allowed;
+}
+
+.aws-date-picker-trigger svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.aws-date-picker-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 1000;
+  width: min(288px, calc(100vw - 32px));
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-1);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  padding: 12px;
+}
+
+.aws-date-picker-header {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.aws-date-picker-month {
+  text-align: center;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.aws-date-picker-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.aws-date-picker-nav:hover {
+  border-color: var(--input-avc-border-hover);
+  background: var(--surface-muted);
+}
+
+.aws-date-picker-nav:focus-visible,
+.aws-date-picker-day:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--link) 35%, transparent);
+  outline-offset: 1px;
+}
+
+.aws-date-picker-weekdays,
+.aws-date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.aws-date-picker-weekdays {
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.aws-date-picker-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.aws-date-picker-day:hover:not(:disabled) {
+  border-color: var(--avc-selection-border);
+  background: var(--avc-selection-bg-hover);
+}
+
+.aws-date-picker-day-muted {
+  color: var(--text-subtle);
+}
+
+.aws-date-picker-day-today {
+  border-color: var(--link);
+}
+
+.aws-date-picker-day-selected,
+.aws-date-picker-day-selected:hover:not(:disabled) {
+  border-color: var(--link);
+  background: var(--link);
+  color: #ffffff;
+}
+
+.aws-date-picker-day:disabled {
+  color: var(--input-clear-disabled);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.aws-time-input-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: auto;
+  z-index: 1000;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: min(220px, calc(100vw - 32px));
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-1);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  padding: 10px;
+}
+
+.aws-time-input-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  max-height: 168px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.aws-time-input-minute-column {
+  align-content: start;
+}
+
+.aws-time-input-option {
+  min-width: 0;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.aws-time-input-option:hover {
+  border-color: var(--avc-selection-border);
+  background: var(--avc-selection-bg-hover);
+}
+
+.aws-time-input-option:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--link) 35%, transparent);
+  outline-offset: 1px;
+}
+
+.aws-time-input-option-selected,
+.aws-time-input-option-selected:hover {
+  border-color: var(--link);
+  background: var(--link);
+  color: #ffffff;
+}
+
 textarea.login-input,
 textarea.console-input {
   height: auto;
@@ -3118,6 +3579,43 @@ textarea.console-input {
 .app-shell [class*="button-trigger"] [class*="trigger"],
 .app-shell [class*="button-trigger"] [class*="placeholder"] {
   line-height: 20px !important;
+}
+
+.medstream-alert-cnp-filter-control,
+.medstream-alert-cnp-filter-control [class*="awsui_root"],
+.medstream-alert-cnp-filter-control [class*="awsui_input-container"],
+.medstream-alert-cnp-filter-control [class*="awsui_input-type-search"] {
+  width: 100% !important;
+  inline-size: 100% !important;
+  background-color: transparent !important;
+}
+
+.medstream-alert-cnp-filter-control input[aria-label="Filter alerts by patient CNP"] {
+  width: 100% !important;
+  inline-size: 100% !important;
+  height: var(--aws-control-height) !important;
+  min-height: var(--aws-control-height) !important;
+  min-block-size: var(--aws-control-height) !important;
+  border-color: var(--input-avc-border) !important;
+  background-color: transparent !important;
+  color: var(--input-avc-text) !important;
+  font-size: 0.875rem !important;
+  line-height: 20px !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+.medstream-alert-cnp-filter-control input[aria-label="Filter alerts by patient CNP"]:hover {
+  border-color: var(--input-avc-border-hover) !important;
+}
+
+.medstream-alert-cnp-filter-control input[aria-label="Filter alerts by patient CNP"]::placeholder {
+  color: var(--input-avc-placeholder) !important;
+  font-style: normal !important;
+}
+
+.medstream-alert-cnp-filter-control [class*="awsui_icon"] {
+  color: var(--input-avc-placeholder) !important;
 }
 
 .app-shell [class*="placeholder"],
@@ -3578,6 +4076,11 @@ textarea::placeholder {
   width: 100%;
   max-width: 640px;
   border: 1px solid var(--border-primary);
+}
+
+.console-modal.medstream-activity-dialog {
+  width: min(760px, calc(100vw - 48px));
+  max-width: min(760px, calc(100vw - 48px));
 }
 
 .alert-critical {

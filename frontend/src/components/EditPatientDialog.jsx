@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   ColumnLayout,
-  DateInput,
   FormField,
   Header,
   Input,
@@ -19,6 +18,8 @@ import {
 } from "../utils/patientPhone.js"
 import {getCityOptions, getCountyOptions} from "../utils/addressOptions.js"
 import {buildPatientAddressForm, normalizePatientAddress} from "../utils/patientAddress.js"
+import AwsDatePicker from "./AwsDatePicker.jsx"
+import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
 
 const TOTAL_STEPS = 2
 
@@ -58,6 +59,7 @@ export default function EditPatientDialog({
   const [form, setForm] = useState(buildPatientEditForm())
   const [address, setAddress] = useState(buildPatientAddressForm())
   const [phoneNumber, setPhoneNumber] = useState("")
+  const maxBirthDate = getTodayIsoDate()
 
   useEffect(() => {
     if (!isOpen || !patient) {
@@ -105,7 +107,7 @@ export default function EditPatientDialog({
     normalizedCurrentValues.first_name
     && normalizedCurrentValues.last_name
     && normalizedCurrentValues.gender
-    && normalizedCurrentValues.birth_date
+    && isIsoDateInRange(normalizedCurrentValues.birth_date, {max: maxBirthDate})
     && normalizedCurrentValues.phone_number,
   )
   const isStepTwoValid = Boolean(
@@ -247,10 +249,11 @@ export default function EditPatientDialog({
                   />
                 </FormField>
                 <FormField label="Birth Date">
-                  <DateInput
+                  <AwsDatePicker
                     value={form.birth_date}
-                    onChange={({detail}) => handleFormValueChange("birth_date", detail.value)}
-                    placeholder="YYYY-MM-DD"
+                    onChange={(value) => handleFormValueChange("birth_date", value)}
+                    className="login-input"
+                    max={maxBirthDate}
                   />
                 </FormField>
                 <FormField label="Phone Number">

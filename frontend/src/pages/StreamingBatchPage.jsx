@@ -1,5 +1,14 @@
 import {useEffect, useState} from "react"
 import {
+  Box,
+  Button,
+  ColumnLayout,
+  Container,
+  ContentLayout,
+  Header,
+  SpaceBetween,
+} from "@cloudscape-design/components"
+import {
   CartesianGrid,
   Line,
   LineChart,
@@ -27,28 +36,11 @@ function formatFixed(value, digits = 2) {
 
 function MetricCard({label, value, hint}) {
   return (
-    <div className="monitor-panel rounded-2xl px-4 py-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{value}</p>
-      <p className="mt-1 text-xs text-[var(--text-secondary)]">{hint}</p>
-    </div>
-  )
-}
-
-function SectionHeader({title, subtitle, accentClass = "text-[var(--text-muted)]"}) {
-  return (
-    <div>
-      <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${accentClass}`}>{title}</p>
-      <p className="mt-2 text-sm text-[var(--text-secondary)]">{subtitle}</p>
-    </div>
-  )
-}
-
-function DownloadIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 21h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/>
-    </svg>
+    <SpaceBetween size="xxs" className="medstream-comparison-metric-card">
+      <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
+      <div className="medstream-comparison-metric-value">{value}</div>
+      <Box color="text-body-secondary" variant="small">{hint}</Box>
+    </SpaceBetween>
   )
 }
 
@@ -130,94 +122,69 @@ export default function StreamingBatchPage() {
 
   const batchLatencyMinutes = (Number(data.batch_latency_avg) || 0) / 60
 
+  const exportComparisonMetrics = () => {
+    const exportTimestamp = new Date().toISOString()
+    const streamingLatencyMs = Number(data.streaming_latency_avg) || 0
+    const batchLatencyMs = (Number(data.batch_latency_avg) || 0) * 1000
+    const latencyDifferenceMs = batchLatencyMs - streamingLatencyMs
+    const responsivenessRatio = streamingLatencyMs > 0
+      ? batchLatencyMs / streamingLatencyMs
+      : 0
+    const rows = [
+      [
+        "timestamp",
+        "streaming_latency_avg_ms",
+        "batch_latency_avg_ms",
+        "total_events",
+        "total_alerts",
+        "alert_rate",
+        "events_per_second",
+        "latency_difference_ms",
+        "responsiveness_ratio",
+        "streaming_snapshot_timestamp",
+        "batch_snapshot_timestamp",
+      ],
+      [
+        exportTimestamp,
+        Number(streamingLatencyMs.toFixed(2)),
+        Number(batchLatencyMs.toFixed(2)),
+        Number(data.total_events) || 0,
+        Number(data.total_alerts) || 0,
+        Number((Number(data.alert_rate) || 0).toFixed(4)),
+        Number((Number(data.events_per_second) || 0).toFixed(4)),
+        Number(latencyDifferenceMs.toFixed(2)),
+        Number(responsivenessRatio.toFixed(4)),
+        streamingMetricsSnapshot?.timestamp ? new Date(streamingMetricsSnapshot.timestamp).toISOString() : "",
+        batchMetricsSnapshot?.timestamp ? new Date(batchMetricsSnapshot.timestamp).toISOString() : "",
+      ],
+      [],
+      ["history_timestamp", "streaming_alerts_window", "batch_alerts_total"],
+      ...history.map((point) => [point.time_iso || "", point.streaming_alerts, point.batch_alerts]),
+    ]
+    downloadCSV("streaming_batch_comparison.csv", rows)
+  }
+
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-4">
+    <ContentLayout>
+      <div className="medstream-comparison-page">
+        <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <BackButton fallbackTo="/dashboard"/>
+          <div className="medstream-page-heading-row">
             <div>
-              <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">Streaming vs Batch</h1>
+              <h1 className="medstream-page-title">Streaming vs Batch</h1>
+              <p>Compare low-latency stream processing with scheduled batch analytics.</p>
             </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                title="Download metrics"
-                aria-label="Download metrics"
-                className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
-                onClick={() => {
-                  const exportTimestamp = new Date().toISOString()
-                  const streamingLatencyMs = Number(data.streaming_latency_avg) || 0
-                  const batchLatencyMs = (Number(data.batch_latency_avg) || 0) * 1000
-                  const latencyDifferenceMs = batchLatencyMs - streamingLatencyMs
-                  const responsivenessRatio = streamingLatencyMs > 0
-                    ? batchLatencyMs / streamingLatencyMs
-                    : 0
-                  const rows = [
-                    [
-                      "timestamp",
-                      "streaming_latency_avg_ms",
-                      "batch_latency_avg_ms",
-                      "total_events",
-                      "total_alerts",
-                      "alert_rate",
-                      "events_per_second",
-                      "latency_difference_ms",
-                      "responsiveness_ratio",
-                      "streaming_snapshot_timestamp",
-                      "batch_snapshot_timestamp",
-                    ],
-                    [
-                      exportTimestamp,
-                      Number(streamingLatencyMs.toFixed(2)),
-                      Number(batchLatencyMs.toFixed(2)),
-                      Number(data.total_events) || 0,
-                      Number(data.total_alerts) || 0,
-                      Number((Number(data.alert_rate) || 0).toFixed(4)),
-                      Number((Number(data.events_per_second) || 0).toFixed(4)),
-                      Number(latencyDifferenceMs.toFixed(2)),
-                      Number(responsivenessRatio.toFixed(4)),
-                      streamingMetricsSnapshot?.timestamp ? new Date(streamingMetricsSnapshot.timestamp).toISOString() : "",
-                      batchMetricsSnapshot?.timestamp ? new Date(batchMetricsSnapshot.timestamp).toISOString() : "",
-                    ],
-                    [],
-                    ["history_timestamp", "streaming_alerts_window", "batch_alerts_total"],
-                    ...history.map((point) => [point.time_iso || "", point.streaming_alerts, point.batch_alerts]),
-                  ]
-                  downloadCSV("streaming_batch_comparison.csv", rows)
-                }}
-              >
-                <DownloadIcon/>
-              </button>
-              <BackButton fallbackTo="/dashboard"/>
-            </div>
+            <Button iconName="download" onClick={exportComparisonMetrics}>Export</Button>
           </div>
-          <div className="w-full">
-            <p className="mt-4 text-[var(--text-secondary)]">
-              This view compares real-time streaming data with batch-processed results.
-              Streaming is fast and responsive, while batch is slower but more accurate.
-              This demonstrates the trade-off between speed and accuracy in data processing systems.
-            </p>
-
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              Each metric displays the current value and the difference compared to the other processing model.
-              Positive values indicate that streaming is higher, while negative values indicate that batch results are higher.
-            </p>
-
-          </div>
-        </header>
+        </div>
 
         {isLoading ? <LoadingSpinner/> : (
           <>
-            <section className="monitor-card rounded-[24px] p-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="space-y-3">
-                  <SectionHeader
-                    title="Streaming (Real-Time Alerts)"
-                    subtitle="Immediate event handling and low-latency alerting."
-                    accentClass="text-[#ff9900]"
-                  />
-                  <div className="grid gap-3 sm:grid-cols-2">
+            <div className="medstream-dashboard-split">
+              <div className="medstream-stretch-container">
+                <Container header={<Header variant="h2" description="Immediate event handling and low-latency alerting.">Streaming</Header>}>
+                  <ColumnLayout columns={2} variant="text-grid">
                     <MetricCard
                       label="Streaming Latency"
                       value={`${formatFixed(Number(data.streaming_latency_avg) || 0, 2)} ms`}
@@ -228,16 +195,13 @@ export default function StreamingBatchPage() {
                       value={formatFixed(Number(data.events_per_second) || 0, 4)}
                       hint="Recent ingestion rate"
                     />
-                  </div>
-                </div>
+                  </ColumnLayout>
+                </Container>
+              </div>
 
-                <div className="space-y-3">
-                  <SectionHeader
-                    title="Batch (Delayed Analytics)"
-                    subtitle="Periodic processing with delayed but broader analysis."
-                    accentClass="text-[var(--link)]"
-                  />
-                  <div className="grid gap-3 sm:grid-cols-3">
+              <div className="medstream-stretch-container">
+                <Container header={<Header variant="h2" description="Periodic processing with delayed but broader analysis.">Batch</Header>}>
+                  <div className="medstream-comparison-batch-metrics-grid">
                     <MetricCard
                       label="Batch Latency"
                       value={`${formatFixed(batchLatencyMinutes, 2)} min`}
@@ -254,109 +218,68 @@ export default function StreamingBatchPage() {
                       hint="Alerts as share of total events"
                     />
                   </div>
-                </div>
+                </Container>
               </div>
-            </section>
+            </div>
 
-            <section className="monitor-card rounded-[24px] p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Time Behavior</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Streaming Activity vs Batch Snapshots</h2>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Orange updates represent real-time streaming alerts. Blue updates represent periodic batch snapshot totals, so changes
-                appear in delayed steps.
-              </p>
+            <div className="medstream-comparison-snapshots-spacer">
+              <Container
+                header={
+                  <Header
+                    variant="h2"
+                    description="Streaming alerts update in real time, while batch totals move in delayed snapshots."
+                  >
+                    Streaming activity vs batch snapshots
+                  </Header>
+                }
+              >
+                <div className="medstream-comparison-chart-grid grid gap-6 lg:grid-cols-2">
+                  <div className="medstream-chart-panel">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={history}>
+                        <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
+                        <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={24}/>
+                        <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={["auto", "auto"]}/>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: chartTheme.tooltipBg,
+                            border: `1px solid ${chartTheme.tooltipBorder}`,
+                            borderRadius: "12px",
+                            color: chartTheme.tooltipText,
+                          }}
+                        />
+                        <Line type="monotone" dataKey="streaming_alerts" name="Streaming Alerts" stroke="#f97316" strokeWidth={3}
+                              dot={false}/>
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
 
-              <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                <div className="h-[260px] rounded-2xl border p-4" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={history}>
-                      <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
-                      <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={24}/>
-                      <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={["auto", "auto"]}/>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: chartTheme.tooltipBg,
-                          border: `1px solid ${chartTheme.tooltipBorder}`,
-                          borderRadius: "12px",
-                          color: chartTheme.tooltipText,
-                        }}
-                      />
-                      <Line type="monotone" dataKey="streaming_alerts" name="Streaming Alerts" stroke="#f97316" strokeWidth={3}
-                            dot={false}/>
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <div className="medstream-chart-panel">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={history}>
+                        <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
+                        <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={24}/>
+                        <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={["auto", "auto"]}/>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: chartTheme.tooltipBg,
+                            border: `1px solid ${chartTheme.tooltipBorder}`,
+                            borderRadius: "12px",
+                            color: chartTheme.tooltipText,
+                          }}
+                        />
+                        <Line type="monotone" dataKey="batch_alerts" name="Batch Alerts (Delayed)" stroke="#60a5fa" strokeWidth={3}
+                              dot={false}/>
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-
-                <div className="h-[260px] rounded-2xl border p-4" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={history}>
-                      <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
-                      <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={24}/>
-                      <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={["auto", "auto"]}/>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: chartTheme.tooltipBg,
-                          border: `1px solid ${chartTheme.tooltipBorder}`,
-                          borderRadius: "12px",
-                          color: chartTheme.tooltipText,
-                        }}
-                      />
-                      <Line type="monotone" dataKey="batch_alerts" name="Batch Alerts (Delayed)" stroke="#60a5fa" strokeWidth={3}
-                            dot={false}/>
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </section>
-
-            <section className="monitor-card rounded-[24px] p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Understanding the Comparison</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Streaming vs Batch Processing</h2>
-
-              <div className="mt-4 space-y-4 text-sm text-[var(--text-secondary)] leading-6">
-                <p>
-                  This page provides a direct comparison between <strong>streaming (real-time)</strong> processing
-                  and <strong>batch (periodic)</strong> processing using the same underlying data.
-                </p>
-
-                <p>
-                  Both systems operate on identical patient data, but process it differently:
-                  streaming processes events instantly, while batch processes accumulated data over a time window.
-                </p>
-
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                  <p className="font-semibold text-[var(--text-primary)] mb-2">Streaming (Real-Time)</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Processes data immediately as it arrives</li>
-                    <li>Very low latency (near-instant updates)</li>
-                    <li>Values fluctuate more due to real-time noise</li>
-                    <li>Ideal for alerts and monitoring</li>
-                  </ul>
-                </div>
-
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                  <p className="font-semibold text-[var(--text-primary)] mb-2">Batch Processing</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Processes data periodically (e.g., every few minutes)</li>
-                    <li>Higher latency but more stable results</li>
-                    <li>Aggregates larger datasets</li>
-                    <li>Ideal for analytics and reporting</li>
-                  </ul>
-                </div>
-
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                  <p className="font-semibold text-[var(--text-primary)] mb-2">Key Insight</p>
-                  <p>
-                    Streaming prioritizes <strong>speed</strong>, while batch prioritizes <strong>accuracy</strong>.
-                    The difference values shown on this page highlight how real-time metrics can deviate
-                    from aggregated results.
-                  </p>
-                </div>
-              </div>
-            </section>
+              </Container>
+            </div>
           </>
         )}
+        </SpaceBetween>
       </div>
-    </div>
+    </ContentLayout>
   )
 }

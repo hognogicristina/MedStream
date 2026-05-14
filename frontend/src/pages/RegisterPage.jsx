@@ -5,10 +5,12 @@ import {registerDoctor} from "../services/authApi.js"
 import {getDepartments} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AwsDatePicker from "../components/AwsDatePicker.jsx"
 import {
   buildPatientPhoneNumber,
   ROMANIA_PHONE_PLACEHOLDER,
 } from "../utils/patientPhone.js"
+import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
 
 function getSelectedOption(options, value) {
   return options.find((option) => option.value === value) || null
@@ -33,6 +35,7 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [departments, setDepartments] = useState([])
   const departmentOptions = departments.map((department) => ({label: department, value: department}))
+  const maxBirthDate = getTodayIsoDate()
 
   useEffect(() => {
     const loadDepartments = async () => {
@@ -58,7 +61,7 @@ export default function RegisterPage() {
   const isStepTwoValid = Boolean(
     form.specialization.trim()
     && form.license_number.trim()
-    && form.birth_date
+    && isIsoDateInRange(form.birth_date, {max: maxBirthDate})
   )
 
   const isStepThreeValid = Boolean(
@@ -312,13 +315,13 @@ export default function RegisterPage() {
                       <label className="login-label" htmlFor="birth_date">
                         {"Birth Date"}
                       </label>
-                      <input
+                      <AwsDatePicker
                         id="birth_date"
                         name="birth_date"
-                        type="date"
                         value={form.birth_date}
-                        onChange={handleChange}
+                        onChange={(value) => handleChange({target: {name: "birth_date", value}})}
                         className="login-input w-full"
+                        max={maxBirthDate}
                         required
                       />
                     </div>

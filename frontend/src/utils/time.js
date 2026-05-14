@@ -14,3 +14,7 @@ export function formatAlertFriendlyTime(value) {
     hour12: false,
   }).format(date)
 }
+
+export function isValidTime(value) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
+}

@@ -19,6 +19,7 @@ import DataTable from "../components/DataTable.jsx"
 import ActivityDialog from "../components/ActivityDialog.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
+import AwsDatePicker from "../components/AwsDatePicker.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {resendVerificationEmail} from "../services/authApi.js"
@@ -48,6 +49,7 @@ import {
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {formatPatientFullName} from "../utils/patients.js"
 import {buildPatientPhoneNumber, normalizeRomanianPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone.js"
+import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
 
 const buildDoctorProfileForm = (doctor) => ({
   first_name: doctor?.first_name || "",
@@ -403,6 +405,7 @@ export default function ProfilePage() {
   const activityPatients = assignedPatients.filter((patient) => patient.department === doctor?.specialization)
   const activityDoctors = allDoctors.filter((item) => item.specialization === doctor?.specialization)
   const departmentOptions = departments.map((department) => ({label: department, value: department}))
+  const maxBirthDate = getTodayIsoDate()
   const transferDoctorSelectOptions = transferDoctorOptions.map((item) => ({
     label: `Dr. ${item.first_name} ${item.last_name}`,
     value: String(item.id),
@@ -412,7 +415,7 @@ export default function ProfilePage() {
     && form.last_name.trim()
     && form.specialization.trim()
     && form.license_number.trim()
-    && form.birth_date
+    && isIsoDateInRange(form.birth_date, {max: maxBirthDate})
   )
   const initialProfileForm = buildDoctorProfileForm(doctor)
   const normalizedPhoneNumber = buildPatientPhoneNumber(phoneNumber)
@@ -1016,8 +1019,15 @@ export default function ProfilePage() {
                         </div>
                         <div className="login-field">
                           <label className="login-label" htmlFor="doctor-birth-date">Birth Date</label>
-                          <input id="doctor-birth-date" name="birth_date" type="date" value={form.birth_date} onChange={handleFormChange}
-                                 className="login-input" required/>
+                          <AwsDatePicker
+                            id="doctor-birth-date"
+                            name="birth_date"
+                            value={form.birth_date}
+                            onChange={(value) => handleFormChange({target: {name: "birth_date", value}})}
+                            className="login-input"
+                            max={maxBirthDate}
+                            required
+                          />
                         </div>
                         <div className="login-field">
                           <label className="login-label" htmlFor="doctor-phone-number">Phone Number</label>

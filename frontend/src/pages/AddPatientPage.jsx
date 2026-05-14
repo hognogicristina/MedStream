@@ -20,6 +20,8 @@ import {buildPatientPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patie
 import {getCityOptions, getCountyOptions} from "../utils/addressOptions.js"
 import {buildEmptyPatientAddress, normalizePatientAddress} from "../utils/patientAddress.js"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
+import AwsDatePicker from "../components/AwsDatePicker.jsx"
+import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
 
 const TOTAL_STEPS = 2
 const GENDER_OPTIONS = [
@@ -58,6 +60,7 @@ export default function AddPatientPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const {token} = useAuth()
   const [currentDoctor, setCurrentDoctor] = useState(null)
+  const maxBirthDate = getTodayIsoDate()
 
 
   const normalizedPhoneNumber = buildPatientPhoneNumber(phoneNumber)
@@ -65,7 +68,7 @@ export default function AddPatientPage() {
     form.first_name.trim()
     && form.last_name.trim()
     && form.cnp.trim()
-    && form.birth_date
+    && isIsoDateInRange(form.birth_date, {max: maxBirthDate})
     && form.gender.trim()
     && normalizedPhoneNumber.trim(),
   )
@@ -224,8 +227,15 @@ export default function AddPatientPage() {
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-birth-date">{"Birth Date"}</label>
-                    <input id="patient-birth-date" type="date" name="birth_date" value={form.birth_date} onChange={handleChange}
-                           className="login-input" required/>
+                    <AwsDatePicker
+                      id="patient-birth-date"
+                      name="birth_date"
+                      value={form.birth_date}
+                      onChange={(value) => handleChange({target: {name: "birth_date", value}})}
+                      className="login-input"
+                      max={maxBirthDate}
+                      required
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-cnp">CNP</label>

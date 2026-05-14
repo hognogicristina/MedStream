@@ -148,6 +148,14 @@ function mapValueOptions(values) {
     .map((value) => ({label: value, value}))
 }
 
+function mapMergedValueOptions(values, ...extraValues) {
+  const mergedValues = [...values, ...extraValues]
+    .map((value) => trimValue(value))
+    .filter(Boolean)
+
+  return Array.from(new Set(mergedValues)).map((value) => ({label: value, value}))
+}
+
 function formatStatusLabel(value) {
   const text = trimValue(value)
   if (!text) {
@@ -486,8 +494,8 @@ export default function PatientMedicalHistoryPage() {
     value: medication.name,
     description: medication.pregnancy_category ? `Pregnancy category ${medication.pregnancy_category}` : undefined,
   }))
-  const dosageSelectOptions = mapValueOptions(dosageOptions)
-  const frequencySelectOptions = mapValueOptions(frequencyOptions)
+  const dosageSelectOptions = mapMergedValueOptions(dosageOptions, medicationForm.dosage, editMedicationForm.dosage, editItem?.dosage)
+  const frequencySelectOptions = mapMergedValueOptions(frequencyOptions, medicationForm.frequency, editMedicationForm.frequency, editItem?.frequency)
   const allergySelectOptions = mapValueOptions(allergyOptions)
   const conditionSelectOptions = filteredConditionOptions.map((condition) => ({
     label: condition.name,
@@ -833,9 +841,12 @@ export default function PatientMedicalHistoryPage() {
                   item.doctor_id ? doctorNameById[item.doctor_id] || "" : ""
                 )
                 const statusMeta = getRecordStatusMeta(item)
+                const medicationDoseFrequency = item.type === "medication"
+                  ? [trimValue(item.dosage), trimValue(item.frequency)].filter(Boolean).join(" • ")
+                  : ""
 
                 return (
-                  <div className="medstream-clinical-record-row">
+                  <div className={`medstream-clinical-record-row ${item.type === "medication" ? "medstream-clinical-record-row-medication" : ""}`}>
                     <div className="medstream-clinical-record-main">
                       <p className="medstream-clinical-record-type">{RECORD_TYPE_LABELS[item.type] || item.type}</p>
                       <div className="medstream-clinical-record-title-row">
@@ -843,13 +854,12 @@ export default function PatientMedicalHistoryPage() {
                         {statusMeta && (
                           <StatusIndicator type={statusMeta.type}>{statusMeta.label}</StatusIndicator>
                         )}
+                        {!statusMeta && medicationDoseFrequency && (
+                          <span className="medstream-clinical-record-medication-meta">{medicationDoseFrequency}</span>
+                        )}
                       </div>
                       {item.type === "diagnosis" && item.notes && (
                         <p className="medstream-clinical-record-description">{item.notes}</p>
-                      )}
-
-                      {item.type === "medication" && item.dosage && (
-                        <p className="medstream-clinical-record-description">{item.dosage}</p>
                       )}
                       {(
                         (item.type === "diagnosis" && item.status_note)
@@ -884,14 +894,12 @@ export default function PatientMedicalHistoryPage() {
 
                     <div className="medstream-clinical-record-side">
                       <div className="medstream-clinical-record-meta">
-                        <div>
-                          <Box color="text-body-secondary" variant="awsui-key-label">Doctor</Box>
-                          <p>{involvedDoctorStr}</p>
-                        </div>
-                        <div>
-                          <Box color="text-body-secondary" variant="awsui-key-label">Last updated</Box>
-                          <p>{formatDateTime(item.timestamp)}</p>
-                        </div>
+                        <p className="medstream-clinical-record-meta-line">
+                          <span>Doctor:</span> {involvedDoctorStr}
+                        </p>
+                        <p className="medstream-clinical-record-meta-line">
+                          <span>Last update:</span> {formatDateTime(item.timestamp)}
+                        </p>
                       </div>
 
                       {["diagnosis", "medication", "allergy", "condition"].includes(item.type) && (

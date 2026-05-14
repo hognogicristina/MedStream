@@ -1,5 +1,20 @@
 import {useEffect, useMemo, useRef, useState} from "react"
-import {Pagination, Select} from "@cloudscape-design/components"
+import {
+  Box,
+  Button,
+  ColumnLayout,
+  Container,
+  ContentLayout,
+  FormField,
+  Header,
+  Input,
+  Pagination,
+  Select,
+  SpaceBetween,
+  StatusIndicator,
+  Table,
+  Tabs,
+} from "@cloudscape-design/components"
 import {Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {
   getBatchInsights,
@@ -86,11 +101,11 @@ function formatMetric(value, unit = "", hasData = false) {
   return `${safeValue.toFixed(2)}${unit}`
 }
 
-function MetricTile({label, value}) {
+function MetricTile({label, value, compact = false}) {
   return (
-    <div className="monitor-panel rounded-2xl px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{value}</p>
+    <div className={compact ? "medstream-batch-metric-tile medstream-batch-metric-tile-compact" : "medstream-batch-metric-tile"}>
+      <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
+      <div className="medstream-batch-metric-value">{value}</div>
     </div>
   )
 }
@@ -118,14 +133,6 @@ function SimpleCasesTooltip({active, payload, chartTheme}) {
     >
       {label}: {value}
     </div>
-  )
-}
-
-function DownloadIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 21h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/>
-    </svg>
   )
 }
 
@@ -595,511 +602,346 @@ export default function BatchMetricsPage() {
 
   if (isLoading) {
     return (
-      <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+      <ContentLayout>
+        <Container>
           <LoadingSpinner/>
-        </div>
-      </div>
+        </Container>
+      </ContentLayout>
     )
   }
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
-                  Demo View
-                </p>
-
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">
-                  Batch Metrics
-                </h1>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  title="Download all metrics"
-                  aria-label="Download all metrics"
-                  className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
-                  onClick={handleExportAllMetrics}
-                >
-                  <DownloadIcon/>
-                </button>
-                <BackButton fallbackTo="/dashboard"/>
-              </div>
+    <ContentLayout>
+      <div className="medstream-batch-metrics-page">
+        <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <BackButton fallbackTo="/dashboard"/>
+          <div className="medstream-page-heading-row">
+            <div>
+              <h1 className="medstream-page-title">Batch Metrics</h1>
+              <p>Scheduled analytics, aggregate patient metrics, and treatment effectiveness.</p>
             </div>
-            <p className="mt-4 text-[var(--text-secondary)]">
-              This view shows aggregated data computed over a time window (e.g., last 5 minutes).
-              Batch processing analyzes large volumes of historical data, providing more stable and accurate insights.
-            </p>
+            <Button iconName="download" onClick={handleExportAllMetrics}>Export</Button>
           </div>
-        </header>
+        </div>
 
-        <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Control</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Scheduling</h2>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              Configure how often batch analytics should run. All timestamps are shown in Europe/Bucharest.
-            </p>
-
-            <div className="mt-6 monitor-panel rounded-2xl px-4 py-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Current Schedule</p>
-              <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{scheduleSummary}</p>
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Run Frequency</span>
-                <div className="mt-3">
+        <div className="medstream-dashboard-split">
+          <div className="medstream-stretch-container">
+            <Container
+              header={
+                <Header variant="h2" description="Configure how often batch analytics should run.">
+                  Scheduling
+                </Header>
+              }
+            >
+              <SpaceBetween size="m">
+                <ColumnLayout columns={2} variant="text-grid">
+                  <SpaceBetween size="xs">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Current schedule</Box>
+                    <Box variant="h3">{scheduleSummary}</Box>
+                  </SpaceBetween>
+                  <FormField label="Run frequency">
                   <Select
                     selectedOption={getSelectedOption(SCHEDULE_TYPE_OPTIONS, scheduleType)}
                     onChange={({detail}) => setScheduleType(detail.selectedOption.value)}
                     options={SCHEDULE_TYPE_OPTIONS}
                     selectedAriaLabel="Selected run frequency"
                   />
-                </div>
-              </label>
+                  </FormField>
+                </ColumnLayout>
 
-              {(scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") ? (
-                <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
-                  <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                    {scheduleType === "seconds" ? "Seconds" : scheduleType === "minutes" ? "Minutes" : "Hours"}
-                  </span>
-                  <input
+                {(scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") ? (
+                  <FormField label={scheduleType === "seconds" ? "Seconds" : scheduleType === "minutes" ? "Minutes" : "Hours"}>
+                    <Input
                     type="number"
-                    min="1"
                     value={scheduleValue}
-                    onChange={(event) => setScheduleValue(event.target.value)}
-                    className="mt-3 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
+                    onChange={({detail}) => setScheduleValue(detail.value)}
                   />
-                </label>
-              ) : null}
+                  </FormField>
+                ) : null}
 
-              {(scheduleType === "daily" || scheduleType === "weekly") ? (
-                <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
-                  <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Time</span>
-                  <input
-                    type="time"
+                {(scheduleType === "daily" || scheduleType === "weekly") ? (
+                  <FormField label="Time">
+                    <Input
                     value={scheduleTime}
-                    onChange={(event) => setScheduleTime(event.target.value)}
-                    className="mt-3 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
+                    onChange={({detail}) => setScheduleTime(detail.value)}
+                    placeholder="08:00"
                   />
-                </label>
-              ) : null}
-            </div>
+                  </FormField>
+                ) : null}
 
-            {scheduleType === "weekly" ? (
-              <div className="mt-3 monitor-panel rounded-2xl px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Days</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {WEEKDAY_OPTIONS.map((day) => {
+                {scheduleType === "weekly" ? (
+                  <SpaceBetween size="xs">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Days</Box>
+                    <SpaceBetween direction="horizontal" size="xs">
+                      {WEEKDAY_OPTIONS.map((day) => {
                     const isSelected = scheduleDays.includes(day)
                     return (
-                      <button
+                          <Button
                         key={day}
-                        type="button"
                         onClick={() => toggleWeekday(day)}
-                        className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
-                          isSelected
-                            ? "border border-[#ff9900] bg-[#2b2217] text-[#ffd08a]"
-                            : "border border-[var(--border-strong)] bg-[var(--surface-2)] text-[var(--text-primary)]"
-                        }`}
+                            variant={isSelected ? "primary" : "normal"}
                       >
                         {day.slice(0, 3)}
-                      </button>
+                          </Button>
                     )
                   })}
-                </div>
-              </div>
-            ) : null}
+                    </SpaceBetween>
+                  </SpaceBetween>
+                ) : null}
 
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                type="button"
-                className="console-button-secondary rounded-xl px-4 py-3 text-sm font-semibold"
+                <SpaceBetween direction="horizontal" size="xs">
+                  <Button
                 onClick={handleApplySchedule}
                 disabled={isApplyingSchedule}
               >
                 {isApplyingSchedule ? "Applying..." : "Apply Schedule"}
-              </button>
-              <button
-                type="button"
-                className="console-button-primary rounded-xl px-4 py-3 text-sm font-semibold"
+                  </Button>
+                  <Button
+                    variant="primary"
                 onClick={handleRunBatchNow}
                 disabled={isRunningBatch}
               >
                 {isRunningBatch ? "Running..." : "Run Batch Now"}
-              </button>
-            </div>
+                  </Button>
+                </SpaceBetween>
+              </SpaceBetween>
+            </Container>
           </div>
 
-          <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Job Status</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Execution Progress</h2>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              The batch job executes in stages (loading, aggregating, computing, finalizing),
-              each representing a phase of data processing.
-            </p>
+          <div className="medstream-stretch-container">
+            <Container
+              header={
+                <Header variant="h2" description="Current batch execution stage and progress.">
+                  Execution progress
+                </Header>
+              }
+            >
+              <SpaceBetween size="m">
+                <ColumnLayout columns={4} variant="text-grid">
+                  <SpaceBetween size="xs">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Status</Box>
+                    <StatusIndicator type={batchProgress.is_running ? "in-progress" : "stopped"}>{progressLabel}</StatusIndicator>
+                  </SpaceBetween>
+                  <MetricTile label="Stage" value={batchProgress.stage || "Idle"}/>
+                  <MetricTile
+                    label="Next Run In"
+                    value={
+                      batchProgress.is_running
+                        ? "Running now"
+                        : batchProgress.next_run_in_seconds == null
+                          ? "Not scheduled"
+                          : `${batchProgress.next_run_in_seconds}s`
+                    }
+                  />
+                  <MetricTile label="Last Run" value={formatBatchTimestamp(batchProgress.last_run)}/>
+                </ColumnLayout>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Status</p>
-                <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{progressLabel}</p>
-              </div>
-              <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Stage</p>
-                <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">{batchProgress.stage || "Idle"}</p>
-              </div>
-              <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Next Run In</p>
-                <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">
-                  {batchProgress.is_running
-                    ? "Running now"
-                    : batchProgress.next_run_in_seconds == null
-                      ? "Not scheduled"
-                      : `${batchProgress.next_run_in_seconds}s`}
-                </p>
-              </div>
-              <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Last Run</p>
-                <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">
-                  {formatBatchTimestamp(batchProgress.last_run)}
-                </p>
-              </div>
-            </div>
+                <SpaceBetween size="xs">
+                  <Box color="text-body-secondary" variant="awsui-key-label">Progress</Box>
+                  <Box variant="h3">{progressDisplay}%</Box>
+                  <div className="h-3 rounded-full bg-[var(--surface-4)]">
+                    <div
+                      className="h-3 rounded-full bg-[#ff9900] transition-all duration-500 ease-out"
+                      style={{width: `${progressDisplay}%`}}
+                    />
+                  </div>
+                </SpaceBetween>
+              </SpaceBetween>
+            </Container>
+          </div>
+        </div>
 
-            <div className="mt-6 monitor-panel rounded-2xl px-4 py-4">
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Progress</p>
-                <p className="text-sm font-semibold text-[var(--text-primary)]">{progressDisplay}%</p>
-              </div>
-              <div className="mt-3 h-3 rounded-full bg-[var(--surface-4)]">
-                <div
-                  className="h-3 rounded-full bg-[#ff9900] transition-all duration-500 ease-out"
-                  style={{width: `${progressDisplay}%`}}
+        <Container header={<Header variant="h2">Latest Metrics</Header>}>
+          <div className="medstream-batch-latest-metrics-grid">
+            <MetricTile compact label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm", hasBatchData)}/>
+            <MetricTile compact label="Avg Oxygen" value={formatMetric(data.avg_oxygen, "%", hasBatchData)}/>
+            <MetricTile compact label="Avg Temperature" value={formatMetric(data.avg_temperature, " C", hasBatchData)}/>
+            <MetricTile compact label="Alerts Count" value={hasBatchData ? String(data.alerts ?? 0) : "Not available"}/>
+            <MetricTile compact label="Execution Time" value={formatMetric(data.execution_time_ms, " ms", hasBatchData)}/>
+          </div>
+        </Container>
+
+        <Container header={<Header variant="h2">Post-Discharge Clinical Summary</Header>}>
+          <ColumnLayout columns={2} variant="text-grid">
+            <MetricTile
+              label="Generated Summaries"
+              value={String(data.generated_discharge_summaries_count ?? 0)}
+            />
+            <MetricTile
+              label="Pending Discharged Patients"
+              value={String(data.pending_discharge_summaries_count ?? 0)}
+            />
+          </ColumnLayout>
+        </Container>
+
+        <div className="medstream-dashboard-split">
+          <div className="medstream-stretch-container">
+            <Container header={<Header variant="h2">Patients per Department</Header>}>
+              <div className="medstream-simple-list-table">
+                <Table
+                  variant="borderless"
+                  items={patientsPerDepartment.items || []}
+                  trackBy="department"
+                  empty={<Box color="text-body-secondary">No department snapshot available yet.</Box>}
+                  columnDefinitions={[
+                    {
+                      id: "department",
+                      header: "Department",
+                      cell: (entry) => entry.department,
+                    },
+                    {
+                      id: "patients",
+                      header: "Patients",
+                      cell: (entry) => `${entry.patients} patients`,
+                    },
+                  ]}
                 />
               </div>
-            </div>
-          </div>
-        </section>
 
-        <section className="monitor-card rounded-[24px] p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Snapshot</p>
-          <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Latest Metrics</h2>
-
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <MetricTile label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm", hasBatchData)}/>
-            <MetricTile label="Avg Oxygen" value={formatMetric(data.avg_oxygen, "%", hasBatchData)}/>
-            <MetricTile label="Avg Temperature" value={formatMetric(data.avg_temperature, " C", hasBatchData)}/>
-            <MetricTile label="Alerts Count" value={hasBatchData ? String(data.alerts ?? 0) : "Not available"}/>
-            <MetricTile label="Execution Time" value={formatMetric(data.execution_time_ms, " ms", hasBatchData)}/>
-          </div>
-
-          <div className="mt-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Post-Discharge Clinical Summary</p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <MetricTile
-                label="Generated Summaries"
-                value={String(data.generated_discharge_summaries_count ?? 0)}
-              />
-              <MetricTile
-                label="Pending Discharged Patients"
-                value={String(data.pending_discharge_summaries_count ?? 0)}
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Insight</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Patients per Department</h2>
-
-            <div className="mt-6 space-y-3">
-              {patientsPerDepartment.items?.length ? patientsPerDepartment.items.map((entry) => (
-                <div key={entry.department} className="monitor-panel rounded-2xl px-4 py-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">{entry.department}</p>
-                    <div className="rounded-full border border-[var(--border-strong)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)]">
-                      {entry.patients} patients
-                    </div>
-                  </div>
-                </div>
-              )) : (
-                <div className="monitor-panel rounded-2xl px-4 py-6 text-sm text-[var(--text-secondary)]">
-                  No department snapshot available yet.
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-end">
+              <div className="mt-4 flex justify-end">
               <Pagination
                 currentPageIndex={patientsPerDepartment.page || 1}
                 pagesCount={departmentsTotalPages}
                 onChange={({detail}) => setDepartmentsPage(detail.currentPageIndex)}
               />
-            </div>
+              </div>
+            </Container>
           </div>
 
-          <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Insight</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Top Diagnosis</h2>
-
-            <div className="mt-6 space-y-3">
-              {topDiagnosis.items?.length ? topDiagnosis.items.map((diagnosis) => (
-                <div key={diagnosis.name} className="monitor-panel rounded-2xl px-4 py-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="group relative flex flex-1 min-w-0 items-center">
-                      <p className="flex-1 min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">
-                        {diagnosis.name}
-                      </p>
-                      <span
-                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs font-medium text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                        {diagnosis.name}
-                      </span>
-                    </div>
-                    <div
-                      className="shrink-0 w-[110px] text-center rounded-full border border-[var(--border-strong)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)]">
-                      {diagnosis.patients} patients
-                    </div>
-                  </div>
-                </div>
-              )) : (
-                <div className="monitor-panel rounded-2xl px-4 py-6 text-sm text-[var(--text-secondary)]">
-                  No diagnosis snapshot available yet.
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-end">
+          <div className="medstream-stretch-container">
+            <Container header={<Header variant="h2">Top Diagnoses by Patient Count</Header>}>
+              <div className="medstream-simple-list-table">
+                <Table
+                  variant="borderless"
+                  items={topDiagnosis.items || []}
+                  trackBy="name"
+                  empty={<Box color="text-body-secondary">No diagnosis snapshot available yet.</Box>}
+                  columnDefinitions={[
+                    {
+                      id: "diagnosis",
+                      header: "Diagnosis",
+                      cell: (diagnosis) => diagnosis.name,
+                    },
+                    {
+                      id: "patients",
+                      header: "Patients",
+                      cell: (diagnosis) => `${diagnosis.patients} patients`,
+                    },
+                  ]}
+                />
+              </div>
+              <div className="mt-2 flex justify-end">
               <Pagination
                 currentPageIndex={topDiagnosis.page || 1}
                 pagesCount={diagnosesTotalPages}
                 onChange={({detail}) => setDiagnosesPage(detail.currentPageIndex)}
               />
-            </div>
+              </div>
+            </Container>
           </div>
-        </section>
+        </div>
 
-        <section className="monitor-card rounded-[24px] p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Treatment Analysis</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Treatment Effectiveness</h2>
-            </div>
-            {treatmentMode === "medication" && selectedMedication ? (
-              <button
-                type="button"
-                title="Export selected medication data"
-                aria-label="Export selected medication data"
-                className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
-                onClick={handleExportSelectedMedication}
-              >
-                <DownloadIcon/>
-              </button>
-            ) : null}
-          </div>
-
-          <div className="mt-5 inline-flex rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-1">
-            <button
-              type="button"
-              onClick={() => setTreatmentMode("medication")}
-              className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                treatmentMode === "medication"
-                  ? "bg-[var(--surface-muted)] text-[var(--text-primary)]"
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              }`}
+        <Container
+          header={
+            <Header
+              variant="h2"
+              actions={treatmentMode === "medication" && selectedMedication ? (
+                <Button iconName="download" onClick={handleExportSelectedMedication}>Export medication</Button>
+              ) : null}
             >
-              Medication
-            </button>
-            <button
-              type="button"
-              onClick={() => setTreatmentMode("overall")}
-              className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                treatmentMode === "overall"
-                  ? "bg-[var(--surface-muted)] text-[var(--text-primary)]"
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              }`}
-            >
-              Overall
-            </button>
-          </div>
-
-          {treatmentMode === "medication" ? (
-            <div className="mt-6 space-y-5">
-              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                <p className="text-sm font-semibold text-[var(--text-primary)]">What this chart measures</p>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                  The chart shows treatment outcomes for the selected medication across all recorded treatment instances.
-                </p>
-                <div className="mt-3 grid gap-2">
-                  {medicationBarData.map((item) => (
-                    <div key={`explain-${item.label}`} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{color: item.fill}}>
-                        {item.label}: {item.count}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--text-secondary)]">{item.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="monitor-panel rounded-2xl p-4">
-                <label htmlFor="medication-select" className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                  Select medication
-                </label>
-                <div className="mt-3">
-                  <Select
-                    selectedOption={getSelectedOption(medicationSelectOptions, selectedMedication)}
-                    onChange={({detail}) => setSelectedMedication(detail.selectedOption.value)}
-                    options={medicationSelectOptions}
-                    placeholder={medicationEffectiveness.length ? "Select medication" : "No medication data available"}
-                    selectedAriaLabel="Selected medication"
-                    disabled={!medicationEffectiveness.length}
-                  />
-                </div>
-              </div>
-
-              <div className="h-[280px] rounded-2xl border p-3" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={medicationBarData} margin={{top: 8, right: 10, left: 0, bottom: 8}}>
-                    <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3"/>
-                    <XAxis dataKey="label" stroke={chartTheme.axis} tick={{fontSize: 11}}/>
-                    <YAxis allowDecimals={false} stroke={chartTheme.axis} tick={{fontSize: 11}}/>
-                    <Tooltip content={<SimpleCasesTooltip chartTheme={chartTheme}/>}/>
-                    <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                      <LabelList dataKey="count" position="top" fill={chartTheme.label} fontSize={12}/>
-                      {medicationBarData.map((item) => (
-                        <Cell key={item.label} fill={item.fill}/>
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-6 rounded-2xl border p-3" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
-              <div className="mb-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                <p className="text-sm font-semibold text-[var(--text-primary)]">What this chart measures</p>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                  This chart summarizes treatment outcomes across all medications and patients in the selected batch window.
-                </p>
-              </div>
-              <div className="h-[300px]">
-                {totalTreatments > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={overallEffectivenessData}
-                        dataKey="value"
-                        nameKey="name"
-                        outerRadius={112}
-                        startAngle={90}
-                        endAngle={-270}
-                        paddingAngle={4}
-                        stroke={chartTheme.pieStroke}
-                        strokeWidth={2}
-                      >
-                        {overallEffectivenessData.map((entry) => (
-                          <Cell key={entry.name} fill={entry.color}/>
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={<SimpleCasesTooltip chartTheme={chartTheme}/>}
+              Treatment Effectiveness
+            </Header>
+          }
+        >
+          <Tabs
+            activeTabId={treatmentMode}
+            onChange={({detail}) => setTreatmentMode(detail.activeTabId)}
+            tabs={[
+              {
+                id: "medication",
+                label: "Medication",
+                content: (
+                  <SpaceBetween size="m">
+                    <Box color="text-body-secondary">
+                      The chart shows treatment outcomes for the selected medication across all recorded treatment instances.
+                    </Box>
+                    <FormField label="Select medication">
+                      <Select
+                        selectedOption={getSelectedOption(medicationSelectOptions, selectedMedication)}
+                        onChange={({detail}) => setSelectedMedication(detail.selectedOption.value)}
+                        options={medicationSelectOptions}
+                        placeholder={medicationEffectiveness.length ? "Select medication" : "No medication data available"}
+                        selectedAriaLabel="Selected medication"
+                        disabled={!medicationEffectiveness.length}
                       />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
-                    No treatment data available yet.
-                  </div>
-                )}
-              </div>
-              <div className="mt-3 flex items-center justify-center gap-5 text-sm text-[var(--text-secondary)]">
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]"/>
-                  Effective: {treatmentEffectiveness.effective}
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#f59e0b]"/>
-                  Improving: {treatmentEffectiveness.improving}
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#ef4444]"/>
-                  Ineffective: {treatmentEffectiveness.ineffective}
-                </span>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="monitor-card rounded-[24px] p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Understanding Batch Processing</p>
-          <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">How Batch Processing Works</h2>
-
-          <div className="mt-4 space-y-4 text-sm text-[var(--text-secondary)] leading-6">
-            <p>
-              This page represents the batch processing layer of the system. Data is collected over time and processed in intervals rather
-              than instantly.
-            </p>
-
-            <p>
-              Instead of reacting to each event individually, batch processing aggregates data across multiple patients and time windows to
-              generate more stable and reliable insights.
-            </p>
-
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-              <p className="font-semibold text-[var(--text-primary)] mb-2">What you are seeing:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Aggregated metrics computed over a time window</li>
-                <li>Stable averages across multiple patients</li>
-                <li>Reduced noise compared to real-time values</li>
-                <li>Summary insights derived from historical data</li>
-              </ul>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-              <p className="font-semibold text-[var(--text-primary)] mb-2">Why batch processing matters:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Provides more accurate and consistent results</li>
-                <li>Enables long-term trend analysis</li>
-                <li>Helps evaluate treatment effectiveness</li>
-                <li>Supports reporting and decision-making</li>
-              </ul>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-              <p className="font-semibold text-[var(--text-primary)] mb-2">Technical flow:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Data is collected over time (streaming layer)</li>
-                <li>Events are accumulated into a dataset</li>
-                <li>Batch jobs process the dataset periodically</li>
-                <li>Metrics and insights are computed</li>
-                <li>Results are exposed via API and visualized</li>
-              </ul>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-              <p className="font-semibold text-[var(--text-primary)] mb-2">Trade-offs:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Higher latency (results are delayed)</li>
-                <li>More stable and reliable outputs</li>
-                <li>Better suited for analytics than monitoring</li>
-                <li>Requires scheduled execution</li>
-              </ul>
-            </div>
-
-            <p>
-              This layer complements streaming processing: batch provides accuracy and deeper insights, while streaming provides speed and
-              real-time visibility.
-            </p>
-          </div>
-        </section>
+                    </FormField>
+                    <div className="medstream-chart-panel">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={medicationBarData} margin={{top: 8, right: 10, left: 0, bottom: 8}}>
+                          <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3"/>
+                          <XAxis dataKey="label" stroke={chartTheme.axis} tick={{fontSize: 11}}/>
+                          <YAxis allowDecimals={false} stroke={chartTheme.axis} tick={{fontSize: 11}}/>
+                          <Tooltip content={<SimpleCasesTooltip chartTheme={chartTheme}/>}/>
+                          <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                            <LabelList dataKey="count" position="top" fill={chartTheme.label} fontSize={12}/>
+                            {medicationBarData.map((item) => (
+                              <Cell key={item.label} fill={item.fill}/>
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </SpaceBetween>
+                ),
+              },
+              {
+                id: "overall",
+                label: "Overall",
+                content: (
+                  <SpaceBetween size="m">
+                    <Box color="text-body-secondary">
+                      This chart summarizes treatment outcomes across all medications and patients in the selected batch window.
+                    </Box>
+                    <div className="medstream-chart-panel">
+                      {totalTreatments > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={overallEffectivenessData}
+                              dataKey="value"
+                              nameKey="name"
+                              outerRadius={112}
+                              startAngle={90}
+                              endAngle={-270}
+                              paddingAngle={4}
+                              stroke={chartTheme.pieStroke}
+                              strokeWidth={2}
+                            >
+                              {overallEffectivenessData.map((entry) => (
+                                <Cell key={entry.name} fill={entry.color}/>
+                              ))}
+                            </Pie>
+                            <Tooltip content={<SimpleCasesTooltip chartTheme={chartTheme}/>}/>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <Box color="text-body-secondary">No treatment data available yet.</Box>
+                      )}
+                    </div>
+                    <ColumnLayout columns={3} variant="text-grid">
+                      <MetricTile label="Effective" value={String(treatmentEffectiveness.effective)}/>
+                      <MetricTile label="Improving" value={String(treatmentEffectiveness.improving)}/>
+                      <MetricTile label="Ineffective" value={String(treatmentEffectiveness.ineffective)}/>
+                    </ColumnLayout>
+                  </SpaceBetween>
+                ),
+              },
+            ]}
+          />
+        </Container>
+        </SpaceBetween>
       </div>
-    </div>
+    </ContentLayout>
   )
 }

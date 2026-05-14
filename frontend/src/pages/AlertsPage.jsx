@@ -395,16 +395,18 @@ export default function AlertsPage() {
                   ariaLabel="Filter by severity"
                 />
               </SpaceBetween>
-              <SpaceBetween size="xxs">
+              <SpaceBetween size="xxs" className="medstream-alert-cnp-filter">
                 <Box color="text-body-secondary" variant="awsui-key-label">Patient CNP</Box>
-                <TextFilter
-                  filteringText={cnpFilter}
-                  filteringPlaceholder="Filter by CNP"
-                  filteringAriaLabel="Filter alerts by patient CNP"
-                  countText={`${filteredAlerts.length} matches`}
-                  disabled={Boolean(scopedPatientId)}
-                  onChange={({detail}) => handleCnpFilterChange(detail.filteringText)}
-                />
+                <div className="medstream-alert-cnp-filter-control">
+                  <TextFilter
+                    filteringText={cnpFilter}
+                    filteringPlaceholder="Filter by CNP"
+                    filteringAriaLabel="Filter alerts by patient CNP"
+                    countText={`${filteredAlerts.length} matches`}
+                    disabled={Boolean(scopedPatientId)}
+                    onChange={({detail}) => handleCnpFilterChange(detail.filteringText)}
+                  />
+                </div>
               </SpaceBetween>
               <SpaceBetween size="xxs">
                 <Box color="text-body-secondary" variant="awsui-key-label">Sort order</Box>
@@ -426,58 +428,60 @@ export default function AlertsPage() {
               </SpaceBetween>
             </div>
 
-            <Table
-              variant="borderless"
-              items={paginatedAlerts}
-              trackBy="id"
-              loading={isLoadingAlerts}
-              loadingText="Loading alert queue"
-              empty={<Box color="text-body-secondary">No alerts match the current filters.</Box>}
-              pagination={
-                <Pagination
-                  currentPageIndex={currentPage}
-                  pagesCount={pagesCount}
-                  onChange={({detail}) => setCurrentPage(detail.currentPageIndex)}
-                />
-              }
-              columnDefinitions={[
-                {
-                  id: "severity",
-                  header: "Severity",
-                  cell: (item) => (
-                    <span className={`alert-row-${item.id} ${flashAlertId === item.id ? "alert-row-flash" : ""}`}>
-                      {getSeverityIndicator(item.severity)}
-                    </span>
-                  ),
-                },
-                {
-                  id: "cnp",
-                  header: "CNP",
-                  cell: (item) => patientCnpById[item.patient_id] || "--",
-                },
-                {
-                  id: "patient",
-                  header: "Patient",
-                  cell: (item) => {
-                    const patient = patientById[item.patient_id]
-                    if (!patient) {
-                      return patientNameById[item.patient_id] || "Unknown patient"
-                    }
-                    return <Button variant="inline-link" onClick={() => navigate(`/patient/${patient.id}`)}>{formatPatientFullName(patient)}</Button>
+            <div className="medstream-column-divider-table">
+              <Table
+                variant="borderless"
+                items={paginatedAlerts}
+                trackBy="id"
+                loading={isLoadingAlerts}
+                loadingText="Loading alert queue"
+                empty={<Box color="text-body-secondary">No alerts match the current filters.</Box>}
+                pagination={
+                  <Pagination
+                    currentPageIndex={currentPage}
+                    pagesCount={pagesCount}
+                    onChange={({detail}) => setCurrentPage(detail.currentPageIndex)}
+                  />
+                }
+                columnDefinitions={[
+                  {
+                    id: "severity",
+                    header: "Severity",
+                    cell: (item) => (
+                      <span className={`alert-row-${item.id} ${flashAlertId === item.id ? "alert-row-flash" : ""}`}>
+                        {getSeverityIndicator(item.severity)}
+                      </span>
+                    ),
                   },
-                },
-                {
-                  id: "message",
-                  header: "Message",
-                  cell: (item) => item.message,
-                },
-                {
-                  id: "created",
-                  header: "Created",
-                  cell: (item) => formatDateTimeWithSeconds(item.created_at),
-                },
-              ]}
-            />
+                  {
+                    id: "cnp",
+                    header: "CNP",
+                    cell: (item) => patientCnpById[item.patient_id] || "--",
+                  },
+                  {
+                    id: "patient",
+                    header: "Patient",
+                    cell: (item) => {
+                      const patient = patientById[item.patient_id]
+                      if (!patient) {
+                        return patientNameById[item.patient_id] || "Unknown patient"
+                      }
+                      return <Button variant="inline-link" onClick={() => navigate(`/patient/${patient.id}`)}>{formatPatientFullName(patient)}</Button>
+                    },
+                  },
+                  {
+                    id: "message",
+                    header: "Message",
+                    cell: (item) => item.message,
+                  },
+                  {
+                    id: "created",
+                    header: "Created",
+                    cell: (item) => formatDateTimeWithSeconds(item.created_at),
+                  },
+                ]}
+              />
+            </div>
           </SpaceBetween>
         </Container>
       </SpaceBetween>

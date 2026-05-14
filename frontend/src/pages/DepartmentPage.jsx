@@ -403,67 +403,77 @@ export default function DepartmentPage() {
           </ColumnLayout>
         </Container>
 
-        <Container header={<Header variant="h2">Patients</Header>}>
-          <Table
-            variant="borderless"
-            items={paginatedRows}
-            loading={isLoading}
-            loadingText="Loading department analytics"
-            empty={<Box color="text-body-secondary">{patients.length === 0 ? `No patients are currently assigned to ${departmentName}.` : "No department patients match the current filters."}</Box>}
-            columnDefinitions={[
-              {
-                id: "patient",
-                header: "Patient",
-                cell: ({patient, displayName}) => (
-                  <Button variant="inline-link" onClick={() => navigate(`/patient/${patient.id}`)}>{displayName}</Button>
-                ),
-              },
-              {
-                id: "status",
-                header: "Status",
-                cell: ({patient}) => patient.is_discharged
-                  ? <StatusIndicator type="stopped">Discharged</StatusIndicator>
-                  : <StatusIndicator type="success">Admitted</StatusIndicator>,
-              },
-              {
-                id: "alerts",
-                header: "Alerts",
-                cell: ({alertSummary}) => renderAlertStatus(alertSummary),
-              },
-              {
-                id: "alertCount",
-                header: "Alert count",
-                cell: ({stat, alertSummary}) => <CountValue value={stat?.alerts_count ?? alertSummary.count}/>,
-              },
-              {
-                id: "heartRate",
-                header: "Avg HR",
-                cell: ({stat}) => stat ? stat.avg_heart_rate.toFixed(1) : "--",
-              },
-              {
-                id: "temperature",
-                header: "Avg Temp",
-                cell: ({stat}) => stat ? stat.avg_temperature.toFixed(1) : "--",
-              },
-              {
-                id: "oxygen",
-                header: "Avg O2",
-                cell: ({stat}) => stat ? stat.avg_oxygen.toFixed(1) : "--",
-              },
-              {
-                id: "snapshot",
-                header: "Snapshot",
-                cell: ({stat}) => stat?.computed_at ? new Date(stat.computed_at).toLocaleTimeString() : "--",
-              },
-            ]}
-            pagination={
+        <Container
+          header={
+            <Header
+              variant="h2"
+              actions={
               <Pagination
                 currentPageIndex={currentPage}
                 pagesCount={pagesCount}
                 onChange={({detail}) => setCurrentPage(detail.currentPageIndex)}
               />
-            }
-          />
+              }
+            >
+              Patients
+            </Header>
+          }
+        >
+          <div className="medstream-column-divider-table">
+            <Table
+              variant="borderless"
+              items={paginatedRows}
+              loading={isLoading}
+              loadingText="Loading department analytics"
+              empty={<Box color="text-body-secondary">{patients.length === 0 ? `No patients are currently assigned to ${departmentName}.` : "No department patients match the current filters."}</Box>}
+              columnDefinitions={[
+                {
+                  id: "patient",
+                  header: "Patient",
+                  cell: ({patient, displayName}) => (
+                    <Button variant="inline-link" onClick={() => navigate(`/patient/${patient.id}`)}>{displayName}</Button>
+                  ),
+                },
+                {
+                  id: "status",
+                  header: "Status",
+                  cell: ({patient}) => patient.is_discharged
+                    ? <StatusIndicator type="stopped">Discharged</StatusIndicator>
+                    : <StatusIndicator type="success">Admitted</StatusIndicator>,
+                },
+                {
+                  id: "alerts",
+                  header: "Alerts",
+                  cell: ({alertSummary}) => renderAlertStatus(alertSummary),
+                },
+                {
+                  id: "alertCount",
+                  header: "Alert count",
+                  cell: ({stat, alertSummary}) => <CountValue value={stat?.alerts_count ?? alertSummary.count}/>,
+                },
+                {
+                  id: "heartRate",
+                  header: "Avg HR",
+                  cell: ({stat}) => stat ? stat.avg_heart_rate.toFixed(1) : "--",
+                },
+                {
+                  id: "temperature",
+                  header: "Avg Temp",
+                  cell: ({stat}) => stat ? stat.avg_temperature.toFixed(1) : "--",
+                },
+                {
+                  id: "oxygen",
+                  header: "Avg O2",
+                  cell: ({stat}) => stat ? stat.avg_oxygen.toFixed(1) : "--",
+                },
+                {
+                  id: "snapshot",
+                  header: "Snapshot",
+                  cell: ({stat}) => stat?.computed_at ? new Date(stat.computed_at).toLocaleTimeString() : "--",
+                },
+              ]}
+            />
+          </div>
         </Container>
       </SpaceBetween>
     </ContentLayout>
