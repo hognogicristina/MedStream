@@ -930,12 +930,28 @@ body {
 .medstream-stretch-container {
   display: flex;
   min-width: 0;
+  align-self: stretch;
 }
 
 .medstream-stretch-container > div {
   flex: 1;
   width: 100%;
   height: 100%;
+}
+
+.medstream-streaming-card {
+  height: 100%;
+}
+
+.medstream-patient-chart-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.medstream-patient-chart-stack > .medstream-patient-chart-container {
+  flex: 1;
+  min-height: 0;
 }
 
 .medstream-vitals-insights {
@@ -1048,21 +1064,37 @@ body {
   align-items: stretch;
   justify-content: center;
   box-sizing: border-box;
+  width: 100%;
+  inline-size: 100%;
   height: 100%;
   min-height: 360px;
   padding: 0;
 }
 
 .medstream-patient-vitals-chart-panel > * {
+  width: 100%;
+  inline-size: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
 .medstream-patient-vitals-chart-panel > :first-child {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  height: 100%;
   margin-top: 0;
 }
 
-.medstream-patient-vitals-legend {
+.medstream-patient-vitals-chart-panel [class*="chart-container"],
+.medstream-patient-vitals-chart-panel [class*="chart-container-outer"],
+.medstream-patient-vitals-chart-panel [class*="chart-container-inner"] {
+  width: 100%;
+  inline-size: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.medstream-patient-vitals-legend,
+.medstream-alert-chart-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 24px;
@@ -1073,7 +1105,8 @@ body {
   line-height: 1.2;
 }
 
-.medstream-patient-vitals-legend span {
+.medstream-patient-vitals-legend span,
+.medstream-alert-chart-legend span {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1084,6 +1117,13 @@ body {
   width: 14px;
   height: 4px;
   border-radius: 999px;
+}
+
+.medstream-alert-chart-legend i {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
 }
 
 .medstream-empty-vitals-chart {
@@ -1186,15 +1226,19 @@ body {
   position: absolute;
   z-index: 4;
   width: max-content;
-  min-width: 204px;
+  min-width: 224px;
   max-width: min(320px, 48%);
   transform: translate(14px, -50%);
-  border: 1px solid color-mix(in srgb, var(--chart-axis) 70%, transparent);
+  border: var(--border-width-popover-nflirh, 2px) solid var(--color-border-popover-1ye6tz, #656871);
   border-radius: 8px;
-  background: var(--surface-2);
-  box-shadow: none;
-  color: var(--chart-tooltip-text);
-  padding: 10px 14px;
+  background: var(--color-background-popover-e20fy8, #1b232d);
+  box-shadow: var(--shadow-popover-pkane9, 0px 4px 20px 1px rgba(0, 4, 12, 1));
+  color: var(--color-text-body-default-vvtq8u, #c6c6cd);
+  font-family: var(--font-family-base-gmnpzl, "Open Sans", "Helvetica Neue", Roboto, Arial, sans-serif);
+  font-size: var(--font-size-body-m-a7nh2n, 14px);
+  font-weight: var(--font-weight-normal-cxw1m3, 400);
+  line-height: var(--line-height-body-m-2mh3ke, 20px);
+  padding: var(--space-static-s-t763lu, 12px);
   pointer-events: none;
 }
 
@@ -1205,47 +1249,45 @@ body {
 .medstream-aws-bar-chart-tooltip::before {
   position: absolute;
   top: 50%;
-  left: -7px;
+  left: -8px;
   width: 12px;
   height: 12px;
   transform: translateY(-50%) rotate(45deg);
-  border-bottom: 1px solid color-mix(in srgb, var(--chart-axis) 70%, transparent);
-  border-left: 1px solid color-mix(in srgb, var(--chart-axis) 70%, transparent);
-  background: var(--surface-2);
+  border-bottom: var(--border-width-popover-nflirh, 2px) solid var(--color-border-popover-1ye6tz, #656871);
+  border-left: var(--border-width-popover-nflirh, 2px) solid var(--color-border-popover-1ye6tz, #656871);
+  background: var(--color-background-popover-e20fy8, #1b232d);
   content: "";
 }
 
 .medstream-aws-bar-chart-tooltip[data-placement="left"]::before {
-  right: -7px;
+  right: -8px;
   left: auto;
   border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--chart-axis) 70%, transparent);
-  border-right: 1px solid color-mix(in srgb, var(--chart-axis) 70%, transparent);
+  border-top: var(--border-width-popover-nflirh, 2px) solid var(--color-border-popover-1ye6tz, #656871);
+  border-right: var(--border-width-popover-nflirh, 2px) solid var(--color-border-popover-1ye6tz, #656871);
 }
 
 .medstream-aws-bar-chart-tooltip strong {
   display: block;
-  margin-bottom: 10px;
-  color: var(--text-primary);
-  font-size: 15px;
-  font-weight: 650;
-  line-height: 1.2;
+  margin-bottom: var(--space-xs-ymlm0b, 8px);
+  color: var(--color-text-body-default-vvtq8u, #c6c6cd);
+  font-family: var(--font-family-heading-ugphat, "Open Sans", "Helvetica Neue", Roboto, Arial, sans-serif);
+  font-size: var(--font-size-heading-xs-j8yzxv, 14px);
+  font-weight: var(--font-weight-heading-xs-wqqpne, 700);
+  letter-spacing: var(--letter-spacing-heading-xs-fgog7a, normal);
+  line-height: var(--line-height-heading-xs-q9j004, 18px);
 }
 
 .medstream-aws-bar-chart-tooltip span {
   display: grid;
-  grid-template-columns: 16px auto auto;
-  gap: 10px;
-  align-items: center;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.2;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  column-gap: var(--space-xxs-hwfkai, 4px);
+  align-items: start;
+  color: var(--color-text-body-secondary-yna5sb, #c6c6cd);
+  font-size: var(--font-size-body-m-a7nh2n, 14px);
+  font-weight: var(--font-weight-normal-cxw1m3, 400);
+  line-height: var(--line-height-body-m-2mh3ke, 20px);
   white-space: nowrap;
-}
-
-.medstream-aws-bar-chart-tooltip span[data-value-placement="left"] {
-  grid-template-columns: 16px auto;
 }
 
 .medstream-aws-bar-chart-tooltip i,
@@ -1256,12 +1298,25 @@ body {
 
 .medstream-aws-bar-chart-tooltip i {
   width: 14px;
-  height: 14px;
+  height: 4px;
+  margin-top: 9px;
+  align-self: start;
+  border-radius: 999px;
+}
+
+.medstream-aws-bar-chart-tooltip em {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--color-text-group-label-a2qc05, #c6c6cd);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .medstream-aws-bar-chart-tooltip b {
-  color: var(--text-primary);
-  font-weight: 650;
+  margin-left: var(--space-xxl-32srm4, 32px);
+  color: var(--color-text-body-default-vvtq8u, #c6c6cd);
+  font-weight: var(--font-weight-normal-cxw1m3, 400);
   white-space: nowrap;
 }
 
@@ -1326,6 +1381,69 @@ body {
 
 .medstream-streaming-vitals-spacer {
   margin-top: 12px;
+}
+
+.medstream-alerts-rate-stack {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.medstream-alerts-rate-stack > div {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.medstream-alerts-rate-chart-panel {
+  height: 248px;
+  min-height: 248px;
+  overflow: hidden;
+}
+
+.medstream-alerts-rate-chart-panel [class*="chart-container"],
+.medstream-alerts-rate-chart-panel [class*="chart-container-outer"],
+.medstream-alerts-rate-chart-panel [class*="chart-container-inner"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.medstream-alerts-rate-chart-panel svg {
+  max-width: 100%;
+}
+
+.medstream-alerts-rate-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  margin-top: 10px;
+}
+
+.medstream-alerts-rate-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: default;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0;
+}
+
+.medstream-alerts-rate-legend-line {
+  display: inline-block;
+  width: 14px;
+  height: 4px;
+  border-radius: 999px;
+  background-color: #f97316;
 }
 
 .medstream-streaming-summary-grid {
@@ -1707,6 +1825,14 @@ body {
   stroke-width: 0 !important;
 }
 
+.medstream-overall-pie-cell-active {
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--text-primary) 24%, transparent));
+}
+
+.medstream-overall-active-ring {
+  pointer-events: none;
+}
+
 .medstream-overall-select-option {
   display: inline-flex;
   gap: 8px;
@@ -1722,14 +1848,14 @@ body {
 
 .medstream-overall-legend {
   position: absolute;
-  right: 12px;
   bottom: 12px;
-  left: auto;
+  left: 12px;
+  right: auto;
   display: flex;
   flex-wrap: wrap;
   gap: 18px;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 700;
@@ -1739,7 +1865,18 @@ body {
   display: inline-flex;
   gap: 8px;
   align-items: center;
+  cursor: pointer;
   min-width: 0;
+  outline: none;
+  transition: color 0.16s ease, opacity 0.16s ease;
+}
+
+.medstream-overall-legend-item-muted {
+  opacity: 0.32;
+}
+
+.medstream-overall-legend-item-active {
+  color: var(--text-primary);
 }
 
 .medstream-overall-pie-label polyline {
@@ -1865,17 +2002,27 @@ body {
   align-items: stretch;
   justify-content: flex-start;
   box-sizing: border-box;
+  width: 100%;
+  inline-size: 100%;
   height: 100%;
   min-height: 360px;
   padding: 0;
 }
 
 .medstream-alert-chart-panel > * {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  width: 100%;
+  inline-size: 100%;
+  max-width: 100%;
   min-width: 0;
+  height: 100%;
 }
 
 .medstream-alert-chart-panel .medstream-patient-alert-bar-chart {
+  width: 100%;
+  inline-size: 100%;
+  max-width: none;
+  height: 100%;
   margin-bottom: 0;
 }
 
@@ -1891,30 +2038,6 @@ body {
 
 .medstream-alert-chart-panel .medstream-aws-bar-chart-legend-left {
   left: 18px;
-}
-
-.medstream-alert-chart-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  margin-top: 0;
-  color: var(--text-secondary);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.medstream-alert-chart-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.medstream-alert-chart-legend i {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
 }
 
 .medstream-patient-details-grid {

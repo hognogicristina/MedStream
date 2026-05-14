@@ -318,6 +318,7 @@ export default function BatchMetricsPage() {
   const [selectedMedication, setSelectedMedication] = useState("")
   const [visibleOutcomeIds, setVisibleOutcomeIds] = useState(OUTCOME_FILTER_IDS)
   const [activeOutcomeId, setActiveOutcomeId] = useState("effective")
+  const [hoveredOutcomeId, setHoveredOutcomeId] = useState("")
   const lastBatchTimestampRef = useRef(null)
   const hasLoadedInitialDataRef = useRef(false)
 
@@ -606,6 +607,7 @@ export default function BatchMetricsPage() {
   const selectedOutcomeOptions = outcomeFilterOptions.filter((option) => visibleOutcomeIds.includes(option.value))
   const visibleOutcomeTotal = visibleOutcomeData.reduce((sum, entry) => sum + entry.rawValue, 0)
   const activeOutcomeIndex = visibleOutcomeChartData.findIndex((entry) => entry.id === activeOutcomeId)
+  const highlightedOutcomeId = hoveredOutcomeId || activeOutcomeId
 
   useEffect(() => {
     if (!medicationEffectiveness.length) {
@@ -1133,9 +1135,45 @@ export default function BatchMetricsPage() {
                                     onMouseEnter={(entry) => setActiveOutcomeId(entry.id)}
                                   >
                                     {visibleOutcomeChartData.map((entry) => (
-                                      <Cell key={entry.id} fill={entry.color} stroke="none" strokeWidth={0}/>
+                                      <Cell
+                                        className={highlightedOutcomeId === entry.id ? "medstream-overall-pie-cell-active" : ""}
+                                        fill={entry.color}
+                                        key={entry.id}
+                                        opacity={highlightedOutcomeId ? (highlightedOutcomeId === entry.id ? 1 : 0.34) : 1}
+                                        stroke="none"
+                                        strokeWidth={0}
+                                      />
                                     ))}
                                   </Pie>
+                                  {highlightedOutcomeId ? (
+                                    <Pie
+                                      className="medstream-overall-active-ring"
+                                      data={visibleOutcomeChartData}
+                                      dataKey="value"
+                                      nameKey="name"
+                                      cx="50%"
+                                      cy="54%"
+                                      innerRadius={128}
+                                      outerRadius={132}
+                                      startAngle={90}
+                                      endAngle={-270}
+                                      paddingAngle={0}
+                                      label={false}
+                                      labelLine={false}
+                                      isAnimationActive={false}
+                                      stroke="none"
+                                      strokeWidth={0}
+                                    >
+                                      {visibleOutcomeChartData.map((entry) => (
+                                        <Cell
+                                          fill={highlightedOutcomeId === entry.id ? entry.color : "transparent"}
+                                          key={entry.id}
+                                          stroke="none"
+                                          strokeWidth={0}
+                                        />
+                                      ))}
+                                    </Pie>
+                                  ) : null}
                                   <Tooltip content={<OverallOutcomeTooltip total={visibleOutcomeTotal}/>}/>
                                 </PieChart>
                               </ResponsiveContainer>
@@ -1146,9 +1184,30 @@ export default function BatchMetricsPage() {
                             </div>
                           )}
 
-                          <div className="medstream-overall-legend" aria-label="Overall treatment outcome legend">
+                          <div
+                            className="medstream-overall-legend"
+                            aria-label="Overall treatment outcome legend"
+                            onMouseLeave={() => setHoveredOutcomeId("")}
+                          >
                             {visibleOutcomeData.map((entry) => (
-                              <div className="medstream-overall-legend-item" key={entry.id}>
+                              <div
+                                className={[
+                                  "medstream-overall-legend-item",
+                                  hoveredOutcomeId === entry.id ? "medstream-overall-legend-item-active" : "",
+                                  hoveredOutcomeId && hoveredOutcomeId !== entry.id ? "medstream-overall-legend-item-muted" : "",
+                                ].filter(Boolean).join(" ")}
+                                key={entry.id}
+                                onBlur={() => setHoveredOutcomeId("")}
+                                onFocus={() => {
+                                  setActiveOutcomeId(entry.id)
+                                  setHoveredOutcomeId(entry.id)
+                                }}
+                                onMouseEnter={() => {
+                                  setActiveOutcomeId(entry.id)
+                                  setHoveredOutcomeId(entry.id)
+                                }}
+                                tabIndex={0}
+                              >
                                 <span className="medstream-overall-legend-swatch" style={{backgroundColor: entry.color}}/>
                                 <span>{entry.name}</span>
                               </div>

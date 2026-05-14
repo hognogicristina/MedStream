@@ -77,8 +77,8 @@ function formatArrivalMethod(value) {
 }
 
 const MAX_VITAL_POINTS = 100
-const PATIENT_ALERT_CHART_HEIGHT = 300
-const PATIENT_VITALS_CHART_HEIGHT = 220
+const PATIENT_ALERT_CHART_HEIGHT = "100%"
+const PATIENT_VITALS_CHART_HEIGHT = 292
 
 export default function PatientPage() {
   const navigate = useNavigate()
@@ -426,9 +426,9 @@ export default function PatientPage() {
     }
 
     return [
-      {label: "Critical", value: counts.critical, color: "#ef4444"},
-      {label: "High", value: counts.high, color: "#f59e0b"},
-      {label: "Normal", value: counts.normal, color: "#22c55e"},
+      {label: "Critical", value: counts.critical, color: "var(--chart-outcome-ineffective)"},
+      {label: "High", value: counts.high, color: "var(--chart-outcome-improving)"},
+      {label: "Normal", value: counts.normal, color: "var(--chart-outcome-effective)"},
     ]
   }, [alerts, id])
   const averageHeartRate = Number.isFinite(batchMetrics?.avg_heart_rate) ? batchMetrics.avg_heart_rate.toFixed(1) : "--"
@@ -618,73 +618,76 @@ export default function PatientPage() {
 
         <div className="medstream-dashboard-split medstream-patient-chart-grid">
           <div className="medstream-stretch-container">
-            <Container
-              className="medstream-patient-chart-container"
-              fitHeight
-              header={<Header variant="h2">Vitals timeline</Header>}
-            >
-              <div className="medstream-chart-panel medstream-patient-vitals-chart-panel">
-                <VitalsChart data={chartData} height={PATIENT_VITALS_CHART_HEIGHT} hideLegend/>
-                <div className="medstream-patient-vitals-legend" aria-label="Vitals legend">
-                  <span><i style={{backgroundColor: "#f97316"}}/>Heart Rate</span>
-                  <span><i style={{backgroundColor: "#3b82f6"}}/>Oxygen Saturation</span>
-                  <span><i style={{backgroundColor: "#22c55e"}}/>Temperature</span>
+            <div className="medstream-patient-chart-stack">
+              <Container
+                className="medstream-patient-chart-container"
+                fitHeight
+                header={<Header variant="h2">Vitals timeline</Header>}
+              >
+                <div className="medstream-chart-panel medstream-patient-vitals-chart-panel">
+                  <VitalsChart data={chartData} height={PATIENT_VITALS_CHART_HEIGHT} hideLegend/>
                 </div>
+              </Container>
+              <div className="medstream-patient-vitals-legend" aria-label="Vitals legend">
+                <span><i style={{backgroundColor: "#f97316"}}/>Heart Rate</span>
+                <span><i style={{backgroundColor: "#3b82f6"}}/>Oxygen Saturation</span>
+                <span><i style={{backgroundColor: "#22c55e"}}/>Temperature</span>
               </div>
-            </Container>
+            </div>
           </div>
 
           <div className="medstream-stretch-container">
             {alerts === null ? (
               <LoadingSpinner text="Loading alerts..."/>
             ) : (
-              <Container
-                className="medstream-alerts-container medstream-patient-chart-container"
-                fitHeight
-                header={
-                  <Header
-                    variant="h2"
-                    actions={patient?.cnp ? <Button onClick={() => navigate(`/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`)}>View alerts feed</Button> : null}
-                  >
-                    Patient alerts
-                  </Header>
-                }
-              >
-                <div className="medstream-chart-panel medstream-alert-chart-panel">
-                  {alertDistributionData.length === 0 ? (
-                    <Box color="text-body-secondary">No alerts available.</Box>
-                  ) : (
-                    <AwsBarChart
-                      ariaLabel="Patient alerts by severity"
-                      barWidthRatio={0.82}
-                      className="medstream-patient-alert-bar-chart"
-                      colorKey="color"
-                      data={alertDistributionData}
-                      emptyText="No alerts available."
-                      height={PATIENT_ALERT_CHART_HEIGHT}
-                      hideLegend
-                      legendPosition="left"
-                      seriesTitle="Alerts"
-                      tooltipValuePlacement="left"
-                      tooltipValueFormatter={(bar) => {
-                        const count = Math.round(Number(bar.y) || 0)
-                        return String(count)
-                      }}
-                      xTitle="Severity"
-                    />
-                  )}
-                  {alertDistributionData.length > 0 ? (
-                    <div className="medstream-alert-chart-legend" aria-label="Patient alerts legend">
-                      {alertDistributionData.map((entry) => (
-                        <span key={entry.label}>
-                          <i style={{backgroundColor: entry.color}}/>
-                          {entry.label}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </Container>
+              <div className="medstream-patient-chart-stack">
+                <Container
+                  className="medstream-alerts-container medstream-patient-chart-container"
+                  fitHeight
+                  header={
+                    <Header
+                      variant="h2"
+                      actions={patient?.cnp ? <Button onClick={() => navigate(`/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`)}>View alerts feed</Button> : null}
+                    >
+                      Patient alerts
+                    </Header>
+                  }
+                >
+                  <div className="medstream-chart-panel medstream-alert-chart-panel">
+                    {alertDistributionData.length === 0 ? (
+                      <Box color="text-body-secondary">No alerts available.</Box>
+                    ) : (
+                      <AwsBarChart
+                        ariaLabel="Patient alerts by severity"
+                        barWidthRatio={0.82}
+                        className="medstream-patient-alert-bar-chart"
+                        colorKey="color"
+                        data={alertDistributionData}
+                        emptyText="No alerts available."
+                        height={PATIENT_ALERT_CHART_HEIGHT}
+                        hideLegend
+                        legendPosition="left"
+                        seriesTitle="Alerts"
+                        tooltipValueFormatter={(bar) => {
+                          const count = Math.round(Number(bar.y) || 0)
+                          return String(count)
+                        }}
+                        xTitle="Severity"
+                      />
+                    )}
+                  </div>
+                </Container>
+                {alertDistributionData.length > 0 ? (
+                  <div className="medstream-alert-chart-legend" aria-label="Patient alerts legend">
+                    {alertDistributionData.map((entry) => (
+                      <span key={entry.label}>
+                        <i style={{backgroundColor: entry.color}}/>
+                        {entry.label}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             )}
           </div>
         </div>

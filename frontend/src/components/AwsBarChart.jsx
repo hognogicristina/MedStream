@@ -55,7 +55,6 @@ export default function AwsBarChart({
   legendPosition = "center",
   seriesTitle = "Value",
   tooltipValueFormatter = null,
-  tooltipValuePlacement = "right",
   valueFormatter = defaultValueFormatter,
   valueKey = "value",
   xTitle,
@@ -117,8 +116,9 @@ export default function AwsBarChart({
 
     return {resolvedYDomain: [0, nextTicks[nextTicks.length - 1]], ticks: nextTicks}
   }, [visiblePoints, yDomain])
+  const svgBottomGap = hideLegend ? 0 : SVG_BOTTOM_GAP
   const chartHeight = chartSize.width && chartSize.height
-    ? Math.max(260, Math.round(CHART_WIDTH * Math.max(180, chartSize.height - SVG_BOTTOM_GAP) / chartSize.width))
+    ? Math.max(260, Math.round(CHART_WIDTH * Math.max(180, chartSize.height - svgBottomGap) / chartSize.width))
     : DEFAULT_CHART_HEIGHT
   const plotTop = yTitle ? PLOT.top : 28
   const plotBottom = chartHeight - (xTitle ? 78 : 44)
@@ -160,7 +160,7 @@ export default function AwsBarChart({
       className={["medstream-aws-bar-chart", className].filter(Boolean).join(" ")}
       onMouseLeave={() => setHoveredKey(null)}
       role="img"
-      style={{height}}
+      style={{height, paddingBottom: svgBottomGap}}
     >
       {visiblePoints.length ? (
         <>
@@ -237,9 +237,9 @@ export default function AwsBarChart({
               }}
             >
               <strong>{hoveredBar.x}</strong>
-              <span data-value-placement={tooltipValuePlacement}>
+              <span>
                 <i style={{backgroundColor: hoveredBar.color}}/>
-                {tooltipValuePlacement === "left" ? null : seriesTitle}
+                <em>{seriesTitle}</em>
                 <b>{formatTooltipValue(hoveredBar)}</b>
               </span>
             </div>

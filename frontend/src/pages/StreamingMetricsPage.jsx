@@ -23,7 +23,7 @@ import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const POLL_INTERVAL_MS = 2500
 const MAX_POINTS = 30
-const ALERTS_PAGE_SIZE = 3
+const ALERTS_PAGE_SIZE = 2
 const ALERTS_TELEMETRY_SIZE = 10
 const ALERTS_WINDOW_SECONDS = 60
 
@@ -281,6 +281,8 @@ export default function StreamingMetricsPage() {
             <div className="medstream-dashboard-split">
               <div className="medstream-stretch-container">
                 <Container
+                  className="medstream-streaming-card"
+                  fitHeight
                   header={
                     <Header
                       variant="h2"
@@ -322,26 +324,37 @@ export default function StreamingMetricsPage() {
               </div>
 
               <div className="medstream-stretch-container">
-                <Container
-                  header={
-                    <Header variant="h2" description="Computed from newly observed alerts in a rolling 60-second window.">
-                      Alerts per minute
-                    </Header>
-                  }
-                >
-                <div className="medstream-chart-panel">
-                  <AwsLineChart
-                    ariaLabel="Alerts per minute"
-                    data={alertsRateHistory}
-                    series={[
-                      {key: "alerts_per_minute", title: "Alerts/Minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} alerts`},
-                    ]}
-                    xTitle="Time"
-                    yDomain={[0, Math.max(1, ...alertsRateHistory.map((point) => Number(point.alerts_per_minute) || 0))]}
-                    yTickFormatter={(value) => String(Math.round(value))}
-                  />
+                <div className="medstream-alerts-rate-stack">
+                  <Container
+                    className="medstream-streaming-card"
+                    fitHeight
+                    header={
+                      <Header variant="h2" description="Computed from newly observed alerts in a rolling 60-second window.">
+                        Alerts per minute
+                      </Header>
+                    }
+                  >
+                    <div className="medstream-chart-panel medstream-alerts-rate-chart-panel">
+                      <AwsLineChart
+                        ariaLabel="Alerts per minute"
+                        data={alertsRateHistory}
+                        hideLegend
+                        series={[
+                          {key: "alerts_per_minute", title: "Alerts/Minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} alerts`},
+                        ]}
+                        xTitle="Time"
+                        yDomain={[0, Math.max(1, ...alertsRateHistory.map((point) => Number(point.alerts_per_minute) || 0))]}
+                        yTickFormatter={(value) => String(Math.round(value))}
+                      />
+                    </div>
+                    <div className="medstream-alerts-rate-legend" role="toolbar" aria-label="Legend">
+                      <button className="medstream-alerts-rate-legend-item" type="button" aria-pressed="false">
+                        <span className="medstream-alerts-rate-legend-line" aria-hidden="true"/>
+                        Alerts/Minute
+                      </button>
+                    </div>
+                  </Container>
                 </div>
-                </Container>
               </div>
             </div>
 

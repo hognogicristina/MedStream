@@ -60,7 +60,7 @@ export default function AwsLineChart({
   yTickFormatter,
   yTitle,
 }) {
-  const chartData = Array.isArray(data) ? data : []
+  const chartData = useMemo(() => Array.isArray(data) ? data : [], [data])
   const chartSeries = useMemo(() => {
     const lineSeries = buildLineSeries(chartData, series)
 
