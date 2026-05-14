@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
 from app.models.patient.patient import Patient
-from app.service.medical_history import DOSAGES, DRUGS, FREQUENCIES
+from app.service.clinical_records import DOSAGES, DRUGS, FREQUENCIES
 
 router = APIRouter(prefix="/medications", tags=["medications"])
 

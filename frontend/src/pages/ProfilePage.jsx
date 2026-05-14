@@ -281,6 +281,15 @@ export default function ProfilePage() {
     Authorization: `Bearer ${token}`,
   }), [token])
   const hasIncomingActivities = activities.some((activity) => activity.status === "incoming")
+  const hasAdmittedAssignedPatients = assignedPatients.some((patient) => !patient.is_discharged)
+  const hasCurrentDepartmentReplacement = Boolean(
+    doctor
+    && allDoctors.some((item) => item.is_active && item.specialization === doctor.specialization && item.id !== doctor.id),
+  )
+  const isSpecializationChangeBlocked = Boolean(
+    doctor
+    && (hasIncomingActivities || hasAdmittedAssignedPatients || !hasCurrentDepartmentReplacement),
+  )
   const isOnlyDoctorInDepartment = Boolean(
     doctor
     && allDoctors.filter((item) => item.is_active && item.specialization === doctor.specialization).length <= 1,
@@ -557,6 +566,12 @@ export default function ProfilePage() {
       setDoctor(doctorData)
       setForm(buildDoctorProfileForm(doctorData))
       setPhoneNumber(normalizeRomanianPhoneNumber(doctorData.phone_number))
+      const [doctorsResponse] = await Promise.all([
+        listDoctors(),
+        refreshAssignedPatients(doctorData.id),
+        refetchActivities(doctorData.id),
+      ])
+      setAllDoctors(getResponseData(doctorsResponse) || [])
       notifySuccess(getResponseMessage(response))
     } catch (error) {
       notifyError(getErrorMessage(error))
@@ -1011,6 +1026,7 @@ export default function ProfilePage() {
                             options={departmentOptions}
                             placeholder="Select specialization"
                             selectedAriaLabel="Selected specialization"
+                            disabled={isSpecializationChangeBlocked}
                           />
                         </div>
                         <div className="login-field">

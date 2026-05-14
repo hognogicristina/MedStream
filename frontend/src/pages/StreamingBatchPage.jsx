@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react"
+import {useEffect, useMemo, useState} from "react"
 import {
   Box,
   Button,
@@ -8,26 +8,20 @@ import {
   Header,
   SpaceBetween,
 } from "@cloudscape-design/components"
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
 import {getBatchMetrics, getMetricsComparison, getStreamingMetrics} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AwsLineChart from "../components/AwsLineChart.jsx"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
-import {useTheme} from "../components/ThemeContext.jsx"
-import {getChartTheme} from "../utils/theme.js"
 
 const POLL_INTERVAL_MS = 4000
 const MAX_HISTORY_POINTS = 30
+const COMPARISON_CHART_SERIES = [
+  {key: "streaming_alerts", title: "Streaming Alerts", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} alerts`},
+  {key: "batch_alerts", title: "Batch Alerts (Delayed)", color: "#60a5fa", valueFormatter: (value) => `${value.toFixed(0)} alerts`},
+]
 
 function formatFixed(value, digits = 2) {
   const safeValue = Number.isFinite(value) ? value : 0
@@ -46,8 +40,6 @@ function MetricCard({label, value, hint}) {
 
 export default function StreamingBatchPage() {
   const {notifyError} = useNotifications()
-  const {theme} = useTheme()
-  const chartTheme = getChartTheme(theme)
   const [comparison, setComparison] = useState(null)
   const [streamingMetricsSnapshot, setStreamingMetricsSnapshot] = useState(null)
   const [batchMetricsSnapshot, setBatchMetricsSnapshot] = useState(null)
@@ -121,6 +113,16 @@ export default function StreamingBatchPage() {
   }
 
   const batchLatencyMinutes = (Number(data.batch_latency_avg) || 0) / 60
+  const comparisonChartYDomain = useMemo(() => [
+    0,
+    Math.max(
+      1,
+      ...history.flatMap((point) => [
+        Number(point.streaming_alerts) || 0,
+        Number(point.batch_alerts) || 0,
+      ]),
+    ),
+  ], [history])
 
   const exportComparisonMetrics = () => {
     const exportTimestamp = new Date().toISOString()
@@ -233,46 +235,15 @@ export default function StreamingBatchPage() {
                   </Header>
                 }
               >
-                <div className="medstream-comparison-chart-grid grid gap-6 lg:grid-cols-2">
-                  <div className="medstream-chart-panel">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={history}>
-                        <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
-                        <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={24}/>
-                        <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={["auto", "auto"]}/>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: chartTheme.tooltipBg,
-                            border: `1px solid ${chartTheme.tooltipBorder}`,
-                            borderRadius: "12px",
-                            color: chartTheme.tooltipText,
-                          }}
-                        />
-                        <Line type="monotone" dataKey="streaming_alerts" name="Streaming Alerts" stroke="#f97316" strokeWidth={3}
-                              dot={false}/>
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="medstream-chart-panel">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={history}>
-                        <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
-                        <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={24}/>
-                        <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={["auto", "auto"]}/>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: chartTheme.tooltipBg,
-                            border: `1px solid ${chartTheme.tooltipBorder}`,
-                            borderRadius: "12px",
-                            color: chartTheme.tooltipText,
-                          }}
-                        />
-                        <Line type="monotone" dataKey="batch_alerts" name="Batch Alerts (Delayed)" stroke="#60a5fa" strokeWidth={3}
-                              dot={false}/>
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                <div className="medstream-chart-panel">
+                  <AwsLineChart
+                    ariaLabel="Streaming activity vs batch snapshots"
+                    data={history}
+                    series={COMPARISON_CHART_SERIES}
+                    xTitle="Time"
+                    yDomain={comparisonChartYDomain}
+                    yTickFormatter={(value) => String(Math.round(value))}
+                  />
                 </div>
               </Container>
             </div>

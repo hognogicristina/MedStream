@@ -27,8 +27,6 @@ const SEVERITY_FILTERS = [
   {value: "critical", label: "Critical alerts present"},
   {value: "high", label: "Warning alerts present"},
   {value: "normal", label: "Normal alerts present"},
-  {value: "any", label: "Any alerts present"},
-  {value: "none", label: "No alerts present"},
 ]
 
 const STATUS_FILTERS = [
@@ -41,6 +39,8 @@ const SORT_OPTIONS = [
   {value: "status_then_name", label: "Admitted first, then name"},
   {value: "patient_name", label: "Patient name"},
   {value: "avg_heart_rate", label: "Average heart rate"},
+  {value: "avg_oxygen", label: "Average O2"},
+  {value: "avg_temperature", label: "Average temperature"},
   {value: "alerts_count", label: "Alerts count"},
 ]
 
@@ -86,6 +86,28 @@ function getStrongestSeverity(alertSummary) {
     return "normal"
   }
   return "none"
+}
+
+function buildCurrentAlertSummary(patientAlerts) {
+  const latestByVital = {}
+  const sortedAlerts = [...patientAlerts].sort((left, right) => {
+    const leftTime = new Date(left.created_at || 0).getTime()
+    const rightTime = new Date(right.created_at || 0).getTime()
+    if (leftTime !== rightTime) {
+      return leftTime - rightTime
+    }
+    return (left.id || 0) - (right.id || 0)
+  })
+
+  sortedAlerts.forEach((alert) => {
+    const vital = getAlertVital(alert)
+    latestByVital[vital || "unknown"] = alert
+  })
+
+  return {
+    count: patientAlerts.length,
+    severities: new Set(Object.values(latestByVital).map((alert) => getAlertSeverityLevel(alert))),
+  }
 }
 
 function renderAlertStatus(alertSummary) {
@@ -210,17 +232,20 @@ export default function DepartmentPage() {
   }))
 
   const statsMap = useMemo(() => Object.fromEntries(stats.map((stat) => [stat.patient_id, stat])), [stats])
-  const alertSummaryMap = useMemo(() => alerts.reduce((accumulator, alert) => {
-    const current = accumulator[alert.patient_id] || {
-      count: 0,
-      severities: new Set(),
-    }
+  const alertSummaryMap = useMemo(() => {
+    const groupedAlerts = alerts.reduce((accumulator, alert) => {
+      accumulator[alert.patient_id] = accumulator[alert.patient_id] || []
+      accumulator[alert.patient_id].push(alert)
+      return accumulator
+    }, {})
 
-    current.count += 1
-    current.severities.add(getAlertSeverityLevel(alert))
-    accumulator[alert.patient_id] = current
-    return accumulator
-  }, {}), [alerts])
+    return Object.fromEntries(
+      Object.entries(groupedAlerts).map(([patientId, patientAlerts]) => [
+        patientId,
+        buildCurrentAlertSummary(patientAlerts),
+      ]),
+    )
+  }, [alerts])
 
   const averageHeartRate = stats.length ? stats.reduce((sum, stat) => sum + stat.avg_heart_rate, 0) / stats.length : 0
   const averageTemperature = stats.length ? stats.reduce((sum, stat) => sum + stat.avg_temperature, 0) / stats.length : 0
@@ -288,6 +313,12 @@ export default function DepartmentPage() {
     }
     if (sortOrder === "avg_heart_rate") {
       return (right.stat?.avg_heart_rate ?? -1) - (left.stat?.avg_heart_rate ?? -1)
+    }
+    if (sortOrder === "avg_oxygen") {
+      return (right.stat?.avg_oxygen ?? -1) - (left.stat?.avg_oxygen ?? -1)
+    }
+    if (sortOrder === "avg_temperature") {
+      return (right.stat?.avg_temperature ?? -1) - (left.stat?.avg_temperature ?? -1)
     }
     if (sortOrder === "alerts_count") {
       return (right.stat?.alerts_count ?? right.alertSummary.count ?? 0) - (left.stat?.alerts_count ?? left.alertSummary.count ?? 0)

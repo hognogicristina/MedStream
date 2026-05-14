@@ -458,6 +458,39 @@ class PatientRepository:
         return payload
 
     @classmethod
+    def _current_alert_level(cls, sequence_alerts: list[Alert]) -> str:
+        if not sequence_alerts:
+            return "none"
+
+        alert_state = cls._get_latest_vital_specific_alert_state(
+            sequence_alerts=sequence_alerts,
+            window_end=now_utc(),
+        )
+        has_high = False
+        has_normal = False
+
+        for bucket in alert_state.values():
+            latest_alert = bucket.get("latest")
+            if latest_alert is None:
+                continue
+
+            latest_state = str(bucket.get("latest_state") or "none").strip().lower()
+            if latest_state == "abnormal":
+                canonical_type = normalize_alert_type(latest_alert.alert_type, latest_alert.severity)
+                severity = str(latest_alert.severity or "").strip().lower()
+                if severity == "critical" or canonical_type.endswith("_critical"):
+                    return "critical"
+                has_high = True
+            elif latest_state == "normalized":
+                has_normal = True
+
+        if has_high:
+            return "high"
+        if has_normal:
+            return "normal"
+        return "none"
+
+    @classmethod
     def _format_vital_label(cls, vital_key: str) -> str:
         normalized = str(vital_key or "").strip().lower()
         if normalized in cls.VITAL_LABELS:
@@ -1513,43 +1546,31 @@ class PatientRepository:
             elif normalized_status == "discharged":
                 patient_query = patient_query.where(Patient.is_discharged.is_(True))
 
+            patients = db.execute(patient_query.order_by(desc(Patient.id))).scalars().all()
+
             normalized_alert_presence = str(alert_presence or "all").strip().lower()
-            alert_patient_ids = select(Alert.patient_id).where(Alert.patient_id.is_not(None))
-            severity = func.lower(func.trim(Alert.severity))
+            if normalized_alert_presence in {"all", ""} or not patients:
+                return patients
 
-            if normalized_alert_presence == "any":
-                patient_query = patient_query.where(Patient.id.in_(alert_patient_ids))
-            elif normalized_alert_presence == "none":
-                patient_query = patient_query.where(Patient.id.not_in(alert_patient_ids))
-            elif normalized_alert_presence == "critical":
-                patient_query = patient_query.where(
-                    Patient.id.in_(
-                        select(Alert.patient_id).where(
-                            Alert.patient_id.is_not(None),
-                            severity == "critical",
-                        )
-                    )
-                )
-            elif normalized_alert_presence == "high":
-                patient_query = patient_query.where(
-                    Patient.id.in_(
-                        select(Alert.patient_id).where(
-                            Alert.patient_id.is_not(None),
-                            severity.in_(("high", "warning")),
-                        )
-                    )
-                )
-            elif normalized_alert_presence == "normal":
-                patient_query = patient_query.where(
-                    Patient.id.in_(
-                        select(Alert.patient_id).where(
-                            Alert.patient_id.is_not(None),
-                            severity.not_in(("critical", "high", "warning")),
-                        )
-                    )
-                )
+            patient_ids = [patient.id for patient in patients]
+            alerts = db.execute(
+                select(Alert)
+                .where(Alert.patient_id.in_(patient_ids))
+                .order_by(Alert.created_at.asc(), Alert.id.asc())
+            ).scalars().all()
+            alerts_by_patient: dict[int, list[Alert]] = {}
+            for alert in alerts:
+                alerts_by_patient.setdefault(alert.patient_id, []).append(alert)
 
-            return db.execute(patient_query.order_by(desc(Patient.id))).scalars().all()
+            def matches_alert_filter(patient: Patient) -> bool:
+                current_level = self._current_alert_level(alerts_by_patient.get(patient.id, []))
+                if normalized_alert_presence == "any":
+                    return current_level != "none"
+                if normalized_alert_presence == "none":
+                    return current_level == "none"
+                return current_level == normalized_alert_presence
+
+            return [patient for patient in patients if matches_alert_filter(patient)]
 
     def search_patients_by_cnp(self, cnp: str, limit: int = 10) -> list[Patient]:
         normalized_cnp = (cnp or "").strip()
@@ -2680,7 +2701,14 @@ class PatientRepository:
             )
             return diagnosis_entry
 
-    def update_patient_diagnosis(self, diagnosis_id: int, doctor_id: int, status: str | None, note: str | None) -> PatientDiagnosis:
+    def update_patient_diagnosis(
+            self,
+            diagnosis_id: int,
+            doctor_id: int,
+            status: str | None,
+            note: str | None,
+            notes: str | None,
+    ) -> PatientDiagnosis:
         with SessionLocal() as db:
             diagnosis = db.get(PatientDiagnosis, diagnosis_id)
             if diagnosis is None:
@@ -2712,6 +2740,11 @@ class PatientRepository:
 
             if note is not None:
                 diagnosis.status_note = validate_required_text(note, "Note")
+                updated = True
+
+            if notes is not None:
+                diagnosis.notes = normalize_optional_text(notes)
+                diagnosis.doctor_id = doctor_id
                 updated = True
 
             validate_non_empty_update(updated, "NO_DIAGNOSIS_UPDATES")

@@ -230,6 +230,7 @@ class SimulatorRepository:
             doctor_id: int,
             diagnosis: str,
             status: str,
+            notes: str | None = None,
             created_at: datetime,
     ) -> None:
         normalized_status = self._sanitize_diagnosis_status(status)
@@ -238,6 +239,7 @@ class SimulatorRepository:
                 patient_id=patient_id,
                 doctor_id=doctor_id,
                 diagnosis=diagnosis,
+                notes=notes,
                 status=normalized_status,
                 created_at=created_at,
                 updated_at=created_at,

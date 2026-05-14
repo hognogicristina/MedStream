@@ -35,7 +35,7 @@ from app.schemas.patient_diagnosis import (
 from app.schemas.patient_medication import MedicationUpdate, PatientMedicationCreate, PatientMedicationRead
 from app.schemas.patient_treatment_analysis import PatientSearchResultRead, PatientTreatmentAnalysisRead
 from app.schemas.patient_post_discharge_summary import PatientPostDischargeSummaryRead
-from app.service.medical_history import (
+from app.service.clinical_records import (
     ACTIVITY_TYPES,
     ALLERGIES,
     DIAGNOSIS,
@@ -360,7 +360,13 @@ def create_patient_diagnosis(id: int, payload: PatientDiagnosisCreate, authoriza
 def update_patient_diagnosis(diagnosis_id: int, payload: PatientDiagnosisUpdate, authorization: str | None = Header(default=None)):
     current_doctor = get_current_doctor(authorization)
     try:
-        diagnosis = patient_service.update_patient_diagnosis(diagnosis_id, current_doctor.id, payload.status, payload.note)
+        diagnosis = patient_service.update_patient_diagnosis(
+            diagnosis_id,
+            current_doctor.id,
+            payload.status,
+            payload.note,
+            payload.notes,
+        )
         result = serialize(diagnosis, PatientDiagnosisRead)
         result["modified_by"] = f"{current_doctor.last_name} {current_doctor.first_name}".strip()
         return success_response("Diagnosis updated successfully.", result)

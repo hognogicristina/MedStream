@@ -1,6 +1,5 @@
 import {useCallback, useEffect, useMemo, useState} from "react"
 import {useNavigate, useParams} from "react-router-dom"
-import {Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {
   Alert,
   Badge,
@@ -17,6 +16,7 @@ import {
 import DepartmentTransferDialog from "../components/DepartmentTransferDialog.jsx"
 import EditPatientDialog from "../components/EditPatientDialog.jsx"
 import VitalsChart from "../components/VitalsChart.jsx"
+import AwsBarChart from "../components/AwsBarChart.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {
@@ -33,10 +33,7 @@ import {getErrorMessage, getResponseData, getResponseMessage} from "../services/
 import {createWebSocket} from "../services/ws.js"
 import {formatPatientPhoneWithCode} from "../utils/patientPhone.js"
 import {useAuth} from "../components/AuthContext.jsx"
-import {normalizeAlertType, ALERT_TYPE_SHORT_LABEL} from "../utils/alerts.js"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
-import {useTheme} from "../components/ThemeContext.jsx"
-import {getChartTheme} from "../utils/theme.js"
 
 function formatDateTime(value) {
   if (!value) {
@@ -79,52 +76,12 @@ function formatArrivalMethod(value) {
 }
 
 const MAX_VITAL_POINTS = 100
-const ALERT_COLOR_BY_SEVERITY = {
-  Critical: "#ef4444",
-  High: "#f97316",
-  Normal: "#3b82f6",
-}
-
-function AlertDistributionTooltip({active, payload, fullAlerts = [], patientId, chartTheme}) {
-  if (!active || !Array.isArray(payload) || !payload.length) {
-    return null
-  }
-
-  const row = payload[0]?.payload || {}
-  const label = String(row.name || "")
-  const count = Number(row.count || 0)
-  const severity = label.toLowerCase()
-
-  const uniqueTypes = [...new Set(
-    fullAlerts
-      .filter((alert) => String(alert.patient_id) === String(patientId))
-      .filter((alert) => String(alert.severity || "").trim().toLowerCase() === severity)
-      .map((alert) => normalizeAlertType(alert.type || alert.alert_type, alert.severity))
-      .filter(Boolean),
-  )]
-
-  const typeLabels = uniqueTypes.map((type) => ALERT_TYPE_SHORT_LABEL[type] || type)
-  const typesText = typeLabels.length ? typeLabels.join(", ") : "--"
-
-  return (
-    <div
-      className="rounded-xl px-3 py-2 shadow-lg"
-      style={{
-        border: `1px solid ${chartTheme.tooltipBorder}`,
-        backgroundColor: chartTheme.tooltipBg,
-      }}
-    >
-      <p className="text-base font-bold text-[var(--text-primary)]">{label}: {count}</p>
-      <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">Types: {typesText}</p>
-    </div>
-  )
-}
+const PATIENT_ALERT_CHART_HEIGHT = 360
+const PATIENT_VITALS_CHART_HEIGHT = 220
 
 export default function PatientPage() {
   const navigate = useNavigate()
   const {notifyError, notifySuccess} = useNotifications()
-  const {theme} = useTheme()
-  const chartTheme = getChartTheme(theme)
   const {token} = useAuth()
   const {id} = useParams()
   const [currentDoctor, setCurrentDoctor] = useState(null)
@@ -468,9 +425,9 @@ export default function PatientPage() {
     }
 
     return [
-      {name: "Critical", count: counts.critical},
-      {name: "High", count: counts.high},
-      {name: "Normal", count: counts.normal},
+      {label: "Critical", value: counts.critical, color: "#ef4444"},
+      {label: "High", value: counts.high, color: "#f59e0b"},
+      {label: "Normal", value: counts.normal, color: "#22c55e"},
     ]
   }, [alerts, id])
   const averageHeartRate = Number.isFinite(batchMetrics?.avg_heart_rate) ? batchMetrics.avg_heart_rate.toFixed(1) : "--"
@@ -507,7 +464,7 @@ export default function PatientPage() {
       setIsTransferDialogOpen(true)
     }
     if (detail.id === "clinical-records") {
-      navigate(`/patients/${id}/medical-history`)
+      navigate(`/patients/${id}/clinical-records`)
     }
     if (detail.id === "admission-history") {
       navigate(`/patients/${id}/admission-history`)
@@ -530,6 +487,54 @@ export default function PatientPage() {
     >
       Actions
     </ButtonDropdown>
+  )
+  const patientDetailsSection = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Identity, department, contact, and admission details."
+          actions={actionButtons}
+        >
+          Patient details
+        </Header>
+      }
+    >
+      <SpaceBetween size="m">
+        {!isDoctorAssigned && currentDoctor && !isLoadingDoctors && (
+          <Alert
+            type="info"
+            action={
+              <Button
+                onClick={handleAssignToMe}
+                disabled={!canAssignToCurrentPatient || isPatientLocked}
+              >
+                Assign to me
+              </Button>
+            }
+          >
+            This patient is not assigned to you.
+          </Alert>
+        )}
+
+        <div className="medstream-patient-details-grid">
+          {patientMetadata.map((item) => (
+            <SpaceBetween size="xxs" key={item.label}>
+              <Box color="text-body-secondary" variant="awsui-key-label">{item.label}</Box>
+              <div className="medstream-patient-detail-value">
+                <p className="medstream-patient-detail-text">{item.value}</p>
+              </div>
+            </SpaceBetween>
+          ))}
+        </div>
+
+        {patient?.is_discharged && (
+          <Alert type="info" header="Discharge summary">
+            Date: {formatDateTime(patient.discharge_date)}. Reason: {patient.discharge_reason || "--"}
+          </Alert>
+        )}
+      </SpaceBetween>
+    </Container>
   )
 
   if (isLoadingPatient) {
@@ -594,6 +599,8 @@ export default function PatientPage() {
           </div>
         </div>
 
+        {patientDetailsSection}
+
         <Container>
           <ColumnLayout columns={4} variant="text-grid">
             <SpaceBetween size="xs">
@@ -615,67 +622,33 @@ export default function PatientPage() {
           </ColumnLayout>
         </Container>
 
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description="Identity, department, contact, and admission details."
-              actions={actionButtons}
-            >
-              Patient details
-            </Header>
-          }
-        >
-          <SpaceBetween size="m">
-            {!isDoctorAssigned && currentDoctor && !isLoadingDoctors && (
-              <Alert
-                type="info"
-                action={
-                  <Button
-                    onClick={handleAssignToMe}
-                    disabled={!canAssignToCurrentPatient || isPatientLocked}
-                  >
-                    Assign to me
-                  </Button>
-                }
-              >
-                This patient is not assigned to you.
-              </Alert>
-            )}
-
-            <div className="medstream-patient-details-grid">
-              {patientMetadata.map((item) => (
-                <SpaceBetween size="xxs" key={item.label}>
-                  <Box color="text-body-secondary" variant="awsui-key-label">{item.label}</Box>
-                  <div className="medstream-patient-detail-value">
-                    <p className="medstream-patient-detail-text">{item.value}</p>
-                  </div>
-                </SpaceBetween>
-              ))}
-            </div>
-
-            {patient?.is_discharged && (
-              <Alert type="info" header="Discharge summary">
-                Date: {formatDateTime(patient.discharge_date)}. Reason: {patient.discharge_reason || "--"}
-              </Alert>
-            )}
-          </SpaceBetween>
-        </Container>
-
-        <div className="medstream-dashboard-split">
+        <div className="medstream-dashboard-split medstream-patient-chart-grid">
           <div className="medstream-stretch-container">
-            <Container header={<Header variant="h2">Vitals timeline</Header>}>
-              {chartData.length > 0 ? (
-                <VitalsChart data={chartData}/>
-              ) : (
-                <Box color="text-body-secondary">No vital samples available for visualization.</Box>
-              )}
+            <Container
+              className="medstream-patient-chart-container"
+              fitHeight
+              header={<Header variant="h2">Vitals timeline</Header>}
+            >
+              <div className="medstream-chart-panel medstream-patient-vitals-chart-panel">
+                {chartData.length > 0 ? (
+                  <>
+                    <VitalsChart data={chartData} height={PATIENT_VITALS_CHART_HEIGHT} hideLegend/>
+                    <div className="medstream-patient-vitals-legend" aria-label="Vitals legend">
+                      <span><i style={{backgroundColor: "#f97316"}}/>Heart Rate</span>
+                      <span><i style={{backgroundColor: "#3b82f6"}}/>Oxygen Saturation</span>
+                      <span><i style={{backgroundColor: "#22c55e"}}/>Temperature</span>
+                    </div>
+                  </>
+                ) : (
+                  <Box color="text-body-secondary">No vital samples available for visualization.</Box>
+                )}
+              </div>
             </Container>
           </div>
 
           <div className="medstream-stretch-container">
             <Container
-              className="medstream-alerts-container"
+              className="medstream-alerts-container medstream-patient-chart-container"
               fitHeight
               header={
                 <Header
@@ -692,25 +665,27 @@ export default function PatientPage() {
                 ) : alertDistributionData.length === 0 ? (
                   <Box color="text-body-secondary">No alerts available.</Box>
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={alertDistributionData} margin={{top: 4, right: 4, left: -16, bottom: 0}}>
-                      <XAxis dataKey="name" stroke={chartTheme.axis} tick={{fill: chartTheme.axisTickFill, fontSize: 12}}/>
-                      <YAxis allowDecimals={false} stroke={chartTheme.axis} tick={{fill: chartTheme.axisTickFill, fontSize: 12}}/>
-                      <Tooltip
-                        content={<AlertDistributionTooltip fullAlerts={alerts || []} patientId={id} chartTheme={chartTheme}/>}
-                      />
-                      <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                        {alertDistributionData.map((entry) => (
-                          <Cell key={`alert-bar-${entry.name}`} fill={ALERT_COLOR_BY_SEVERITY[entry.name] || "#9ca3af"}/>
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <AwsBarChart
+                    ariaLabel="Patient alerts by severity"
+                    barWidthRatio={0.82}
+                    colorKey="color"
+                    data={alertDistributionData}
+                    emptyText="No alerts available."
+                    height={PATIENT_ALERT_CHART_HEIGHT}
+                    legendPosition="left"
+                    seriesTitle="Alerts"
+                    tooltipValueFormatter={(bar) => {
+                      const count = Math.round(Number(bar.y) || 0)
+                      return `${count} ${count === 1 ? "alert" : "alerts"} ${bar.x.toLowerCase()}`
+                    }}
+                    xTitle="Severity"
+                  />
                 )}
               </div>
             </Container>
           </div>
         </div>
+
       </SpaceBetween>
 
       <EditPatientDialog

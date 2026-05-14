@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     smtp_pass: str = ""
     frontend_base_url: str = "http://localhost:5173"
     auth_secret_key: str = "medstream-dev-auth-secret"
-    auth_token_ttl_minutes: int = 60
+    auth_token_ttl_minutes: int = 4320
 
     heart_rate_alert_threshold: int = 120
     oxygen_alert_threshold: int = 92

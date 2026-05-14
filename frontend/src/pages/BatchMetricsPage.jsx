@@ -16,7 +16,7 @@ import {
   Table,
   Tabs,
 } from "@cloudscape-design/components"
-import {Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Sector, Tooltip, XAxis, YAxis} from "recharts"
+import {Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip} from "recharts"
 import {
   getBatchInsights,
   getBatchMetrics,
@@ -31,6 +31,7 @@ import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import AwsBarChart from "../components/AwsBarChart.jsx"
 import {useTheme} from "../components/ThemeContext.jsx"
 import {getChartTheme} from "../utils/theme.js"
 
@@ -108,32 +109,6 @@ function MetricTile({label, value, compact = false}) {
     <div className={compact ? "medstream-batch-metric-tile medstream-batch-metric-tile-compact" : "medstream-batch-metric-tile"}>
       <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
       <div className="medstream-batch-metric-value">{value}</div>
-    </div>
-  )
-}
-
-function SimpleCasesTooltip({active, payload, chartTheme}) {
-  if (!active || !Array.isArray(payload) || !payload.length) {
-    return null
-  }
-
-  const row = payload[0]?.payload || {}
-  const label = String(row.label || row.name || "")
-  const value = Number.isFinite(Number(row.count)) ? row.count : (row.rawValue ?? row.value ?? 0)
-
-  return (
-    <div
-      style={{
-        backgroundColor: chartTheme.tooltipBg,
-        border: `1px solid ${chartTheme.tooltipBorder}`,
-        borderRadius: "12px",
-        color: chartTheme.tooltipText,
-        padding: "8px 10px",
-        fontSize: "12px",
-        fontWeight: 600,
-      }}
-    >
-      {label}: {value}
     </div>
   )
 }
@@ -662,20 +637,17 @@ export default function BatchMetricsPage() {
     {
       label: "Effective",
       count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.effective : 0,
-      fill: "#22c55e",
-      description: TREATMENT_CATEGORY_DESCRIPTION.Effective,
+      color: "#22c55e",
     },
     {
       label: "Improving",
       count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.improving : 0,
-      fill: "#f59e0b",
-      description: TREATMENT_CATEGORY_DESCRIPTION.Improving,
+      color: "#f59e0b",
     },
     {
       label: "Ineffective",
       count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.ineffective : 0,
-      fill: "#ef4444",
-      description: TREATMENT_CATEGORY_DESCRIPTION.Ineffective,
+      color: "#ef4444",
     },
   ]
 
@@ -1086,21 +1058,20 @@ export default function BatchMetricsPage() {
                         disabled={!medicationEffectiveness.length}
                       />
                     </FormField>
-                    <div className="medstream-chart-panel">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={medicationBarData} margin={{top: 8, right: 10, left: 0, bottom: 8}}>
-                          <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3"/>
-                          <XAxis dataKey="label" stroke={chartTheme.axis} tick={{fontSize: 11}}/>
-                          <YAxis allowDecimals={false} stroke={chartTheme.axis} tick={{fontSize: 11}}/>
-                          <Tooltip content={<SimpleCasesTooltip chartTheme={chartTheme}/>}/>
-                          <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                            <LabelList dataKey="count" position="top" fill={chartTheme.label} fontSize={12}/>
-                            {medicationBarData.map((item) => (
-                              <Cell key={item.label} fill={item.fill}/>
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                    <div className="medstream-chart-panel medstream-medication-effectiveness-chart-panel">
+                      <AwsBarChart
+                        ariaLabel="Treatment outcomes for selected medication"
+                        barWidthRatio={0.86}
+                        colorKey="color"
+                        data={medicationBarData}
+                        emptyText="No medication treatment data available."
+                        height={390}
+                        legendPosition="left"
+                        seriesTitle="Treatments"
+                        valueKey="count"
+                        xTitle="Outcome"
+                        yTitle="Treatment count"
+                      />
                     </div>
                   </SpaceBetween>
                 ),
@@ -1136,7 +1107,7 @@ export default function BatchMetricsPage() {
                           {visibleOutcomeChartData.length ? (
                             <div className="medstream-overall-pie" aria-label={`Overall treatment outcomes: ${visibleOutcomeTotal} visible treatments`}>
                               <ResponsiveContainer width="100%" height="100%">
-                                <PieChart margin={{top: 58, right: 150, bottom: 56, left: 150}}>
+                                <PieChart margin={{top: 42, right: 130, bottom: 62, left: 130}}>
                                   <Pie
                                     activeIndex={activeOutcomeIndex >= 0 ? activeOutcomeIndex : undefined}
                                     activeShape={renderActivePieShape}
@@ -1144,9 +1115,9 @@ export default function BatchMetricsPage() {
                                     dataKey="value"
                                     nameKey="name"
                                     cx="50%"
-                                    cy="58%"
+                                    cy="54%"
                                     innerRadius={0}
-                                    outerRadius={126}
+                                    outerRadius={118}
                                     startAngle={90}
                                     endAngle={-270}
                                     paddingAngle={0}

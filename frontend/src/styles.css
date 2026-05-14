@@ -233,7 +233,7 @@ body {
 
 .medstream-main-frame {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 24px;
   min-height: calc(100vh - 56px);
   padding: 0;
@@ -888,6 +888,21 @@ body {
   align-items: stretch;
 }
 
+.medstream-patient-chart-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  margin: 0 auto;
+}
+
+.medstream-patient-chart-container [class*="content"],
+.medstream-patient-chart-container [class*="content-inner"] {
+  height: 100%;
+}
+
+.medstream-patient-chart-container [class*="content-inner"] {
+  padding: 0 12px 10px !important;
+}
+
 .medstream-profile-settings-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.92fr);
@@ -990,6 +1005,247 @@ body {
 .medstream-chart-panel {
   height: 260px;
   min-height: 260px;
+}
+
+.medstream-patient-vitals-chart-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 360px;
+  padding: 0;
+}
+
+.medstream-patient-vitals-chart-panel > * {
+  min-width: 0;
+}
+
+.medstream-patient-vitals-chart-panel > :first-child {
+  flex: 0 0 auto;
+  margin-top: 16px;
+}
+
+.medstream-patient-vitals-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.medstream-patient-vitals-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.medstream-patient-vitals-legend i {
+  display: inline-block;
+  width: 14px;
+  height: 4px;
+  border-radius: 999px;
+}
+
+.medstream-aws-bar-chart {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  flex-direction: column;
+  padding-bottom: 24px;
+}
+
+.medstream-aws-bar-chart-svg {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  overflow: visible;
+}
+
+.medstream-aws-bar-chart-title,
+.medstream-aws-bar-chart-axis-title {
+  fill: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.medstream-aws-bar-chart-grid {
+  stroke: var(--chart-axis);
+  stroke-opacity: 0.48;
+  stroke-width: 1;
+}
+
+.medstream-aws-bar-chart-baseline {
+  stroke: var(--chart-axis);
+  stroke-width: 2;
+}
+
+.medstream-aws-bar-chart-tick,
+.medstream-aws-bar-chart-x-label {
+  fill: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.medstream-aws-bar-chart-bar {
+  cursor: pointer;
+  transition: filter 0.16s ease, opacity 0.16s ease;
+}
+
+.medstream-aws-bar-chart-bar-muted {
+  opacity: 0.28;
+}
+
+.medstream-aws-bar-chart-bar-hovered {
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.28));
+}
+
+.medstream-aws-bar-chart-bar-overlay {
+  fill: rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+}
+
+.medstream-aws-bar-chart-tooltip {
+  position: absolute;
+  z-index: 4;
+  width: max-content;
+  min-width: 204px;
+  max-width: min(320px, 48%);
+  transform: translate(14px, -50%);
+  border: 1px solid color-mix(in srgb, var(--chart-axis) 70%, transparent);
+  border-radius: 8px;
+  background: var(--surface-2);
+  box-shadow: none;
+  color: var(--chart-tooltip-text);
+  padding: 10px 14px;
+  pointer-events: none;
+}
+
+.medstream-aws-bar-chart-tooltip[data-placement="left"] {
+  transform: translate(calc(-100% - 14px), -50%);
+}
+
+.medstream-aws-bar-chart-tooltip::before {
+  position: absolute;
+  top: 50%;
+  left: -7px;
+  width: 12px;
+  height: 12px;
+  transform: translateY(-50%) rotate(45deg);
+  border-bottom: 1px solid color-mix(in srgb, var(--chart-axis) 70%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--chart-axis) 70%, transparent);
+  background: var(--surface-2);
+  content: "";
+}
+
+.medstream-aws-bar-chart-tooltip[data-placement="left"]::before {
+  right: -7px;
+  left: auto;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--chart-axis) 70%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--chart-axis) 70%, transparent);
+}
+
+.medstream-aws-bar-chart-tooltip strong {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.medstream-aws-bar-chart-tooltip span {
+  display: grid;
+  grid-template-columns: 16px auto auto;
+  gap: 10px;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.medstream-aws-bar-chart-tooltip i,
+.medstream-aws-bar-chart-legend-item i {
+  display: inline-block;
+  border-radius: 3px;
+}
+
+.medstream-aws-bar-chart-tooltip i {
+  width: 14px;
+  height: 14px;
+}
+
+.medstream-aws-bar-chart-tooltip b {
+  color: var(--text-primary);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.medstream-aws-bar-chart-legend {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px 30px;
+  margin-top: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.medstream-aws-bar-chart-legend-left {
+  justify-content: flex-start;
+}
+
+.medstream-aws-bar-chart-legend-right {
+  justify-content: flex-end;
+}
+
+.medstream-aws-bar-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.16s ease, opacity 0.16s ease;
+}
+
+.medstream-aws-bar-chart-legend-item i {
+  width: 14px;
+  height: 14px;
+}
+
+.medstream-aws-bar-chart-legend-item-muted {
+  opacity: 0.32;
+}
+
+.medstream-aws-bar-chart-legend-item-active {
+  color: var(--text-primary);
+}
+
+.medstream-medication-effectiveness-chart-panel {
+  display: flex;
+  align-items: stretch;
+  height: 420px;
+  min-height: 420px;
+  margin-top: 0;
+  padding: 4px 10px 12px;
+}
+
+.medstream-medication-effectiveness-chart-panel > .medstream-aws-bar-chart {
+  width: 100%;
 }
 
 .medstream-streaming-vitals-spacer {
@@ -1330,8 +1586,8 @@ body {
 
 .medstream-overall-chart-panel {
   position: relative;
-  height: 480px;
-  min-height: 480px;
+  height: 430px;
+  min-height: 430px;
   overflow: hidden;
   border-radius: 8px;
 }
@@ -1345,7 +1601,7 @@ body {
 }
 
 .medstream-overall-pie {
-  height: calc(100% - 34px);
+  height: calc(100% - 48px);
   min-height: 0;
 }
 
@@ -1375,13 +1631,14 @@ body {
 
 .medstream-overall-legend {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  right: 12px;
+  bottom: 12px;
+  left: auto;
   display: flex;
   flex-wrap: wrap;
   gap: 18px;
   align-items: center;
+  justify-content: flex-end;
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 700;
@@ -1484,7 +1741,7 @@ body {
 }
 
 .medstream-alerts-container [class*="content-inner"] {
-  padding: 0 !important;
+  padding: 0 12px 10px !important;
 }
 
 .medstream-alert-chart-panel {
@@ -1492,13 +1749,17 @@ body {
   align-items: stretch;
   box-sizing: border-box;
   height: 100%;
-  min-height: 320px;
+  min-height: 360px;
   padding: 0;
 }
 
 .medstream-alert-chart-panel > * {
   flex: 1;
   min-width: 0;
+}
+
+.medstream-alert-chart-panel .medstream-aws-bar-chart-legend-left {
+  left: 18px;
 }
 
 .medstream-patient-details-grid {
@@ -2059,8 +2320,8 @@ body {
 
 .medstream-attribute-entry {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(180px, 0.75fr);
-  gap: 12px 16px;
+  grid-template-columns: minmax(0, 1fr) max-content minmax(128px, max-content);
+  gap: 4px 18px;
   align-items: start;
 }
 
@@ -2084,20 +2345,26 @@ body {
   line-height: 1.35;
 }
 
-.medstream-attribute-primary p {
-  display: -webkit-box;
-  margin: 2px 0 0;
+.medstream-attribute-note {
+  grid-column: 1 / -1;
+  margin: 0;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   color: var(--text-secondary);
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.4;
+}
+
+.medstream-attribute-summary-cell {
+  min-width: 0;
+}
+
+.medstream-attribute-status-cell {
+  min-width: max-content;
 }
 
 .medstream-attribute-summary-value {
   display: block;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
@@ -2108,6 +2375,11 @@ body {
   display: flex;
   align-items: center;
   min-height: 18px;
+  white-space: nowrap;
+}
+
+.medstream-attribute-status-value * {
+  white-space: nowrap;
 }
 
 .medstream-attribute-main {

@@ -200,7 +200,7 @@ function getRecordStatusType(item) {
   return "info"
 }
 
-export default function PatientMedicalHistoryPage() {
+export default function PatientClinicalRecordsPage() {
   const {id} = useParams()
   const {notifyError, notifySuccess} = useNotifications()
   const {token} = useAuth()
@@ -514,6 +514,21 @@ export default function PatientMedicalHistoryPage() {
   const selectedEditMedicationDosageOption = getSelectedOption(dosageSelectOptions, editMedicationForm.dosage)
   const selectedEditMedicationFrequencyOption = getSelectedOption(frequencySelectOptions, editMedicationForm.frequency)
   const selectedEditConditionStatusOption = getSelectedOption(conditionStatusSelectOptions, editConditionForm.status)
+  const initialDiagnosisValues = editItem && showDialog === "edit_diagnosis"
+    ? {
+      notes: trimValue(editItem.notes),
+      status: trimValue(editItem.status),
+    }
+    : {notes: "", status: ""}
+  const currentDiagnosisValues = {
+    notes: trimValue(editDiagnosisForm.notes),
+    status: trimValue(editDiagnosisForm.status),
+  }
+  const isDiagnosisStatusChanged = initialDiagnosisValues.status !== currentDiagnosisValues.status
+  const isDiagnosisNotesChanged = initialDiagnosisValues.notes !== currentDiagnosisValues.notes
+  const canSubmitEditDiagnosis = (isDiagnosisStatusChanged || isDiagnosisNotesChanged)
+    && Boolean(currentDiagnosisValues.status)
+    && (!isDiagnosisStatusChanged || Boolean(trimValue(editDiagnosisForm.note)))
   const isEditDialog = Boolean(showDialog?.startsWith("edit_"))
   const dialogRecordType = showDialog
     ? showDialog.replace("edit_", "").replaceAll("_", " ")
@@ -525,7 +540,7 @@ export default function PatientMedicalHistoryPage() {
     showDialog
     && !isSubmitting
     && canMutateRecords
-    && !(showDialog === "edit_diagnosis" && (!trimValue(editDiagnosisForm.status) || !trimValue(editDiagnosisForm.note)))
+    && !(showDialog === "edit_diagnosis" && !canSubmitEditDiagnosis)
     && !(showDialog === "medication" && (!canSubmitAddMedication || isDuplicateMedication))
     && !(showDialog === "edit_medication" && !canSubmitEditMedication)
     && !(showDialog === "edit_allergy" && !canSubmitAllergy)
@@ -580,12 +595,16 @@ export default function PatientMedicalHistoryPage() {
       if (type === "edit_diagnosis") {
         const payload = {}
 
-        if (trimValue(editDiagnosisForm.status)) {
+        if (trimValue(editDiagnosisForm.status) !== trimValue(editItem.status)) {
           payload.status = trimValue(editDiagnosisForm.status)
         }
 
         if (trimValue(editDiagnosisForm.note)) {
           payload.note = appendDoctorNote(trimValue(editDiagnosisForm.note))
+        }
+
+        if (trimValue(editDiagnosisForm.notes) !== trimValue(editItem.notes)) {
+          payload.notes = trimValue(editDiagnosisForm.notes)
         }
 
         response = await updatePatientDiagnosis(editItem.id, payload, authHeaders)
@@ -1095,6 +1114,17 @@ export default function PatientMedicalHistoryPage() {
                 {showDialog === "edit_diagnosis" && (
                   <>
                     <div className="medstream-form-field-wide">
+                      <FormField label="Notes" stretch>
+                        <Textarea
+                          value={editDiagnosisForm.notes}
+                          onChange={({detail}) => setEditDiagnosisForm({...editDiagnosisForm, notes: detail.value})}
+                          placeholder="Clinical notes"
+                          rows={3}
+                          disabled={isSubmitting}
+                        />
+                      </FormField>
+                    </div>
+                    <div className="medstream-form-field-wide">
                       <FormField label="Status" stretch>
                         <Select
                           selectedOption={selectedEditDiagnosisStatusOption}
@@ -1106,7 +1136,11 @@ export default function PatientMedicalHistoryPage() {
                       </FormField>
                     </div>
                     <div className="medstream-form-field-wide">
-                      <FormField label="Status Note" stretch>
+                      <FormField
+                        label="Status Note"
+                        description={isDiagnosisStatusChanged ? "Required when the status changes." : undefined}
+                        stretch
+                      >
                         <Textarea
                           value={editDiagnosisForm.note}
                           onChange={({detail}) => setEditDiagnosisForm({...editDiagnosisForm, note: detail.value})}

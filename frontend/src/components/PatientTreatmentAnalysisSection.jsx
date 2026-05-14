@@ -9,16 +9,14 @@ import {
   Pagination,
   SpaceBetween,
   StatusIndicator,
+  AreaChart,
 } from "@cloudscape-design/components"
-import {Area, AreaChart, CartesianGrid, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {getPatient, getPatientTreatmentAnalysis} from "../services/patientApi.js"
 import {createWebSocket} from "../services/ws.js"
 import LoadingSpinner from "./LoadingSpinner.jsx"
-import {useTheme} from "./ThemeContext.jsx"
 import {alertTypeToVital, getAlertSeverityLevel, isNormalizedAlertType, normalizeAlertType} from "../utils/alerts.js"
-import {getChartTheme} from "../utils/theme.js"
 import {formatAlertFriendlyTime} from "../utils/time.js"
 
 const DIAGNOSIS_PAGE_SIZE = 3
@@ -28,6 +26,17 @@ const OUTCOME_CONFIG = {
   Effective: {value: 2, color: "#22c55e"},
   Improving: {value: 1, color: "#f59e0b"},
   Ineffective: {value: 0, color: "#ef4444"},
+}
+const AREA_CHART_I18N_STRINGS = {
+  chartAriaRoleDescription: "area chart",
+  detailPopoverDismissAriaLabel: "Dismiss",
+  detailTotalLabel: "Outcome",
+  filterLabel: "Filter displayed outcomes",
+  filterPlaceholder: "Filter outcomes",
+  filterSelectedAriaLabel: "selected",
+  legendAriaLabel: "Legend",
+  xAxisAriaRoleDescription: "x axis",
+  yAxisAriaRoleDescription: "y axis",
 }
 
 function normalizeOutcomeLabel(value) {
@@ -39,6 +48,19 @@ function normalizeOutcomeLabel(value) {
     return "Improving"
   }
   return "Ineffective"
+}
+
+function formatOutcomeScale(value) {
+  if (value === 3) {
+    return "Effective"
+  }
+  if (value === 2) {
+    return "Improving"
+  }
+  if (value === 1) {
+    return "Ineffective"
+  }
+  return ""
 }
 
 const toTimestamp = (value) => {
@@ -182,10 +204,10 @@ function AttributeSummaryValue({label, value}) {
   const displayValue = value == null || value === "" ? "--" : value
 
   return (
-    <SpaceBetween size="xxs">
+    <div className="medstream-attribute-summary-cell">
       <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
       <Box className="medstream-attribute-summary-value">{displayValue}</Box>
-    </SpaceBetween>
+    </div>
   )
 }
 
@@ -210,14 +232,14 @@ function AttributeStatusValue({value}) {
   const displayValue = value == null || value === "" ? "--" : value
 
   return (
-    <SpaceBetween size="xxs">
+    <div className="medstream-attribute-summary-cell medstream-attribute-status-cell">
       <Box color="text-body-secondary" variant="awsui-key-label">Status</Box>
       <div className="medstream-attribute-status-value">
         <StatusIndicator type={getAttributeStatusType(displayValue)}>
           {formatDisplayValue(displayValue)}
         </StatusIndicator>
       </div>
-    </SpaceBetween>
+    </div>
   )
 }
 
@@ -279,12 +301,10 @@ function DynamoAttributeTable({title, items, emptyText, pagination}) {
                   <div className="medstream-attribute-primary">
                     <Box color="text-body-secondary" variant="awsui-key-label">Name</Box>
                     <strong>{formatDisplayValue(item.name)}</strong>
-                    <p>{formatDisplayValue(item.note)}</p>
                   </div>
-                  <div className="medstream-attribute-summary-grid">
-                    <AttributeStatusValue value={item.status}/>
-                    <AttributeSummaryValue label="Dcotor" value={formatDisplayValue(item.modifiedBy)}/>
-                  </div>
+                  <AttributeStatusValue value={item.status}/>
+                  <AttributeSummaryValue label="Doctor" value={formatDisplayValue(item.modifiedBy)}/>
+                  <p className="medstream-attribute-note">{formatDisplayValue(item.note)}</p>
                 </div>
               </article>
             ))
@@ -453,41 +473,6 @@ function getTriggeredRule(alert) {
   return buildCleanAlertHistoryLabel(alert)
 }
 
-function TreatmentOutcomeTooltip({active, payload, chartTheme}) {
-  if (!active || !payload?.length) {
-    return null
-  }
-  const point = payload[0]?.payload
-  if (!point) {
-    return null
-  }
-
-  return (
-    <div
-      className="rounded-xl p-3 text-xs"
-      style={{
-        border: `1px solid ${chartTheme.tooltipBorder}`,
-        backgroundColor: chartTheme.tooltipBg,
-        color: chartTheme.tooltipText,
-      }}
-    >
-      <p className="font-semibold">Treatment #{point.treatmentIndex}</p>
-      <p
-        className={`mt-1 font-semibold ${
-          point.outcome === "Effective"
-            ? "text-[#22c55e]"
-            : point.outcome === "Improving"
-              ? "text-[#f59e0b]"
-              : "text-[#ef4444]"
-        }`}
-      >
-        Outcome: {point.outcome}
-      </p>
-      {point.decisionTimeLabel ? <p className="mt-1 text-[var(--text-primary)]">Time: {point.decisionTimeLabel}</p> : null}
-    </div>
-  )
-}
-
 const extractVitalsFromMessage = (message) => {
   const text = String(message || "")
   const hrMatch = text.match(/HR\s*(-?\d+(?:\.\d+)?)/i)
@@ -605,8 +590,6 @@ export default function PatientTreatmentAnalysisSection({
   selectedPatientId = null,
   showSelectedPatientSummary = false,
 }) {
-  const {theme} = useTheme()
-  const chartTheme = getChartTheme(theme)
   const {notifyError} = useNotifications()
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [analysis, setAnalysis] = useState(null)
@@ -820,6 +803,50 @@ export default function PatientTreatmentAnalysisSection({
       outcomeColor: (OUTCOME_CONFIG[treatment.outcome] || OUTCOME_CONFIG.Ineffective).color,
     }))
   }, [normalizedTreatments])
+  const treatmentOutcomeAreaSeries = useMemo(() => {
+    const toAreaData = (minimumLevel) => chartData.map((point) => {
+      const level = Number(point.outcomeValue) + 1
+
+      return {
+        x: Number(point.treatmentIndex),
+        y: level >= minimumLevel ? 1 : 0,
+      }
+    })
+
+    return [
+      {
+        type: "area",
+        title: "Ineffective",
+        color: OUTCOME_CONFIG.Ineffective.color,
+        data: toAreaData(1),
+        valueFormatter: (value) => value > 0 ? "Ineffective" : "-",
+      },
+      {
+        type: "area",
+        title: "Improving",
+        color: OUTCOME_CONFIG.Improving.color,
+        data: toAreaData(2),
+        valueFormatter: (value) => value > 0 ? "Improving" : "-",
+      },
+      {
+        type: "area",
+        title: "Effective",
+        color: OUTCOME_CONFIG.Effective.color,
+        data: toAreaData(3),
+        valueFormatter: (value) => value > 0 ? "Effective" : "-",
+      },
+    ]
+  }, [chartData])
+  const treatmentOutcomeXDomain = useMemo(() => {
+    const xValues = chartData.map((point) => Number(point.treatmentIndex)).filter(Number.isFinite)
+    if (!xValues.length) {
+      return [0, 1]
+    }
+
+    const min = Math.min(...xValues)
+    const max = Math.max(...xValues)
+    return min === max ? [min - 0.5, max + 0.5] : [min, max]
+  }, [chartData])
 
   const treatmentTimelineEvaluation = useMemo(() => {
     const latestAlert = parsedAlerts[0] || null
@@ -1053,61 +1080,25 @@ export default function PatientTreatmentAnalysisSection({
 
             {!isLoadingAnalysis && analysis ? (
               <div className="medstream-chart-panel medstream-treatment-chart-panel">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{top: 10, right: 12, left: 8, bottom: 4}}>
-                  <defs>
-                    <linearGradient id="treatmentOutcomeFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#22c55e" stopOpacity={0.26}/>
-                      <stop offset="50%" stopColor="#f59e0b" stopOpacity={0.2}/>
-                      <stop offset="100%" stopColor="#ef4444" stopOpacity={0.2}/>
-                    </linearGradient>
-                  </defs>
-                  <ReferenceArea y1={0} y2={0.66} fill="#ef4444" fillOpacity={0.14} strokeOpacity={0}/>
-                  <ReferenceArea y1={0.66} y2={1.33} fill="#f59e0b" fillOpacity={0.11} strokeOpacity={0}/>
-                  <ReferenceArea y1={1.33} y2={2} fill="#22c55e" fillOpacity={0.11} strokeOpacity={0}/>
-                  <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3"/>
-                  <XAxis dataKey="treatmentIndex" stroke={chartTheme.axis} tick={{fontSize: 11}}/>
-                  <YAxis
-                    stroke={chartTheme.axis}
-                    tick={{fontSize: 11}}
-                    allowDecimals={false}
-                    domain={[0, 2]}
-                    ticks={[0, 1, 2]}
-                    tickFormatter={(value) => {
-                      if (value === 2) {
-                        return "Effective"
-                      }
-                      if (value === 1) {
-                        return "Improving"
-                      }
-                      return "Ineffective"
-                    }}
-                  />
-                  <ReferenceLine y={1} stroke={chartTheme.reference} strokeDasharray="4 4"/>
-                  <Tooltip content={<TreatmentOutcomeTooltip chartTheme={chartTheme}/>}/>
-                  <Area
-                    type="monotone"
-                    dataKey="outcomeValue"
-                    name="Outcome"
-                    stroke={chartTheme.lineContrast}
-                    fill="url(#treatmentOutcomeFill)"
-                    strokeWidth={3}
-                    isAnimationActive={true}
-                    animationDuration={460}
-                    activeDot={{r: 6, stroke: chartTheme.lineDotStroke, strokeWidth: 2}}
-                    dot={({cx, cy, payload}) => (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={4}
-                        fill={payload?.outcomeColor || "#ef4444"}
-                        stroke={chartTheme.lineDotStroke}
-                        strokeWidth={1}
-                      />
-                    )}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+                <AreaChart
+                  ariaLabel="Treatment outcome trend"
+                  height={210}
+                  hideFilter
+                  i18nStrings={AREA_CHART_I18N_STRINGS}
+                  series={treatmentOutcomeAreaSeries}
+                  visibleSeries={treatmentOutcomeAreaSeries}
+                  onFilterChange={() => {}}
+                  statusType="finished"
+                  xDomain={treatmentOutcomeXDomain}
+                  xScaleType="linear"
+                  xTitle="Treatment"
+                  xTickFormatter={(value) => Number.isInteger(value) ? `#${value}` : ""}
+                  yDomain={[0, 3]}
+                  yTickFormatter={formatOutcomeScale}
+                  yTitle="Outcome"
+                  detailTotalFormatter={formatOutcomeScale}
+                  empty={<Box color="text-body-secondary">No treatment outcome data available.</Box>}
+                />
               </div>
             ) : null}
           </SpaceBetween>

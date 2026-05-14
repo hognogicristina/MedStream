@@ -386,7 +386,7 @@ class SimulatorService:
                     created_at=admission_date + timedelta(hours=2),
                 )
 
-        self._seed_patient_medical_records(
+        self._seed_patient_clinical_records(
             db,
             patient_id=patient.id,
             doctor_id=doctor.id,
@@ -449,7 +449,7 @@ class SimulatorService:
 
         return patient_data
 
-    def _seed_patient_medical_records(
+    def _seed_patient_clinical_records(
             self,
             db,
             *,
@@ -487,6 +487,7 @@ class SimulatorService:
                 doctor_id=doctor_id,
                 diagnosis=diagnosis,
                 status=random.choice(INITIAL_DIAGNOSIS_STATUSES),
+                notes=f"Simulated clinical assessment for {diagnosis}.",
                 created_at=diagnosed_at,
             )
 

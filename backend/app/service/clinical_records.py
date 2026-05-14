@@ -40,7 +40,7 @@ def load_csv_column(filename, index):
         return medical_repository.get_all_dosages()
     if filename == "frequencies.csv":
         return medical_repository.get_all_frequencies()
-    raise ValueError(f"Unsupported medical history dataset: {filename}")
+    raise ValueError(f"Unsupported clinical records dataset: {filename}")
 
 
 __all__ = [

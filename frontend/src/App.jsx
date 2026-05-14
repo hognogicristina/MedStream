@@ -17,7 +17,7 @@ import LoginPage from "./pages/LoginPage.jsx"
 import PatientPage from "./pages/PatientPage.jsx"
 import PatientDiagnosisPage from "./pages/PatientDiagnosisPage.jsx"
 import PatientAdmissionHistoryPage from "./pages/PatientAdmissionHistoryPage.jsx"
-import PatientMedicalHistoryPage from "./pages/PatientMedicalHistoryPage.jsx"
+import PatientClinicalRecordsPage from "./pages/PatientClinicalRecordsPage.jsx"
 import PatientPostDischargeSummaryPage from "./pages/PatientPostDischargeSummaryPage.jsx"
 import PatientTreatmentAnalysisPage from "./pages/PatientTreatmentAnalysisPage.jsx"
 import ProfilePage from "./pages/ProfilePage.jsx"
@@ -124,7 +124,7 @@ function useDocumentTitle() {
     const staticTitle = resolveStaticTitle(pathname)
     document.title = staticTitle
 
-    const match = pathname.match(/^\/patients\/(\d+)\/(diagnosis|medical-history|admission-history|analysis|post-discharge-summary)$/)
+    const match = pathname.match(/^\/patients\/(\d+)\/(diagnosis|clinical-records|admission-history|analysis|post-discharge-summary)$/)
       || pathname.match(/^\/patient\/(\d+)$/)
 
     if (!match) {
@@ -137,8 +137,8 @@ function useDocumentTitle() {
     const section = match[2] || ""
     const sectionTitle = section === "diagnosis"
       ? "Clinical Records"
-      : section === "medical-history"
-        ? "Medical History"
+      : section === "clinical-records"
+        ? "Clinical Records"
         : section === "admission-history"
           ? "Admission History"
           : section === "analysis"
@@ -250,7 +250,7 @@ function App() {
           <Route path="/departments/:name" element={<DepartmentPage/>}/>
           <Route path="/patient/:id" element={<PatientPage/>}/>
           <Route path="/patients/:id/diagnosis" element={<PatientDiagnosisPage/>}/>
-          <Route path="/patients/:id/medical-history" element={<PatientMedicalHistoryPage/>}/>
+          <Route path="/patients/:id/clinical-records" element={<PatientClinicalRecordsPage/>}/>
           <Route path="/patients/:id/admission-history" element={<PatientAdmissionHistoryPage/>}/>
           <Route path="/patients/:id/analysis" element={<PatientTreatmentAnalysisPage/>}/>
           <Route path="/patients/:id/post-discharge-summary" element={<PatientPostDischargeSummaryPage/>}/>

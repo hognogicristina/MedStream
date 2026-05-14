@@ -14,22 +14,12 @@ import {
   getStreamingAlerts,
   getStreamingMetrics,
 } from "../services/patientApi.js"
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AwsLineChart from "../components/AwsLineChart.jsx"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
-import {useTheme} from "../components/ThemeContext.jsx"
-import {getChartTheme} from "../utils/theme.js"
 
 const POLL_INTERVAL_MS = 2500
 const MAX_POINTS = 30
@@ -71,13 +61,11 @@ function toMillis(value) {
 
 export default function StreamingMetricsPage() {
   const {notifyError} = useNotifications()
-  const {theme} = useTheme()
-  const chartTheme = getChartTheme(theme)
   const [metrics, setMetrics] = useState(null)
   const [comparison, setComparison] = useState(null)
   const [alertsPage, setAlertsPage] = useState(1)
   const [recentAlerts, setRecentAlerts] = useState({items: [], total: 0, page: 1, page_size: ALERTS_PAGE_SIZE})
-  const [heartRateHistory, setHeartRateHistory] = useState([])
+  const [vitalsHistory, setVitalsHistory] = useState([])
   const [alertsRateHistory, setAlertsRateHistory] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [, setSeenAlertIds] = useState({})
@@ -120,11 +108,13 @@ export default function StreamingMetricsPage() {
 
         const tickTime = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
 
-        setHeartRateHistory((current) => [
+        setVitalsHistory((current) => [
           ...current.slice(-(MAX_POINTS - 1)),
           {
             time: tickTime,
             heart_rate: nextMetrics.avg_heart_rate,
+            oxygen_saturation: nextMetrics.avg_oxygen,
+            temperature: nextMetrics.avg_temperature,
           },
         ])
 
@@ -340,22 +330,16 @@ export default function StreamingMetricsPage() {
                   }
                 >
                 <div className="medstream-chart-panel">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={alertsRateHistory}>
-                      <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
-                      <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={20}/>
-                      <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={[0, "auto"]}/>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: chartTheme.tooltipBg,
-                          border: `1px solid ${chartTheme.tooltipBorder}`,
-                          borderRadius: "12px",
-                          color: chartTheme.tooltipText,
-                        }}
-                      />
-                      <Line type="monotone" dataKey="alerts_per_minute" name="Alerts/Minute" stroke="#f97316" strokeWidth={3} dot={false}/>
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <AwsLineChart
+                    ariaLabel="Alerts per minute"
+                    data={alertsRateHistory}
+                    series={[
+                      {key: "alerts_per_minute", title: "Alerts/Minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} alerts`},
+                    ]}
+                    xTitle="Time"
+                    yDomain={[0, Math.max(1, ...alertsRateHistory.map((point) => Number(point.alerts_per_minute) || 0))]}
+                    yTickFormatter={(value) => String(Math.round(value))}
+                  />
                 </div>
                 </Container>
               </div>
@@ -366,29 +350,23 @@ export default function StreamingMetricsPage() {
                 header={
                   <Header
                     variant="h2"
-                    description="Heart-rate context for alert generation in the streaming pipeline."
+                    description="Heart rate, oxygen saturation, and temperature context for alert generation in the streaming pipeline."
                   >
                     Vital signs trend
                   </Header>
                 }
               >
                 <div className="medstream-chart-panel">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={heartRateHistory}>
-                      <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
-                      <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={24}/>
-                      <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={["auto", "auto"]}/>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: chartTheme.tooltipBg,
-                          border: `1px solid ${chartTheme.tooltipBorder}`,
-                          borderRadius: "12px",
-                          color: chartTheme.tooltipText,
-                        }}
-                      />
-                      <Line type="monotone" dataKey="heart_rate" stroke="#60a5fa" strokeWidth={2} dot={false}/>
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <AwsLineChart
+                    ariaLabel="Vital signs trend"
+                    data={vitalsHistory}
+                    series={[
+                      {key: "heart_rate", title: "Heart Rate", color: "#60a5fa", valueFormatter: (value) => `${value.toFixed(0)} bpm`},
+                      {key: "oxygen_saturation", title: "Oxygen Saturation", color: "#22c55e", valueFormatter: (value) => `${value.toFixed(0)}%`},
+                      {key: "temperature", title: "Temperature", color: "#f97316", valueFormatter: (value) => `${value.toFixed(1)}°C`},
+                    ]}
+                    xTitle="Time"
+                  />
                 </div>
               </Container>
             </div>

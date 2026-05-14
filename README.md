@@ -9,7 +9,7 @@ MedStream is a hospital operations platform for patient workflows, live vitals m
 - Real-time vitals ingestion and alert generation
 - Live dashboard with alert preview and telemetry updates
 - Batch analytics for stable, periodic insights
-- Medical history modules: diagnoses, allergies, medications, admission history
+- Clinical records modules: diagnoses, allergies, medications, admission history
 
 ## 3. Tech Stack
 - Backend: FastAPI, SQLAlchemy, Pydantic

@@ -8,7 +8,7 @@ from app.models.doctor.doctor import Doctor
 from app.models.doctor.doctor_activity import DoctorActivity
 from app.models.patient.patient import Patient
 from app.schemas.doctor_activity import DoctorActivityRead
-from app.service.medical_history import ACTIVITY_TYPES
+from app.service.clinical_records import ACTIVITY_TYPES
 
 
 def serialize_activity(activity: DoctorActivity) -> dict:

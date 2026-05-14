@@ -6,6 +6,7 @@ from sqlalchemy import or_, select
 
 from app.core.errors import AuthorizationError, PermissionDeniedError, ValidationError
 from app.models.doctor.doctor_activity import DoctorActivity
+from app.models.doctor.doctor_activity_doctor import doctor_activity_doctors
 from app.models.doctor.doctor_activity_patient import doctor_activity_patients
 from app.service.auth_tokens import parse_access_token
 from app.validators.auth_validators import (
@@ -229,9 +230,25 @@ def validate_activity_creation(db, doctor, patient) -> None:
 
 
 def validate_doctor_has_no_incoming_activities(db, doctor_id: int) -> None:
-    incoming_count = db.query(DoctorActivity).filter(
-        DoctorActivity.doctor_id == doctor_id,
-        DoctorActivity.status == "incoming",
-    ).count()
-    if incoming_count > 0:
+    primary_incoming = db.execute(
+        select(DoctorActivity.id)
+        .where(
+            DoctorActivity.doctor_id == doctor_id,
+            DoctorActivity.status == "incoming",
+        )
+        .limit(1)
+    ).first()
+    linked_incoming = db.execute(
+        select(DoctorActivity.id)
+        .join(
+            doctor_activity_doctors,
+            doctor_activity_doctors.c.doctor_activity_id == DoctorActivity.id,
+        )
+        .where(
+            doctor_activity_doctors.c.doctor_id == doctor_id,
+            DoctorActivity.status == "incoming",
+        )
+        .limit(1)
+    ).first()
+    if primary_incoming or linked_incoming:
         raise ValidationError("DOCTOR_HAS_INCOMING_ACTIVITIES")

@@ -238,7 +238,11 @@ class DoctorRepository:
 
     def update_current_doctor(self, doctor_id: int, payload):
         with SessionLocal() as db:
-            doctor = db.get(Doctor, doctor_id)
+            doctor = db.execute(
+                select(Doctor)
+                .options(selectinload(Doctor.patients))
+                .where(Doctor.id == doctor_id)
+            ).scalar_one_or_none()
             if doctor is None:
                 raise NotFoundError("DOCTOR_NOT_FOUND")
 
@@ -250,6 +254,29 @@ class DoctorRepository:
                 license_number=updates.get("license_number"),
                 doctor_id=doctor.id,
             )
+            requested_specialization = updates.get("specialization")
+            if requested_specialization is not None and requested_specialization != doctor.specialization:
+                validate_doctor_has_no_incoming_activities(db, doctor.id)
+                if any(not patient.is_discharged for patient in doctor.patients):
+                    raise ValidationError("DOCTOR_HAS_ADMITTED_ASSIGNED_PATIENTS")
+
+                replacement_doctor = db.execute(
+                    select(Doctor)
+                    .options(selectinload(Doctor.patients))
+                    .where(
+                        Doctor.is_active.is_(True),
+                        Doctor.specialization == doctor.specialization,
+                        Doctor.id != doctor.id,
+                    )
+                    .order_by(Doctor.last_name.asc(), Doctor.first_name.asc(), Doctor.id.asc())
+                ).scalar_one_or_none()
+                if replacement_doctor is None:
+                    raise ValidationError("SPECIALIZATION_CHANGE_REQUIRES_CURRENT_DEPARTMENT_REPLACEMENT")
+
+                for patient in list(doctor.patients):
+                    if not any(existing.id == patient.id for existing in replacement_doctor.patients):
+                        replacement_doctor.patients.append(patient)
+                    doctor.patients.remove(patient)
 
             for field, value in updates.items():
                 setattr(doctor, field, value)
