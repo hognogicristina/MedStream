@@ -43,16 +43,19 @@ export default function AwsBarChart({
   ariaLabel,
   barColor = AWS_BAR_BLUE,
   barWidthRatio = 0.68,
+  className = "",
   colorKey = null,
   data,
   emptyText = "No chart data available.",
   height = 260,
   hideFilter = true,
   hideLegend = false,
+  hideZeroValues = false,
   labelKey = "label",
   legendPosition = "center",
   seriesTitle = "Value",
   tooltipValueFormatter = null,
+  tooltipValuePlacement = "right",
   valueFormatter = defaultValueFormatter,
   valueKey = "value",
   xTitle,
@@ -64,8 +67,9 @@ export default function AwsBarChart({
 
   const chartRef = useRef(null)
   const [chartSize, setChartSize] = useState({width: 0, height: 0})
+  const [hoveredKey, setHoveredKey] = useState(null)
   const chartData = useMemo(() => Array.isArray(data) ? data : [], [data])
-  const [hoveredIndex, setHoveredIndex] = useState(null)
+
   useLayoutEffect(() => {
     const node = chartRef.current
     if (!node || typeof ResizeObserver === "undefined") {
@@ -85,6 +89,7 @@ export default function AwsBarChart({
     observer.observe(node)
     return () => observer.disconnect()
   }, [])
+
   const points = useMemo(
     () => chartData
       .map((point) => {
@@ -97,17 +102,21 @@ export default function AwsBarChart({
       .filter((point) => point.x),
     [barColor, chartData, colorKey, labelKey, valueKey],
   )
+  const visiblePoints = useMemo(
+    () => hideZeroValues ? points.filter((point) => point.y > 0) : points,
+    [hideZeroValues, points],
+  )
   const {resolvedYDomain, ticks} = useMemo(() => {
     if (yDomain) {
       const maxValue = Math.max(1, Number(yDomain[1]) || 1)
       return {resolvedYDomain: yDomain, ticks: buildTicks(maxValue)}
     }
 
-    const maxValue = Math.max(0, ...points.map((point) => point.y))
+    const maxValue = Math.max(0, ...visiblePoints.map((point) => point.y))
     const nextTicks = buildTicks(Math.max(1, Math.ceil(maxValue * 1.15)))
 
     return {resolvedYDomain: [0, nextTicks[nextTicks.length - 1]], ticks: nextTicks}
-  }, [points, yDomain])
+  }, [visiblePoints, yDomain])
   const chartHeight = chartSize.width && chartSize.height
     ? Math.max(260, Math.round(CHART_WIDTH * Math.max(180, chartSize.height - SVG_BOTTOM_GAP) / chartSize.width))
     : DEFAULT_CHART_HEIGHT
@@ -115,10 +124,10 @@ export default function AwsBarChart({
   const plotBottom = chartHeight - (xTitle ? 78 : 44)
   const plotWidth = CHART_WIDTH - PLOT.left - PLOT.right
   const plotHeight = plotBottom - plotTop
-  const categoryWidth = points.length ? plotWidth / points.length : plotWidth
+  const categoryWidth = visiblePoints.length ? plotWidth / visiblePoints.length : plotWidth
   const barWidth = Math.min(380, categoryWidth * barWidthRatio)
   const maxDomainValue = Number(resolvedYDomain[1]) || 1
-  const bars = points.map((point, index) => {
+  const bars = visiblePoints.map((point, index) => {
     const heightRatio = Math.max(0, Math.min(1, point.y / maxDomainValue))
     const barHeight = Math.max(point.y > 0 ? 3 : 0, plotHeight * heightRatio)
     const svgX = PLOT.left + (index * categoryWidth) + ((categoryWidth - barWidth) / 2)
@@ -131,15 +140,15 @@ export default function AwsBarChart({
       centerX: svgX + barWidth / 2,
       svgX,
       tooltipY: Math.min(
-        plotBottom - 34,
-        Math.max(plotTop + 26, y + Math.min(42, Math.max(22, barHeight * 0.22))),
+        plotBottom - 26,
+        Math.max(plotTop + 26, y + (barHeight / 2)),
       ),
       y,
     }
   })
-  const hoveredBar = hoveredIndex == null ? null : bars[hoveredIndex]
+  const hoveredBar = hoveredKey == null ? null : bars.find((bar) => bar.x === hoveredKey) || null
   const formatTooltipValue = tooltipValueFormatter || ((bar) => valueFormatter(bar.y))
-  const hasActiveBar = hoveredIndex != null
+  const hasActiveBar = hoveredKey != null
   const legendItems = colorKey ? points : [{x: seriesTitle, color: barColor}]
   const tooltipLeft = hoveredBar ? Math.min(78, Math.max(22, (hoveredBar.centerX / CHART_WIDTH) * 100)) : 50
   const tooltipPlacement = hoveredBar && hoveredBar.centerX > CHART_WIDTH * 0.62 ? "left" : "right"
@@ -148,12 +157,12 @@ export default function AwsBarChart({
     <div
       aria-label={ariaLabel}
       ref={chartRef}
-      className="medstream-aws-bar-chart"
-      onMouseLeave={() => setHoveredIndex(null)}
+      className={["medstream-aws-bar-chart", className].filter(Boolean).join(" ")}
+      onMouseLeave={() => setHoveredKey(null)}
       role="img"
       style={{height}}
     >
-      {points.length ? (
+      {visiblePoints.length ? (
         <>
           <svg className="medstream-aws-bar-chart-svg" viewBox={`0 0 ${CHART_WIDTH} ${chartHeight}`} aria-hidden="true">
             {yTitle ? (
@@ -173,19 +182,19 @@ export default function AwsBarChart({
               )
             })}
             <line className="medstream-aws-bar-chart-baseline" x1={PLOT.left} x2={CHART_WIDTH - PLOT.right} y1={plotBottom} y2={plotBottom}/>
-            {bars.map((bar, index) => (
+            {bars.map((bar) => (
               <g
                 key={bar.x}
-                onBlur={() => setHoveredIndex(null)}
-                onFocus={() => setHoveredIndex(index)}
-                onMouseEnter={() => setHoveredIndex(index)}
+                onBlur={() => setHoveredKey(null)}
+                onFocus={() => setHoveredKey(bar.x)}
+                onMouseEnter={() => setHoveredKey(bar.x)}
                 tabIndex={0}
               >
                 <rect
                   className={[
                     "medstream-aws-bar-chart-bar",
-                    hoveredIndex === index ? "medstream-aws-bar-chart-bar-hovered" : "",
-                    hasActiveBar && hoveredIndex !== index ? "medstream-aws-bar-chart-bar-muted" : "",
+                    hoveredKey === bar.x ? "medstream-aws-bar-chart-bar-hovered" : "",
+                    hasActiveBar && hoveredKey !== bar.x ? "medstream-aws-bar-chart-bar-muted" : "",
                   ].filter(Boolean).join(" ")}
                   fill={bar.color}
                   height={bar.barHeight}
@@ -195,7 +204,7 @@ export default function AwsBarChart({
                   x={bar.svgX}
                   y={bar.y}
                 />
-                {hoveredIndex === index ? (
+                {hoveredKey === bar.x ? (
                   <rect
                     className="medstream-aws-bar-chart-bar-overlay"
                     height={bar.barHeight}
@@ -228,9 +237,9 @@ export default function AwsBarChart({
               }}
             >
               <strong>{hoveredBar.x}</strong>
-              <span>
+              <span data-value-placement={tooltipValuePlacement}>
                 <i style={{backgroundColor: hoveredBar.color}}/>
-                {seriesTitle}
+                {tooltipValuePlacement === "left" ? null : seriesTitle}
                 <b>{formatTooltipValue(hoveredBar)}</b>
               </span>
             </div>
@@ -238,17 +247,17 @@ export default function AwsBarChart({
 
           {!hideLegend ? (
             <div className={`medstream-aws-bar-chart-legend medstream-aws-bar-chart-legend-${legendPosition}`}>
-              {legendItems.map((item, index) => (
+              {legendItems.map((item) => (
                 <span
                   className={[
                     "medstream-aws-bar-chart-legend-item",
-                    hoveredIndex === index ? "medstream-aws-bar-chart-legend-item-active" : "",
-                    hasActiveBar && hoveredIndex !== index ? "medstream-aws-bar-chart-legend-item-muted" : "",
+                    hoveredKey === item.x ? "medstream-aws-bar-chart-legend-item-active" : "",
+                    hasActiveBar && hoveredKey !== item.x ? "medstream-aws-bar-chart-legend-item-muted" : "",
                   ].filter(Boolean).join(" ")}
                   key={item.x}
-                  onBlur={() => setHoveredIndex(null)}
-                  onFocus={() => setHoveredIndex(index)}
-                  onMouseEnter={() => setHoveredIndex(index)}
+                  onBlur={() => setHoveredKey(null)}
+                  onFocus={() => setHoveredKey(item.x)}
+                  onMouseEnter={() => setHoveredKey(item.x)}
                   tabIndex={0}
                 >
                   <i style={{backgroundColor: item.color}}/>

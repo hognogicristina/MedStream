@@ -136,9 +136,7 @@ export default function PatientAdmissionHistoryPage() {
         </div>
 
         {isLoading ? (
-          <Container>
-            <LoadingSpinner/>
-          </Container>
+          <LoadingSpinner/>
         ) : (
           <div className="medstream-admission-history-stack">
             <Container>

@@ -1,3 +1,5 @@
+import LoadingSpinner from "./LoadingSpinner.jsx"
+
 function formatDateTime(value) {
   if (!value) {
     return "--"
@@ -32,11 +34,7 @@ export default function ActivityList({
                                        onEdit,
                                      }) {
   if (isLoading) {
-    return (
-      <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
-        {loadingMessage}
-      </div>
-    )
+    return <LoadingSpinner text={loadingMessage}/>
   }
 
   if (activities.length === 0) {

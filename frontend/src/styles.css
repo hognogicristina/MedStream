@@ -1011,6 +1011,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  justify-content: center;
   box-sizing: border-box;
   height: 100%;
   min-height: 360px;
@@ -1023,7 +1024,7 @@ body {
 
 .medstream-patient-vitals-chart-panel > :first-child {
   flex: 0 0 auto;
-  margin-top: 16px;
+  margin-top: 0;
 }
 
 .medstream-patient-vitals-legend {
@@ -1170,6 +1171,10 @@ body {
   font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;
+}
+
+.medstream-aws-bar-chart-tooltip span[data-value-placement="left"] {
+  grid-template-columns: 16px auto;
 }
 
 .medstream-aws-bar-chart-tooltip i,
@@ -1746,7 +1751,9 @@ body {
 
 .medstream-alert-chart-panel {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
+  justify-content: flex-start;
   box-sizing: border-box;
   height: 100%;
   min-height: 360px;
@@ -1754,12 +1761,40 @@ body {
 }
 
 .medstream-alert-chart-panel > * {
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
+}
+
+.medstream-alert-chart-panel .medstream-patient-alert-bar-chart {
+  margin-bottom: 0;
 }
 
 .medstream-alert-chart-panel .medstream-aws-bar-chart-legend-left {
   left: 18px;
+}
+
+.medstream-alert-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.medstream-alert-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.medstream-alert-chart-legend i {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
 }
 
 .medstream-patient-details-grid {
@@ -4267,6 +4302,19 @@ textarea.console-input {
   line-height: 20px !important;
   border-radius: 6px !important;
   box-shadow: none !important;
+}
+
+[data-theme="dark"] .medstream-alert-cnp-filter-control {
+  --input-avc-bg: var(--color-background-input-default-ifz5bb);
+  --awsui-style-background-default-6b9ypa: var(--color-background-input-default-ifz5bb);
+  --awsui-style-background-hover-6b9ypa: var(--color-background-input-default-ifz5bb);
+  --awsui-style-background-focus-6b9ypa: var(--color-background-input-default-ifz5bb);
+}
+
+[data-theme="dark"] .app-shell .medstream-alert-cnp-filter-control input[class*="awsui_input"][aria-label="Filter alerts by patient CNP"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+[data-theme="dark"] .medstream-alert-cnp-filter-control [class*="awsui_input-container"],
+[data-theme="dark"] .medstream-alert-cnp-filter-control [class*="awsui_input-type-search"] {
+  background-color: var(--color-background-input-default-ifz5bb) !important;
 }
 
 .medstream-alert-cnp-filter-control input[aria-label="Filter alerts by patient CNP"]:hover {

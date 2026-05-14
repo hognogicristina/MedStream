@@ -1,5 +1,6 @@
 import {useCallback, useEffect, useState} from "react"
 import {Pagination, Select} from "@cloudscape-design/components"
+import LoadingSpinner from "./LoadingSpinner.jsx"
 
 function getSelectedOption(options, value) {
   return options.find((option) => String(option.value) === String(value)) || null
@@ -139,31 +140,29 @@ export default function DataTable({
         </div>
       </div>
 
-      <div className={shellClassName}>
-        {renderHeader?.()}
+      {loading ? (
+        <LoadingSpinner text={loadingMessage}/>
+      ) : (
+        <div className={shellClassName}>
+          {renderHeader?.()}
 
-        {loading && (
-          <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
-            {loadingMessage}
-          </div>
-        )}
+          {paginatedItems.length === 0 && (
+            <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
+              {emptyMessage}
+            </div>
+          )}
 
-        {!loading && paginatedItems.length === 0 && (
-          <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
-            {emptyMessage}
-          </div>
-        )}
-
-        {!loading && paginatedItems.length > 0 && (
-          <div className={bodyClassName}>
-            {paginatedItems.map((item) => (
-              <div key={getItemKey(item)} className={rowClassName?.(item)}>
-                {renderRow(item)}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+          {paginatedItems.length > 0 && (
+            <div className={bodyClassName}>
+              {paginatedItems.map((item) => (
+                <div key={getItemKey(item)} className={rowClassName?.(item)}>
+                  {renderRow(item)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4 flex-wrap">

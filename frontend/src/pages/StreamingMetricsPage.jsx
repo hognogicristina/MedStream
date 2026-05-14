@@ -261,10 +261,10 @@ export default function StreamingMetricsPage() {
           </div>
         </div>
 
-        <Container>
-          {isLoading ? (
-            <LoadingSpinner/>
-          ) : (
+        {isLoading ? (
+          <LoadingSpinner/>
+        ) : (
+          <Container>
             <div className="medstream-streaming-summary-grid">
               <MetricTile label="Alerts per Second" value={formatMetric(latestRatePoint.alerts_per_second)}/>
               <MetricTile label="Alerts per Minute" value={formatMetric(latestRatePoint.alerts_per_minute)}/>
@@ -273,8 +273,8 @@ export default function StreamingMetricsPage() {
               <MetricTile label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm")}/>
               <MetricTile label="Execution Time" value={formatMetric(data.execution_time_ms, " ms")}/>
             </div>
-          )}
-        </Container>
+          </Container>
+        )}
 
         {!isLoading && (
           <>

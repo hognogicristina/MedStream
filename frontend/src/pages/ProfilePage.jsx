@@ -808,9 +808,7 @@ export default function ProfilePage() {
           </div>
 
           {isLoading ? (
-            <Container>
-              <LoadingSpinner/>
-            </Container>
+            <LoadingSpinner/>
           ) : doctor ? (
             <SpaceBetween size="l">
               <Container>

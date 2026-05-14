@@ -20,6 +20,7 @@ import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import VitalsChart from "../components/VitalsChart.jsx"
 import {formatPatientFullName} from "../utils/patients.js"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const MAX_PREVIEW_ALERTS = 4
 const MAX_ALERTS = 60
@@ -245,6 +246,20 @@ export default function DashboardPage() {
     }
   })
 
+  if (isLoadingDashboard) {
+    return (
+      <ContentLayout>
+        <SpaceBetween size="m">
+          <div className="medstream-page-header">
+            <h1 className="medstream-page-title">MedStream Dashboard</h1>
+            <p>Real-time patient monitoring and batch analytics overview</p>
+          </div>
+          <LoadingSpinner text="Loading dashboard data..."/>
+        </SpaceBetween>
+      </ContentLayout>
+    )
+  }
+
   return (
     <ContentLayout>
       <SpaceBetween size="m">
@@ -351,8 +366,6 @@ export default function DashboardPage() {
               variant="borderless"
               items={patientRows}
               trackBy="id"
-              loading={isLoadingDashboard}
-              loadingText="Loading patients"
               empty={<Box color="text-body-secondary">No patients available.</Box>}
               columnDefinitions={[
                 {

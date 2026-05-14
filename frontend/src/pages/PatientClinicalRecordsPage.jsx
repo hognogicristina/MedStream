@@ -755,9 +755,7 @@ export default function PatientClinicalRecordsPage() {
   if (isLoading) {
     return (
       <ContentLayout>
-        <Container>
-          <LoadingSpinner/>
-        </Container>
+        <LoadingSpinner/>
       </ContentLayout>
     )
   }
@@ -1257,31 +1255,33 @@ export default function PatientClinicalRecordsPage() {
             </Box>
           }
         >
-          <Table
-            variant="borderless"
-            items={doctors}
-            trackBy="id"
-            loading={isLoading}
-            loadingText="Loading assigned doctors"
-            empty={<Box color="text-body-secondary">No doctors are assigned.</Box>}
-            columnDefinitions={[
-              {
-                id: "doctor",
-                header: "Doctor",
-                cell: (doctor) => `Dr. ${doctor.first_name} ${doctor.last_name}`,
-              },
-              {
-                id: "specialization",
-                header: "Specialization",
-                cell: (doctor) => doctor.specialization || "--",
-              },
-              {
-                id: "email",
-                header: "Email",
-                cell: (doctor) => doctor.email || "--",
-              },
-            ]}
-          />
+          {isLoading ? (
+            <LoadingSpinner text="Loading assigned doctors..."/>
+          ) : (
+            <Table
+              variant="borderless"
+              items={doctors}
+              trackBy="id"
+              empty={<Box color="text-body-secondary">No doctors are assigned.</Box>}
+              columnDefinitions={[
+                {
+                  id: "doctor",
+                  header: "Doctor",
+                  cell: (doctor) => `Dr. ${doctor.first_name} ${doctor.last_name}`,
+                },
+                {
+                  id: "specialization",
+                  header: "Specialization",
+                  cell: (doctor) => doctor.specialization || "--",
+                },
+                {
+                  id: "email",
+                  header: "Email",
+                  cell: (doctor) => doctor.email || "--",
+                },
+              ]}
+            />
+          )}
         </Modal>
       </SpaceBetween>
     </ContentLayout>

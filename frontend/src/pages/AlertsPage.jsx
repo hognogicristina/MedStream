@@ -22,6 +22,7 @@ import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import {formatPatientFullName} from "../utils/patients.js"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const ALL_ALERTS_TITLE = "Alert System"
 const PATIENT_TITLE_FALLBACK = "Alert System - Patient"
@@ -334,6 +335,25 @@ export default function AlertsPage() {
     }
   }
 
+  if (isLoadingAlerts) {
+    return (
+      <ContentLayout>
+        <SpaceBetween size="m">
+          <div className="medstream-page-header">
+            <AppBreadcrumbs/>
+            <div className="medstream-page-heading-row">
+              <div>
+                <h1 className="medstream-page-title">Alerts</h1>
+                <p>Live alert queue with filters, sort order, and paging.</p>
+              </div>
+            </div>
+          </div>
+          <LoadingSpinner text="Loading alert queue..."/>
+        </SpaceBetween>
+      </ContentLayout>
+    )
+  }
+
   return (
     <ContentLayout>
       <SpaceBetween size="m">
@@ -433,8 +453,6 @@ export default function AlertsPage() {
                 variant="borderless"
                 items={paginatedAlerts}
                 trackBy="id"
-                loading={isLoadingAlerts}
-                loadingText="Loading alert queue"
                 empty={<Box color="text-body-secondary">No alerts match the current filters.</Box>}
                 pagination={
                   <Pagination

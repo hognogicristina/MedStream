@@ -87,9 +87,7 @@ export default function PatientTreatmentAnalysisPage() {
         </div>
 
         {isLoading ? (
-          <Container>
-            <LoadingSpinner/>
-          </Container>
+          <LoadingSpinner/>
         ) : (
           <PatientTreatmentAnalysisSection
             selectedPatientId={patientId}

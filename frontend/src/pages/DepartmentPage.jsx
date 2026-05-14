@@ -19,6 +19,7 @@ import {getAlerts, getBatchStatusStats, getDepartments, getStats, listPatients} 
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {formatPatientFullName} from "../utils/patients.js"
 import {alertTypeToVital, getAlertSeverityLevel, normalizeAlertType} from "../utils/alerts.js"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const PAGE_SIZE = 10
 
@@ -335,6 +336,20 @@ export default function DepartmentPage() {
     }
   }, [currentPage, pagesCount])
 
+  if (isLoading) {
+    return (
+      <ContentLayout>
+        <SpaceBetween size="m">
+          <div className="medstream-page-header">
+            <h1 className="medstream-page-title">{departmentName}</h1>
+            <p>Department patients and batch analytics overview</p>
+          </div>
+          <LoadingSpinner text="Loading department analytics..."/>
+        </SpaceBetween>
+      </ContentLayout>
+    )
+  }
+
   return (
     <ContentLayout>
       <SpaceBetween size="m">
@@ -454,8 +469,6 @@ export default function DepartmentPage() {
             <Table
               variant="borderless"
               items={paginatedRows}
-              loading={isLoading}
-              loadingText="Loading department analytics"
               empty={<Box color="text-body-secondary">{patients.length === 0 ? `No patients are currently assigned to ${departmentName}.` : "No department patients match the current filters."}</Box>}
               columnDefinitions={[
                 {

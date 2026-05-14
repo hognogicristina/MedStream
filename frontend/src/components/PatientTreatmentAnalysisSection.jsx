@@ -1052,6 +1052,14 @@ export default function PatientTreatmentAnalysisSection({
     }
   }, [conditionPage, totalConditionPages])
 
+  if (isLoadingAnalysis) {
+    return (
+      <section className="medstream-treatment-analysis-surface">
+        <LoadingSpinner/>
+      </section>
+    )
+  }
+
   return (
     <section className="medstream-treatment-analysis-surface">
       <SpaceBetween size="m">
@@ -1068,10 +1076,6 @@ export default function PatientTreatmentAnalysisSection({
           <SpaceBetween size="m">
             {showSelectedPatientSummary && selectedPatient ? (
               <Box color="text-body-secondary">{selectedPatient.cnp} - {selectedPatient.full_name}</Box>
-            ) : null}
-
-            {isLoadingAnalysis ? (
-              <LoadingSpinner/>
             ) : null}
 
             {!isLoadingAnalysis && !analysis ? (

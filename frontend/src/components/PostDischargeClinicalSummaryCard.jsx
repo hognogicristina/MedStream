@@ -8,6 +8,7 @@ import {
   SpaceBetween,
   StatusIndicator,
 } from "@cloudscape-design/components"
+import LoadingSpinner from "./LoadingSpinner.jsx"
 
 const SUMMARY_VIEW_OPTIONS = [
   {id: "overview", text: "Overview"},
@@ -227,11 +228,7 @@ export default function PostDischargeClinicalSummaryCard({summary, isLoading = f
   const [selectedView, setSelectedView] = useState("overview")
 
   if (isLoading) {
-    return (
-      <Container>
-        <Box color="text-body-secondary">Loading post-discharge clinical summary...</Box>
-      </Container>
-    )
+    return <LoadingSpinner text="Loading post-discharge clinical summary..."/>
   }
 
   if (!summary) {

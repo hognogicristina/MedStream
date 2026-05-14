@@ -103,9 +103,7 @@ export default function PatientPostDischargeSummaryPage() {
         </div>
 
         {isLoading ? (
-          <Container>
-            <LoadingSpinner/>
-          </Container>
+          <LoadingSpinner/>
         ) : hasSummary ? (
           <SpaceBetween size="l">
             <Container

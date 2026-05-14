@@ -764,9 +764,7 @@ export default function BatchMetricsPage() {
   if (isLoading) {
     return (
       <ContentLayout>
-        <Container>
-          <LoadingSpinner/>
-        </Container>
+        <LoadingSpinner/>
       </ContentLayout>
     )
   }
@@ -1066,11 +1064,11 @@ export default function BatchMetricsPage() {
                         data={medicationBarData}
                         emptyText="No medication treatment data available."
                         height={390}
+                        hideZeroValues
                         legendPosition="left"
                         seriesTitle="Treatments"
                         valueKey="count"
                         xTitle="Outcome"
-                        yTitle="Treatment count"
                       />
                     </div>
                   </SpaceBetween>
