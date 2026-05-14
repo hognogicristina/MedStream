@@ -108,29 +108,6 @@ const INITIAL_FORMS = {
   editCondition: {status: "", notes: ""},
 }
 
-const STATUS_COLORS = {
-  diagnosis: {
-    active: "#BBF7D0",
-    resolved: "#BFDBFE",
-    chronic: "#FDE68A",
-    inactive: "#E5E7EB",
-  },
-  allergy: {
-    mild: "#BBF7D0",
-    moderate: "#FDE68A",
-    severe: "#FCA5A5",
-  },
-  condition: {
-    active: "#BBF7D0",
-    improving: "#86EFAC",
-    stable: "#BFDBFE",
-    worsening: "#FDE68A",
-    critical: "#FCA5A5",
-    resolved: "#BAE6FD",
-    chronic: "#E9D5FF",
-  },
-}
-
 const FILTER_OPTIONS = [
   {label: "All records", value: "all"},
   {label: "Diagnosis", value: "diagnosis"},
@@ -169,6 +146,50 @@ function mapValueOptions(values) {
     .map((value) => trimValue(value))
     .filter(Boolean)
     .map((value) => ({label: value, value}))
+}
+
+function formatStatusLabel(value) {
+  const text = trimValue(value)
+  if (!text) {
+    return "--"
+  }
+  return text
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`)
+    .join(" ")
+}
+
+function getRecordStatusType(item) {
+  const value = normalize(item.status || item.severity)
+
+  if (item.type === "allergy") {
+    if (value === "severe") {
+      return "error"
+    }
+    if (value === "moderate") {
+      return "warning"
+    }
+    return "success"
+  }
+
+  if (["critical", "worsening", "severe", "failed", "error"].includes(value)) {
+    return "error"
+  }
+  if (["chronic", "moderate", "warning"].includes(value)) {
+    return "warning"
+  }
+  if (["improving", "pending", "in-progress", "in progress"].includes(value)) {
+    return "in-progress"
+  }
+  if (["inactive", "closed", "discharged"].includes(value)) {
+    return "stopped"
+  }
+  if (["active", "resolved", "stable", "mild", "normal", "available"].includes(value)) {
+    return "success"
+  }
+
+  return "info"
 }
 
 export default function PatientMedicalHistoryPage() {
@@ -690,15 +711,15 @@ export default function PatientMedicalHistoryPage() {
 
   const getRecordStatusMeta = (item) => {
     if (item.type === "diagnosis" && item.status) {
-      return {label: item.status, color: STATUS_COLORS.diagnosis[String(item.status || "").toLowerCase()] || "#6B7280"}
+      return {label: formatStatusLabel(item.status), type: getRecordStatusType(item)}
     }
 
     if (item.type === "condition" && item.status) {
-      return {label: item.status, color: STATUS_COLORS.condition[String(item.status || "").toLowerCase()] || "#6B7280"}
+      return {label: formatStatusLabel(item.status), type: getRecordStatusType(item)}
     }
 
     if (item.type === "allergy" && item.severity) {
-      return {label: item.severity, color: STATUS_COLORS.allergy[String(item.severity || "").toLowerCase()] || "#6B7280"}
+      return {label: formatStatusLabel(item.severity), type: getRecordStatusType(item)}
     }
 
     return null
@@ -801,8 +822,8 @@ export default function PatientMedicalHistoryPage() {
               pageSize={8}
               emptyMessage="No records match the current filter."
               controlsLayoutClassName="hidden"
-              shellClassName="space-y-3"
-              bodyClassName="space-y-3"
+              shellClassName="medstream-clinical-record-shell"
+              bodyClassName="medstream-clinical-record-list"
               getItemKey={(item) => `${item.type}-${item.id}`}
               renderRow={(item) => {
                 const involvedDoctorStr = item.doctor_id
@@ -815,15 +836,20 @@ export default function PatientMedicalHistoryPage() {
 
                 return (
                   <div className="medstream-clinical-record-row">
-                    <div className="max-w-xl">
+                    <div className="medstream-clinical-record-main">
                       <p className="medstream-clinical-record-type">{RECORD_TYPE_LABELS[item.type] || item.type}</p>
-                      <p className="text-sm font-semibold text-[var(--text-primary)]">{item.label}</p>
+                      <div className="medstream-clinical-record-title-row">
+                        <h3>{item.label}</h3>
+                        {statusMeta && (
+                          <StatusIndicator type={statusMeta.type}>{statusMeta.label}</StatusIndicator>
+                        )}
+                      </div>
                       {item.type === "diagnosis" && item.notes && (
-                        <p className="text-sm text-[var(--text-secondary)] mt-1">{item.notes}</p>
+                        <p className="medstream-clinical-record-description">{item.notes}</p>
                       )}
 
                       {item.type === "medication" && item.dosage && (
-                        <p className="text-sm text-[var(--text-secondary)] mt-1">{item.dosage}</p>
+                        <p className="medstream-clinical-record-description">{item.dosage}</p>
                       )}
                       {(
                         (item.type === "diagnosis" && item.status_note)
@@ -848,34 +874,24 @@ export default function PatientMedicalHistoryPage() {
                             : null
 
                         return (
-                          <div className="text-xs text-[var(--text-muted)] mt-2 shadow-inner bg-[var(--surface-4)] px-3 py-2 rounded-md space-y-1">
+                          <div className="medstream-clinical-record-note">
                             {mainText && <p>{mainText}</p>}
-                            {doctorText && <p className="italic">{doctorText}</p>}
+                            {doctorText && <p>{doctorText}</p>}
                           </div>
                         )
                       })()}
-                      {statusMeta && (
-                        <div className="mt-2">
-                          <span
-                            className="inline-block rounded-md border px-2 py-0.5 text-xs font-medium uppercase"
-                            style={{
-                              color: statusMeta.color,
-                              borderColor: statusMeta.color,
-                              backgroundColor: `${statusMeta.color}1A`,
-                            }}
-                          >
-                            {statusMeta.label}
-                          </span>
-                        </div>
-                      )}
                     </div>
 
-                    <div className="flex sm:flex-col justify-between sm:justify-end items-end gap-3 text-right">
-                      <div>
-                        <span className="block text-xs uppercase tracking-wider text-[var(--text-muted)] font-medium mb-1">
-                          Doc: {involvedDoctorStr}
-                        </span>
-                        <span className="block text-xs text-[var(--text-muted)]">Last updated: {formatDateTime(item.timestamp)}</span>
+                    <div className="medstream-clinical-record-side">
+                      <div className="medstream-clinical-record-meta">
+                        <div>
+                          <Box color="text-body-secondary" variant="awsui-key-label">Doctor</Box>
+                          <p>{involvedDoctorStr}</p>
+                        </div>
+                        <div>
+                          <Box color="text-body-secondary" variant="awsui-key-label">Last updated</Box>
+                          <p>{formatDateTime(item.timestamp)}</p>
+                        </div>
                       </div>
 
                       {["diagnosis", "medication", "allergy", "condition"].includes(item.type) && (

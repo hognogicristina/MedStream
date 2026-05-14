@@ -1,7 +1,6 @@
 import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate} from "react-router-dom"
 import {useEffect} from "react"
 import AuthenticatedLayout from "./components/AuthenticatedLayout.jsx"
-import AwsInputEnhancer from "./components/AwsInputEnhancer.jsx"
 import {useAuth} from "./components/AuthContext.jsx"
 import ProtectedRoute from "./components/ProtectedRoute.jsx"
 import PublicOnlyRoute from "./components/PublicOnlyRoute.jsx"
@@ -19,6 +18,7 @@ import PatientPage from "./pages/PatientPage.jsx"
 import PatientDiagnosisPage from "./pages/PatientDiagnosisPage.jsx"
 import PatientAdmissionHistoryPage from "./pages/PatientAdmissionHistoryPage.jsx"
 import PatientMedicalHistoryPage from "./pages/PatientMedicalHistoryPage.jsx"
+import PatientPostDischargeSummaryPage from "./pages/PatientPostDischargeSummaryPage.jsx"
 import PatientTreatmentAnalysisPage from "./pages/PatientTreatmentAnalysisPage.jsx"
 import ProfilePage from "./pages/ProfilePage.jsx"
 import RecoverAccountPage from "./pages/RecoverAccountPage.jsx"
@@ -124,7 +124,7 @@ function useDocumentTitle() {
     const staticTitle = resolveStaticTitle(pathname)
     document.title = staticTitle
 
-    const match = pathname.match(/^\/patients\/(\d+)\/(diagnosis|medical-history|admission-history|analysis)$/)
+    const match = pathname.match(/^\/patients\/(\d+)\/(diagnosis|medical-history|admission-history|analysis|post-discharge-summary)$/)
       || pathname.match(/^\/patient\/(\d+)$/)
 
     if (!match) {
@@ -143,7 +143,9 @@ function useDocumentTitle() {
           ? "Admission History"
           : section === "analysis"
             ? "Treatment Analysis"
-            : ""
+            : section === "post-discharge-summary"
+              ? "Post-Discharge Clinical Summary"
+              : ""
 
     const fallbackPatientTitle = sectionTitle ? `Patient: #${patientId} - ${sectionTitle}` : `Patient: #${patientId}`
     document.title = fallbackPatientTitle
@@ -178,7 +180,6 @@ function App() {
   return (
     <BrowserRouter>
       <TitleManager/>
-      <AwsInputEnhancer/>
       <ApiAuthBridge/>
       <Routes>
         <Route path="/" element={<RootRoute/>}/>
@@ -252,6 +253,7 @@ function App() {
           <Route path="/patients/:id/medical-history" element={<PatientMedicalHistoryPage/>}/>
           <Route path="/patients/:id/admission-history" element={<PatientAdmissionHistoryPage/>}/>
           <Route path="/patients/:id/analysis" element={<PatientTreatmentAnalysisPage/>}/>
+          <Route path="/patients/:id/post-discharge-summary" element={<PatientPostDischargeSummaryPage/>}/>
           <Route path="/alerts" element={<AlertsPage/>}/>
           <Route path="/metrics/streaming" element={<StreamingMetricsPage/>}/>
           <Route path="/metrics/batch" element={<BatchMetricsPage/>}/>

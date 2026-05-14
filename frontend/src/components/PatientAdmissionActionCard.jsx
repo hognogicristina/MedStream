@@ -1,4 +1,4 @@
-import {Button, Select} from "@cloudscape-design/components"
+import {Button, Container, FormField, Header, Select, SpaceBetween, Textarea} from "@cloudscape-design/components"
 
 function getSelectedOption(options, value) {
   return options.find((option) => option.value === value) || null
@@ -28,20 +28,20 @@ export default function PatientAdmissionActionCard({
   const dischargeTypeOptions = dischargeTypes.map((type) => ({label: type, value: type}))
 
   return (
-    <section className="monitor-card rounded-[28px] p-6">
-      <div className="mb-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">
-          {patient?.is_discharged ? "Readmission" : "Discharge"}
-        </p>
-        <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">
-          {patient?.is_discharged ? "Readmit Patient" : "Discharge Patient"}
-        </h2>
-      </div>
-
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description={patient?.is_discharged ? "Restore this patient to admitted status." : "Close the current admission when discharge criteria are met."}
+        >
+          {patient?.is_discharged ? "Readmit patient" : "Discharge patient"}
+        </Header>
+      }
+    >
       {patient?.is_discharged ? (
-        <form className="space-y-4" onSubmit={onReadmitSubmit}>
-          <div className="login-field">
-            <label className="login-label" htmlFor="readmit-arrival-method">Arrival Method</label>
+        <form onSubmit={onReadmitSubmit}>
+          <SpaceBetween size="m">
+            <FormField label="Arrival Method" description="Admission note is generated automatically from arrival method.">
             <Select
               selectedOption={getSelectedOption(arrivalMethodOptions, readmitArrivalMethod)}
               onChange={({detail}) => onReadmitArrivalMethodChange(detail.selectedOption.value)}
@@ -49,10 +49,7 @@ export default function PatientAdmissionActionCard({
               selectedAriaLabel="Selected arrival method"
               disabled={!canManagePatient || isSubmittingReadmit}
             />
-          </div>
-          <p className="text-xs text-[var(--text-muted)]">
-            Admission note is generated automatically from arrival method.
-          </p>
+            </FormField>
           <Button
             formAction="submit"
             variant="primary"
@@ -61,11 +58,12 @@ export default function PatientAdmissionActionCard({
           >
             {isSubmittingReadmit ? "Submitting..." : "Readmit Patient"}
           </Button>
+          </SpaceBetween>
         </form>
       ) : (
-        <form className="space-y-4" onSubmit={onDischargeSubmit}>
-          <div className="login-field">
-            <label className="login-label" htmlFor="discharge-type">Type</label>
+        <form onSubmit={onDischargeSubmit}>
+          <SpaceBetween size="m">
+            <FormField label="Type">
             <Select
               selectedOption={getSelectedOption(dischargeTypeOptions, dischargeType)}
               onChange={({detail}) => onDischargeTypeChange(detail.selectedOption.value)}
@@ -74,15 +72,15 @@ export default function PatientAdmissionActionCard({
               selectedAriaLabel="Selected discharge type"
               disabled={!canManagePatient || isSubmittingDischarge}
             />
-          </div>
-          <textarea
+            </FormField>
+            <FormField label="Reason for discharge">
+          <Textarea
             value={dischargeReason}
-            onChange={(event) => onDischargeReasonChange(event.target.value)}
+            onChange={({detail}) => onDischargeReasonChange(detail.value)}
             placeholder="Reason for discharge"
-            className="console-input min-h-28 w-full rounded-2xl px-4 py-3 outline-none"
             disabled={!canManagePatient || isSubmittingDischarge}
-            required
           />
+            </FormField>
 
           <Button
             formAction="submit"
@@ -92,8 +90,9 @@ export default function PatientAdmissionActionCard({
           >
             {isSubmittingDischarge ? "Submitting..." : "Discharge Patient"}
           </Button>
+          </SpaceBetween>
         </form>
       )}
-    </section>
+    </Container>
   )
 }

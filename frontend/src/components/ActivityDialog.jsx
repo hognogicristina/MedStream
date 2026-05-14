@@ -1,25 +1,7 @@
 import {useMemo, useState} from "react"
 import {Button, Pagination, Select} from "@cloudscape-design/components"
 
-function ClearFieldButton({disabled, label, onClear, show}) {
-  if (!show) {
-    return null
-  }
-
-  return (
-    <button
-      aria-label={label}
-      className="medstream-clear-field-button"
-      disabled={disabled}
-      formAction="none"
-      onClick={onClear}
-      type="button"
-    >
-    </button>
-  )
-}
-
-function ClearableInput({clearLabel, disabled = false, onChange, onClear, required = false, type = "text", value, ...props}) {
+function ClearableInput({disabled = false, onChange, required = false, type = "text", value, ...props}) {
   return (
     <div className="medstream-clearable-field">
       <input
@@ -31,17 +13,11 @@ function ClearableInput({clearLabel, disabled = false, onChange, onClear, requir
         type={type}
         value={value}
       />
-      <ClearFieldButton
-        disabled={disabled || !value}
-        label={clearLabel}
-        onClear={onClear}
-        show
-      />
     </div>
   )
 }
 
-function ClearableTextarea({clearLabel, disabled = false, onChange, onClear, value, ...props}) {
+function ClearableTextarea({disabled = false, onChange, value, ...props}) {
   return (
     <div className="medstream-clearable-field medstream-clearable-textarea-field">
       <textarea
@@ -50,12 +26,6 @@ function ClearableTextarea({clearLabel, disabled = false, onChange, onClear, val
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         value={value}
-      />
-      <ClearFieldButton
-        disabled={disabled || !value}
-        label={clearLabel}
-        onClear={onClear}
-        show
       />
     </div>
   )
@@ -243,12 +213,10 @@ export default function ActivityDialog({
               <div className="login-field">
                 <label className="login-label" htmlFor="activity-date">Date</label>
                 <ClearableInput
-                  clearLabel="Clear activity date"
                   id="activity-date"
                   type="date"
                   value={form.scheduledDate}
                   onChange={(value) => setForm((current) => ({...current, scheduledDate: value}))}
-                  onClear={() => setForm((current) => ({...current, scheduledDate: ""}))}
                   required
                 />
               </div>
@@ -256,12 +224,10 @@ export default function ActivityDialog({
               <div className="login-field">
                 <label className="login-label" htmlFor="activity-time">Time</label>
                 <ClearableInput
-                  clearLabel="Clear activity time"
                   id="activity-time"
                   type="time"
                   value={form.scheduledTime}
                   onChange={(value) => setForm((current) => ({...current, scheduledTime: value}))}
-                  onClear={() => setForm((current) => ({...current, scheduledTime: ""}))}
                   required
                 />
               </div>
@@ -271,12 +237,10 @@ export default function ActivityDialog({
           <div className="login-field">
             <label className="login-label" htmlFor="activity-title">Title</label>
             <ClearableInput
-              clearLabel="Clear activity title"
               id="activity-title"
               type="text"
               value={form.title}
               onChange={(value) => setForm((current) => ({...current, title: value}))}
-              onClear={() => setForm((current) => ({...current, title: ""}))}
               placeholder="Example: Post-op monitoring review"
               required
             />
@@ -285,11 +249,9 @@ export default function ActivityDialog({
           <div className="login-field medstream-form-field-wide">
             <label className="login-label" htmlFor="activity-description">Description</label>
             <ClearableTextarea
-              clearLabel="Clear activity description"
               id="activity-description"
               value={form.description}
               onChange={(value) => setForm((current) => ({...current, description: value}))}
-              onClear={() => setForm((current) => ({...current, description: ""}))}
               placeholder="Optional details"
             />
           </div>
@@ -307,15 +269,10 @@ export default function ActivityDialog({
                 <div className="login-field medstream-activity-search">
                   <label className="login-label" htmlFor="activity-patient-search">Search patient</label>
                   <ClearableInput
-                    clearLabel="Clear patient search"
                     id="activity-patient-search"
                     value={patientQuery}
                     onChange={(value) => {
                       setPatientQuery(value)
-                      setPatientPage(1)
-                    }}
-                    onClear={() => {
-                      setPatientQuery("")
                       setPatientPage(1)
                     }}
                     placeholder="Search by name"

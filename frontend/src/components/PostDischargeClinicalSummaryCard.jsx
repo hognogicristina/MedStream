@@ -1,3 +1,20 @@
+import {useState} from "react"
+import {
+  Alert,
+  Box,
+  Container,
+  Header,
+  SegmentedControl,
+  SpaceBetween,
+  StatusIndicator,
+} from "@cloudscape-design/components"
+
+const SUMMARY_VIEW_OPTIONS = [
+  {id: "overview", text: "Overview"},
+  {id: "metrics", text: "Metrics"},
+  {id: "clinical", text: "Clinical notes"},
+]
+
 function formatDateTime(value) {
   if (!value) {
     return "--"
@@ -48,41 +65,46 @@ function normalizeOutcome(value) {
   return "Not available"
 }
 
-function StatTile({label, value, className = ""}) {
+function normalizePatientState(value) {
+  const normalized = String(value || "").trim().toLowerCase()
+  if (!normalized) {
+    return "Not available"
+  }
+  return normalized.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function StatTile({label, value, tone = "neutral"}) {
   return (
-    <div className={`rounded-xl border px-3 py-2 ${className || "border-[var(--border-subtle)] bg-[var(--surface-2)]"}`}>
-      <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{value}</p>
-    </div>
+    <SummaryValue label={label} value={value} tone={tone}/>
   )
 }
 
-function outcomeClassName(value) {
+function outcomeTone(value) {
   const normalized = normalizeOutcome(value)
   if (normalized === "Effective") {
-    return "status-surface status-surface-success"
+    return "success"
   }
   if (normalized === "Improving") {
-    return "status-surface status-surface-warning"
+    return "warning"
   }
   if (normalized === "Ineffective") {
-    return "status-surface status-surface-danger"
+    return "danger"
   }
-  return "status-surface status-surface-neutral"
+  return "neutral"
 }
 
-function vitalClassName(value) {
+function vitalTone(value) {
   const normalized = String(value || "").trim().toLowerCase()
   if (normalized === "oxygen_saturation") {
-    return "status-surface status-surface-info"
+    return "info"
   }
   if (normalized === "heart_rate") {
-    return "status-surface status-surface-danger"
+    return "danger"
   }
   if (normalized === "temperature") {
-    return "status-surface status-surface-warning"
+    return "warning"
   }
-  return "status-surface status-surface-neutral"
+  return "neutral"
 }
 
 function toSafeCount(value) {
@@ -91,13 +113,6 @@ function toSafeCount(value) {
     return 0
   }
   return Math.round(numeric)
-}
-
-function percentage(value, total) {
-  if (!total) {
-    return 0
-  }
-  return Math.max(0, Math.min(100, (value / total) * 100))
 }
 
 function responseInterpretation(score) {
@@ -110,12 +125,112 @@ function responseInterpretation(score) {
   return "Limited treatment response"
 }
 
+function Section({title, children}) {
+  return (
+    <Container
+      header={<Header variant="h2">{title}</Header>}
+    >
+      {children}
+    </Container>
+  )
+}
+
+function PlainSection({title, children}) {
+  return (
+    <div className="post-discharge-plain-section">
+      <Box variant="h2">{title}</Box>
+      {children}
+    </div>
+  )
+}
+
+function SummaryText({title, children}) {
+  return (
+    <SpaceBetween size="xs">
+      <Box variant="h3">{title}</Box>
+      <Box color="text-body-primary" variant="p">{children}</Box>
+    </SpaceBetween>
+  )
+}
+
+function LegendItem({label, value, tone}) {
+  return <SummaryValue label={label} value={value} tone={tone}/>
+}
+
+function MetricSummaryItem({label, value, tone = "neutral"}) {
+  const displayValue = value == null || value === "" ? "--" : value
+
+  return (
+    <div className={`post-discharge-metric-card post-discharge-metric-card-${tone}`}>
+      <div className="post-discharge-metric-card-accent"/>
+      <div className="post-discharge-metric-card-label">{label}</div>
+      <div className="post-discharge-metric-card-value">{displayValue}</div>
+    </div>
+  )
+}
+
+function MetricSummaryPanel({title, subtitle, children}) {
+  return (
+    <section className="post-discharge-metric-panel">
+      <Container
+        header={<Header variant="h2" description={subtitle}>{title}</Header>}
+      >
+        <div className="post-discharge-metric-panel-grid">
+          {children}
+        </div>
+      </Container>
+    </section>
+  )
+}
+
+function TreatmentResponseMeter({value, description, additionalInfo}) {
+  const safeValue = Math.max(0, Math.min(100, Number(value) || 0))
+
+  return (
+    <div
+      className="post-discharge-response-meter"
+      role="progressbar"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-valuenow={safeValue}
+      aria-label="Treatment response score"
+    >
+      <div className="post-discharge-response-meter-header">
+        <div>
+          <div className="post-discharge-response-meter-label">Treatment response score</div>
+          <div className="post-discharge-response-meter-description">{description}</div>
+        </div>
+        <div className="post-discharge-response-meter-percent">{safeValue}%</div>
+      </div>
+      <div className="post-discharge-response-meter-track">
+        <div className="post-discharge-response-meter-fill" style={{width: `${safeValue}%`}}/>
+      </div>
+      <div className="post-discharge-response-meter-info">{additionalInfo}</div>
+    </div>
+  )
+}
+
+function SummaryValue({label, value, tone = "neutral"}) {
+  const displayValue = value == null || value === "" ? "--" : value
+
+  return (
+    <div className="post-discharge-value-block">
+      <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
+      <div className={`post-discharge-summary-value post-discharge-summary-value-${tone}`}>
+        {displayValue}
+      </div>
+    </div>
+  )
+}
+
 export default function PostDischargeClinicalSummaryCard({summary, isLoading = false, compact = false}) {
+  const [selectedView, setSelectedView] = useState("overview")
+
   if (isLoading) {
     return (
-      <section className="monitor-panel rounded-2xl border border-[var(--border-subtle)] px-4 py-4">
-        <p className="text-sm text-[var(--text-secondary)]">Loading post-discharge clinical summary...</p>
-      </section>
+      <Container>
+        <Box color="text-body-secondary">Loading post-discharge clinical summary...</Box>
+      </Container>
     )
   }
 
@@ -130,22 +245,33 @@ export default function PostDischargeClinicalSummaryCard({summary, isLoading = f
 
   const dischargeReason = summary.discharge_reason || "Not recorded."
   const finalOutcome = normalizeOutcome(summary.final_treatment_outcome)
+  const finalPatientState = normalizePatientState(summary.final_patient_state)
   const problematicVital = formatVital(summary.most_problematic_vital)
   const generatedAt = formatDateTime(summary.generated_at)
 
   if (status === "pending") {
     return (
-      <section className="monitor-panel overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-2)] px-4 py-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-lg font-semibold text-[var(--text-primary)]">Post-Discharge Clinical Summary</h3>
-          <span className="rounded-full border border-[var(--border-soft)] bg-[var(--surface-3)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
-            Generated overview
-          </span>
-        </div>
-        <p className="mt-2 text-sm text-[var(--text-secondary)]">Historical clinical summary</p>
-        <p className="mt-4 text-sm text-[var(--text-primary)]">Clinical summary is being prepared.</p>
-        <p className="mt-2 text-xs text-[var(--text-muted)]">Discharge reason: {dischargeReason}</p>
-      </section>
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="The discharge record is available while generated insights are still pending."
+            actions={<StatusIndicator type="pending">Preparing</StatusIndicator>}
+          >
+            Post-Discharge Clinical Summary
+          </Header>
+        }
+      >
+        <SpaceBetween size="m">
+          <Alert type="info" header="Clinical summary is being prepared.">
+            Generated insights will appear here when processing is complete.
+          </Alert>
+          <div className="post-discharge-fit-grid">
+            <StatTile label="Discharge reason" value={dischargeReason}/>
+            <StatTile label="Discharge date" value={formatDateTime(summary.discharge_date)}/>
+          </div>
+        </SpaceBetween>
+      </Container>
     )
   }
 
@@ -156,9 +282,6 @@ export default function PostDischargeClinicalSummaryCard({summary, isLoading = f
   const ineffectiveCount = toSafeCount(treatmentMetrics.ineffective)
   const totalTreatmentsRaw = toSafeCount(treatmentMetrics.total)
   const totalTreatments = totalTreatmentsRaw || (effectiveCount + improvingCount + ineffectiveCount)
-  const effectivePct = percentage(effectiveCount, totalTreatments)
-  const improvingPct = percentage(improvingCount, totalTreatments)
-  const ineffectivePct = Math.max(0, 100 - effectivePct - improvingPct)
   const hasTreatmentData = totalTreatments > 0
   const responseScore = hasTreatmentData
     ? ((effectiveCount + (improvingCount * 0.5)) / totalTreatments) * 100
@@ -166,94 +289,117 @@ export default function PostDischargeClinicalSummaryCard({summary, isLoading = f
   const roundedResponseScore = responseScore == null ? null : Math.round(responseScore)
   const responseLabel = roundedResponseScore == null ? "Not enough treatment data" : `${roundedResponseScore}%`
   const responseInterpretationText = roundedResponseScore == null ? null : responseInterpretation(roundedResponseScore)
+  const isOverviewView = selectedView === "overview"
+  const isMetricsView = selectedView === "metrics"
+  const isClinicalView = selectedView === "clinical"
 
   return (
-    <section className="monitor-panel overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-2)] px-4 py-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-lg font-semibold text-[var(--text-primary)]">Post-Discharge Clinical Summary</h3>
-        <span className="rounded-full border border-[var(--border-soft)] bg-[var(--surface-3)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
-          Generated overview
-        </span>
-      </div>
-      <p className="mt-2 text-sm text-[var(--text-secondary)]">Readmission overview</p>
-      <p className="mt-3 text-xs text-[var(--text-muted)]">Generated at: {generatedAt}</p>
-
-      <div className="mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Treatment Response Score</p>
-          <span className="rounded-full border border-[var(--border-soft)] bg-[var(--surface-3)] px-2 py-0.5 text-xs font-semibold text-[var(--text-primary)]">
-            {responseLabel}
-          </span>
-        </div>
-        {responseInterpretationText ? (
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">{responseInterpretationText}</p>
-        ) : (
-          <p className="mt-2 text-sm text-[var(--text-muted)]">Not enough treatment data</p>
-        )}
-        <div className="mt-3 h-3 overflow-hidden rounded-full border border-[var(--border-subtle)] bg-[var(--surface-4)]">
-          <div className="flex h-full w-full">
-            <div className="h-full bg-[#2f8f5a]" style={{width: `${effectivePct}%`}}/>
-            <div className="h-full bg-[#b7882c]" style={{width: `${improvingPct}%`}}/>
-            <div className="h-full bg-[#a64551]" style={{width: `${ineffectivePct}%`}}/>
-          </div>
-        </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          <div className="rounded-lg border border-[#1f4f3a] bg-[#11251c] px-2 py-1.5 text-xs text-[var(--text-primary)]">
-            <span className="font-semibold text-[#9dd6b4]">Effective:</span> {effectiveCount}
-          </div>
-          <div className="rounded-lg border border-[#5d4a1f] bg-[#2a2111] px-2 py-1.5 text-xs text-[var(--text-primary)]">
-            <span className="font-semibold text-[#f4d38f]">Improving:</span> {improvingCount}
-          </div>
-          <div className="rounded-lg border border-[#5b2a2f] bg-[#2a1618] px-2 py-1.5 text-xs text-[var(--text-primary)]">
-            <span className="font-semibold text-[#f5a4ad]">Ineffective:</span> {ineffectiveCount}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Discharge Details</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <StatTile label="Discharge reason" value={dischargeReason}/>
-          <StatTile label="Discharge date" value={formatDateTime(summary.discharge_date)}/>
-          <StatTile label="Final treatment outcome" value={finalOutcome} className={outcomeClassName(summary.final_treatment_outcome)}/>
-          <StatTile label="Most monitored issue" value={problematicVital} className={vitalClassName(summary.most_problematic_vital)}/>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] px-3 py-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Treatment Outcomes</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <StatTile label="Total" value={totalTreatments}/>
-            <StatTile label="Effective" value={effectiveCount} className="status-surface status-surface-success"/>
-            <StatTile label="Improving" value={improvingCount} className="status-surface status-surface-warning"/>
-            <StatTile label="Ineffective" value={ineffectiveCount} className="status-surface status-surface-danger"/>
-          </div>
+    <Container
+      className="post-discharge-summary-card"
+      header={
+        <Header
+          variant="h2"
+          description="Readmission overview generated from historical patient data."
+          actions={<StatusIndicator type="success">Ready</StatusIndicator>}
+        >
+          Post-Discharge Clinical Summary
+        </Header>
+      }
+    >
+      <SpaceBetween size="m">
+        <div className="post-discharge-control-row">
+          <SegmentedControl
+            selectedId={selectedView}
+            label="Summary view"
+            options={SUMMARY_VIEW_OPTIONS}
+            onChange={({detail}) => setSelectedView(detail.selectedId)}
+          />
         </div>
 
-        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] px-3 py-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Alert Profile</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <StatTile label="Total" value={alertMetrics.total ?? 0}/>
-            <StatTile label="Critical" value={alertMetrics.critical ?? 0} className="status-surface status-surface-danger"/>
-            <StatTile label="High" value={alertMetrics.high ?? 0} className="status-surface status-surface-warning"/>
-            <StatTile label={compact ? "Normalized" : "Normal / Stable"} value={alertMetrics.normal ?? 0} className="status-surface status-surface-success"/>
-            <div className={compact ? "" : "col-span-2"}>
-              <StatTile label="Normalized" value={alertMetrics.normalized ?? 0} className="status-surface status-surface-success"/>
+        {isOverviewView && (
+          <SpaceBetween size="m">
+            <div className="post-discharge-fit-grid">
+              <SummaryValue label="Generated at" value={generatedAt}/>
+              <SummaryValue label="Final treatment outcome" value={finalOutcome} tone={outcomeTone(summary.final_treatment_outcome)}/>
+              <SummaryValue label="Most monitored issue" value={problematicVital} tone={vitalTone(summary.most_problematic_vital)}/>
             </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] px-3 py-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Clinical Summary</p>
-        <p className="mt-2 text-sm leading-6 text-[var(--text-primary)]">{summary.clinical_summary || "No clinical summary available."}</p>
-      </div>
+            <PlainSection title="Discharge details">
+              <div className="post-discharge-fit-grid">
+                <StatTile label="Discharge reason" value={dischargeReason}/>
+                <StatTile label="Discharge date" value={formatDateTime(summary.discharge_date)}/>
+                <StatTile label="Final treatment outcome" value={finalOutcome} tone={outcomeTone(summary.final_treatment_outcome)}/>
+              </div>
+            </PlainSection>
+          </SpaceBetween>
+        )}
 
-      <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] px-3 py-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Readmission Notes</p>
-        <p className="mt-2 text-sm leading-6 text-[var(--text-primary)]">{summary.readmission_notes || "No readmission notes available."}</p>
-      </div>
-    </section>
+        {isMetricsView && (
+          <SpaceBetween size="m">
+            <Section title="Treatment response">
+              <SpaceBetween size="m">
+                <div className="post-discharge-response-summary-grid">
+                  <SummaryValue label="Response score" value={responseLabel}/>
+                  <SummaryValue label="Response" value={responseInterpretationText || "Not enough treatment data"}/>
+                </div>
+                <TreatmentResponseMeter
+                  value={roundedResponseScore || 0}
+                  description={responseInterpretationText || "Not enough treatment data"}
+                  additionalInfo={`${effectiveCount} effective, ${improvingCount} improving, ${ineffectiveCount} ineffective`}
+                />
+                <div className="post-discharge-response-outcome-grid">
+                  <LegendItem label="Effective" value={effectiveCount} tone="success"/>
+                  <LegendItem label="Improving" value={improvingCount} tone="warning"/>
+                  <LegendItem label="Ineffective" value={ineffectiveCount} tone="danger"/>
+                </div>
+              </SpaceBetween>
+            </Section>
+
+            <div className="medstream-dashboard-split">
+              <MetricSummaryPanel
+                title="Treatment outcomes"
+                subtitle={`${totalTreatments} recorded treatment actions`}
+              >
+                <MetricSummaryItem label="Total" value={totalTreatments}/>
+                <MetricSummaryItem label="Effective" value={effectiveCount} tone="success"/>
+                <MetricSummaryItem label="Improving" value={improvingCount} tone="warning"/>
+                <MetricSummaryItem label="Ineffective" value={ineffectiveCount} tone="danger"/>
+              </MetricSummaryPanel>
+
+              <MetricSummaryPanel
+                title="Alert profile"
+                subtitle={`${alertMetrics.total ?? 0} alert events captured`}
+              >
+                <MetricSummaryItem label="Total" value={alertMetrics.total ?? 0}/>
+                <MetricSummaryItem label="Critical" value={alertMetrics.critical ?? 0} tone="danger"/>
+                <MetricSummaryItem label="High" value={alertMetrics.high ?? 0} tone="warning"/>
+                <MetricSummaryItem label={compact ? "Normalized" : "Normal / stable"} value={alertMetrics.normal ?? 0} tone="success"/>
+                <MetricSummaryItem label="Normalized" value={alertMetrics.normalized ?? 0} tone="success"/>
+              </MetricSummaryPanel>
+            </div>
+          </SpaceBetween>
+        )}
+
+        {isClinicalView && (
+          <PlainSection title="Clinical summary">
+            <div className="post-discharge-text-stack">
+              <SummaryText title="Final patient state">
+                {finalPatientState}
+              </SummaryText>
+
+              <SummaryText title="Summary">
+                {summary.clinical_summary || "No clinical summary available."}
+              </SummaryText>
+
+              <div className="post-discharge-inline-panel">
+                <SummaryText title="Readmission notes">
+                  {summary.readmission_notes || "No readmission notes available."}
+                </SummaryText>
+              </div>
+            </div>
+          </PlainSection>
+        )}
+      </SpaceBetween>
+    </Container>
   )
 }

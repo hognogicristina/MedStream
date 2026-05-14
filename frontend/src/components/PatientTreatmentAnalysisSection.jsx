@@ -1,19 +1,27 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from "react"
-import {Pagination} from "@cloudscape-design/components"
+import {
+  Alert,
+  Box,
+  Button,
+  ColumnLayout,
+  Container,
+  Header,
+  Pagination,
+  SpaceBetween,
+  StatusIndicator,
+} from "@cloudscape-design/components"
 import {Area, AreaChart, CartesianGrid, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
-import {getPatient, getPatientPostDischargeSummary, getPatientTreatmentAnalysis} from "../services/patientApi.js"
+import {getPatient, getPatientTreatmentAnalysis} from "../services/patientApi.js"
 import {createWebSocket} from "../services/ws.js"
 import LoadingSpinner from "./LoadingSpinner.jsx"
 import {useTheme} from "./ThemeContext.jsx"
 import {alertTypeToVital, getAlertSeverityLevel, isNormalizedAlertType, normalizeAlertType} from "../utils/alerts.js"
 import {getChartTheme} from "../utils/theme.js"
 import {formatAlertFriendlyTime} from "../utils/time.js"
-import PostDischargeClinicalSummaryCard from "./PostDischargeClinicalSummaryCard.jsx"
 
-const DIAGNOSIS_PAGE_SIZE_COLLAPSED = 1
-const DIAGNOSIS_PAGE_SIZE_EXPANDED = 3
+const DIAGNOSIS_PAGE_SIZE = 3
 const CONDITION_PAGE_SIZE = 3
 const ALERT_HISTORY_EXPANDED_PAGE_SIZE = 4
 const OUTCOME_CONFIG = {
@@ -113,99 +121,224 @@ function compareTreatmentsAscending(left, right) {
   return leftAction - rightAction
 }
 
-function getLatestSummaryStylesBySeverity(severity, isLightTheme) {
-  if (isLightTheme) {
-    if (severity === "critical") {
-      return {
-        card: "border-[#ef9aa7] bg-[#fee7ec]",
-        value: "text-[#9f1239]",
-        time: "text-[#be123c]",
-      }
-    }
-    if (severity === "high") {
-      return {
-        card: "border-[#f4b96a] bg-[#fff0db]",
-        value: "text-[#9a3412]",
-        time: "text-[#b45309]",
-      }
-    }
-    return {
-      card: "border-[#8ed8b3] bg-[#e9f8ef]",
-      value: "text-[#166534]",
-      time: "text-[#15803d]",
-    }
+function formatCompactDate(value) {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) {
+    return "--"
   }
-
-  if (severity === "critical") {
-    return {
-      card: "border-[#4e1d26] bg-[#1c1217]",
-      value: "text-[#ff8fa1]",
-      time: "text-[#ffb3bc]",
-    }
-  }
-  if (severity === "high") {
-    return {
-      card: "border-[#4b351a] bg-[#1d1710]",
-      value: "text-[#ffcf85]",
-      time: "text-[#ffd9a3]",
-    }
-  }
-  return {
-    card: "border-[#214a34] bg-[#10241a]",
-    value: "text-[#8fe1b1]",
-    time: "text-[#b9ebcf]",
-  }
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date)
 }
 
-function getLatestSummaryNeutralStyles() {
-  return {
-    card: "border-[var(--border-subtle)] bg-[var(--surface-2)]",
-    value: "text-[var(--text-primary)]",
-    time: "text-[var(--text-secondary)]",
+function formatDisplayValue(value) {
+  if (value == null || value === "") {
+    return "--"
   }
-}
-
-function hasRealVitalData(value) {
-  if (value == null) {
-    return false
-  }
-  if (typeof value === "number") {
-    return Number.isFinite(value)
-  }
-  const text = String(value).trim()
-  return text !== "" && text !== "--" && text.toLowerCase() !== "null" && text.toLowerCase() !== "undefined"
-}
-
-function getHistoryStylesBySeverity(severity) {
-  if (severity === "critical") {
-    return {
-      label: "text-[#ff8fa1]",
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return "--"
     }
+    return value.map((item) => formatDisplayValue(item)).join(", ")
   }
-  if (severity === "high") {
-    return {
-      label: "text-[#f6b26b]",
-    }
+  if (typeof value === "object") {
+    const entries = Object.entries(value)
+      .filter(([, entryValue]) => entryValue != null && entryValue !== "")
+      .map(([key, entryValue]) => `${key}: ${formatDisplayValue(entryValue)}`)
+    return entries.length ? entries.join("; ") : "--"
   }
-  return {
-    label: "text-[#7fb8ff]",
-  }
+  return String(value)
 }
 
-function renderHistoryMessageWithColoredLabel(message, labelClassName) {
-  const text = String(message || "--")
-  const separatorIndex = text.indexOf(":")
-  if (separatorIndex <= 0) {
-    return <span className="text-[var(--text-primary)]">{text}</span>
-  }
+function DetailField({label, children}) {
+  const value = children == null || children === "" ? "--" : children
 
-  const label = text.slice(0, separatorIndex)
-  const rest = text.slice(separatorIndex)
   return (
-    <>
-      <span className={labelClassName}>{label}</span>
-      <span className="text-[var(--text-primary)]">{rest}</span>
-    </>
+    <div className="medstream-compact-detail-field">
+      <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
+      <div className="medstream-compact-detail-value">{value}</div>
+    </div>
+  )
+}
+
+function SummaryValue({label, value, meta}) {
+  const displayValue = value == null || value === "" ? "--" : value
+
+  return (
+    <div className="medstream-compact-summary-field">
+      <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
+      <div className="medstream-compact-summary-value">{displayValue}</div>
+      {meta ? <Box color="text-body-secondary">{meta}</Box> : null}
+    </div>
+  )
+}
+
+function AttributeSummaryValue({label, value}) {
+  const displayValue = value == null || value === "" ? "--" : value
+
+  return (
+    <SpaceBetween size="xxs">
+      <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
+      <Box className="medstream-attribute-summary-value">{displayValue}</Box>
+    </SpaceBetween>
+  )
+}
+
+function getAttributeStatusType(value) {
+  const normalized = String(value || "").trim().toLowerCase()
+  if (["resolved", "available", "active", "normal"].includes(normalized)) {
+    return "success"
+  }
+  if (["improving", "in progress", "in-progress", "pending"].includes(normalized)) {
+    return "in-progress"
+  }
+  if (["inactive", "closed", "discharged"].includes(normalized)) {
+    return "stopped"
+  }
+  if (["critical", "failed", "error", "unresolved"].includes(normalized)) {
+    return "error"
+  }
+  return "info"
+}
+
+function AttributeStatusValue({value}) {
+  const displayValue = value == null || value === "" ? "--" : value
+
+  return (
+    <SpaceBetween size="xxs">
+      <Box color="text-body-secondary" variant="awsui-key-label">Status</Box>
+      <div className="medstream-attribute-status-value">
+        <StatusIndicator type={getAttributeStatusType(displayValue)}>
+          {formatDisplayValue(displayValue)}
+        </StatusIndicator>
+      </div>
+    </SpaceBetween>
+  )
+}
+
+function StepFunctionsMedicationDecision({
+  displayedMedication,
+  selectedTreatmentOutcome,
+}) {
+  const statusType = selectedTreatmentOutcome === "Effective"
+    ? "success"
+    : selectedTreatmentOutcome === "Improving"
+      ? "in-progress"
+      : "error"
+
+  return (
+    <section className="medstream-sfn-panel" aria-label="Medication decision details">
+      <div className="medstream-sfn-heading">
+        <div className="medstream-sfn-heading-main">
+          <h3>{formatDisplayValue(displayedMedication.medication_name)}</h3>
+          <p>Medication decision details</p>
+        </div>
+        <StatusIndicator type={statusType}>{formatDisplayValue(selectedTreatmentOutcome)}</StatusIndicator>
+      </div>
+
+      <div className="medstream-sfn-content">
+        <div className="medstream-sfn-main">
+          <div className="medstream-sfn-section">
+            <h4>Execution details</h4>
+            <ColumnLayout columns={3} variant="text-grid">
+              <DetailField label="Status">
+                <StatusIndicator type={statusType}>{formatDisplayValue(selectedTreatmentOutcome)}</StatusIndicator>
+              </DetailField>
+              <DetailField label="Type">Task</DetailField>
+              <DetailField label="Started">{formatCompactDate(displayedMedication.timestamp || displayedMedication.created_at)}</DetailField>
+              <DetailField label="Medication ID">{displayedMedication.id || "--"}</DetailField>
+              <DetailField label="Dosage">{displayedMedication.dosage || "--"}</DetailField>
+              <DetailField label="Frequency">{displayedMedication.frequency || "--"}</DetailField>
+            </ColumnLayout>
+          </div>
+
+          <div className="medstream-sfn-section">
+            <h4>Cause</h4>
+            <p className="medstream-sfn-cause">{formatDisplayValue(displayedMedication.reasonText)}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function DynamoAttributeTable({title, items, emptyText, pagination}) {
+  return (
+    <Container header={<Header variant="h2">{title}</Header>}>
+      <SpaceBetween size="s">
+        <div className="medstream-attribute-list">
+          {items.length ? (
+            items.map((item) => (
+              <article key={item.id} className="medstream-attribute-row">
+                <div className="medstream-attribute-entry">
+                  <div className="medstream-attribute-primary">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Name</Box>
+                    <strong>{formatDisplayValue(item.name)}</strong>
+                    <p>{formatDisplayValue(item.note)}</p>
+                  </div>
+                  <div className="medstream-attribute-summary-grid">
+                    <AttributeStatusValue value={item.status}/>
+                    <AttributeSummaryValue label="Dcotor" value={formatDisplayValue(item.modifiedBy)}/>
+                  </div>
+                </div>
+              </article>
+            ))
+          ) : (
+            <p className="medstream-simple-empty">{formatDisplayValue(emptyText)}</p>
+          )}
+        </div>
+        {pagination ? <div className="medstream-simple-pagination">{pagination}</div> : null}
+      </SpaceBetween>
+    </Container>
+  )
+}
+
+function AlertHistoryTable({items, pagination}) {
+  return (
+    <div className="medstream-alert-history-list">
+      <div className="medstream-simple-section-header">
+        <h3>Alert history</h3>
+      </div>
+      {items.length ? (
+        <div className="medstream-alert-history-items">
+          {items.map((alert) => (
+            <article key={alert.id} className={`medstream-alert-history-row medstream-alert-history-row-${alert.statusId}`}>
+              <div className="medstream-alert-history-main">
+                <StatusIndicator type={alert.status.type}>{alert.status.label}</StatusIndicator>
+                <strong>{alert.vital}</strong>
+                <span>{alert.time}</span>
+              </div>
+              <div className="medstream-alert-history-values">
+                <div>
+                  <span>Value</span>
+                  <strong>{alert.value}</strong>
+                </div>
+                <div>
+                  <span>Previous</span>
+                  <strong>{alert.previous}</strong>
+                </div>
+                <div>
+                  <span>Rule</span>
+                  <strong>{alert.triggeredRule}</strong>
+                </div>
+                <div>
+                  <span>State</span>
+                  <strong>{alert.state}</strong>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="medstream-simple-empty">No linked alerts.</p>
+      )}
+      {pagination ? <div className="medstream-simple-pagination">{pagination}</div> : null}
+    </div>
   )
 }
 
@@ -233,6 +366,91 @@ function buildCleanAlertHistoryLabel(alert) {
     return `Temperature: ${formatAlertValue(value)}°C`
   }
   return String(alert.message || "--")
+}
+
+function getAlertHistoryValue(alert) {
+  const vitalKey = alertTypeToVital(alert.type)
+  const statusVitals = getStatusVitals(alert)
+  if (vitalKey === "heartRate") {
+    return alert.value ?? statusVitals.heartRate
+  }
+  if (vitalKey === "oxygen") {
+    return alert.value ?? statusVitals.oxygen
+  }
+  if (vitalKey === "temperature") {
+    return alert.value ?? statusVitals.temperature
+  }
+  return alert.value
+}
+
+function getAlertVitalLabel(alert) {
+  const vitalKey = alertTypeToVital(alert.type)
+  if (vitalKey === "heartRate") {
+    return "Heart rate"
+  }
+  if (vitalKey === "oxygen") {
+    return "Oxygen"
+  }
+  if (vitalKey === "temperature") {
+    return "Temperature"
+  }
+  return "Vital"
+}
+
+function formatAlertHistoryValue(value, vital) {
+  if (!Number.isFinite(value)) {
+    return "--"
+  }
+  if (vital === "Heart rate") {
+    return `${formatAlertValue(value)} bpm`
+  }
+  if (vital === "Oxygen") {
+    return `${formatAlertValue(value)}%`
+  }
+  if (vital === "Temperature") {
+    return `${formatAlertValue(value)}°C`
+  }
+  return formatAlertValue(value)
+}
+
+function getAlertHistoryStatus(alert) {
+  const severity = getAlertSeverityLevel(alert)
+  if (isNormalizedAlertType(alert?.type)) {
+    return {id: "normal", label: "Normal", type: "success"}
+  }
+  if (severity === "critical") {
+    return {id: "critical", label: "Critical", type: "error"}
+  }
+  if (severity === "high") {
+    return {id: "high", label: "High", type: "warning"}
+  }
+  return {id: "normal", label: "Normal", type: "success"}
+}
+
+function getTriggeredRule(alert) {
+  const type = String(alert.type || "").trim().toLowerCase()
+  if (isNormalizedAlertType(type)) {
+    return "Back to normal"
+  }
+  if (type === "heart_rate_critical") {
+    return "HR > 120 bpm"
+  }
+  if (type === "heart_rate_high") {
+    return "HR > 110 bpm"
+  }
+  if (type === "oxygen_critical") {
+    return "SpO2 < 90%"
+  }
+  if (type === "oxygen_low") {
+    return "SpO2 < 92%"
+  }
+  if (type === "temperature_critical") {
+    return "Temp > 39°C"
+  }
+  if (type === "temperature_high") {
+    return "Temp > 38°C"
+  }
+  return buildCleanAlertHistoryLabel(alert)
 }
 
 function TreatmentOutcomeTooltip({active, payload, chartTheme}) {
@@ -388,14 +606,11 @@ export default function PatientTreatmentAnalysisSection({
   showSelectedPatientSummary = false,
 }) {
   const {theme} = useTheme()
-  const isLightTheme = theme === "light"
   const chartTheme = getChartTheme(theme)
   const {notifyError} = useNotifications()
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [analysis, setAnalysis] = useState(null)
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(true)
-  const [postDischargeSummary, setPostDischargeSummary] = useState(null)
-  const [isLoadingPostDischargeSummary, setIsLoadingPostDischargeSummary] = useState(true)
   const [showFullAlertHistory, setShowFullAlertHistory] = useState(false)
   const [alertHistoryPage, setAlertHistoryPage] = useState(1)
   const [medicationPage, setMedicationPage] = useState(1)
@@ -431,27 +646,6 @@ export default function PatientTreatmentAnalysisSection({
     }
   }, [notifyError])
 
-  const loadPostDischargeSummary = useCallback(async (patientId, options = {}) => {
-    const {isBackground = false} = options
-    if (!isBackground) {
-      setIsLoadingPostDischargeSummary(true)
-    }
-    try {
-      const response = await getPatientPostDischargeSummary(patientId)
-      const responseData = getResponseData(response) || null
-      setPostDischargeSummary(responseData)
-    } catch (error) {
-      if (!isBackground) {
-        setPostDischargeSummary(null)
-        notifyError(getErrorMessage(error))
-      }
-    } finally {
-      if (!isBackground) {
-        setIsLoadingPostDischargeSummary(false)
-      }
-    }
-  }, [notifyError])
-
   useEffect(() => {
     if (!selectedPatientId) {
       return
@@ -461,7 +655,6 @@ export default function PatientTreatmentAnalysisSection({
     setMedicationPage(1)
     setDiagnosisPage(1)
     setConditionPage(1)
-    setPostDischargeSummary(null)
 
     const loadInitial = async () => {
       try {
@@ -478,15 +671,12 @@ export default function PatientTreatmentAnalysisSection({
         notifyError(getErrorMessage(error))
       }
 
-      await Promise.all([
-        loadAnalysis(selectedPatientId),
-        loadPostDischargeSummary(selectedPatientId),
-      ])
+      await loadAnalysis(selectedPatientId)
     }
 
     loadInitial().then(() => {
     })
-  }, [loadAnalysis, loadPostDischargeSummary, notifyError, selectedPatientId])
+  }, [loadAnalysis, notifyError, selectedPatientId])
 
   useEffect(() => {
     return () => {
@@ -554,31 +744,6 @@ export default function PatientTreatmentAnalysisSection({
       socket.close()
     }
   }, [loadAnalysis, selectedPatientId])
-
-  useEffect(() => {
-    if (!selectedPatientId) {
-      return
-    }
-    let active = true
-    const refreshSummary = async () => {
-      try {
-        await loadPostDischargeSummary(selectedPatientId, {isBackground: true})
-      } catch (error) {
-        void error
-      }
-    }
-    const intervalId = window.setInterval(() => {
-      if (!active) {
-        return
-      }
-      refreshSummary().then(() => {
-      })
-    }, 30000)
-    return () => {
-      active = false
-      window.clearInterval(intervalId)
-    }
-  }, [loadPostDischargeSummary, selectedPatientId])
 
   const parsedAlerts = useMemo(() => {
     return dedupeAlertsNewestFirst(analysis?.alerts || [])
@@ -742,19 +907,32 @@ export default function PatientTreatmentAnalysisSection({
         return Number(right?.id || 0) - Number(left?.id || 0)
       })
   }, [analysis])
-  const diagnosisPageSize = showFullAlertHistory ? DIAGNOSIS_PAGE_SIZE_EXPANDED : DIAGNOSIS_PAGE_SIZE_COLLAPSED
-  const totalDiagnosisPages = Math.max(1, Math.ceil(diagnosisStatusDetails.length / diagnosisPageSize))
+  const totalDiagnosisPages = Math.max(1, Math.ceil(diagnosisStatusDetails.length / DIAGNOSIS_PAGE_SIZE))
   const totalConditionPages = Math.max(1, Math.ceil(conditionStatusDetails.length / CONDITION_PAGE_SIZE))
   const paginatedDiagnosisStatusDetails = useMemo(() => {
-    const start = (diagnosisPage - 1) * diagnosisPageSize
-    const end = diagnosisPage * diagnosisPageSize
+    const start = (diagnosisPage - 1) * DIAGNOSIS_PAGE_SIZE
+    const end = diagnosisPage * DIAGNOSIS_PAGE_SIZE
     return diagnosisStatusDetails.slice(start, end)
-  }, [diagnosisPage, diagnosisPageSize, diagnosisStatusDetails])
+  }, [diagnosisPage, diagnosisStatusDetails])
   const paginatedConditionStatusDetails = useMemo(() => {
     const start = (conditionPage - 1) * CONDITION_PAGE_SIZE
     const end = conditionPage * CONDITION_PAGE_SIZE
     return conditionStatusDetails.slice(start, end)
   }, [conditionPage, conditionStatusDetails])
+  const diagnosisListItems = useMemo(() => paginatedDiagnosisStatusDetails.map((diagnosis) => ({
+    id: diagnosis.id || `${diagnosis.diagnosis}-${diagnosis.created_at}`,
+    name: diagnosis.diagnosis || "--",
+    status: diagnosis.status || "--",
+    note: diagnosis.status_note || diagnosis.notes || "--",
+    modifiedBy: diagnosis.modified_by || "--",
+  })), [paginatedDiagnosisStatusDetails])
+  const conditionListItems = useMemo(() => paginatedConditionStatusDetails.map((condition) => ({
+    id: condition.id || `${condition.name}-${condition.updated_at || condition.diagnosed_at}`,
+    name: condition.name || "--",
+    status: condition.status || "--",
+    note: condition.notes || "--",
+    modifiedBy: condition.modified_by || "--",
+  })), [paginatedConditionStatusDetails])
 
   const totalMedicationPages = Math.max(1, medicationHistory.length)
   const displayedMedication = medicationHistory.length ? medicationHistory[Math.max(0, medicationPage - 1)] : null
@@ -763,34 +941,59 @@ export default function PatientTreatmentAnalysisSection({
   const finalOutcome = treatmentTimelineEvaluation.outcome
   const selectedTreatmentOutcome = displayedMedication?.outcome || "--"
   const hasInconsistentDischarge = Boolean(selectedPatient?.is_discharged) && finalOutcome !== "Effective"
-  const outcomeTextClass = (outcome) => (
-    outcome === "Effective"
-      ? "text-[#22c55e]"
-      : outcome === "Improving"
-        ? "text-[#f59e0b]"
-        : "text-[#ef4444]"
-  )
-  const postDischargeStatus = String(postDischargeSummary?.status || "").trim().toLowerCase()
-  const hasPostDischargeSummaryContent = postDischargeStatus === "ready" || postDischargeStatus === "pending"
-  const shouldShowPostDischargeSummary = isLoadingPostDischargeSummary
-    ? Boolean(selectedPatient?.is_discharged || postDischargeSummary)
-    : hasPostDischargeSummaryContent
-
   const fullAlertHistory = useMemo(() => {
-    return dedupeAlertsNewestFirst(analysis?.alerts || [])
+    const normalizedAlerts = dedupeAlertsNewestFirst(analysis?.alerts || [])
       .map((alert) => normalizeTreatmentAlert(alert))
       .map((alert) => ({...alert, time: toTimestamp(alert.created_at)}))
       .filter((alert) => alert.time !== null)
       .sort((left, right) => compareAlertsNewestFirst(left, right))
-      .map((alert) => ({
-        id: alert.id,
-        type: alert.type,
-        value: alert.value,
-        message: buildCleanAlertHistoryLabel(alert),
-        severity: String(alert.severity || "").trim().toLowerCase(),
-        createdAt: alert.created_at,
-        date: formatDate(alert.created_at),
-      }))
+
+    const latestAlertKeyByVital = new Map()
+    normalizedAlerts.forEach((alert) => {
+      const vital = getAlertVitalLabel(alert)
+      if (!latestAlertKeyByVital.has(vital)) {
+        latestAlertKeyByVital.set(vital, getAlertIdentityKey(alert))
+      }
+    })
+
+    const previousValueByVital = new Map()
+    return [...normalizedAlerts]
+      .sort((left, right) => {
+        if (left.time !== right.time) {
+          return left.time - right.time
+        }
+        return Number(left?.id || 0) - Number(right?.id || 0)
+      })
+      .map((alert) => {
+        const vital = getAlertVitalLabel(alert)
+        const numericValue = getAlertHistoryValue(alert)
+        const previousValue = previousValueByVital.get(vital) ?? null
+        if (Number.isFinite(numericValue)) {
+          previousValueByVital.set(vital, numericValue)
+        }
+        const status = getAlertHistoryStatus(alert)
+        return {
+          id: alert.id,
+          key: getAlertIdentityKey(alert),
+          status,
+          statusId: status.id,
+          vital,
+          value: formatAlertHistoryValue(numericValue, vital),
+          previous: formatAlertHistoryValue(previousValue, vital),
+          triggeredRule: getTriggeredRule(alert),
+          createdAt: alert.created_at,
+          time: formatAlertLastUpdated(alert.created_at),
+          state: latestAlertKeyByVital.get(vital) === getAlertIdentityKey(alert) ? "Active" : "Replaced",
+        }
+      })
+      .sort((left, right) => {
+        const leftTime = toTimestamp(left?.createdAt) ?? 0
+        const rightTime = toTimestamp(right?.createdAt) ?? 0
+        if (rightTime !== leftTime) {
+          return rightTime - leftTime
+        }
+        return Number(right?.id || 0) - Number(left?.id || 0)
+      })
   }, [analysis])
 
   const totalAlertHistoryPages = Math.max(1, Math.ceil(fullAlertHistory.length / ALERT_HISTORY_EXPANDED_PAGE_SIZE))
@@ -823,335 +1026,230 @@ export default function PatientTreatmentAnalysisSection({
   }, [conditionPage, totalConditionPages])
 
   return (
-    <section className="monitor-card rounded-[24px] p-6">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Treatment Insights</p>
-      <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Patient Treatment Analysis</h2>
-      {showSelectedPatientSummary && selectedPatient ? (
-        <p className="mt-2 text-sm text-[var(--text-secondary)]">{selectedPatient.cnp} - {selectedPatient.full_name}</p>
-      ) : null}
+    <section className="medstream-treatment-analysis-surface">
+      <SpaceBetween size="m">
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Timeline and reasoning for medications, alerts, diagnoses, and conditions."
+            >
+              Patient treatment analysis
+            </Header>
+          }
+        >
+          <SpaceBetween size="m">
+            {showSelectedPatientSummary && selectedPatient ? (
+              <Box color="text-body-secondary">{selectedPatient.cnp} - {selectedPatient.full_name}</Box>
+            ) : null}
 
-      {isLoadingAnalysis ? (
-        <LoadingSpinner/>
-      ) : null}
+            {isLoadingAnalysis ? (
+              <LoadingSpinner/>
+            ) : null}
 
-      {!isLoadingAnalysis && !analysis ? (
-        <div className="mt-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-3)] px-4 py-6 text-sm text-[var(--text-secondary)]">
-          Patient treatment analysis is not available.
-        </div>
-      ) : null}
+            {!isLoadingAnalysis && !analysis ? (
+              <Box color="text-body-secondary">Patient treatment analysis is not available.</Box>
+            ) : null}
 
-      {!isLoadingAnalysis && analysis ? (
-        <div className="mt-6 space-y-6">
-          <div>
-            <h3 className="text-xl font-semibold text-[var(--text-primary)]">Treatment Timeline</h3>
-          </div>
-          <div className="h-[320px] rounded-2xl border p-3" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{top: 10, right: 12, left: 8, bottom: 4}}>
-                <defs>
-                  <linearGradient id="treatmentOutcomeFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.26}/>
-                    <stop offset="50%" stopColor="#f59e0b" stopOpacity={0.2}/>
-                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0.2}/>
-                  </linearGradient>
-                </defs>
-                <ReferenceArea y1={0} y2={0.66} fill="#ef4444" fillOpacity={0.14} strokeOpacity={0}/>
-                <ReferenceArea y1={0.66} y2={1.33} fill="#f59e0b" fillOpacity={0.11} strokeOpacity={0}/>
-                <ReferenceArea y1={1.33} y2={2} fill="#22c55e" fillOpacity={0.11} strokeOpacity={0}/>
-                <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3"/>
-                <XAxis dataKey="treatmentIndex" stroke={chartTheme.axis} tick={{fontSize: 11}}/>
-                <YAxis
-                  stroke={chartTheme.axis}
-                  tick={{fontSize: 11}}
-                  allowDecimals={false}
-                  domain={[0, 2]}
-                  ticks={[0, 1, 2]}
-                  tickFormatter={(value) => {
-                    if (value === 2) {
-                      return "Effective"
-                    }
-                    if (value === 1) {
-                      return "Improving"
-                    }
-                    return "Ineffective"
-                  }}
-                />
-                <ReferenceLine y={1} stroke={chartTheme.reference} strokeDasharray="4 4"/>
-                <Tooltip content={<TreatmentOutcomeTooltip chartTheme={chartTheme}/>}/>
-                <Area
-                  type="monotone"
-                  dataKey="outcomeValue"
-                  name="Outcome"
-                  stroke={chartTheme.lineContrast}
-                  fill="url(#treatmentOutcomeFill)"
-                  strokeWidth={3}
-                  isAnimationActive={true}
-                  animationDuration={460}
-                  activeDot={{r: 6, stroke: chartTheme.lineDotStroke, strokeWidth: 2}}
-                  dot={({cx, cy, payload}) => (
-                    <circle
-                      cx={cx}
-                      cy={cy}
-                      r={4}
-                      fill={payload?.outcomeColor || "#ef4444"}
-                      stroke={chartTheme.lineDotStroke}
-                      strokeWidth={1}
-                    />
-                  )}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div>
-            <h3 className="text-xl font-semibold text-[var(--text-primary)]">Treatment Summary & Clinical Reasoning</h3>
-            {hasInconsistentDischarge ? (
-              <div className="warning-banner warning-banner-danger mt-3 rounded-xl px-3 py-2 text-sm">
-                Inconsistency detected: patient is discharged but the final treatment outcome is not Effective.
+            {!isLoadingAnalysis && analysis ? (
+              <div className="medstream-chart-panel medstream-treatment-chart-panel">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{top: 10, right: 12, left: 8, bottom: 4}}>
+                  <defs>
+                    <linearGradient id="treatmentOutcomeFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22c55e" stopOpacity={0.26}/>
+                      <stop offset="50%" stopColor="#f59e0b" stopOpacity={0.2}/>
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity={0.2}/>
+                    </linearGradient>
+                  </defs>
+                  <ReferenceArea y1={0} y2={0.66} fill="#ef4444" fillOpacity={0.14} strokeOpacity={0}/>
+                  <ReferenceArea y1={0.66} y2={1.33} fill="#f59e0b" fillOpacity={0.11} strokeOpacity={0}/>
+                  <ReferenceArea y1={1.33} y2={2} fill="#22c55e" fillOpacity={0.11} strokeOpacity={0}/>
+                  <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3"/>
+                  <XAxis dataKey="treatmentIndex" stroke={chartTheme.axis} tick={{fontSize: 11}}/>
+                  <YAxis
+                    stroke={chartTheme.axis}
+                    tick={{fontSize: 11}}
+                    allowDecimals={false}
+                    domain={[0, 2]}
+                    ticks={[0, 1, 2]}
+                    tickFormatter={(value) => {
+                      if (value === 2) {
+                        return "Effective"
+                      }
+                      if (value === 1) {
+                        return "Improving"
+                      }
+                      return "Ineffective"
+                    }}
+                  />
+                  <ReferenceLine y={1} stroke={chartTheme.reference} strokeDasharray="4 4"/>
+                  <Tooltip content={<TreatmentOutcomeTooltip chartTheme={chartTheme}/>}/>
+                  <Area
+                    type="monotone"
+                    dataKey="outcomeValue"
+                    name="Outcome"
+                    stroke={chartTheme.lineContrast}
+                    fill="url(#treatmentOutcomeFill)"
+                    strokeWidth={3}
+                    isAnimationActive={true}
+                    animationDuration={460}
+                    activeDot={{r: 6, stroke: chartTheme.lineDotStroke, strokeWidth: 2}}
+                    dot={({cx, cy, payload}) => (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={4}
+                        fill={payload?.outcomeColor || "#ef4444"}
+                        stroke={chartTheme.lineDotStroke}
+                        strokeWidth={1}
+                      />
+                    )}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
               </div>
             ) : null}
-            <div className="mt-4 space-y-4">
+          </SpaceBetween>
+        </Container>
+
+        {!isLoadingAnalysis && analysis ? (
+          <SpaceBetween size="m">
+          {hasInconsistentDischarge ? (
+            <Alert type="warning" header="Inconsistent discharge state">
+              Patient is discharged but the final treatment outcome is not Effective.
+            </Alert>
+          ) : null}
+
               {displayedMedication ? (
-                <div className="monitor-panel rounded-2xl px-4 py-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">Medication: {displayedMedication.medication_name || "--"}</p>
-                    <p
-                      className="text-xs text-[var(--text-secondary)]">Date: {displayedMedication.displayed_date}</p>
-                  </div>
-                  <p className="mt-2 text-sm text-[var(--text-primary)]">Dosage: {displayedMedication.dosage || "--"}</p>
-                  <p className="mt-1 text-sm text-[var(--text-primary)]">Frequency: {displayedMedication.frequency || "--"}</p>
-                  {displayedMedication.notes ? (
-                    <p className="mt-1 text-sm text-[var(--text-primary)]">Notes: {displayedMedication.notes}</p>
-                  ) : null}
-                  {displayedMedication.modified_by ? (
-                    <p className="mt-1 text-sm text-[var(--text-primary)]">Modified by doctor: {displayedMedication.modified_by}</p>
-                  ) : null}
-                  <div className="mt-3 flex justify-end">
-                    <Pagination
-                      currentPageIndex={medicationPage}
-                      pagesCount={totalMedicationPages}
-                      onChange={({detail}) => setMedicationPage(detail.currentPageIndex)}
+                <SpaceBetween size="m">
+                  <Container
+                    header={
+                      <Header
+                        variant="h2"
+                        description="Medication decision, execution details, and clinical cause."
+                        actions={
+                          <Pagination
+                            currentPageIndex={medicationPage}
+                            pagesCount={totalMedicationPages}
+                            onChange={({detail}) => setMedicationPage(detail.currentPageIndex)}
+                          />
+                        }
+                      >
+                        Medication decision
+                      </Header>
+                    }
+                  >
+                    <StepFunctionsMedicationDecision
+                      displayedMedication={displayedMedication}
+                      selectedTreatmentOutcome={selectedTreatmentOutcome}
                     />
-                  </div>
+                  </Container>
 
-                  <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Reason</p>
-                      <p className="mt-2 text-sm text-[var(--text-primary)]">{displayedMedication.reasonText}</p>
-                    </div>
-                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Selected Treatment Outcome</p>
-                      <p className={`mt-2 text-sm font-semibold ${outcomeTextClass(selectedTreatmentOutcome)}`}>
-                        {selectedTreatmentOutcome}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Final Treatment Outcome</p>
-                      <p className={`mt-2 text-sm font-semibold ${outcomeTextClass(finalOutcome)}`}>
-                        {finalOutcome}
-                      </p>
-                    </div>
-                  </div>
+                  <Container
+                    header={
+                      <Header
+                        variant="h2"
+                        description={`Last update: ${latestAlertSummary.lastUpdated}`}
+                        actions={
+                          fullAlertHistory.length ? (
+                            <Button
+                              onClick={() => {
+                                setShowFullAlertHistory((current) => {
+                                  const next = !current
+                                  setAlertHistoryPage(1)
+                                  return next
+                                })
+                              }}
+                            >
+                              {showFullAlertHistory ? "Hide full history" : "View full history"}
+                            </Button>
+                          ) : null
+                        }
+                      >
+                        Latest alert summary
+                      </Header>
+                    }
+                  >
+                    <SpaceBetween size="m">
+                      <ColumnLayout columns={3} variant="text-grid">
+                        <SummaryValue
+                          label="Heart rate"
+                          value={latestAlertSummary.heartRate != null ? `${latestAlertSummary.heartRate} bpm` : "--"}
+                          meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.heartRate?.created_at)}
+                        />
+                        <SummaryValue
+                          label="Oxygen"
+                          value={latestAlertSummary.oxygen != null ? `${latestAlertSummary.oxygen}%` : "--"}
+                          meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.oxygen?.created_at)}
+                        />
+                        <SummaryValue
+                          label="Temperature"
+                          value={latestAlertSummary.temperature != null ? `${latestAlertSummary.temperature}°C` : "--"}
+                          meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.temperature?.created_at)}
+                        />
+                      </ColumnLayout>
+                      <p className="medstream-latest-alert-copy">{latestAlertSummary.summary}</p>
+                      {showFullAlertHistory ? (
+                        <div className="medstream-alert-history">
+                          <AlertHistoryTable
+                            items={paginatedAlertHistory}
+                            pagination={
+                              fullAlertHistory.length > ALERT_HISTORY_EXPANDED_PAGE_SIZE ? (
+                                <Pagination
+                                  currentPageIndex={alertHistoryPage}
+                                  pagesCount={totalAlertHistoryPages}
+                                  onChange={({detail}) => setAlertHistoryPage(detail.currentPageIndex)}
+                                />
+                              ) : null
+                            }
+                          />
+                        </div>
+                      ) : null}
+                    </SpaceBetween>
+                  </Container>
 
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Latest Alert Summary</p>
-                        <p className="text-[11px] text-[var(--text-muted)]">Last update: {latestAlertSummary.lastUpdated}</p>
-                      </div>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                        {(() => {
-                          const heartRateHasData = hasRealVitalData(latestAlertSummary.heartRate)
-                          const heartRateSeverity = getAlertSeverityLevel(latestAlertSummary.latestVitalAlerts.heartRate)
-                          const heartRateStyles = heartRateHasData
-                            ? getLatestSummaryStylesBySeverity(heartRateSeverity, isLightTheme)
-                            : getLatestSummaryNeutralStyles()
-                          return (
-                        <div
-                          className={`rounded-lg border px-3 py-2 ${heartRateStyles.card}`}>
-                          <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Heart Rate</p>
-                          <p className={`mt-1 text-sm font-semibold ${heartRateStyles.value}`}>
-                            {latestAlertSummary.heartRate != null ? `${latestAlertSummary.heartRate} bpm` : "--"}
-                          </p>
-                          <p className={`mt-1 text-[10px] font-semibold tracking-[0.08em] ${heartRateStyles.time}`}>
-                            {formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.heartRate?.created_at)}
-                          </p>
-                        </div>
-                          )
-                        })()}
-                        {(() => {
-                          const oxygenHasData = hasRealVitalData(latestAlertSummary.oxygen)
-                          const oxygenSeverity = getAlertSeverityLevel(latestAlertSummary.latestVitalAlerts.oxygen)
-                          const oxygenStyles = oxygenHasData
-                            ? getLatestSummaryStylesBySeverity(oxygenSeverity, isLightTheme)
-                            : getLatestSummaryNeutralStyles()
-                          return (
-                        <div
-                          className={`rounded-lg border px-3 py-2 ${oxygenStyles.card}`}>
-                          <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Oxygen</p>
-                          <p className={`mt-1 text-sm font-semibold ${oxygenStyles.value}`}>
-                            {latestAlertSummary.oxygen != null ? `${latestAlertSummary.oxygen}%` : "--"}
-                          </p>
-                          <p className={`mt-1 text-[10px] font-semibold tracking-[0.08em] ${oxygenStyles.time}`}>
-                            {formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.oxygen?.created_at)}
-                          </p>
-                        </div>
-                          )
-                        })()}
-                        {(() => {
-                          const temperatureHasData = hasRealVitalData(latestAlertSummary.temperature)
-                          const temperatureSeverity = getAlertSeverityLevel(latestAlertSummary.latestVitalAlerts.temperature)
-                          const temperatureStyles = temperatureHasData
-                            ? getLatestSummaryStylesBySeverity(temperatureSeverity, isLightTheme)
-                            : getLatestSummaryNeutralStyles()
-                          return (
-                        <div
-                          className={`rounded-lg border px-3 py-2 ${temperatureStyles.card}`}>
-                          <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Temperature</p>
-                          <p className={`mt-1 text-sm font-semibold ${temperatureStyles.value}`}>
-                            {latestAlertSummary.temperature != null ? `${latestAlertSummary.temperature}°C` : "--"}
-                          </p>
-                          <p className={`mt-1 text-[10px] font-semibold tracking-[0.08em] ${temperatureStyles.time}`}>
-                            {formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.temperature?.created_at)}
-                          </p>
-                        </div>
-                          )
-                        })()}
-                      </div>
-                      <p className="mt-3 text-sm text-[var(--text-primary)]">{latestAlertSummary.summary}</p>
-                      {fullAlertHistory.length ? (
-                        <div className="mt-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowFullAlertHistory((current) => {
-                                const next = !current
-                                setAlertHistoryPage(1)
-                                return next
-                              })
-                            }}
-                            className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--link)] transition hover:text-[#c5e4ff]"
-                          >
-                            {showFullAlertHistory ? "Hide Full History" : "View Full History"}
-                          </button>
-                          {showFullAlertHistory ? (
-                            <div className="mt-2 divide-y divide-[#26303d]">
-                              {paginatedAlertHistory.map((alert, index) => (
-                                (() => {
-                                  const historySeverity = getAlertSeverityLevel(alert)
-                                  const historyStyles = getHistoryStylesBySeverity(historySeverity)
-                                  return (
-                                    <div
-                                      key={`${alert.id || index}-${alert.type}-${alert.date}`}
-                                      className="py-2"
-                                    >
-                                      <div className="flex items-start justify-between gap-3 text-sm">
-                                        <div className="flex items-start gap-2">
-                                          {renderHistoryMessageWithColoredLabel(alert.message, historyStyles.label)}
-                                        </div>
-                                        <span className="whitespace-nowrap text-xs font-semibold text-[var(--text-primary)]">
-                                          {formatAlertFriendlyTime(alert.createdAt)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  )
-                                })()
-                              ))}
-                              {fullAlertHistory.length > ALERT_HISTORY_EXPANDED_PAGE_SIZE ? (
-                                <div className="mt-3 flex justify-end">
-                                  <Pagination
-                                    currentPageIndex={alertHistoryPage}
-                                    pagesCount={totalAlertHistoryPages}
-                                    onChange={({detail}) => setAlertHistoryPage(detail.currentPageIndex)}
-                                  />
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <p className="mt-3 text-sm text-[var(--text-primary)]">No linked alerts</p>
-                      )}
+                  <div className="medstream-dashboard-split medstream-treatment-clinical-grid">
+                    <div className="medstream-stretch-container">
+                      <DynamoAttributeTable
+                        title="Diagnosis"
+                        items={diagnosisStatusDetails.length ? diagnosisListItems : []}
+                        emptyText={displayedMedication.related_diagnoses.length ? formatDisplayValue(displayedMedication.related_diagnoses) : "No linked diagnosis."}
+                        pagination={
+                          <Pagination
+                            currentPageIndex={diagnosisPage}
+                            pagesCount={totalDiagnosisPages}
+                            onChange={({detail}) => setDiagnosisPage(detail.currentPageIndex)}
+                          />
+                        }
+                      />
                     </div>
-                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Diagnosis</p>
-                      {diagnosisStatusDetails.length ? (
-                        <div className="mt-2 divide-y divide-[#26303d]">
-                          {paginatedDiagnosisStatusDetails.map((diagnosis) => (
-                            <div key={diagnosis.id} className="py-2">
-                              <p className="text-sm font-semibold text-[var(--text-primary)]">{diagnosis.diagnosis}</p>
-                              <p className="mt-1 text-xs text-[var(--text-secondary)]">Status: {diagnosis.status || "--"}</p>
-                              {diagnosis.status_note ? <p className="mt-1 text-xs text-[var(--text-primary)]">{diagnosis.status_note}</p> : null}
-                              {diagnosis.notes ? <p className="mt-1 text-xs text-[var(--text-muted)]">{diagnosis.notes}</p> : null}
-                              {diagnosis.modified_by ? <p className="mt-1 text-xs text-[var(--text-primary)]">Modified by doctor: {diagnosis.modified_by}</p> : null}
-                            </div>
-                          ))}
-                          {diagnosisStatusDetails.length > diagnosisPageSize ? (
-                            <div className="mt-3 flex justify-end">
-                              <Pagination
-                                currentPageIndex={diagnosisPage}
-                                pagesCount={totalDiagnosisPages}
-                                onChange={({detail}) => setDiagnosisPage(detail.currentPageIndex)}
-                              />
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-sm text-[var(--text-primary)]">
-                          {displayedMedication.related_diagnoses.length ? displayedMedication.related_diagnoses.join(", ") : "No linked diagnosis"}
-                        </p>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="mt-3 p-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Conditions</p>
-                    {conditionStatusDetails.length ? (
-                      <div className="mt-2 divide-y divide-[#26303d]">
-                        {paginatedConditionStatusDetails.map((condition) => (
-                          <div key={condition.id} className="py-2">
-                            <p className="text-sm font-semibold text-[var(--text-primary)]">{condition.name}</p>
-                            <p className="mt-1 text-xs text-[var(--text-secondary)]">Status: {condition.status || "--"}</p>
-                            {condition.notes ? <p className="mt-1 text-xs text-[var(--text-primary)]">{condition.notes}</p> : null}
-                            {condition.modified_by ? <p className="mt-1 text-xs text-[var(--text-primary)]">Modified by doctor: {condition.modified_by}</p> : null}
-                          </div>
-                        ))}
-                        {conditionStatusDetails.length > CONDITION_PAGE_SIZE ? (
-                          <div className="mt-3 flex justify-end">
-                            <Pagination
-                              currentPageIndex={conditionPage}
-                              pagesCount={totalConditionPages}
-                              onChange={({detail}) => setConditionPage(detail.currentPageIndex)}
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-sm text-[var(--text-primary)]">
-                        {displayedMedication.related_conditions.length ? displayedMedication.related_conditions.join(", ") : "No linked conditions"}
-                      </p>
-                    )}
+                    <div className="medstream-stretch-container">
+                      <DynamoAttributeTable
+                        title="Conditions"
+                        items={conditionStatusDetails.length ? conditionListItems : []}
+                        emptyText={displayedMedication.related_conditions.length ? formatDisplayValue(displayedMedication.related_conditions) : "No linked conditions."}
+                        pagination={
+                          <Pagination
+                            currentPageIndex={conditionPage}
+                            pagesCount={totalConditionPages}
+                            onChange={({detail}) => setConditionPage(detail.currentPageIndex)}
+                          />
+                        }
+                      />
+                    </div>
                   </div>
-                </div>
+                </SpaceBetween>
               ) : (
-                <div className="monitor-panel rounded-2xl px-4 py-4 text-sm text-[var(--text-secondary)]">
-                  No treatment history available.
-                </div>
+                <Container>
+                  <Box color="text-body-secondary">No treatment history available.</Box>
+                </Container>
               )}
-            </div>
-          </div>
+          </SpaceBetween>
+        ) : null}
 
-        </div>
-      ) : null}
-
-      {shouldShowPostDischargeSummary ? (
-        <div className="mt-6">
-          <PostDischargeClinicalSummaryCard
-            summary={postDischargeSummary}
-            isLoading={isLoadingPostDischargeSummary}
-          />
-        </div>
-      ) : null}
+      </SpaceBetween>
     </section>
   )
 }

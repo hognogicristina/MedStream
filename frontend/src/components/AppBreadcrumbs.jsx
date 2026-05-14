@@ -17,7 +17,7 @@ const ROUTE_LABELS = {
 }
 
 function getPatientIdFromPathname(pathname) {
-  return pathname.match(/^\/patients\/(\d+)\/(?:diagnosis|medical-history|admission-history|analysis)$/)?.[1]
+  return pathname.match(/^\/patients\/(\d+)\/(?:diagnosis|medical-history|admission-history|analysis|post-discharge-summary)$/)?.[1]
     || pathname.match(/^\/patient\/(\d+)$/)?.[1]
     || null
 }
@@ -44,7 +44,7 @@ function buildBreadcrumbItems(pathname, patientName) {
     ]
   }
 
-  const patientSectionMatch = pathname.match(/^\/patients\/(\d+)\/(diagnosis|medical-history|admission-history|analysis)$/)
+  const patientSectionMatch = pathname.match(/^\/patients\/(\d+)\/(diagnosis|medical-history|admission-history|analysis|post-discharge-summary)$/)
   if (patientSectionMatch) {
     const [, patientId, section] = patientSectionMatch
     const patientLabel = patientName ? `Patient: ${patientName}` : "Patient"
@@ -53,7 +53,17 @@ function buildBreadcrumbItems(pathname, patientName) {
       "medical-history": "Medical History",
       "admission-history": "Admission History",
       analysis: "Treatment Analysis",
+      "post-discharge-summary": "Post-Discharge Clinical Summary",
     }[section]
+
+    if (section === "post-discharge-summary") {
+      return [
+        {text: "Dashboard", href: "/dashboard"},
+        {text: patientLabel, href: `/patient/${patientId}`},
+        {text: "Treatment Analysis", href: `/patients/${patientId}/analysis`},
+        {text: sectionLabel, href: pathname},
+      ]
+    }
 
     return [
       {text: "Dashboard", href: "/dashboard"},

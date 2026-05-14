@@ -1,15 +1,24 @@
 import {useCallback, useEffect, useState} from "react"
-import {Link, useParams} from "react-router-dom"
-import {Pagination} from "@cloudscape-design/components"
+import {useParams} from "react-router-dom"
+import {
+  Badge,
+  Box,
+  ColumnLayout,
+  Container,
+  ContentLayout,
+  Header,
+  Pagination,
+  SpaceBetween,
+  StatusIndicator,
+} from "@cloudscape-design/components"
 
-import BackButton from "../components/BackButton.jsx"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import PatientAdmissionActionCard from "../components/PatientAdmissionActionCard.jsx"
-import PostDischargeClinicalSummaryCard from "../components/PostDischargeClinicalSummaryCard.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {usePatientAdmissionActions} from "../hooks/usePatientAdmissionActions.js"
 import {useAuth} from "../components/AuthContext.jsx"
-import {getPatient, getPatientAdmissionHistory, getPatientPostDischargeSummary} from "../services/patientApi.js"
+import {getPatient, getPatientAdmissionHistory} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 
 function formatDateTime(value) {
@@ -46,7 +55,6 @@ export default function PatientAdmissionHistoryPage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
-  const [postDischargeSummary, setPostDischargeSummary] = useState(null)
 
   const loadPageData = useCallback(async (nextPage = page) => {
     setIsLoading(true)
@@ -61,14 +69,6 @@ export default function PatientAdmissionHistoryPage() {
       const historyData = getResponseData(historyResponse) || {}
       setEntries(historyData.items || [])
       setTotal(historyData.total || 0)
-
-      try {
-        const summaryResponse = await getPatientPostDischargeSummary(id)
-        setPostDischargeSummary(getResponseData(summaryResponse) || null)
-      } catch (summaryError) {
-        void summaryError
-        setPostDischargeSummary(null)
-      }
     } catch (error) {
       notifyError(getErrorMessage(error))
     } finally {
@@ -81,6 +81,9 @@ export default function PatientAdmissionHistoryPage() {
   }, [loadPageData, page])
 
   const maxPage = Math.max(1, Math.ceil(total / pageSize))
+  const patientName = patient ? `${patient.last_name} ${patient.first_name}`.trim() : "Patient"
+  const patientStatusText = patient?.is_discharged ? "Discharged" : "Admitted"
+  const lastEntry = entries[0]
 
   useEffect(() => {
     if (page > maxPage) {
@@ -101,79 +104,103 @@ export default function PatientAdmissionHistoryPage() {
   })
   const {loadDischargeTypes} = admissionActions
 
-  const patientName = patient ? `${patient.last_name} ${patient.first_name}`.trim() : "Patient"
-
   useEffect(() => {
     loadDischargeTypes().then(() => {
     })
   }, [loadDischargeTypes])
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-4">
+    <ContentLayout>
+      <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <AppBreadcrumbs/>
+          <div className="medstream-page-heading-row">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Admission History</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{patientName}</h1>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Admission, discharge, and readmission activity for this patient.</p>
+              <h1 className="medstream-page-title">{patientName}</h1>
+              <p>Admission History</p>
+              <div className="medstream-page-filter-row">
+                <StatusIndicator type={patient?.is_discharged ? "stopped" : "success"}>
+                  {patientStatusText}
+                </StatusIndicator>
+                <span className="medstream-department-badge">
+                  <Badge color="blue">{patient?.department || "--"}</Badge>
+                </span>
+              </div>
             </div>
-            <BackButton/>
           </div>
-        </header>
+        </div>
 
-        {isLoading ? <LoadingSpinner/> : (
-          <>
-            <section className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
-              <div className="monitor-card rounded-[28px] p-6">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Timeline</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Admissions and Discharges</h2>
-                </div>
-                <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
-                {total} total
-              </span>
-              </div>
+        {isLoading ? (
+          <Container>
+            <LoadingSpinner/>
+          </Container>
+        ) : (
+          <div className="medstream-admission-history-stack">
+            <Container>
+              <ColumnLayout columns={4} variant="text-grid">
+                <SpaceBetween size="xs">
+                  <Box color="text-body-secondary" variant="awsui-key-label">History entries</Box>
+                  <Box variant="h2">{total}</Box>
+                </SpaceBetween>
+                <SpaceBetween size="xs">
+                  <Box color="text-body-secondary" variant="awsui-key-label">Current state</Box>
+                  <Box variant="h2">{patientStatusText}</Box>
+                </SpaceBetween>
+                <SpaceBetween size="xs">
+                  <Box color="text-body-secondary" variant="awsui-key-label">Latest event</Box>
+                  <Box variant="h2">{formatAdmissionType(lastEntry?.type)}</Box>
+                </SpaceBetween>
+                <SpaceBetween size="xs">
+                  <Box color="text-body-secondary" variant="awsui-key-label">Department</Box>
+                  <Box variant="h2">{patient?.department || "--"}</Box>
+                </SpaceBetween>
+              </ColumnLayout>
+            </Container>
 
-              <div className="mb-4 flex justify-end">
-                <Pagination
-                  currentPageIndex={page}
-                  pagesCount={maxPage}
-                  onChange={({detail}) => setPage(detail.currentPageIndex)}
-                />
-              </div>
-
-              <ul className="space-y-3">
+            <div className="medstream-dashboard-split medstream-admission-history-layout">
+              <div className="medstream-stretch-container">
+                <Container
+                  fitHeight
+                  header={
+                    <Header
+                      variant="h2"
+                      description="Admission, discharge, and readmission activity for this patient."
+                      actions={
+                        <Pagination
+                          currentPageIndex={page}
+                          pagesCount={maxPage}
+                          onChange={({detail}) => setPage(detail.currentPageIndex)}
+                        />
+                      }
+                    >
+                      Admissions and discharges
+                    </Header>
+                  }
+                >
+              <ul className="medstream-timeline-list">
                 {entries.length === 0 && (
-                  <li className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
+                  <li className="medstream-timeline-empty">
                     {isLoading ? "Loading admission history..." : "No admission history recorded for this patient."}
                   </li>
                 )}
 
                 {entries.map((entry) => (
-                  <li key={entry.id} className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-4">
-                    <div className="flex items-start justify-between gap-4">
+                  <li key={entry.id} className="medstream-timeline-item">
+                    <div className="medstream-timeline-item-row">
                       <div>
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">{formatAdmissionType(entry.type)}</p>
-                        <p className="mt-2 text-sm text-[var(--text-secondary)]">{entry.note || entry.reason || "--"}</p>
+                        <Box variant="h3">{formatAdmissionType(entry.type)}</Box>
+                        <Box color="text-body-secondary">{entry.note || entry.reason || "--"}</Box>
                       </div>
-                      <span className="text-xs text-[var(--text-muted)]">{formatDateTime(entry.created_at)}</span>
+                      <Box color="text-body-secondary" variant="small">{formatDateTime(entry.created_at)}</Box>
                     </div>
                   </li>
                 ))}
               </ul>
 
-              <div className="mt-4">
-                <Link
-                  to={`/patient/${id}`}
-                  className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
-                >
-                  Back to patient page
-                </Link>
-              </div>
+                </Container>
               </div>
 
+              <div className="medstream-stretch-container">
               <PatientAdmissionActionCard
                 patient={patient}
                 canManagePatient={Boolean(token)}
@@ -189,14 +216,11 @@ export default function PatientAdmissionHistoryPage() {
                 isSubmittingDischarge={admissionActions.isSubmittingDischarge}
                 isSubmittingReadmit={admissionActions.isSubmittingReadmit}
               />
-            </section>
-
-            {["ready", "pending"].includes(String(postDischargeSummary?.status || "").trim().toLowerCase()) ? (
-              <PostDischargeClinicalSummaryCard summary={postDischargeSummary}/>
-            ) : null}
-          </>
+              </div>
+            </div>
+          </div>
         )}
-      </div>
-    </div>
+      </SpaceBetween>
+    </ContentLayout>
   )
 }

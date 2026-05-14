@@ -1281,7 +1281,7 @@ export default function ProfilePage() {
                     <p className="mt-2 text-sm text-[var(--text-muted)]">CNP: {patientPendingTransfer.cnp}</p>
                   </div>
 
-                  <div className="login-field mt-5">
+                  <div className="login-field mt-5" data-aws-input-clear-ignore>
                     <label className="login-label" htmlFor="transfer-doctor">Available Doctors</label>
                     <Select
                       selectedOption={getSelectedOption(transferDoctorSelectOptions, selectedTransferDoctorId)}
