@@ -32,8 +32,6 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import AwsBarChart from "../components/AwsBarChart.jsx"
-import {useTheme} from "../components/ThemeContext.jsx"
-import {getChartTheme} from "../utils/theme.js"
 
 const POLL_INTERVAL_MS = 30000
 const STATUS_POLL_INTERVAL_MS = 2500
@@ -104,6 +102,15 @@ function formatMetric(value, unit = "", hasData = false) {
   return `${safeValue.toFixed(2)}${unit}`
 }
 
+function toTreatmentCount(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return 0
+  }
+
+  return Math.max(0, Math.round(numericValue))
+}
+
 function MetricTile({label, value, compact = false}) {
   return (
     <div className={compact ? "medstream-batch-metric-tile medstream-batch-metric-tile-compact" : "medstream-batch-metric-tile"}>
@@ -121,7 +128,7 @@ function formatOutcomePercentage(value, total) {
   return `${((value / total) * 100).toFixed(0)}%`
 }
 
-function OverallOutcomeTooltip({active, payload, chartTheme, total}) {
+function OverallOutcomeTooltip({active, payload, total}) {
   if (!active || !Array.isArray(payload) || !payload.length) {
     return null
   }
@@ -136,9 +143,6 @@ function OverallOutcomeTooltip({active, payload, chartTheme, total}) {
       className="medstream-overall-tooltip"
       style={{
         "--overall-tooltip-color": row.color,
-        backgroundColor: chartTheme.tooltipBg,
-        border: `1px solid ${chartTheme.tooltipBorder}`,
-        color: chartTheme.tooltipText,
       }}
     >
       <div className="medstream-overall-tooltip-title">{row.name}</div>
@@ -295,8 +299,6 @@ function formatScheduleSummary(schedule) {
 
 export default function BatchMetricsPage() {
   const {notifyError, notifySuccess} = useNotifications()
-  const {theme} = useTheme()
-  const chartTheme = getChartTheme(theme)
   const [metrics, setMetrics] = useState(null)
   const [insights, setInsights] = useState(null)
   const [comparison, setComparison] = useState(null)
@@ -636,17 +638,17 @@ export default function BatchMetricsPage() {
   const medicationBarData = [
     {
       label: "Effective",
-      count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.effective : 0,
+      count: toTreatmentCount(selectedMedicationEffectiveness?.effective),
       color: "#22c55e",
     },
     {
       label: "Improving",
-      count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.improving : 0,
+      count: toTreatmentCount(selectedMedicationEffectiveness?.improving),
       color: "#f59e0b",
     },
     {
       label: "Ineffective",
-      count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.ineffective : 0,
+      count: toTreatmentCount(selectedMedicationEffectiveness?.ineffective),
       color: "#ef4444",
     },
   ]
@@ -816,35 +818,38 @@ export default function BatchMetricsPage() {
                     <Box color="text-body-secondary" variant="awsui-key-label">Current schedule</Box>
                     <Box variant="h3">{scheduleSummary}</Box>
                   </SpaceBetween>
-                  <FormField label="Run frequency">
-                  <Select
-                    selectedOption={getSelectedOption(SCHEDULE_TYPE_OPTIONS, scheduleType)}
-                    onChange={({detail}) => setScheduleType(detail.selectedOption.value)}
-                    options={SCHEDULE_TYPE_OPTIONS}
-                    selectedAriaLabel="Selected run frequency"
-                  />
-                  </FormField>
                 </ColumnLayout>
 
-                {(scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") ? (
-                  <FormField label={scheduleType === "seconds" ? "Seconds" : scheduleType === "minutes" ? "Minutes" : "Hours"}>
-                    <Input
-                    type="number"
-                    value={scheduleValue}
-                    onChange={({detail}) => setScheduleValue(detail.value)}
-                  />
+                <div className="medstream-schedule-frequency-row">
+                  <FormField label="Run frequency">
+                    <Select
+                      selectedOption={getSelectedOption(SCHEDULE_TYPE_OPTIONS, scheduleType)}
+                      onChange={({detail}) => setScheduleType(detail.selectedOption.value)}
+                      options={SCHEDULE_TYPE_OPTIONS}
+                      selectedAriaLabel="Selected run frequency"
+                    />
                   </FormField>
-                ) : null}
 
-                {(scheduleType === "daily" || scheduleType === "weekly") ? (
-                  <FormField label="Time">
-                    <Input
-                    value={scheduleTime}
-                    onChange={({detail}) => setScheduleTime(detail.value)}
-                    placeholder="08:00"
-                  />
-                  </FormField>
-                ) : null}
+                  {(scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") ? (
+                    <FormField label={scheduleType === "seconds" ? "Seconds" : scheduleType === "minutes" ? "Minutes" : "Hours"}>
+                      <Input
+                        type="number"
+                        value={scheduleValue}
+                        onChange={({detail}) => setScheduleValue(detail.value)}
+                      />
+                    </FormField>
+                  ) : null}
+
+                  {(scheduleType === "daily" || scheduleType === "weekly") ? (
+                    <FormField label="Time">
+                      <Input
+                        value={scheduleTime}
+                        onChange={({detail}) => setScheduleTime(detail.value)}
+                        placeholder="08:00"
+                      />
+                    </FormField>
+                  ) : null}
+                </div>
 
                 {scheduleType === "weekly" ? (
                   <SpaceBetween size="xs">
@@ -1067,6 +1072,7 @@ export default function BatchMetricsPage() {
                         hideZeroValues
                         legendPosition="left"
                         seriesTitle="Treatments"
+                        tooltipValueFormatter={(bar) => String(toTreatmentCount(bar.y))}
                         valueKey="count"
                         xTitle="Outcome"
                       />
@@ -1130,7 +1136,7 @@ export default function BatchMetricsPage() {
                                       <Cell key={entry.id} fill={entry.color} stroke="none" strokeWidth={0}/>
                                     ))}
                                   </Pie>
-                                  <Tooltip content={<OverallOutcomeTooltip chartTheme={chartTheme} total={visibleOutcomeTotal}/>}/>
+                                  <Tooltip content={<OverallOutcomeTooltip total={visibleOutcomeTotal}/>}/>
                                 </PieChart>
                               </ResponsiveContainer>
                             </div>

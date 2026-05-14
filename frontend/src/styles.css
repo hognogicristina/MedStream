@@ -15,6 +15,7 @@
   --input-avc-border-hover: #5f6b7a;
   --input-avc-text: #232f3e;
   --input-avc-placeholder: #5f6b7a;
+  --input-avc-focus-ring: color-mix(in srgb, var(--link) 18%, transparent);
   --input-clear-active: #232f3e;
   --input-clear-disabled: #8c98a8;
   --avc-selection-blue: #0972d3;
@@ -67,6 +68,7 @@
   --input-avc-border-hover: #879196;
   --input-avc-text: #f2f3f3;
   --input-avc-placeholder: #879196;
+  --input-avc-focus-ring: color-mix(in srgb, var(--link) 24%, transparent);
   --input-clear-active: #b6bec9;
   --input-clear-disabled: #6b7280;
   --avc-selection-blue: #0972d3;
@@ -810,6 +812,21 @@ body {
   margin-top: 12px;
 }
 
+.medstream-page-filter-row > [class*="awsui_root"],
+.medstream-page-filter-row > .medstream-hover-dropdown,
+.medstream-page-filter-row > .medstream-department-badge {
+  flex: 0 0 auto;
+  width: auto !important;
+  inline-size: auto !important;
+  max-width: 100%;
+}
+
+.medstream-page-filter-row [class*="awsui_container"],
+.medstream-page-filter-row .medstream-department-badge,
+.medstream-page-filter-row .medstream-department-badge [class*="awsui_badge"] {
+  white-space: nowrap;
+}
+
 .medstream-content-inner [class*="awsui_layout"],
 .medstream-content-inner [class*="awsui_content"] {
   background-color: transparent;
@@ -942,64 +959,82 @@ body {
   cursor: help;
 }
 
-.medstream-department-tooltip {
+.medstream-hover-dropdown {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  overflow: visible;
+  vertical-align: middle;
   outline: none;
 }
 
-.medstream-department-tooltip::after {
+.medstream-hover-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+}
+
+.medstream-hover-dropdown-content {
   position: absolute;
-  z-index: 50;
-  left: 0;
-  bottom: calc(100% + 8px);
+  z-index: 80;
+  top: calc(100% + 10px);
+  left: 50%;
   width: max-content;
-  max-width: 260px;
-  transform: translateY(4px);
-  border: 1px solid var(--chart-tooltip-border);
-  border-radius: 8px;
-  background: var(--chart-tooltip-bg);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  max-width: min(340px, calc(100vw - 32px));
+  transform: translate(-50%, -4px);
+  border: 2px solid color-mix(in srgb, var(--chart-axis) 72%, transparent);
+  border-radius: 12px;
+  background: var(--surface-2);
+  box-shadow: 0 16px 36px rgba(2, 6, 23, 0.28);
   color: var(--chart-tooltip-text);
-  content: attr(data-tooltip);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.4;
   opacity: 0;
-  padding: 8px 10px;
+  padding: 12px 16px;
   pointer-events: none;
   text-align: left;
   transition: opacity 0.15s ease, transform 0.15s ease;
   white-space: normal;
 }
 
-.medstream-department-tooltip::before {
+.medstream-hover-dropdown-content::before {
   position: absolute;
-  z-index: 51;
-  left: 12px;
-  bottom: calc(100% + 3px);
+  top: -7px;
+  left: 50%;
   width: 10px;
   height: 10px;
-  transform: rotate(45deg);
-  border-right: 1px solid var(--chart-tooltip-border);
-  border-bottom: 1px solid var(--chart-tooltip-border);
-  background: var(--chart-tooltip-bg);
+  transform: translateX(-50%) rotate(45deg);
+  border-top: 2px solid color-mix(in srgb, var(--chart-axis) 72%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--chart-axis) 72%, transparent);
+  background: var(--surface-2);
   content: "";
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
 }
 
-.medstream-department-tooltip:hover::after,
-.medstream-department-tooltip:hover::before,
-.medstream-department-tooltip:focus-visible::after,
-.medstream-department-tooltip:focus-visible::before {
+.medstream-hover-dropdown[data-position="top"] .medstream-hover-dropdown-content {
+  top: auto;
+  bottom: calc(100% + 10px);
+  transform: translate(-50%, 4px);
+}
+
+.medstream-hover-dropdown[data-position="top"] .medstream-hover-dropdown-content::before {
+  top: auto;
+  bottom: -7px;
+  border-top: 0;
+  border-left: 0;
+  border-right: 2px solid color-mix(in srgb, var(--chart-axis) 72%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--chart-axis) 72%, transparent);
+}
+
+.medstream-hover-dropdown:hover .medstream-hover-dropdown-content,
+.medstream-hover-dropdown:focus-visible .medstream-hover-dropdown-content,
+.medstream-hover-dropdown:focus-within .medstream-hover-dropdown-content {
   opacity: 1;
 }
 
-.medstream-department-tooltip:hover::after,
-.medstream-department-tooltip:focus-visible::after {
-  transform: translateY(0);
+.medstream-hover-dropdown:hover .medstream-hover-dropdown-content,
+.medstream-hover-dropdown:focus-visible .medstream-hover-dropdown-content,
+.medstream-hover-dropdown:focus-within .medstream-hover-dropdown-content {
+  transform: translate(-50%, 0);
 }
 
 .medstream-chart-panel {
@@ -1049,6 +1084,42 @@ body {
   width: 14px;
   height: 4px;
   border-radius: 999px;
+}
+
+.medstream-empty-vitals-chart {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+}
+
+.medstream-empty-vitals-chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.medstream-empty-vitals-chart-grid {
+  stroke: var(--chart-axis);
+  stroke-opacity: 0.44;
+  stroke-width: 1;
+}
+
+.medstream-empty-vitals-chart-axis {
+  stroke: var(--chart-axis);
+  stroke-width: 2;
+}
+
+.medstream-empty-vitals-chart-tick {
+  fill: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.medstream-empty-vitals-chart-axis-title {
+  fill: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .medstream-aws-bar-chart {
@@ -1481,6 +1552,21 @@ body {
   background: rgba(255, 255, 255, 0.16);
 }
 
+.medstream-schedule-frequency-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 1fr);
+  gap: 16px;
+  align-items: end;
+}
+
+.medstream-schedule-frequency-row > *,
+.medstream-schedule-frequency-row [class*="awsui_root"],
+.medstream-schedule-frequency-row [aria-haspopup="listbox"] {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
 .medstream-batch-job-state {
   --batch-job-state-color: var(--text-muted);
   --batch-job-state-border: var(--border-primary);
@@ -1677,27 +1763,48 @@ body {
 }
 
 .medstream-overall-tooltip {
-  min-width: 270px;
+  position: relative;
+  min-width: 230px;
+  border: 2px solid #697386;
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
-  padding: 18px 20px;
+  background: #1b2430;
+  box-shadow: none;
+  color: #d5dbdb;
+  padding: 14px 12px 12px;
   font-size: 14px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.medstream-overall-tooltip::before {
+  position: absolute;
+  top: 18px;
+  left: -8px;
+  width: 14px;
+  height: 14px;
+  transform: rotate(45deg);
+  border-bottom: 2px solid #697386;
+  border-left: 2px solid #697386;
+  background: #1b2430;
+  content: "";
 }
 
 .medstream-overall-tooltip-title {
   display: flex;
-  gap: 10px;
+  gap: 6px;
   align-items: center;
-  margin-bottom: 18px;
-  font-size: 16px;
+  margin-bottom: 10px;
+  color: #f2f3f3;
+  font-size: 14px;
   font-weight: 800;
 }
 
 .medstream-overall-tooltip-title::before {
   display: inline-block;
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
   background: var(--overall-tooltip-color);
   content: "";
 }
@@ -1705,20 +1812,23 @@ body {
 .medstream-overall-tooltip-row {
   display: flex;
   justify-content: space-between;
-  gap: 28px;
+  gap: 22px;
   line-height: 1.45;
 }
 
 .medstream-overall-tooltip-row + .medstream-overall-tooltip-row {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .medstream-overall-tooltip-row span {
-  color: var(--text-secondary);
+  color: #c7cfd8;
 }
 
 .medstream-overall-tooltip-row strong {
-  font-weight: 700;
+  color: #f2f3f3;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .medstream-overall-empty {
@@ -1769,6 +1879,16 @@ body {
   margin-bottom: 0;
 }
 
+.medstream-patient-alert-bar-chart .medstream-aws-bar-chart-axis-title {
+  font-size: 15px;
+}
+
+.medstream-patient-alert-bar-chart .medstream-aws-bar-chart-tick,
+.medstream-patient-alert-bar-chart .medstream-aws-bar-chart-x-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .medstream-alert-chart-panel .medstream-aws-bar-chart-legend-left {
   left: 18px;
 }
@@ -1779,7 +1899,7 @@ body {
   gap: 8px 24px;
   margin-top: 0;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -2875,7 +2995,7 @@ body {
   font-size: 0.875rem;
   line-height: 20px;
   outline: none;
-  padding: 5px var(--aws-control-x-padding);
+  padding: 5px 34px 5px var(--aws-control-x-padding);
 }
 
 .medstream-clearable-input:hover {
@@ -2884,7 +3004,7 @@ body {
 
 .medstream-clearable-input:focus {
   border-color: var(--link);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 18%, transparent);
+  box-shadow: 0 0 0 2px var(--input-avc-focus-ring);
 }
 
 .medstream-clearable-input::placeholder {
@@ -3321,6 +3441,10 @@ input[type="search"]::-webkit-search-cancel-button {
 
   .medstream-batch-latest-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .medstream-schedule-frequency-row {
+    grid-template-columns: 1fr;
   }
 
   .medstream-batch-run-banner {
@@ -3862,6 +3986,14 @@ textarea {
   box-shadow: none;
 }
 
+.register-page .login-card,
+.register-page .login-layout,
+.register-page .login-panel,
+.register-page .login-form,
+.register-page .auth-section {
+  overflow: visible;
+}
+
 .login-layout {
   display: flex;
   flex-direction: column;
@@ -3980,7 +4112,9 @@ textarea {
 }
 
 .login-input,
-.console-input {
+.console-input,
+select.login-input,
+select.console-input {
   width: 100%;
   box-sizing: border-box;
   height: var(--aws-control-height);
@@ -3993,6 +4127,16 @@ textarea {
   line-height: 20px;
   color: var(--input-avc-text);
   outline: none;
+}
+
+.login-input:disabled,
+.console-input:disabled,
+.medstream-clearable-input:disabled {
+  border-color: var(--input-avc-border);
+  background-color: var(--input-avc-bg);
+  color: var(--text-subtle);
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 
 .login-input:hover,
@@ -4055,11 +4199,11 @@ textarea {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 1000;
+  z-index: 1200;
   width: min(288px, calc(100vw - 32px));
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--input-avc-border);
   border-radius: 6px;
-  background: var(--surface-1);
+  background: var(--input-avc-bg);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
   padding: 12px;
 }
@@ -4172,9 +4316,9 @@ textarea {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   width: min(220px, calc(100vw - 32px));
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--input-avc-border);
   border-radius: 6px;
-  background: var(--surface-1);
+  background: var(--input-avc-bg);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
   padding: 10px;
 }
@@ -4229,55 +4373,270 @@ textarea.console-input {
 }
 
 .app-shell input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
-.medstream-content-inner input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]) {
+.medstream-content-inner input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.medstream-form-grid input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.medstream-form-field-wide input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.medstream-controls-grid input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.app-shell textarea[class*="awsui_textarea"],
+.medstream-content-inner textarea[class*="awsui_textarea"],
+.medstream-form-grid textarea[class*="awsui_textarea"],
+.medstream-form-field-wide textarea[class*="awsui_textarea"],
+.medstream-controls-grid textarea[class*="awsui_textarea"] {
+  box-sizing: border-box !important;
   height: var(--aws-control-height) !important;
   min-height: var(--aws-control-height) !important;
   border-color: var(--input-avc-border) !important;
+  border-radius: 6px !important;
   background-color: var(--input-avc-bg) !important;
   color: var(--input-avc-text) !important;
   font-size: 0.875rem !important;
   line-height: 20px !important;
+  box-shadow: none !important;
+}
+
+.app-shell textarea[class*="awsui_textarea"],
+.medstream-content-inner textarea[class*="awsui_textarea"],
+.medstream-form-grid textarea[class*="awsui_textarea"],
+.medstream-form-field-wide textarea[class*="awsui_textarea"],
+.medstream-controls-grid textarea[class*="awsui_textarea"] {
+  height: auto !important;
+  min-height: 88px !important;
+  padding: 8px var(--aws-control-x-padding) !important;
+  resize: vertical;
+}
+
+.app-shell input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):hover,
+.medstream-content-inner input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):hover,
+.medstream-form-grid input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):hover,
+.medstream-form-field-wide input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):hover,
+.medstream-controls-grid input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):hover,
+.app-shell textarea[class*="awsui_textarea"]:hover,
+.medstream-content-inner textarea[class*="awsui_textarea"]:hover,
+.medstream-form-grid textarea[class*="awsui_textarea"]:hover,
+.medstream-form-field-wide textarea[class*="awsui_textarea"]:hover,
+.medstream-controls-grid textarea[class*="awsui_textarea"]:hover {
+  border-color: var(--input-avc-border-hover) !important;
+}
+
+.app-shell input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
+.app-shell input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus-visible,
+.medstream-content-inner input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
+.medstream-content-inner input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus-visible,
+.medstream-form-grid input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
+.medstream-form-grid input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus-visible,
+.medstream-form-field-wide input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
+.medstream-form-field-wide input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus-visible,
+.medstream-controls-grid input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
+.medstream-controls-grid input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus-visible,
+.app-shell textarea[class*="awsui_textarea"]:focus,
+.app-shell textarea[class*="awsui_textarea"]:focus-visible,
+.medstream-content-inner textarea[class*="awsui_textarea"]:focus,
+.medstream-content-inner textarea[class*="awsui_textarea"]:focus-visible,
+.medstream-form-grid textarea[class*="awsui_textarea"]:focus,
+.medstream-form-grid textarea[class*="awsui_textarea"]:focus-visible,
+.medstream-form-field-wide textarea[class*="awsui_textarea"]:focus,
+.medstream-form-field-wide textarea[class*="awsui_textarea"]:focus-visible,
+.medstream-controls-grid textarea[class*="awsui_textarea"]:focus,
+.medstream-controls-grid textarea[class*="awsui_textarea"]:focus-visible {
+  border-color: var(--link) !important;
+  box-shadow: 0 0 0 2px var(--input-avc-focus-ring) !important;
+  outline: 0 !important;
+}
+
+.app-shell input[class*="awsui_input"][disabled]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.medstream-content-inner input[class*="awsui_input"][disabled]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.medstream-form-grid input[class*="awsui_input"][disabled]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.medstream-form-field-wide input[class*="awsui_input"][disabled]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.medstream-controls-grid input[class*="awsui_input"][disabled]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.app-shell textarea[class*="awsui_textarea"][disabled],
+.medstream-content-inner textarea[class*="awsui_textarea"][disabled],
+.medstream-form-grid textarea[class*="awsui_textarea"][disabled],
+.medstream-form-field-wide textarea[class*="awsui_textarea"][disabled],
+.medstream-controls-grid textarea[class*="awsui_textarea"][disabled] {
+  border-color: var(--input-avc-border) !important;
+  background-color: var(--input-avc-bg) !important;
+  color: var(--text-subtle) !important;
+  cursor: not-allowed !important;
+  opacity: 0.72 !important;
 }
 
 .app-shell input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])::placeholder,
-.medstream-content-inner input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])::placeholder {
+.medstream-content-inner input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])::placeholder,
+.medstream-form-grid input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])::placeholder,
+.medstream-form-field-wide input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])::placeholder,
+.medstream-controls-grid input[class*="awsui_input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])::placeholder,
+.app-shell textarea[class*="awsui_textarea"]::placeholder,
+.medstream-content-inner textarea[class*="awsui_textarea"]::placeholder,
+.medstream-form-grid textarea[class*="awsui_textarea"]::placeholder,
+.medstream-form-field-wide textarea[class*="awsui_textarea"]::placeholder,
+.medstream-controls-grid textarea[class*="awsui_textarea"]::placeholder {
   color: var(--input-avc-placeholder) !important;
   font-style: italic !important;
 }
 
 .login-field [class*="awsui_root"],
 .medstream-form-grid [class*="awsui_root"],
-.medstream-clinical-controls-grid [class*="awsui_root"] {
+.medstream-form-field-wide [class*="awsui_root"],
+.medstream-clinical-controls-grid [class*="awsui_root"],
+.medstream-controls-grid [class*="awsui_root"] {
   width: 100% !important;
   inline-size: 100% !important;
 }
 
 .login-field [class*="button-trigger"],
+.login-field [aria-haspopup="listbox"],
 .medstream-form-grid [class*="button-trigger"],
+.medstream-form-grid [aria-haspopup="listbox"],
+.medstream-form-field-wide [class*="button-trigger"],
+.medstream-form-field-wide [aria-haspopup="listbox"],
 .medstream-clinical-controls-grid [class*="button-trigger"],
-.app-shell [class*="button-trigger"] {
+.medstream-clinical-controls-grid [aria-haspopup="listbox"],
+.medstream-controls-grid [class*="button-trigger"],
+.medstream-controls-grid [aria-haspopup="listbox"],
+.medstream-page-filter-row [class*="button-trigger"],
+.medstream-page-filter-row [aria-haspopup="listbox"],
+.app-shell [class*="button-trigger"],
+.app-shell button[aria-haspopup="listbox"],
+.medstream-content-inner button[aria-haspopup="listbox"] {
   width: 100% !important;
   inline-size: 100% !important;
   height: var(--aws-control-height) !important;
   min-height: var(--aws-control-height) !important;
   min-block-size: var(--aws-control-height) !important;
   border-color: var(--input-avc-border) !important;
+  border-radius: 6px !important;
   background-color: var(--input-avc-bg) !important;
+  color: var(--input-avc-text) !important;
   padding: 5px var(--aws-control-x-padding) !important;
   font-size: 0.875rem !important;
   line-height: 20px !important;
   align-items: center !important;
+  box-shadow: none !important;
+}
+
+.login-field [class*="button-trigger"]:hover,
+.login-field [aria-haspopup="listbox"]:hover,
+.medstream-form-grid [class*="button-trigger"]:hover,
+.medstream-form-grid [aria-haspopup="listbox"]:hover,
+.medstream-form-field-wide [class*="button-trigger"]:hover,
+.medstream-form-field-wide [aria-haspopup="listbox"]:hover,
+.medstream-clinical-controls-grid [class*="button-trigger"]:hover,
+.medstream-clinical-controls-grid [aria-haspopup="listbox"]:hover,
+.medstream-controls-grid [class*="button-trigger"]:hover,
+.medstream-controls-grid [aria-haspopup="listbox"]:hover,
+.medstream-page-filter-row [class*="button-trigger"]:hover,
+.medstream-page-filter-row [aria-haspopup="listbox"]:hover,
+.app-shell [class*="button-trigger"]:hover,
+.app-shell button[aria-haspopup="listbox"]:hover,
+.medstream-content-inner button[aria-haspopup="listbox"]:hover {
+  border-color: var(--input-avc-border-hover) !important;
+  background-color: var(--input-avc-bg) !important;
+}
+
+.login-field [class*="button-trigger"]:focus,
+.login-field [class*="button-trigger"]:focus-visible,
+.login-field [aria-haspopup="listbox"]:focus,
+.login-field [aria-haspopup="listbox"]:focus-visible,
+.medstream-form-grid [class*="button-trigger"]:focus,
+.medstream-form-grid [class*="button-trigger"]:focus-visible,
+.medstream-form-grid [aria-haspopup="listbox"]:focus,
+.medstream-form-grid [aria-haspopup="listbox"]:focus-visible,
+.medstream-form-field-wide [class*="button-trigger"]:focus,
+.medstream-form-field-wide [class*="button-trigger"]:focus-visible,
+.medstream-form-field-wide [aria-haspopup="listbox"]:focus,
+.medstream-form-field-wide [aria-haspopup="listbox"]:focus-visible,
+.medstream-clinical-controls-grid [class*="button-trigger"]:focus,
+.medstream-clinical-controls-grid [class*="button-trigger"]:focus-visible,
+.medstream-clinical-controls-grid [aria-haspopup="listbox"]:focus,
+.medstream-clinical-controls-grid [aria-haspopup="listbox"]:focus-visible,
+.medstream-controls-grid [class*="button-trigger"]:focus,
+.medstream-controls-grid [class*="button-trigger"]:focus-visible,
+.medstream-controls-grid [aria-haspopup="listbox"]:focus,
+.medstream-controls-grid [aria-haspopup="listbox"]:focus-visible,
+.medstream-page-filter-row [class*="button-trigger"]:focus,
+.medstream-page-filter-row [class*="button-trigger"]:focus-visible,
+.medstream-page-filter-row [aria-haspopup="listbox"]:focus,
+.medstream-page-filter-row [aria-haspopup="listbox"]:focus-visible,
+.app-shell [class*="button-trigger"]:focus,
+.app-shell [class*="button-trigger"]:focus-visible,
+.app-shell button[aria-haspopup="listbox"]:focus,
+.app-shell button[aria-haspopup="listbox"]:focus-visible,
+.medstream-content-inner button[aria-haspopup="listbox"]:focus,
+.medstream-content-inner button[aria-haspopup="listbox"]:focus-visible {
+  border-color: var(--link) !important;
+  box-shadow: 0 0 0 2px var(--input-avc-focus-ring) !important;
+  outline: 0 !important;
+}
+
+.app-shell [class*="button-trigger"][disabled],
+.app-shell [class*="button-trigger"][aria-disabled="true"],
+.app-shell button[aria-haspopup="listbox"][disabled],
+.app-shell button[aria-haspopup="listbox"][aria-disabled="true"],
+.login-field [aria-haspopup="listbox"][aria-disabled="true"],
+.medstream-form-grid [aria-haspopup="listbox"][aria-disabled="true"],
+.medstream-form-field-wide [aria-haspopup="listbox"][aria-disabled="true"],
+.medstream-clinical-controls-grid [aria-haspopup="listbox"][aria-disabled="true"],
+.medstream-controls-grid [aria-haspopup="listbox"][aria-disabled="true"],
+.medstream-page-filter-row [aria-haspopup="listbox"][aria-disabled="true"],
+.medstream-content-inner button[aria-haspopup="listbox"][disabled],
+.medstream-content-inner button[aria-haspopup="listbox"][aria-disabled="true"] {
+  border-color: var(--input-avc-border) !important;
+  background-color: var(--input-avc-bg) !important;
+  color: var(--text-subtle) !important;
+  cursor: not-allowed !important;
+  opacity: 0.72 !important;
 }
 
 .login-field [class*="button-trigger"] [class*="trigger"],
+.login-field [class*="button-trigger"] [class*="label"],
+.login-field [class*="button-trigger"] [class*="selected"],
 .login-field [class*="button-trigger"] [class*="placeholder"],
+.login-field [aria-haspopup="listbox"] *,
 .medstream-form-grid [class*="button-trigger"] [class*="trigger"],
+.medstream-form-grid [class*="button-trigger"] [class*="label"],
+.medstream-form-grid [class*="button-trigger"] [class*="selected"],
 .medstream-form-grid [class*="button-trigger"] [class*="placeholder"],
+.medstream-form-grid [aria-haspopup="listbox"] *,
+.medstream-form-field-wide [class*="button-trigger"] [class*="trigger"],
+.medstream-form-field-wide [class*="button-trigger"] [class*="label"],
+.medstream-form-field-wide [class*="button-trigger"] [class*="selected"],
+.medstream-form-field-wide [class*="button-trigger"] [class*="placeholder"],
+.medstream-form-field-wide [aria-haspopup="listbox"] *,
 .medstream-clinical-controls-grid [class*="button-trigger"] [class*="trigger"],
+.medstream-clinical-controls-grid [class*="button-trigger"] [class*="label"],
+.medstream-clinical-controls-grid [class*="button-trigger"] [class*="selected"],
 .medstream-clinical-controls-grid [class*="button-trigger"] [class*="placeholder"],
+.medstream-clinical-controls-grid [aria-haspopup="listbox"] *,
+.medstream-controls-grid [class*="button-trigger"] [class*="trigger"],
+.medstream-controls-grid [class*="button-trigger"] [class*="label"],
+.medstream-controls-grid [class*="button-trigger"] [class*="selected"],
+.medstream-controls-grid [class*="button-trigger"] [class*="placeholder"],
+.medstream-controls-grid [aria-haspopup="listbox"] *,
+.medstream-page-filter-row [class*="button-trigger"] [class*="trigger"],
+.medstream-page-filter-row [class*="button-trigger"] [class*="label"],
+.medstream-page-filter-row [class*="button-trigger"] [class*="selected"],
+.medstream-page-filter-row [class*="button-trigger"] [class*="placeholder"],
+.medstream-page-filter-row [aria-haspopup="listbox"] *,
 .app-shell [class*="button-trigger"] [class*="trigger"],
-.app-shell [class*="button-trigger"] [class*="placeholder"] {
+.app-shell [class*="button-trigger"] [class*="label"],
+.app-shell [class*="button-trigger"] [class*="selected"],
+.app-shell [class*="button-trigger"] [class*="placeholder"],
+.app-shell button[aria-haspopup="listbox"] *,
+.medstream-content-inner button[aria-haspopup="listbox"] * {
+  color: inherit !important;
   line-height: 20px !important;
+}
+
+.app-shell [class*="button-trigger"] [class*="placeholder"],
+.login-field [aria-haspopup="listbox"] [class*="placeholder"],
+.medstream-form-grid [aria-haspopup="listbox"] [class*="placeholder"],
+.medstream-form-field-wide [aria-haspopup="listbox"] [class*="placeholder"],
+.medstream-clinical-controls-grid [aria-haspopup="listbox"] [class*="placeholder"],
+.medstream-controls-grid [aria-haspopup="listbox"] [class*="placeholder"],
+.medstream-page-filter-row [aria-haspopup="listbox"] [class*="placeholder"],
+.app-shell button[aria-haspopup="listbox"] [class*="placeholder"],
+.medstream-content-inner button[aria-haspopup="listbox"] [class*="placeholder"] {
+  color: var(--input-avc-placeholder) !important;
 }
 
 .medstream-alert-cnp-filter-control,
@@ -4286,7 +4645,7 @@ textarea.console-input {
 .medstream-alert-cnp-filter-control [class*="awsui_input-type-search"] {
   width: 100% !important;
   inline-size: 100% !important;
-  background-color: transparent !important;
+  background-color: var(--input-avc-bg) !important;
 }
 
 .medstream-alert-cnp-filter-control input[aria-label="Filter alerts by patient CNP"] {
@@ -4296,25 +4655,12 @@ textarea.console-input {
   min-height: var(--aws-control-height) !important;
   min-block-size: var(--aws-control-height) !important;
   border-color: var(--input-avc-border) !important;
-  background-color: transparent !important;
+  background-color: var(--input-avc-bg) !important;
   color: var(--input-avc-text) !important;
   font-size: 0.875rem !important;
   line-height: 20px !important;
   border-radius: 6px !important;
   box-shadow: none !important;
-}
-
-[data-theme="dark"] .medstream-alert-cnp-filter-control {
-  --input-avc-bg: var(--color-background-input-default-ifz5bb);
-  --awsui-style-background-default-6b9ypa: var(--color-background-input-default-ifz5bb);
-  --awsui-style-background-hover-6b9ypa: var(--color-background-input-default-ifz5bb);
-  --awsui-style-background-focus-6b9ypa: var(--color-background-input-default-ifz5bb);
-}
-
-[data-theme="dark"] .app-shell .medstream-alert-cnp-filter-control input[class*="awsui_input"][aria-label="Filter alerts by patient CNP"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
-[data-theme="dark"] .medstream-alert-cnp-filter-control [class*="awsui_input-container"],
-[data-theme="dark"] .medstream-alert-cnp-filter-control [class*="awsui_input-type-search"] {
-  background-color: var(--color-background-input-default-ifz5bb) !important;
 }
 
 .medstream-alert-cnp-filter-control input[aria-label="Filter alerts by patient CNP"]:hover {
@@ -4328,6 +4674,31 @@ textarea.console-input {
 
 .medstream-alert-cnp-filter-control [class*="awsui_icon"] {
   color: var(--input-avc-placeholder) !important;
+}
+
+[class*="dropdown-content-wrapper"],
+[class*="dropdown-content-wrapper"] [class*="dropdown-content"],
+[class*="dropdown-content-wrapper"] [class*="options-list"],
+[class*="dropdown-content-wrapper"] [class*="items-list-container"] {
+  border-color: var(--input-avc-border) !important;
+  background-color: var(--input-avc-bg) !important;
+  color: var(--input-avc-text) !important;
+}
+
+[class*="dropdown-content-wrapper"] [class*="selectable-item"],
+[class*="dropdown-content-wrapper"] [class*="selectable-item"] *,
+[class*="dropdown-content-wrapper"] [role="option"],
+[class*="dropdown-content-wrapper"] [role="option"] * {
+  background-color: transparent !important;
+  color: var(--input-avc-text) !important;
+}
+
+[class*="dropdown-content-wrapper"] [class*="selectable-item"][class*="highlighted"],
+[class*="dropdown-content-wrapper"] [class*="selectable-item"][class*="has-background"],
+[class*="dropdown-content-wrapper"] [role="option"]:hover,
+[class*="dropdown-content-wrapper"] [role="option"][aria-selected="true"] {
+  background-color: var(--avc-selection-bg-hover) !important;
+  color: var(--input-avc-text) !important;
 }
 
 .app-shell [class*="placeholder"],
@@ -4344,8 +4715,8 @@ textarea::placeholder {
 .login-input:focus,
 .console-input:focus {
   border-color: var(--link);
-  outline: 2px solid color-mix(in srgb, var(--link) 18%, transparent);
-  outline-offset: 0;
+  box-shadow: 0 0 0 2px var(--input-avc-focus-ring);
+  outline: 0;
 }
 
 .login-input::placeholder,
@@ -4442,7 +4813,7 @@ textarea::placeholder {
   position: fixed;
   top: 18px;
   right: 18px;
-  z-index: 80;
+  z-index: 10040;
   display: flex;
   max-width: min(420px, calc(100vw - 24px));
   width: 100%;
@@ -5376,6 +5747,14 @@ textarea::placeholder {
   margin-bottom: 14px;
 }
 
+.post-discharge-unframed-section {
+  min-width: 0;
+}
+
+.post-discharge-unframed-section-header {
+  margin-bottom: 14px;
+}
+
 .post-discharge-summary-value {
   overflow-wrap: anywhere;
   color: var(--text-primary);
@@ -5471,6 +5850,39 @@ textarea::placeholder {
   height: 100%;
   border-radius: inherit;
   background: #0972d3;
+}
+
+.post-discharge-section-divider {
+  height: 1px;
+  width: 100%;
+  background: var(--border-subtle);
+}
+
+.post-discharge-metric-steps-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.post-discharge-metric-steps-section {
+  min-width: 0;
+}
+
+.post-discharge-metric-steps-header {
+  margin-bottom: 14px;
+}
+
+.post-discharge-metric-steps-divider {
+  width: 1px;
+  min-height: 100%;
+  background: var(--border-subtle);
+}
+
+.post-discharge-step-value {
+  font-size: 20px;
+  line-height: 1.1;
 }
 
 .post-discharge-metric-panel {
@@ -5596,6 +6008,16 @@ textarea::placeholder {
     align-items: flex-start;
     flex-direction: column;
     gap: 6px;
+  }
+
+  .post-discharge-metric-steps-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .post-discharge-metric-steps-divider {
+    width: 100%;
+    height: 1px;
+    min-height: 0;
   }
 
   .post-discharge-metric-panel-grid {

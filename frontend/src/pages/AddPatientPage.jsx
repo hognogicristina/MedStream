@@ -127,7 +127,7 @@ export default function AddPatientPage() {
         department: currentDoctor?.specialization || "ER",
         phone_number: normalizedPhoneNumber,
         address: normalizePatientAddress(address),
-      })
+      }, token ? {Authorization: `Bearer ${token}`} : {})
       const patientData = getResponseData(response)
 
       if (currentDoctor?.id) {

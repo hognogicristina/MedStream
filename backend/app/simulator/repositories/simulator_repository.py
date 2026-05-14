@@ -86,16 +86,40 @@ class SimulatorRepository:
             select(Doctor).where(func.lower(Doctor.email) == (email or "").strip().lower())
         ).scalar_one_or_none()
 
+    def get_doctor_by_email_or_license(self, db, *, email: str, license_number: str) -> Doctor | None:
+        normalized_email = (email or "").strip().lower()
+        normalized_license = (license_number or "").strip()
+        return db.execute(
+            select(Doctor).where(
+                (func.lower(Doctor.email) == normalized_email)
+                | (Doctor.license_number == normalized_license)
+            )
+        ).scalars().first()
+
     def create_doctor(self, db, payload: dict) -> Doctor:
         doctor = Doctor(**payload)
         db.add(doctor)
         return doctor
 
     def get_random_doctor(self, db) -> Doctor | None:
-        return db.query(Doctor).order_by(func.random()).first()
+        return (
+            db.query(Doctor)
+            .filter(Doctor.is_active.is_(True), Doctor.deleted_at.is_(None))
+            .order_by(func.random())
+            .first()
+        )
 
     def get_random_doctor_for_department(self, db, department: str) -> Doctor | None:
-        return db.query(Doctor).filter(Doctor.specialization == department).order_by(func.random()).first()
+        return (
+            db.query(Doctor)
+            .filter(
+                Doctor.specialization == department,
+                Doctor.is_active.is_(True),
+                Doctor.deleted_at.is_(None),
+            )
+            .order_by(func.random())
+            .first()
+        )
 
     def get_doctor(self, db, doctor_id: int) -> Doctor | None:
         return db.get(Doctor, doctor_id)
@@ -401,6 +425,33 @@ class SimulatorRepository:
 
     def get_patient(self, db, patient_id: int) -> Patient | None:
         return db.get(Patient, patient_id)
+
+    def get_admitted_patients_for_monitoring(
+            self,
+            db,
+            *,
+            exclude_patient_ids: set[int],
+            limit: int,
+    ) -> list[Patient]:
+        query = select(Patient).where(Patient.is_discharged.is_(False))
+        if exclude_patient_ids:
+            query = query.where(Patient.id.notin_(exclude_patient_ids))
+        return db.execute(query.order_by(Patient.id.desc()).limit(limit)).scalars().all()
+
+    def get_patient_condition_names(self, db, patient_id: int) -> list[str]:
+        return db.execute(
+            select(PatientCondition.name)
+            .join(PatientConditionAssignment, PatientConditionAssignment.condition_id == PatientCondition.id)
+            .where(PatientConditionAssignment.patient_id == patient_id)
+            .order_by(PatientConditionAssignment.diagnosed_at.desc(), PatientConditionAssignment.id.desc())
+        ).scalars().all()
+
+    def get_patient_diagnosis_names(self, db, patient_id: int) -> list[str]:
+        return db.execute(
+            select(PatientDiagnosis.diagnosis)
+            .where(PatientDiagnosis.patient_id == patient_id)
+            .order_by(PatientDiagnosis.created_at.desc(), PatientDiagnosis.id.desc())
+        ).scalars().all()
 
     def cancel_incoming_patient_activities(self, db, patient_id: int) -> None:
         activities = (

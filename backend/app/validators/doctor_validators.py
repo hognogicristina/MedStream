@@ -148,12 +148,16 @@ def validate_identifier_payload(payload) -> str:
 
 
 def validate_doctor_identifier_match(email: str, phone_number: str | None, identifier: str) -> bool:
-    normalized_identifier = normalize_phone_value(identifier)
-    normalized_phone = normalize_phone_value(phone_number)
     normalized_email = email.strip().lower()
 
     if normalized_email == identifier.strip().lower():
         return True
+
+    try:
+        normalized_identifier = normalize_phone_value(identifier)
+        normalized_phone = normalize_phone_value(phone_number)
+    except ValidationError:
+        return False
 
     if not normalized_identifier or not normalized_phone:
         return False

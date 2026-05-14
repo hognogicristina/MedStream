@@ -1096,7 +1096,7 @@ export default function PatientTreatmentAnalysisSection({
                   xDomain={treatmentOutcomeXDomain}
                   xScaleType="linear"
                   xTitle="Treatment"
-                  xTickFormatter={(value) => Number.isInteger(value) ? `#${value}` : ""}
+                  xTickFormatter={(value) => Number.isInteger(value) ? String(value) : ""}
                   yDomain={[0, 3]}
                   yTickFormatter={formatOutcomeScale}
                   yTitle="Outcome"

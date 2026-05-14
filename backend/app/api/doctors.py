@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Header, Query
+from fastapi import APIRouter, Header, Query
 
 from app.api.activity_utils import serialize_activity
 from app.core.error_handling import raise_http_from_error
@@ -117,15 +117,13 @@ def update_current_doctor(payload: DoctorUpdate, authorization: str | None = Hea
 @router.patch("/me/email", response_model=ApiResponse[DoctorRead])
 def update_current_doctor_email(
         payload: DoctorEmailUpdate,
-        background_tasks: BackgroundTasks,
         authorization: str | None = Header(default=None),
 ):
     current_doctor = get_current_doctor(authorization)
     try:
         doctor, raw_token = doctor_service.update_current_doctor_email(current_doctor.id, payload.email)
         if raw_token is not None:
-            background_tasks.add_task(
-                send_email_change_verification_email,
+            send_email_change_verification_email(
                 doctor.pending_email,
                 doctor.first_name,
                 raw_token,

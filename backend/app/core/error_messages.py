@@ -82,6 +82,7 @@ ERROR_MESSAGES = {
     "DOCTOR_IDENTITY_FIELDS_UNIQUE": "Doctor identity fields must be unique.",
     "INVALID_OR_EXPIRED_RESET_TOKEN": "Invalid or expired reset token.",
     "INVALID_VERIFICATION_TOKEN": "Invalid verification link.",
+    "REPLACED_VERIFICATION_TOKEN": "This verification link was replaced. Please request a new verification email.",
     "EXPIRED_VERIFICATION_TOKEN": "Verification link expired.",
     "INVALID_OR_EXPIRED_VERIFICATION_TOKEN": "Invalid or expired verification token.",
     "EMAIL_ALREADY_VERIFIED": "Email is already verified.",

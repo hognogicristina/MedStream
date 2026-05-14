@@ -21,6 +21,7 @@ import ActivityDialog from "../components/ActivityDialog.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import AwsDatePicker from "../components/AwsDatePicker.jsx"
+import HoverTextDropdown from "../components/HoverTextDropdown.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {resendVerificationEmail} from "../services/authApi.js"
@@ -1221,19 +1222,28 @@ export default function ProfilePage() {
                         </Alert>
                       )}
 
-                      <Button
-                        variant="primary"
-                        className="medstream-submit-button"
-                        onClick={() => {
-                          if (!isOnlyDoctorInDepartment && !hasIncomingActivities) {
-                            setShowDeleteModal(true)
-                          }
-                        }}
-                        disabled={isDeletingAccount || isOnlyDoctorInDepartment || hasIncomingActivities}
-                        title={isOnlyDoctorInDepartment ? "You are the only doctor in this department. Account cannot be deleted." : ""}
+                      <HoverTextDropdown
+                        content={
+                          isOnlyDoctorInDepartment
+                            ? "You are the only doctor in this department. Account cannot be deleted."
+                            : hasIncomingActivities
+                              ? "Cannot modify account while there are incoming activities."
+                              : ""
+                        }
                       >
-                        {isDeletingAccount ? "Deactivating..." : "Delete account"}
-                      </Button>
+                        <Button
+                          variant="primary"
+                          className="medstream-submit-button"
+                          onClick={() => {
+                            if (!isOnlyDoctorInDepartment && !hasIncomingActivities) {
+                              setShowDeleteModal(true)
+                            }
+                          }}
+                          disabled={isDeletingAccount || isOnlyDoctorInDepartment || hasIncomingActivities}
+                        >
+                          {isDeletingAccount ? "Deactivating..." : "Delete account"}
+                        </Button>
+                      </HoverTextDropdown>
                     </SpaceBetween>
                   </Container>
                 </div>
@@ -1405,15 +1415,16 @@ export default function ProfilePage() {
                   >
                     Cancel
                   </Button>
-                  <Button
-                    variant="primary"
-                    className="medstream-submit-button"
-                    onClick={() => handleRemovePatient(patientPendingRemoval.id)}
-                    disabled={hasIncomingActivities || removingPatientId === patientPendingRemoval.id}
-                    title={hasIncomingActivities ? "Cannot modify patients while there are incoming activities." : ""}
-                  >
-                    {removingPatientId === patientPendingRemoval.id ? "Removing..." : "Yes, Remove Patient"}
-                  </Button>
+                  <HoverTextDropdown content={hasIncomingActivities ? "Cannot modify patients while there are incoming activities." : ""}>
+                    <Button
+                      variant="primary"
+                      className="medstream-submit-button"
+                      onClick={() => handleRemovePatient(patientPendingRemoval.id)}
+                      disabled={hasIncomingActivities || removingPatientId === patientPendingRemoval.id}
+                    >
+                      {removingPatientId === patientPendingRemoval.id ? "Removing..." : "Yes, Remove Patient"}
+                    </Button>
+                  </HoverTextDropdown>
                 </SpaceBetween>
               </Box>
             }

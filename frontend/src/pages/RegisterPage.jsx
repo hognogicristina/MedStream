@@ -311,7 +311,7 @@ export default function RegisterPage() {
                       />
                     </div>
 
-                    <div className="login-field relative z-0 sm:col-span-2">
+                    <div className="login-field relative z-20 sm:col-span-2">
                       <label className="login-label" htmlFor="birth_date">
                         {"Birth Date"}
                       </label>

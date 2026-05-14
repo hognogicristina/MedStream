@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import threading
 from email.message import EmailMessage
 from urllib.parse import urlencode
 
@@ -11,6 +13,9 @@ from app.validators.notification_validators import (
     validate_notification_subject,
     validate_smtp_host,
 )
+
+logger = logging.getLogger(__name__)
+LOCAL_SMTP_HOSTS = {"localhost", "127.0.0.1", "mailcatcher", "mailhog", "mailpit"}
 
 
 def _build_frontend_link(path: str, token: str):
@@ -73,32 +78,60 @@ async def send_email_async(recipient: str, subject: str, text_body: str, html_bo
     email.set_content(validate_notification_body(text_body, "Text body"))
     email.add_alternative(validate_notification_body(html_body, "HTML body"), subtype="html")
 
+    smtp_host = validate_smtp_host(settings.smtp_host)
+    logger.info(
+        "Sending email to %s via SMTP %s:%s.",
+        recipient,
+        smtp_host,
+        settings.smtp_port,
+    )
     await aiosmtplib.send(
         email,
-        hostname=validate_smtp_host(settings.smtp_host),
+        hostname=smtp_host,
         port=settings.smtp_port,
         username=settings.smtp_user or None,
         password=settings.smtp_pass or None,
         start_tls=settings.smtp_port not in (465, 1025),
         use_tls=settings.smtp_port == 465,
     )
+    logger.info("Email accepted by SMTP server for %s.", recipient)
+    print(f"Email accepted by SMTP server for {recipient}", flush=True)
 
 
 def send_email(recipient: str, subject: str, text_body: str, html_body: str):
     validate_smtp_host(settings.smtp_host)
-
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.run(send_email_async(recipient, subject, text_body, html_body))
-        else:
-            loop.run_until_complete(send_email_async(recipient, subject, text_body, html_body))
+        asyncio.get_running_loop()
     except RuntimeError:
         asyncio.run(send_email_async(recipient, subject, text_body, html_body))
+        return
+
+    result: dict[str, BaseException | None] = {"error": None}
+
+    def send_in_thread():
+        try:
+            asyncio.run(send_email_async(recipient, subject, text_body, html_body))
+        except BaseException as error:
+            result["error"] = error
+
+    thread = threading.Thread(target=send_in_thread, daemon=True)
+    thread.start()
+    thread.join()
+
+    if result["error"] is not None:
+        raise result["error"]
+
+
+def _log_local_action_link(action_label: str, action_url: str):
+    if settings.smtp_host.strip().lower() in LOCAL_SMTP_HOSTS:
+        logger.info("%s link: %s", action_label, action_url)
+        print(f"{action_label} link: {action_url}", flush=True)
 
 
 def send_registration_verification_email(email: str, first_name: str, token: str):
     action_url = build_verify_email_link(token)
+    _log_local_action_link("Registration verification", action_url)
+    print(f"Sending registration verification email to {email} via {settings.smtp_host}:{settings.smtp_port}", flush=True)
     message = f"Hello Dr. {first_name}, your MedStream account is ready. Validate your email address to complete registration."
     send_email(
         email,
@@ -110,6 +143,8 @@ def send_registration_verification_email(email: str, first_name: str, token: str
 
 def send_password_reset_email(email: str, first_name: str, token: str):
     action_url = build_password_reset_link(token)
+    _log_local_action_link("Password reset", action_url)
+    print(f"Sending password reset email to {email} via {settings.smtp_host}:{settings.smtp_port}", flush=True)
     message = f"Hello Dr. {first_name}, we received a request to reset your MedStream password. This link expires shortly."
     send_email(
         email,
@@ -121,6 +156,8 @@ def send_password_reset_email(email: str, first_name: str, token: str):
 
 def send_email_change_verification_email(email: str, first_name: str, token: str):
     action_url = build_verify_email_link(token)
+    _log_local_action_link("Email change verification", action_url)
+    print(f"Sending email change verification email to {email} via {settings.smtp_host}:{settings.smtp_port}", flush=True)
     message = f"Hello Dr. {first_name}, confirm your new email address to finish updating your MedStream account."
     send_email(
         email,
@@ -132,6 +169,8 @@ def send_email_change_verification_email(email: str, first_name: str, token: str
 
 def send_account_recovery_email(email: str, first_name: str, token: str):
     action_url = build_account_recovery_link(token)
+    _log_local_action_link("Account recovery", action_url)
+    print(f"Sending account recovery email to {email} via {settings.smtp_host}:{settings.smtp_port}", flush=True)
     message = (
         f"Hello Dr. {first_name}, we received a request to recover access to your MedStream account. "
         "Use this secure link to continue to login."

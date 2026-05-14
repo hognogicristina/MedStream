@@ -56,6 +56,7 @@ ALERT_COOLDOWN_MINUTES_RANGE = (5, 15)
 MAX_ALERTS_PER_PATIENT_PER_HOUR = 18
 MAX_ALERTS_PER_PATIENT_PER_CYCLE = 2
 MAX_DOSAGE_MULTIPLIER = 4
+MANUAL_PATIENT_DISCOVERY_LIMIT = 25
 ALERT_DRIVEN_TRANSFER_TREATMENT_THRESHOLD = 9
 MIN_TREATMENT_ACTIONS_BEFORE_RECOVERY_DISCHARGE = 10
 EFFECTIVE_DISCHARGE_TREATMENT_THRESHOLD = MIN_TREATMENT_ACTIONS_BEFORE_RECOVERY_DISCHARGE
@@ -96,6 +97,7 @@ HARDCODED_DOCTOR_PASSWORD = "lalalalalalL1"
 RANDOM_DOCTOR_TARGET_COUNT = 49
 HARDCODED_DOCTOR_PHONE = "+40755123456"
 HARDCODED_DOCTOR_BIRTH_DATE = date(1988, 4, 12)
+HARDCODED_DOCTOR_LICENSE = "STATIC-LIC-CH-00001"
 
 
 class SimulatorService:
@@ -206,7 +208,11 @@ class SimulatorService:
             random_password_hash = pwd_context.hash(DEFAULT_SIMULATOR_DOCTOR_PASSWORD)
             hardcoded_password_hash = pwd_context.hash(HARDCODED_DOCTOR_PASSWORD)
 
-            hardcoded_doctor = self.repository.get_doctor_by_email(db, HARDCODED_DOCTOR_EMAIL)
+            hardcoded_doctor = self.repository.get_doctor_by_email_or_license(
+                db,
+                email=HARDCODED_DOCTOR_EMAIL,
+                license_number=HARDCODED_DOCTOR_LICENSE,
+            )
             if hardcoded_doctor is None:
                 hardcoded_phone = self._resolve_unique_phone_for_doctor(
                     db,
@@ -221,7 +227,7 @@ class SimulatorService:
                         "email": HARDCODED_DOCTOR_EMAIL,
                         "password_hash": hardcoded_password_hash,
                         "specialization": departments[0],
-                        "license_number": "STATIC-LIC-CH-00001",
+                        "license_number": HARDCODED_DOCTOR_LICENSE,
                         "phone_number": hardcoded_phone,
                         "birth_date": HARDCODED_DOCTOR_BIRTH_DATE,
                         "email_confirmed": True,
@@ -233,7 +239,8 @@ class SimulatorService:
                 hardcoded_doctor.last_name = "Hognogi"
                 hardcoded_doctor.password_hash = hardcoded_password_hash
                 hardcoded_doctor.is_active = True
-                hardcoded_doctor.email_confirmed = True
+                if not hardcoded_doctor.pending_email:
+                    hardcoded_doctor.email_confirmed = True
                 hardcoded_doctor.birth_date = hardcoded_doctor.birth_date or HARDCODED_DOCTOR_BIRTH_DATE
                 hardcoded_doctor.phone_number = self._resolve_unique_phone_for_doctor(
                     db,
@@ -252,7 +259,11 @@ class SimulatorService:
 
             created_random = 0
             for payload in random_payloads:
-                existing_doctor = self.repository.get_doctor_by_email(db, payload["email"])
+                existing_doctor = self.repository.get_doctor_by_email_or_license(
+                    db,
+                    email=payload["email"],
+                    license_number=payload["license_number"],
+                )
                 if existing_doctor is not None:
                     existing_doctor.birth_date = existing_doctor.birth_date or payload.get("birth_date") or self._generate_doctor_birth_date()
                     existing_doctor.phone_number = self._resolve_unique_phone_for_doctor(
@@ -281,6 +292,8 @@ class SimulatorService:
             self.repository.normalize_medical_statuses(db)
             activities_created_in_cycle: set[int] = set()
 
+            self._discover_existing_patients(db)
+
             if random.random() < self.config.patient_spawn_probability:
                 patient_data = self._create_patient(db, self.counter)
                 if patient_data is not None:
@@ -298,6 +311,120 @@ class SimulatorService:
                     next_active_patients.append(patient_data)
 
             self.active_patients = next_active_patients
+
+    def _discover_existing_patients(self, db) -> None:
+        active_patient_ids = {
+            int(patient_data["id"])
+            for patient_data in self.active_patients
+            if patient_data.get("id") is not None
+        }
+        patients = self.repository.get_admitted_patients_for_monitoring(
+            db,
+            exclude_patient_ids=active_patient_ids,
+            limit=MANUAL_PATIENT_DISCOVERY_LIMIT,
+        )
+        for patient in patients:
+            patient_data = self._build_patient_monitoring_state(db, patient)
+            if patient_data is not None:
+                self.active_patients.append(patient_data)
+                active_patient_ids.add(patient.id)
+
+    def _build_patient_monitoring_state(self, db, patient) -> dict | None:
+        drugs = medical_repository.get_all_medications()
+        dosages = medical_repository.get_all_dosages()
+        frequencies = medical_repository.get_all_frequencies()
+        if not drugs:
+            return None
+
+        doctor_id = self.repository.get_first_assigned_doctor_id(db, patient.id)
+        if doctor_id is None:
+            doctor = self.repository.get_random_doctor_for_department(db, patient.department)
+            if doctor is not None:
+                self.repository.assign_doctor_to_patient(db, doctor.id, patient.id)
+
+        condition_name, preferred_medication = self._resolve_monitoring_profile(db, patient, drugs)
+        medication_plan = self._build_medication_plan(
+            drugs=drugs,
+            condition_name=condition_name,
+            is_pregnant=bool(patient.is_pregnant),
+            preferred_medication=preferred_medication,
+        )
+        if not medication_plan:
+            return None
+
+        now = now_utc()
+        segment = "active"
+        treatment_state = self._initialize_treatment_state(
+            patient_id=patient.id,
+            condition_name=condition_name,
+            medication_plan=medication_plan,
+        )
+        clinical_state = self._initial_clinical_state(
+            patient_id=patient.id,
+            segment=segment,
+            condition_name=condition_name,
+        )
+
+        return {
+            "id": patient.id,
+            "condition": condition_name,
+            "diagnosis": None,
+            "segment": segment,
+            "base_time": now,
+            "admission_date": now,
+            "timeline_cursor": now,
+            "last_alert_evaluation": {"count": 0, "severity_score": 0},
+            "recent_treatment_outcomes": [],
+            "last_vital_alert_states": {"heart_rate": "normal", "oxygen": "normal", "temperature": "normal"},
+            "last_alert_timestamp": None,
+            "recent_alert_timestamps": [],
+            "alert_cooldown_minutes": random.randint(*ALERT_COOLDOWN_MINUTES_RANGE),
+            "medication_dosage": self._default_dosage_for_patient(dosages, patient.id),
+            "medication_frequency": self._default_frequency_for_patient(frequencies, patient.id),
+            "treatment_state": treatment_state,
+            "clinical_state": clinical_state,
+            "stability_started_at": None,
+            "high_critical_alert_count": 0,
+            "alert_driven_treatment_count": 0,
+            "treatment_update_count": 0,
+            "total_alert_count": 0,
+            "latest_treatment_outcome": None,
+            "pending_treatment_outcome_since": None,
+            "monitoring_status": "active",
+            "debug_alert_cooldown_seconds": random.randint(*DEBUG_ALERT_COOLDOWN_SECONDS_RANGE),
+            "debug_alert_burst_cycles_remaining": 0,
+        }
+
+    def _resolve_monitoring_profile(self, db, patient, drugs: list[dict]) -> tuple[str, str | None]:
+        condition_names = [
+            str(item).strip()
+            for item in self.repository.get_patient_condition_names(db, patient.id)
+            if str(item).strip()
+        ]
+        diagnosis_names = [
+            str(item).strip()
+            for item in self.repository.get_patient_diagnosis_names(db, patient.id)
+            if str(item).strip()
+        ]
+        medications = self.repository.get_patient_medications(db, patient_id=patient.id)
+        preferred_medication = next((str(item.name).strip() for item in medications if str(item.name).strip()), None)
+
+        known_drug_conditions = {
+            (drug.get("condition") or "").strip().lower(): (drug.get("condition") or "").strip()
+            for drug in drugs
+            if (drug.get("condition") or "").strip()
+        }
+        for candidate in [*condition_names, *diagnosis_names]:
+            normalized = candidate.lower()
+            if normalized in known_drug_conditions:
+                return known_drug_conditions[normalized], preferred_medication
+
+        profile = choose_medication_profile(drugs, bool(patient.is_pregnant))
+        if profile is None:
+            fallback_condition = condition_names[0] if condition_names else "General monitoring"
+            return fallback_condition, preferred_medication
+
+        return profile["condition_name"], preferred_medication or profile["medication_name"]
 
     def _create_patient(self, db, index: int) -> dict | None:
         counties = medical_repository.get_all_counties()

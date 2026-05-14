@@ -1,4 +1,10 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+PROJECT_DIR = BACKEND_DIR.parent
 
 
 class Settings(BaseSettings):
@@ -13,8 +19,8 @@ class Settings(BaseSettings):
     kafka_alerts_topic: str = "alerts-events"
     kafka_batch_topic: str = "batch-events"
     batch_interval_seconds: int = 30
-    smtp_host: str = ""
-    smtp_port: int = 587
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
     smtp_user: str = ""
     smtp_pass: str = ""
     frontend_base_url: str = "http://localhost:5173"
@@ -25,7 +31,13 @@ class Settings(BaseSettings):
     oxygen_alert_threshold: int = 92
     temperature_alert_threshold: int = 39
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(
+            PROJECT_DIR / ".env",
+            BACKEND_DIR / ".env",
+        ),
+        extra="ignore",
+    )
 
 
 settings = Settings()

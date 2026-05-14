@@ -422,7 +422,6 @@ export default function AlertsPage() {
                     filteringText={cnpFilter}
                     filteringPlaceholder="Filter by CNP"
                     filteringAriaLabel="Filter alerts by patient CNP"
-                    countText={`${filteredAlerts.length} matches`}
                     disabled={Boolean(scopedPatientId)}
                     onChange={({detail}) => handleCnpFilterChange(detail.filteringText)}
                   />

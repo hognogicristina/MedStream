@@ -2,7 +2,10 @@ import {useEffect, useState} from "react"
 import {Link, useNavigate, useSearchParams} from "react-router-dom"
 import {resendVerificationEmail, verifyEmailToken} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
-import {VERIFICATION_LINK_EXPIRED_MESSAGE} from "../services/appMessages.js"
+import {
+  VERIFICATION_LINK_EXPIRED_MESSAGE,
+  VERIFICATION_LINK_REPLACED_MESSAGE,
+} from "../services/appMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 
 export default function VerifyEmailPage() {
@@ -36,8 +39,12 @@ export default function VerifyEmailPage() {
 
         const nextMessage = getErrorMessage(error)
         notifyError(nextMessage, {duration: 5000})
-        setResultMessage(nextMessage === VERIFICATION_LINK_EXPIRED_MESSAGE ? "Verification link expired." : "Invalid link.")
-        setShowResendButton(nextMessage === VERIFICATION_LINK_EXPIRED_MESSAGE)
+        setResultMessage(nextMessage)
+        setShowResendButton(Boolean(token) && (
+          nextMessage === VERIFICATION_LINK_EXPIRED_MESSAGE
+          || nextMessage === VERIFICATION_LINK_REPLACED_MESSAGE
+          || nextMessage === "Invalid verification link."
+        ))
       } finally {
         if (active) {
           setIsLoading(false)

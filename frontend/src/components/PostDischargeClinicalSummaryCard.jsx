@@ -6,6 +6,7 @@ import {
   Header,
   SegmentedControl,
   SpaceBetween,
+  Steps,
   StatusIndicator,
 } from "@cloudscape-design/components"
 import LoadingSpinner from "./LoadingSpinner.jsx"
@@ -128,11 +129,12 @@ function responseInterpretation(score) {
 
 function Section({title, children}) {
   return (
-    <Container
-      header={<Header variant="h2">{title}</Header>}
-    >
+    <section className="post-discharge-unframed-section">
+      <div className="post-discharge-unframed-section-header">
+        <Header variant="h2">{title}</Header>
+      </div>
       {children}
-    </Container>
+    </section>
   )
 }
 
@@ -158,28 +160,45 @@ function LegendItem({label, value, tone}) {
   return <SummaryValue label={label} value={value} tone={tone}/>
 }
 
-function MetricSummaryItem({label, value, tone = "neutral"}) {
+function stepStatusFromTone(tone) {
+  if (tone === "success") {
+    return "success"
+  }
+  if (tone === "warning") {
+    return "warning"
+  }
+  if (tone === "danger") {
+    return "error"
+  }
+  return "info"
+}
+
+function MetricStepValue({value, tone = "neutral"}) {
   const displayValue = value == null || value === "" ? "--" : value
 
   return (
-    <div className={`post-discharge-metric-card post-discharge-metric-card-${tone}`}>
-      <div className="post-discharge-metric-card-accent"/>
-      <div className="post-discharge-metric-card-label">{label}</div>
-      <div className="post-discharge-metric-card-value">{displayValue}</div>
+    <div className={`post-discharge-summary-value post-discharge-step-value post-discharge-summary-value-${tone}`}>
+      {displayValue}
     </div>
   )
 }
 
-function MetricSummaryPanel({title, subtitle, children}) {
+function MetricStepsSection({title, subtitle, items}) {
   return (
-    <section className="post-discharge-metric-panel">
-      <Container
-        header={<Header variant="h2" description={subtitle}>{title}</Header>}
-      >
-        <div className="post-discharge-metric-panel-grid">
-          {children}
-        </div>
-      </Container>
+    <section className="post-discharge-metric-steps-section">
+      <div className="post-discharge-metric-steps-header">
+        <Header variant="h2" description={subtitle}>{title}</Header>
+      </div>
+      <Steps
+        ariaLabel={title}
+        className="post-discharge-metric-steps"
+        steps={items.map(({label, value, tone = "neutral"}) => ({
+          status: stepStatusFromTone(tone),
+          statusIconAriaLabel: label,
+          header: label,
+          details: <MetricStepValue value={value} tone={tone}/>,
+        }))}
+      />
     </section>
   )
 }
@@ -224,7 +243,7 @@ function SummaryValue({label, value, tone = "neutral"}) {
   )
 }
 
-export default function PostDischargeClinicalSummaryCard({summary, isLoading = false, compact = false}) {
+export default function PostDischargeClinicalSummaryCard({summary, isLoading = false}) {
   const [selectedView, setSelectedView] = useState("overview")
 
   if (isLoading) {
@@ -286,6 +305,16 @@ export default function PostDischargeClinicalSummaryCard({summary, isLoading = f
   const roundedResponseScore = responseScore == null ? null : Math.round(responseScore)
   const responseLabel = roundedResponseScore == null ? "Not enough treatment data" : `${roundedResponseScore}%`
   const responseInterpretationText = roundedResponseScore == null ? null : responseInterpretation(roundedResponseScore)
+  const treatmentOutcomeItems = [
+    {label: "Effective", value: effectiveCount, tone: "success"},
+    {label: "Improving", value: improvingCount, tone: "warning"},
+    {label: "Ineffective", value: ineffectiveCount, tone: "danger"},
+  ]
+  const alertProfileItems = [
+    {label: "Normal / stable", value: alertMetrics.normal ?? 0, tone: "success"},
+    {label: "High", value: alertMetrics.high ?? 0, tone: "warning"},
+    {label: "Critical", value: alertMetrics.critical ?? 0, tone: "danger"},
+  ]
   const isOverviewView = selectedView === "overview"
   const isMetricsView = selectedView === "metrics"
   const isClinicalView = selectedView === "clinical"
@@ -352,27 +381,22 @@ export default function PostDischargeClinicalSummaryCard({summary, isLoading = f
               </SpaceBetween>
             </Section>
 
-            <div className="medstream-dashboard-split">
-              <MetricSummaryPanel
+            <div className="post-discharge-section-divider" role="separator"/>
+
+            <div className="post-discharge-metric-steps-layout">
+              <MetricStepsSection
                 title="Treatment outcomes"
                 subtitle={`${totalTreatments} recorded treatment actions`}
-              >
-                <MetricSummaryItem label="Total" value={totalTreatments}/>
-                <MetricSummaryItem label="Effective" value={effectiveCount} tone="success"/>
-                <MetricSummaryItem label="Improving" value={improvingCount} tone="warning"/>
-                <MetricSummaryItem label="Ineffective" value={ineffectiveCount} tone="danger"/>
-              </MetricSummaryPanel>
+                items={treatmentOutcomeItems}
+              />
 
-              <MetricSummaryPanel
+              <div className="post-discharge-metric-steps-divider" role="separator" aria-orientation="vertical"/>
+
+              <MetricStepsSection
                 title="Alert profile"
                 subtitle={`${alertMetrics.total ?? 0} alert events captured`}
-              >
-                <MetricSummaryItem label="Total" value={alertMetrics.total ?? 0}/>
-                <MetricSummaryItem label="Critical" value={alertMetrics.critical ?? 0} tone="danger"/>
-                <MetricSummaryItem label="High" value={alertMetrics.high ?? 0} tone="warning"/>
-                <MetricSummaryItem label={compact ? "Normalized" : "Normal / stable"} value={alertMetrics.normal ?? 0} tone="success"/>
-                <MetricSummaryItem label="Normalized" value={alertMetrics.normalized ?? 0} tone="success"/>
-              </MetricSummaryPanel>
+                items={alertProfileItems}
+              />
             </div>
           </SpaceBetween>
         )}

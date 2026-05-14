@@ -547,7 +547,16 @@ class DoctorRepository:
                                  None)
 
             if email_match and email_match.is_active:
-                raise ValidationError("EMAIL_ALREADY_REGISTERED")
+                if email_match.email_confirmed:
+                    raise ValidationError("EMAIL_ALREADY_REGISTERED")
+                if phone_match and phone_match.is_active and phone_match.id != email_match.id:
+                    raise ValidationError("PHONE_ALREADY_REGISTERED")
+                if license_match and license_match.is_active and license_match.id != email_match.id:
+                    raise ValidationError("LICENSE_ALREADY_REGISTERED")
+
+                raw_token, _ = create_email_verification_token(db, email_match, email_match.email)
+                send_registration_verification_email(email_match.email, email_match.first_name, raw_token)
+                return email_match
             if phone_match and phone_match.is_active:
                 raise ValidationError("PHONE_ALREADY_REGISTERED")
             if license_match and license_match.is_active:
@@ -635,6 +644,8 @@ class DoctorRepository:
             if verification.used_at is not None:
                 if doctor.email_confirmed and not doctor.pending_email and verification.target_email == doctor.email:
                     return
+                if doctor.pending_email:
+                    raise ValidationError("REPLACED_VERIFICATION_TOKEN")
                 raise ValidationError("INVALID_VERIFICATION_TOKEN")
 
             if doctor.pending_email and verification.target_email == doctor.pending_email:

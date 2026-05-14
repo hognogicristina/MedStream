@@ -34,6 +34,7 @@ import {createWebSocket} from "../services/ws.js"
 import {formatPatientPhoneWithCode} from "../utils/patientPhone.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
+import HoverTextDropdown from "../components/HoverTextDropdown.jsx"
 
 function formatDateTime(value) {
   if (!value) {
@@ -582,16 +583,11 @@ export default function PatientPage() {
                 <StatusIndicator type={isDoctorAssigned ? "success" : "pending"}>
                   {isDoctorAssigned ? "Assigned" : "Unassigned"}
                 </StatusIndicator>
-                <span
-                  className="medstream-department-tooltip"
-                  tabIndex={0}
-                  aria-label="Department where this patient is currently admitted"
-                  data-tooltip="Department where this patient is currently admitted"
-                >
+                <HoverTextDropdown content="Department where this patient is currently admitted" position="top">
                   <span className="medstream-department-badge">
                     <Badge color="blue">{department || "--"}</Badge>
                   </span>
-                </span>
+                </HoverTextDropdown>
               </div>
             </div>
           </div>
@@ -628,18 +624,12 @@ export default function PatientPage() {
               header={<Header variant="h2">Vitals timeline</Header>}
             >
               <div className="medstream-chart-panel medstream-patient-vitals-chart-panel">
-                {chartData.length > 0 ? (
-                  <>
-                    <VitalsChart data={chartData} height={PATIENT_VITALS_CHART_HEIGHT} hideLegend/>
-                    <div className="medstream-patient-vitals-legend" aria-label="Vitals legend">
-                      <span><i style={{backgroundColor: "#f97316"}}/>Heart Rate</span>
-                      <span><i style={{backgroundColor: "#3b82f6"}}/>Oxygen Saturation</span>
-                      <span><i style={{backgroundColor: "#22c55e"}}/>Temperature</span>
-                    </div>
-                  </>
-                ) : (
-                  <Box color="text-body-secondary">No vital samples available for visualization.</Box>
-                )}
+                <VitalsChart data={chartData} height={PATIENT_VITALS_CHART_HEIGHT} hideLegend/>
+                <div className="medstream-patient-vitals-legend" aria-label="Vitals legend">
+                  <span><i style={{backgroundColor: "#f97316"}}/>Heart Rate</span>
+                  <span><i style={{backgroundColor: "#3b82f6"}}/>Oxygen Saturation</span>
+                  <span><i style={{backgroundColor: "#22c55e"}}/>Temperature</span>
+                </div>
               </div>
             </Container>
           </div>
