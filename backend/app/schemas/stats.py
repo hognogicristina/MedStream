@@ -32,6 +32,7 @@ class BatchProgressRead(BaseModel):
     progress: int
     stage: str
     last_run: datetime | None
+    last_run_status: str
     next_run_in_seconds: int | None = None
 
 

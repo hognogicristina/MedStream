@@ -9,6 +9,7 @@ import {
   Container,
   ContentLayout,
   Header,
+  Modal,
   Pagination,
   Select,
   SpaceBetween,
@@ -1235,81 +1236,64 @@ export default function ProfilePage() {
       </ContentLayout>
 
         {showDeleteModal && (
-          <div className="console-modal-overlay">
-            <div className="console-modal monitor-card rounded-lg p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Account deactivation</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Deactivate doctor account</h2>
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-lg border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
-                <p className="text-sm text-[var(--text-primary)]">
-                  This action deactivates the doctor account and automatically reassigns your patients to another doctor from the same
-                  department.
-                </p>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                <Button
-                  className="medstream-cancel-button"
-                  onClick={() => setShowDeleteModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  className="medstream-submit-button"
-                  onClick={handleDeleteAccount}
-                  disabled={isDeletingAccount}
-                >
-                  {isDeletingAccount ? "Deactivating..." : "Confirm"}
-                </Button>
-              </div>
+          <Modal
+            visible={showDeleteModal}
+            onDismiss={isDeletingAccount ? undefined : () => setShowDeleteModal(false)}
+            size="medium"
+            header={
+              <Header
+                variant="h2"
+                description="Deactivate this account and reassign all currently assigned patients."
+              >
+                Deactivate doctor account
+              </Header>
+            }
+            footer={
+              <Box float="right">
+                <SpaceBetween direction="horizontal" size="xs">
+                  <Button
+                    className="medstream-cancel-button"
+                    onClick={() => setShowDeleteModal(false)}
+                    disabled={isDeletingAccount}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="medstream-submit-button"
+                    onClick={handleDeleteAccount}
+                    disabled={isDeletingAccount}
+                  >
+                    {isDeletingAccount ? "Deactivating..." : "Confirm"}
+                  </Button>
+                </SpaceBetween>
+              </Box>
+            }
+          >
+            <div className="medstream-modal-summary">
+              This action deactivates the doctor account and automatically reassigns your patients to another doctor from the same
+              department.
             </div>
-          </div>
+          </Modal>
         )}
 
         {patientPendingTransfer && (
-          <div className="console-modal-overlay">
-            <div className="console-modal monitor-card rounded-lg p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Patient assignment</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Transfer assigned patient</h2>
-                </div>
-              </div>
-
-              {!showTransferActivityConfirmation ? (
-                <>
-                  <div className="mt-5 rounded-lg border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
-                    <p className="text-sm text-[var(--text-primary)]">
-                      Select another doctor from {patientPendingTransfer.department} to
-                      transfer {formatPatientFullName(patientPendingTransfer)}.
-                    </p>
-                    <p className="mt-2 text-sm text-[var(--text-muted)]">CNP: {patientPendingTransfer.cnp}</p>
-                  </div>
-
-                  <div className="login-field mt-5" data-aws-input-clear-ignore>
-                    <label className="login-label" htmlFor="transfer-doctor">Available Doctors</label>
-                    <Select
-                      selectedOption={getSelectedOption(transferDoctorSelectOptions, selectedTransferDoctorId)}
-                      onChange={({detail}) => setSelectedTransferDoctorId(detail.selectedOption.value)}
-                      options={transferDoctorSelectOptions}
-                      placeholder={
-                        isLoadingTransferDoctors
-                          ? "Loading doctors..."
-                          : transferDoctorOptions.length > 0
-                            ? "Select a doctor"
-                            : "No available doctors"
-                      }
-                      selectedAriaLabel="Selected transfer doctor"
-                      disabled={isLoadingTransferDoctors || isTransferringPatient || transferDoctorOptions.length === 0}
-                    />
-                  </div>
-
-                  <div className="mt-6 flex justify-end gap-3">
+          <Modal
+            visible={Boolean(patientPendingTransfer)}
+            onDismiss={isTransferringPatient ? undefined : closeTransferDialog}
+            size="medium"
+            header={
+              <Header
+                variant="h2"
+                description={showTransferActivityConfirmation ? "Confirm transfer and activity reassignment." : "Choose another doctor from the same department."}
+              >
+                Transfer assigned patient
+              </Header>
+            }
+            footer={
+              <Box float="right">
+                {!showTransferActivityConfirmation ? (
+                  <SpaceBetween direction="horizontal" size="xs">
                     <Button
                       className="medstream-cancel-button"
                       onClick={closeTransferDialog}
@@ -1325,20 +1309,9 @@ export default function ProfilePage() {
                     >
                       {isTransferringPatient ? "Transferring..." : (isCheckingTransferActivities ? "Checking..." : "Transfer")}
                     </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="mt-5 rounded-lg border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
-                    <p className="text-sm text-[var(--text-primary)]">
-                      Are you sure you want to transfer this patient?
-                    </p>
-                    <p className="mt-2 text-sm text-[var(--text-muted)]">
-                      Existing activities will be canceled and reassigned.
-                    </p>
-                  </div>
-
-                  <div className="mt-6 flex justify-end gap-3">
+                  </SpaceBetween>
+                ) : (
+                  <SpaceBetween direction="horizontal" size="xs">
                     <Button
                       className="medstream-cancel-button"
                       onClick={() => setShowTransferActivityConfirmation(false)}
@@ -1354,79 +1327,127 @@ export default function ProfilePage() {
                     >
                       {isTransferringPatient ? "Transferring..." : "Confirm Transfer"}
                     </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+                  </SpaceBetween>
+                )}
+              </Box>
+            }
+          >
+            {!showTransferActivityConfirmation ? (
+              <SpaceBetween size="m">
+                <div className="medstream-modal-summary">
+                  <p>
+                    Select another doctor from {patientPendingTransfer.department} to transfer {formatPatientFullName(patientPendingTransfer)}.
+                  </p>
+                  <p>CNP: {patientPendingTransfer.cnp}</p>
+                </div>
+
+                <div className="login-field" data-aws-input-clear-ignore>
+                  <label className="login-label" htmlFor="transfer-doctor">Available Doctors</label>
+                  <Select
+                    selectedOption={getSelectedOption(transferDoctorSelectOptions, selectedTransferDoctorId)}
+                    onChange={({detail}) => setSelectedTransferDoctorId(detail.selectedOption.value)}
+                    options={transferDoctorSelectOptions}
+                    placeholder={
+                      isLoadingTransferDoctors
+                        ? "Loading doctors..."
+                        : transferDoctorOptions.length > 0
+                          ? "Select a doctor"
+                          : "No available doctors"
+                    }
+                    selectedAriaLabel="Selected transfer doctor"
+                    disabled={isLoadingTransferDoctors || isTransferringPatient || transferDoctorOptions.length === 0}
+                  />
+                </div>
+              </SpaceBetween>
+            ) : (
+              <div className="medstream-modal-summary">
+                <p>Are you sure you want to transfer this patient?</p>
+                <p>Existing activities will be canceled and reassigned.</p>
+              </div>
+            )}
+          </Modal>
         )}
 
         {patientPendingRemoval && (
-          <div className="console-modal-overlay">
-            <div className="console-modal monitor-card rounded-lg p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Patient assignment</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Remove assigned patient</h2>
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-lg border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
-                <p className="text-sm text-[var(--text-primary)]">
-                  Remove {formatPatientFullName(patientPendingRemoval)} from this doctor&apos;s assigned patient list?
-                </p>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">CNP: {patientPendingRemoval.cnp}</p>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                <Button
-                  className="medstream-cancel-button"
-                  onClick={() => setPatientPendingRemoval(null)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  className="medstream-submit-button"
-                  onClick={() => handleRemovePatient(patientPendingRemoval.id)}
-                  disabled={hasIncomingActivities || removingPatientId === patientPendingRemoval.id}
-                  title={hasIncomingActivities ? "Cannot modify patients while there are incoming activities." : ""}
-                >
-                  {removingPatientId === patientPendingRemoval.id ? "Removing..." : "Yes, Remove Patient"}
-                </Button>
-              </div>
+          <Modal
+            visible={Boolean(patientPendingRemoval)}
+            onDismiss={removingPatientId === patientPendingRemoval.id ? undefined : () => setPatientPendingRemoval(null)}
+            size="medium"
+            header={
+              <Header
+                variant="h2"
+                description="Remove the patient from this doctor's assigned list."
+              >
+                Remove assigned patient
+              </Header>
+            }
+            footer={
+              <Box float="right">
+                <SpaceBetween direction="horizontal" size="xs">
+                  <Button
+                    className="medstream-cancel-button"
+                    onClick={() => setPatientPendingRemoval(null)}
+                    disabled={removingPatientId === patientPendingRemoval.id}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="medstream-submit-button"
+                    onClick={() => handleRemovePatient(patientPendingRemoval.id)}
+                    disabled={hasIncomingActivities || removingPatientId === patientPendingRemoval.id}
+                    title={hasIncomingActivities ? "Cannot modify patients while there are incoming activities." : ""}
+                  >
+                    {removingPatientId === patientPendingRemoval.id ? "Removing..." : "Yes, Remove Patient"}
+                  </Button>
+                </SpaceBetween>
+              </Box>
+            }
+          >
+            <div className="medstream-modal-summary">
+              <p>Remove {formatPatientFullName(patientPendingRemoval)} from this doctor&apos;s assigned patient list?</p>
+              <p>CNP: {patientPendingRemoval.cnp}</p>
             </div>
-          </div>
+          </Modal>
         )}
 
         {activityPendingCancellation && (
-          <div className="console-modal-overlay z-50">
-            <div className="console-modal monitor-card w-full max-w-md rounded-lg p-6">
-              <div>
-                <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Activities</p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Cancel activity</h2>
-                <p className="mt-3 text-sm text-[var(--text-secondary)]">Are you sure you want to cancel this activity?</p>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                <Button
-                  className="medstream-cancel-button"
-                  onClick={() => setActivityPendingCancellation(null)}
-                  disabled={isSubmittingActivity}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  className="medstream-submit-button"
-                  onClick={handleCancelActivity}
-                  disabled={isSubmittingActivity}
-                >
-                  {isSubmittingActivity ? "Canceling..." : "Yes, Cancel Activity"}
-                </Button>
-              </div>
-            </div>
-          </div>
+          <Modal
+            visible={Boolean(activityPendingCancellation)}
+            onDismiss={isSubmittingActivity ? undefined : () => setActivityPendingCancellation(null)}
+            size="small"
+            header={
+              <Header
+                variant="h2"
+                description="This action marks the activity as canceled."
+              >
+                Cancel activity
+              </Header>
+            }
+            footer={
+              <Box float="right">
+                <SpaceBetween direction="horizontal" size="xs">
+                  <Button
+                    className="medstream-cancel-button"
+                    onClick={() => setActivityPendingCancellation(null)}
+                    disabled={isSubmittingActivity}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="medstream-submit-button"
+                    onClick={handleCancelActivity}
+                    disabled={isSubmittingActivity}
+                  >
+                    {isSubmittingActivity ? "Canceling..." : "Yes, Cancel Activity"}
+                  </Button>
+                </SpaceBetween>
+              </Box>
+            }
+          >
+            <Box color="text-body-secondary">Are you sure you want to cancel this activity?</Box>
+          </Modal>
         )}
 
         {isActivityDialogOpen && (

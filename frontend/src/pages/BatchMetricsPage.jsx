@@ -184,7 +184,7 @@ function OverallOutcomeTooltip({active, payload, chartTheme, total}) {
 }
 
 function renderActivePieShape(props) {
-  const {cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, stroke} = props
+  const {cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload} = props
 
   return (
     <g>
@@ -196,8 +196,8 @@ function renderActivePieShape(props) {
         startAngle={startAngle}
         endAngle={endAngle}
         fill={fill}
-        stroke={stroke}
-        strokeWidth={3}
+        stroke="none"
+        strokeWidth={0}
       />
       <Sector
         cx={cx}
@@ -207,6 +207,8 @@ function renderActivePieShape(props) {
         startAngle={startAngle}
         endAngle={endAngle}
         fill={payload.color}
+        stroke="none"
+        strokeWidth={0}
       />
       {renderOverallPieLabel(props)}
     </g>
@@ -239,25 +241,54 @@ function renderOverallPieLabel(props) {
   )
 }
 
-function getStageProgress(progress, stage, isRunning) {
-  if (!isRunning && progress >= 100) {
-    return 100
-  }
+function resolveLastRunStatus(batchProgress) {
+  const normalizedStatus = (batchProgress.last_run_status || "").toLowerCase()
+  const normalizedStage = (batchProgress.stage || "").toLowerCase()
 
-  const normalizedStage = (stage || "").toLowerCase()
-  if (normalizedStage.includes("loading")) {
-    return Math.max(progress, 10)
+  if (normalizedStatus && normalizedStatus !== "idle") {
+    return normalizedStatus
   }
-  if (normalizedStage.includes("aggregating")) {
-    return Math.max(progress, 40)
+  if (normalizedStage.includes("failed")) {
+    return "failed"
   }
-  if (normalizedStage.includes("computing")) {
-    return Math.max(progress, 70)
+  if (normalizedStage.includes("completed") || (!batchProgress.is_running && Number(batchProgress.progress) >= 100 && batchProgress.last_run)) {
+    return "success"
   }
-  if (normalizedStage.includes("finalizing") || normalizedStage.includes("completed")) {
-    return Math.max(progress, 100)
+  if (batchProgress.is_running) {
+    return "running"
   }
-  return progress
+  return normalizedStatus || "idle"
+}
+
+function formatBatchRunState(batchProgress) {
+  return batchProgress.is_running ? "Running" : "Idle"
+}
+
+function formatLastRunStatus(batchProgress) {
+  const normalizedStatus = resolveLastRunStatus(batchProgress)
+
+  if (!normalizedStatus) {
+    return "Idle"
+  }
+  if (normalizedStatus === "success") {
+    return "Success"
+  }
+  return normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)
+}
+
+function getLastRunStatusType(batchProgress) {
+  const normalizedStatus = resolveLastRunStatus(batchProgress)
+
+  if (normalizedStatus === "success") {
+    return "success"
+  }
+  if (normalizedStatus === "failed") {
+    return "error"
+  }
+  if (normalizedStatus === "running") {
+    return "in-progress"
+  }
+  return "stopped"
 }
 
 function formatScheduleSummary(schedule) {
@@ -295,7 +326,6 @@ export default function BatchMetricsPage() {
   const [insights, setInsights] = useState(null)
   const [comparison, setComparison] = useState(null)
   const [batchProgress, setBatchProgress] = useState({is_running: false, progress: 0, stage: "Idle", last_run: null})
-  const [progressDisplay, setProgressDisplay] = useState(0)
   const [schedule, setSchedule] = useState(EMPTY_SCHEDULE)
   const [scheduleType, setScheduleType] = useState("seconds")
   const [scheduleValue, setScheduleValue] = useState("30")
@@ -305,6 +335,7 @@ export default function BatchMetricsPage() {
   const [departmentsPage, setDepartmentsPage] = useState(1)
   const [diagnosesPage, setDiagnosesPage] = useState(1)
   const [isRunningBatch, setIsRunningBatch] = useState(false)
+  const [showRunStartedBanner, setShowRunStartedBanner] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [treatmentMode, setTreatmentMode] = useState("medication")
   const [selectedMedication, setSelectedMedication] = useState("")
@@ -417,25 +448,6 @@ export default function BatchMetricsPage() {
   }, [])
 
   useEffect(() => {
-    const nextProgress = getStageProgress(batchProgress.progress, batchProgress.stage, batchProgress.is_running)
-
-    if (batchProgress.is_running) {
-      setProgressDisplay(nextProgress)
-      return
-    }
-
-    if (nextProgress >= 100) {
-      setProgressDisplay(100)
-      const timeoutId = window.setTimeout(() => {
-        setProgressDisplay(0)
-      }, 1200)
-      return () => window.clearTimeout(timeoutId)
-    }
-
-    setProgressDisplay(0)
-  }, [batchProgress])
-
-  useEffect(() => {
     if (batchProgress.next_run_in_seconds == null) {
       return
     }
@@ -455,6 +467,18 @@ export default function BatchMetricsPage() {
 
     return () => window.clearInterval(intervalId)
   }, [batchProgress.is_running, batchProgress.next_run_in_seconds])
+
+  useEffect(() => {
+    if (!showRunStartedBanner) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowRunStartedBanner(false)
+    }, 7000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [showRunStartedBanner])
 
   const refreshData = async (nextDepartmentsPage = departmentsPage, nextDiagnosesPage = diagnosesPage) => {
     const [metricsResponse, insightsResponse, batchStatusResponse, scheduleResponse] = await Promise.all([
@@ -508,10 +532,18 @@ export default function BatchMetricsPage() {
   const handleRunBatchNow = async () => {
     try {
       setIsRunningBatch(true)
+      setShowRunStartedBanner(false)
       await runBatchNow()
+      setBatchProgress((current) => ({
+        ...current,
+        is_running: true,
+        last_run_status: "running",
+        progress: Math.max(Number(current.progress) || 0, 10),
+        stage: "Loading data",
+      }))
+      setShowRunStartedBanner(true)
       await new Promise((resolve) => window.setTimeout(resolve, 800))
       await refreshData()
-      notifySuccess("Batch run started successfully.", {duration: 5000})
     } catch (runError) {
       notifyError(getErrorMessage(runError), {duration: 5000})
     } finally {
@@ -536,7 +568,7 @@ export default function BatchMetricsPage() {
     () => insightsData.medication_effectiveness || [],
     [insightsData.medication_effectiveness],
   )
-  const progressLabel = batchProgress.is_running ? "Running" : "Idle"
+  const progressLabel = formatBatchRunState(batchProgress)
   const departmentsTotalPages = Math.max(1, Math.ceil((patientsPerDepartment.total || 0) / PAGE_SIZE))
   const diagnosesTotalPages = Math.max(1, Math.ceil((topDiagnosis.total || 0) / PAGE_SIZE))
   const totalTreatments = treatmentEffectiveness.effective + treatmentEffectiveness.improving + treatmentEffectiveness.ineffective
@@ -651,6 +683,10 @@ export default function BatchMetricsPage() {
   const effectivePercentage = totalTreatments ? (treatmentEffectiveness.effective / totalTreatments) * 100 : 0
   const improvingPercentage = totalTreatments ? (treatmentEffectiveness.improving / totalTreatments) * 100 : 0
   const ineffectivePercentage = totalTreatments ? (treatmentEffectiveness.ineffective / totalTreatments) * 100 : 0
+  const lastRunStatusLabel = formatLastRunStatus(batchProgress)
+  const lastRunStatusType = getLastRunStatusType(batchProgress)
+  const batchRunState = progressLabel
+  const batchRunTone = batchRunState.toLowerCase()
 
   const handleExportAllMetrics = () => {
     const exportTimestamp = new Date().toISOString()
@@ -776,6 +812,23 @@ export default function BatchMetricsPage() {
             </div>
             <Button iconName="download" onClick={handleExportAllMetrics}>Export</Button>
           </div>
+          {showRunStartedBanner ? (
+            <div className="medstream-batch-run-banner" role="status">
+              <span className="medstream-batch-run-banner-icon" aria-hidden="true"/>
+              <span className="medstream-batch-run-banner-content">
+                <strong>Job run triggered</strong>
+                <span>The job run was submitted successfully and execution status is updating.</span>
+              </span>
+              <button
+                type="button"
+                className="medstream-batch-run-banner-dismiss"
+                onClick={() => setShowRunStartedBanner(false)}
+                aria-label="Dismiss run started message"
+              >
+                x
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="medstream-dashboard-split">
@@ -874,7 +927,9 @@ export default function BatchMetricsPage() {
                 <ColumnLayout columns={4} variant="text-grid">
                   <SpaceBetween size="xs">
                     <Box color="text-body-secondary" variant="awsui-key-label">Status</Box>
-                    <StatusIndicator type={batchProgress.is_running ? "in-progress" : "stopped"}>{progressLabel}</StatusIndicator>
+                    <StatusIndicator type={lastRunStatusType}>
+                      {lastRunStatusLabel}
+                    </StatusIndicator>
                   </SpaceBetween>
                   <MetricTile label="Stage" value={batchProgress.stage || "Idle"}/>
                   <MetricTile
@@ -890,16 +945,18 @@ export default function BatchMetricsPage() {
                   <MetricTile label="Last Run" value={formatBatchTimestamp(batchProgress.last_run)}/>
                 </ColumnLayout>
 
-                <SpaceBetween size="xs">
-                  <Box color="text-body-secondary" variant="awsui-key-label">Progress</Box>
-                  <Box variant="h3">{progressDisplay}%</Box>
-                  <div className="h-3 rounded-full bg-[var(--surface-4)]">
-                    <div
-                      className="h-3 rounded-full bg-[#ff9900] transition-all duration-500 ease-out"
-                      style={{width: `${progressDisplay}%`}}
-                    />
+                <div className={`medstream-batch-job-state medstream-batch-job-state-${batchRunTone}`}>
+                  <div className="medstream-batch-job-state-indicator" aria-hidden="true">
+                    {batchRunState === "Running" ? (
+                      <span className="medstream-batch-job-spinner"/>
+                    ) : (
+                      <span className="medstream-batch-job-status-icon"/>
+                    )}
                   </div>
-                </SpaceBetween>
+                  <div className="medstream-batch-job-state-copy">
+                    <strong>{batchRunState}</strong>
+                  </div>
+                </div>
               </SpaceBetween>
             </Container>
           </div>
@@ -1096,12 +1153,12 @@ export default function BatchMetricsPage() {
                                     label={renderOverallPieLabel}
                                     labelLine={false}
                                     isAnimationActive={false}
-                                    stroke={chartTheme.pieStroke}
-                                    strokeWidth={3}
+                                    stroke="none"
+                                    strokeWidth={0}
                                     onMouseEnter={(entry) => setActiveOutcomeId(entry.id)}
                                   >
                                     {visibleOutcomeChartData.map((entry) => (
-                                      <Cell key={entry.id} fill={entry.color}/>
+                                      <Cell key={entry.id} fill={entry.color} stroke="none" strokeWidth={0}/>
                                     ))}
                                   </Pie>
                                   <Tooltip content={<OverallOutcomeTooltip chartTheme={chartTheme} total={visibleOutcomeTotal}/>}/>

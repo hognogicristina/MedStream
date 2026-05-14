@@ -46,6 +46,9 @@
   --status-normal-soft: #edf8ee;
   --toast-bg: rgba(255, 255, 255, 0.98);
   --overlay-bg: rgba(35, 47, 62, 0.28);
+  --modal-surface: #ffffff;
+  --modal-footer-surface: #f8f9fb;
+  --modal-shadow: 0 24px 64px rgba(0, 7, 22, 0.18);
   color: var(--text-primary);
   background: var(--app-bg);
   font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -93,6 +96,9 @@
   --status-normal-soft: #1b2430;
   --toast-bg: rgba(22, 27, 34, 0.96);
   --overlay-bg: rgba(15, 20, 26, 0.78);
+  --modal-surface: #161d27;
+  --modal-footer-surface: #151c25;
+  --modal-shadow: 0 24px 64px rgba(0, 0, 0, 0.46);
 }
 
 body {
@@ -1136,6 +1142,192 @@ body {
   font-size: 16px;
 }
 
+.medstream-batch-run-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 78px;
+  margin-top: 14px;
+  border-radius: 16px;
+  background: #037f0c;
+  color: #ffffff;
+  line-height: 1.35;
+  padding: 18px 20px;
+}
+
+.medstream-batch-run-banner-icon {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+}
+
+.medstream-batch-run-banner-icon::after {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 8px;
+  height: 5px;
+  transform: rotate(-45deg);
+  border-bottom: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  content: "";
+}
+
+.medstream-batch-run-banner-content {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.medstream-batch-run-banner-content strong {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.medstream-batch-run-banner-content span {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.medstream-batch-run-banner-dismiss {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.medstream-batch-run-banner-dismiss:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.medstream-batch-job-state {
+  --batch-job-state-color: var(--text-muted);
+  --batch-job-state-border: var(--border-primary);
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 14px;
+}
+
+.medstream-batch-job-state-running {
+  --batch-job-state-color: #ff9900;
+  --batch-job-state-border: color-mix(in srgb, #ff9900 54%, transparent);
+}
+
+.medstream-batch-job-state-succeeded {
+  --batch-job-state-color: #037f0c;
+  --batch-job-state-border: color-mix(in srgb, #037f0c 48%, transparent);
+}
+
+.medstream-batch-job-state-failed {
+  --batch-job-state-color: #d13212;
+  --batch-job-state-border: color-mix(in srgb, #d13212 48%, transparent);
+}
+
+.medstream-batch-job-state-indicator {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+}
+
+.medstream-batch-job-spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 2px solid color-mix(in srgb, var(--batch-job-state-color) 22%, transparent);
+  border-top-color: var(--batch-job-state-color);
+  border-radius: 50%;
+  animation: medstream-batch-spin 0.9s linear infinite;
+}
+
+.medstream-batch-job-status-icon {
+  position: relative;
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--batch-job-state-color);
+  border-radius: 50%;
+}
+
+.medstream-batch-job-state-succeeded .medstream-batch-job-status-icon::after {
+  position: absolute;
+  top: 6px;
+  left: 5px;
+  width: 9px;
+  height: 5px;
+  transform: rotate(-45deg);
+  border-bottom: 2px solid var(--batch-job-state-color);
+  border-left: 2px solid var(--batch-job-state-color);
+  content: "";
+}
+
+.medstream-batch-job-state-failed .medstream-batch-job-status-icon::before,
+.medstream-batch-job-state-failed .medstream-batch-job-status-icon::after {
+  position: absolute;
+  top: 9px;
+  left: 5px;
+  width: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--batch-job-state-color);
+  content: "";
+}
+
+.medstream-batch-job-state-failed .medstream-batch-job-status-icon::before {
+  transform: rotate(45deg);
+}
+
+.medstream-batch-job-state-failed .medstream-batch-job-status-icon::after {
+  transform: rotate(-45deg);
+}
+
+.medstream-batch-job-state-idle .medstream-batch-job-status-icon::after {
+  position: absolute;
+  top: 5px;
+  left: 9px;
+  width: 2px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--batch-job-state-color);
+  box-shadow: 0 5px 0 var(--batch-job-state-color);
+  content: "";
+}
+
+.medstream-batch-job-state-copy {
+  min-width: 0;
+}
+
+.medstream-batch-job-state-copy strong {
+  display: block;
+  color: var(--batch-job-state-color);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
 .medstream-overall-chart-panel {
   position: relative;
   height: 480px;
@@ -1155,6 +1347,17 @@ body {
 .medstream-overall-pie {
   height: calc(100% - 34px);
   min-height: 0;
+}
+
+.medstream-overall-pie .recharts-wrapper,
+.medstream-overall-pie .recharts-surface {
+  outline: 0 !important;
+}
+
+.medstream-overall-pie .recharts-pie-sector path,
+.medstream-overall-pie .recharts-sector {
+  stroke: transparent !important;
+  stroke-width: 0 !important;
 }
 
 .medstream-overall-select-option {
@@ -2334,7 +2537,7 @@ body {
 }
 
 .medstream-activity-dialog-form {
-  padding: 20px 24px 24px;
+  padding: 0;
 }
 
 .medstream-activity-date-grid {
@@ -2811,6 +3014,39 @@ input[type="search"]::-webkit-search-cancel-button {
 
   .medstream-batch-latest-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .medstream-batch-run-banner {
+    min-height: 0;
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .medstream-batch-run-banner-content strong {
+    font-size: 15px;
+  }
+
+  .medstream-batch-run-banner-content span {
+    font-size: 12px;
+  }
+
+  .medstream-batch-job-state {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .medstream-batch-job-state-indicator {
+    width: 30px;
+    height: 30px;
+  }
+
+  .medstream-batch-job-spinner {
+    width: 20px;
+    height: 20px;
+  }
+
+  .medstream-batch-job-state-copy strong {
+    font-size: 14px;
   }
 
   .medstream-streaming-summary-grid {
@@ -4239,6 +4475,123 @@ textarea::placeholder {
   max-width: min(760px, calc(100vw - 48px));
 }
 
+[class*="awsui_root_"][role="dialog"] {
+  background: var(--overlay-bg) !important;
+}
+
+[class*="awsui_dialog_"]:not(#\9) {
+  border-radius: 28px !important;
+  color: var(--text-primary) !important;
+}
+
+[class*="awsui_dialog_"][class*="awsui_small_"]:not(#\9) {
+  max-inline-size: min(520px, calc(100vw - 32px)) !important;
+}
+
+[class*="awsui_dialog_"][class*="awsui_medium_"]:not(#\9) {
+  max-inline-size: min(720px, calc(100vw - 32px)) !important;
+}
+
+[class*="awsui_dialog_"][class*="awsui_large_"]:not(#\9) {
+  max-inline-size: min(920px, calc(100vw - 32px)) !important;
+}
+
+[class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"]:not(#\9) {
+  overflow: hidden !important;
+  border: 1px solid color-mix(in srgb, var(--border-primary) 88%, transparent) !important;
+  border-radius: 28px !important;
+  background: var(--modal-surface) !important;
+  box-shadow: var(--modal-shadow) !important;
+}
+
+[class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"]:not(#\9) {
+  border-block-end: 1px solid var(--border-strong) !important;
+  background: var(--modal-surface) !important;
+  padding: 32px 40px 28px !important;
+}
+
+[class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_content_"]:not(#\9) {
+  background: var(--modal-surface) !important;
+  color: var(--text-primary) !important;
+  padding: 28px 40px !important;
+}
+
+[class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_footer_"]:not(#\9) {
+  border-block-start: 1px solid var(--border-strong) !important;
+  background: var(--modal-footer-surface) !important;
+  padding: 24px 40px !important;
+}
+
+[class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_footer_"]:not(#\9)::after {
+  display: none !important;
+}
+
+[class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"] [class*="awsui_header--text_"] h2,
+[class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"] [class*="awsui_header--text_"] [class*="awsui_heading_"] {
+  color: var(--text-primary) !important;
+  font-size: 32px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.15 !important;
+}
+
+[class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"] [class*="awsui_header--text_"] [class*="awsui_description_"],
+[class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"] [class*="awsui_header--text_"] p {
+  color: var(--text-secondary) !important;
+  font-size: 18px !important;
+  line-height: 1.45 !important;
+}
+
+[class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"] [class*="awsui_dismiss-control_"] {
+  color: var(--text-primary) !important;
+}
+
+.medstream-modal-summary {
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 16px;
+}
+
+.medstream-modal-summary p {
+  margin: 0;
+}
+
+.medstream-modal-summary p + p {
+  margin-top: 8px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  [class*="awsui_dialog_"]:not(#\9) {
+    border-radius: 18px !important;
+  }
+
+  [class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"]:not(#\9) {
+    border-radius: 18px !important;
+  }
+
+  [class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"]:not(#\9),
+  [class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_content_"]:not(#\9),
+  [class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_footer_"]:not(#\9) {
+    padding-right: 20px !important;
+    padding-left: 20px !important;
+  }
+
+  [class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"] [class*="awsui_header--text_"] h2,
+  [class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"] [class*="awsui_header--text_"] [class*="awsui_heading_"] {
+    font-size: 26px !important;
+  }
+
+  [class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"] [class*="awsui_header--text_"] [class*="awsui_description_"],
+  [class*="awsui_dialog_"] > [class*="awsui_focus-lock_"] > [class*="awsui_container_"] > [class*="awsui_header_"] [class*="awsui_header--text_"] p {
+    font-size: 15px !important;
+  }
+}
+
 .alert-critical {
   color: #fff0f2;
   background: #3a1f25;
@@ -4593,6 +4946,12 @@ textarea::placeholder {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes medstream-batch-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

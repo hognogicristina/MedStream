@@ -1,5 +1,5 @@
 import {useMemo, useState} from "react"
-import {Button, Pagination, Select} from "@cloudscape-design/components"
+import {Box, Button, Header, Modal, Pagination, Select, SpaceBetween} from "@cloudscape-design/components"
 import AwsDatePicker from "./AwsDatePicker.jsx"
 import AwsTimeInput from "./AwsTimeInput.jsx"
 import {isValidTime} from "../utils/time.js"
@@ -164,42 +164,68 @@ export default function ActivityDialog({
     && form.doctorIds.length > 0
     && form.patientIds.length > 0
 
+  const handleSubmit = () => {
+    if (!isValid || isSubmitting) {
+      return
+    }
+
+    const payload = {
+      type: form.type,
+      title: form.title.trim(),
+      description: form.description.trim(),
+      scheduled_at: buildScheduledAt(form.scheduledDate, form.scheduledTime),
+      doctor_ids: Array.from(new Set([currentDoctorId, ...form.doctorIds].filter(Boolean))),
+    }
+
+    if (mode !== "edit") {
+      payload.patient_ids = form.patientIds
+    }
+
+    onSubmit(payload)
+  }
+
   return (
-    <div className="console-modal-overlay medstream-activity-modal-overlay z-50">
-      <div className="console-modal medstream-dialog-panel medstream-activity-dialog">
-        <div className="medstream-activity-dialog-header">
-          <div>
-            <p className="medstream-activity-dialog-eyebrow">Activities</p>
-            <h2 className="medstream-activity-dialog-title">{mode === "edit" ? "Edit Activity" : "Add Activity"}</h2>
-          </div>
-          <Button
-            className="medstream-cancel-button"
-            onClick={onClose}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        </div>
-
-        <form
-          className="medstream-form medstream-activity-dialog-form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const payload = {
-              type: form.type,
-              title: form.title.trim(),
-              description: form.description.trim(),
-              scheduled_at: buildScheduledAt(form.scheduledDate, form.scheduledTime),
-              doctor_ids: Array.from(new Set([currentDoctorId, ...form.doctorIds].filter(Boolean))),
-            }
-
-            if (mode !== "edit") {
-              payload.patient_ids = form.patientIds
-            }
-
-            onSubmit(payload)
-          }}
+    <Modal
+      visible={isOpen}
+      onDismiss={isSubmitting ? undefined : onClose}
+      size="large"
+      header={
+        <Header
+          variant="h2"
+          description={mode === "edit" ? "Update the schedule, details, and assigned doctors." : "Schedule a new care activity and assign the responsible team."}
         >
+          {mode === "edit" ? "Edit Activity" : "Add Activity"}
+        </Header>
+      }
+      footer={
+        <Box float="right">
+          <SpaceBetween direction="horizontal" size="xs">
+            <Button
+              className="medstream-cancel-button"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              className="medstream-submit-button"
+              onClick={handleSubmit}
+              disabled={!isValid || isSubmitting}
+            >
+              {isSubmitting ? "Saving..." : mode === "edit" ? "Save Changes" : "Add Activity"}
+            </Button>
+          </SpaceBetween>
+        </Box>
+      }
+    >
+      <form
+        className="medstream-form medstream-activity-dialog-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          handleSubmit()
+        }}
+      >
           <div className="medstream-form-grid">
             <div className="login-field">
               <label className="login-label" htmlFor="activity-type">Type</label>
@@ -355,18 +381,7 @@ export default function ActivityDialog({
             </section>
           </div>
 
-          <div className="medstream-form-actions">
-            <Button
-              formAction="submit"
-              variant="primary"
-              className="medstream-submit-button"
-              disabled={!isValid || isSubmitting}
-            >
-              {isSubmitting ? "Saving..." : mode === "edit" ? "Save Changes" : "Add Activity"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   )
 }
