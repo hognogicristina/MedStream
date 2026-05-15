@@ -69,7 +69,8 @@ export default function StreamingMetricsPage() {
   const [alertsRateHistory, setAlertsRateHistory] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [, setSeenAlertIds] = useState({})
-  const [lastAlertTime, setLastAlertTime] = useState(null)
+  const [, setLastAlertTime] = useState(null)
+  const [highlightedAlertsRateSeries, setHighlightedAlertsRateSeries] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -287,7 +288,6 @@ export default function StreamingMetricsPage() {
                     <Header
                       variant="h2"
                       description="Alerts are appended as soon as threshold checks trigger."
-                      actions={<StatusIndicator type={lastAlertTime ? "success" : "pending"}>Last alert: {formatAlertTime(lastAlertTime)}</StatusIndicator>}
                     >
                       Streaming alert feed
                     </Header>
@@ -334,11 +334,18 @@ export default function StreamingMetricsPage() {
                       </Header>
                     }
                   >
-                    <div className="medstream-chart-panel medstream-alerts-rate-chart-panel">
+                    <div
+                      className={[
+                        "medstream-chart-panel medstream-alerts-rate-chart-panel",
+                        highlightedAlertsRateSeries === "Alerts/Minute" ? "medstream-alerts-rate-chart-panel-active" : "",
+                      ].filter(Boolean).join(" ")}
+                    >
                       <AwsLineChart
                         ariaLabel="Alerts per minute"
                         data={alertsRateHistory}
+                        highlightedSeriesTitle={highlightedAlertsRateSeries}
                         hideLegend
+                        onHighlightedSeriesTitleChange={setHighlightedAlertsRateSeries}
                         series={[
                           {key: "alerts_per_minute", title: "Alerts/Minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} alerts`},
                         ]}
@@ -347,8 +354,23 @@ export default function StreamingMetricsPage() {
                         yTickFormatter={(value) => String(Math.round(value))}
                       />
                     </div>
-                    <div className="medstream-alerts-rate-legend" role="toolbar" aria-label="Legend">
-                      <button className="medstream-alerts-rate-legend-item" type="button" aria-pressed="false">
+                    <div
+                      className="medstream-alerts-rate-legend"
+                      role="toolbar"
+                      aria-label="Legend"
+                      onMouseLeave={() => setHighlightedAlertsRateSeries(null)}
+                    >
+                      <button
+                        className={[
+                          "medstream-alerts-rate-legend-item",
+                          highlightedAlertsRateSeries === "Alerts/Minute" ? "medstream-alerts-rate-legend-item-active" : "",
+                        ].filter(Boolean).join(" ")}
+                        type="button"
+                        aria-pressed={highlightedAlertsRateSeries === "Alerts/Minute"}
+                        onBlur={() => setHighlightedAlertsRateSeries(null)}
+                        onFocus={() => setHighlightedAlertsRateSeries("Alerts/Minute")}
+                        onMouseEnter={() => setHighlightedAlertsRateSeries("Alerts/Minute")}
+                      >
                         <span className="medstream-alerts-rate-legend-line" aria-hidden="true"/>
                         Alerts/Minute
                       </button>

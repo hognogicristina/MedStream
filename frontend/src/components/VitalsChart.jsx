@@ -42,7 +42,13 @@ function EmptyVitalsChart({height}) {
   )
 }
 
-export default function VitalsChart({data, height = 250, hideLegend = false}) {
+export default function VitalsChart({
+  data,
+  height = 250,
+  highlightedSeriesTitle = undefined,
+  hideLegend = false,
+  onHighlightedSeriesTitleChange = null,
+}) {
   if (!Array.isArray(data) || data.length === 0) {
     return <EmptyVitalsChart height={height}/>
   }
@@ -52,7 +58,9 @@ export default function VitalsChart({data, height = 250, hideLegend = false}) {
       ariaLabel="Vital signs trend"
       data={data}
       height={height}
+      highlightedSeriesTitle={highlightedSeriesTitle}
       hideLegend={hideLegend}
+      onHighlightedSeriesTitleChange={onHighlightedSeriesTitleChange}
       series={[
         {key: "heart_rate", title: "Heart Rate", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} bpm`},
         {key: "oxygen_saturation", title: "Oxygen Saturation", color: "#3b82f6", valueFormatter: (value) => `${value.toFixed(0)}%`},

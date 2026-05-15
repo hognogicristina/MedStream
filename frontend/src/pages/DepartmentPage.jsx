@@ -22,6 +22,7 @@ import {alertTypeToVital, getAlertSeverityLevel, normalizeAlertType} from "../ut
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const PAGE_SIZE = 10
+const ALL_DEPARTMENTS_VALUE = "__all_departments__"
 
 const SEVERITY_FILTERS = [
   {value: "all", label: "All patients"},
@@ -162,7 +163,13 @@ export default function DepartmentPage() {
   const navigate = useNavigate()
   const {notifyError} = useNotifications()
   const {name} = useParams()
-  const departmentName = decodeURIComponent(name || "")
+  const departmentName = name ? decodeURIComponent(name) : ""
+  const isAllDepartments = !departmentName
+  const selectedDepartmentValue = isAllDepartments ? ALL_DEPARTMENTS_VALUE : departmentName
+  const pageTitle = isAllDepartments ? "All departments" : departmentName
+  const pageDescription = isAllDepartments
+    ? "All department patients and batch analytics overview"
+    : "Department patients and batch analytics overview"
   const [patients, setPatients] = useState([])
   const [stats, setStats] = useState([])
   const [alerts, setAlerts] = useState([])
@@ -193,21 +200,29 @@ export default function DepartmentPage() {
       setIsLoading(true)
 
       try {
+        const patientParams = {
+          alert_presence: severityFilter,
+          status: statusFilter,
+        }
+
+        if (!isAllDepartments) {
+          patientParams.department = departmentName
+        }
+
         const [patientsRes, statsRes, alertsRes, batchStatusRes] = await Promise.all([
-          listPatients({
-            department: departmentName,
-            alert_presence: severityFilter,
-            status: statusFilter,
-          }),
+          listPatients(patientParams),
           getStats(),
           getAlerts(),
           getBatchStatusStats(),
         ])
 
-        const filteredPatients = getResponseData(patientsRes).filter((patient) => patient.department === departmentName)
+        const responsePatients = getResponseData(patientsRes) || []
+        const filteredPatients = isAllDepartments
+          ? responsePatients
+          : responsePatients.filter((patient) => patient.department === departmentName)
         const patientIds = new Set(filteredPatients.map((patient) => patient.id))
-        const filteredStats = getResponseData(statsRes).filter((stat) => patientIds.has(stat.patient_id))
-        const filteredAlerts = getResponseData(alertsRes).filter((alert) => patientIds.has(alert.patient_id))
+        const filteredStats = (getResponseData(statsRes) || []).filter((stat) => patientIds.has(stat.patient_id))
+        const filteredAlerts = (getResponseData(alertsRes) || []).filter((alert) => patientIds.has(alert.patient_id))
 
         setPatients(filteredPatients)
         setStats(filteredStats)
@@ -221,16 +236,19 @@ export default function DepartmentPage() {
     }
 
     loadDepartmentData()
-  }, [departmentName, notifyError, severityFilter, statusFilter])
+  }, [departmentName, isAllDepartments, notifyError, severityFilter, statusFilter])
 
   useEffect(() => {
     setCurrentPage(1)
   }, [departmentName, severityFilter, statusFilter, sortOrder])
 
-  const departmentOptions = departments.map((department) => ({
-    label: department,
-    value: department,
-  }))
+  const departmentOptions = [
+    {label: "All departments", value: ALL_DEPARTMENTS_VALUE},
+    ...departments.map((department) => ({
+      label: department,
+      value: department,
+    })),
+  ]
 
   const statsMap = useMemo(() => Object.fromEntries(stats.map((stat) => [stat.patient_id, stat])), [stats])
   const alertSummaryMap = useMemo(() => {
@@ -341,8 +359,8 @@ export default function DepartmentPage() {
       <ContentLayout>
         <SpaceBetween size="m">
           <div className="medstream-page-header">
-            <h1 className="medstream-page-title">{departmentName}</h1>
-            <p>Department patients and batch analytics overview</p>
+            <h1 className="medstream-page-title">{pageTitle}</h1>
+            <p>{pageDescription}</p>
           </div>
           <LoadingSpinner text="Loading department analytics..."/>
         </SpaceBetween>
@@ -354,8 +372,8 @@ export default function DepartmentPage() {
     <ContentLayout>
       <SpaceBetween size="m">
         <div className="medstream-page-header">
-          <h1 className="medstream-page-title">{departmentName}</h1>
-          <p>Department patients and batch analytics overview</p>
+          <h1 className="medstream-page-title">{pageTitle}</h1>
+          <p>{pageDescription}</p>
         </div>
 
         <Container>
@@ -398,13 +416,16 @@ export default function DepartmentPage() {
         <Container header={<Header variant="h2">Department controls</Header>}>
           <div className="medstream-controls-grid">
             <Select
-              selectedOption={getSelectedOption(departmentOptions, departmentName)}
+              selectedOption={getSelectedOption(departmentOptions, selectedDepartmentValue)}
               options={departmentOptions}
               selectedAriaLabel="Selected department"
               placeholder="Select department"
               onChange={({detail}) => {
-                if (detail.selectedOption.value) {
-                  navigate(`/departments/${encodeURIComponent(detail.selectedOption.value)}`)
+                const nextDepartment = detail.selectedOption.value
+                if (nextDepartment === ALL_DEPARTMENTS_VALUE) {
+                  navigate("/departments")
+                } else if (nextDepartment) {
+                  navigate(`/departments/${encodeURIComponent(nextDepartment)}`)
                 }
               }}
             />
@@ -469,7 +490,7 @@ export default function DepartmentPage() {
             <Table
               variant="borderless"
               items={paginatedRows}
-              empty={<Box color="text-body-secondary">{patients.length === 0 ? `No patients are currently assigned to ${departmentName}.` : "No department patients match the current filters."}</Box>}
+              empty={<Box color="text-body-secondary">{patients.length === 0 ? `No patients are currently assigned to ${pageTitle}.` : "No department patients match the current filters."}</Box>}
               columnDefinitions={[
                 {
                   id: "patient",

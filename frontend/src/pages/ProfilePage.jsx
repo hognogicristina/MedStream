@@ -995,11 +995,6 @@ export default function ProfilePage() {
                       <Header
                         variant="h2"
                         description="Identity, specialization, license, and contact details."
-                        actions={
-                          <StatusIndicator type={doctor.is_active ? "success" : "stopped"}>
-                            {doctor.is_active ? "Active" : "Inactive"}
-                          </StatusIndicator>
-                        }
                       >
                         Editable doctor info
                       </Header>
@@ -1141,11 +1136,6 @@ export default function ProfilePage() {
                       <Header
                         variant="h2"
                         description="Email used for login and verification."
-                        actions={
-                          <StatusIndicator type={isPendingEmail ? "pending" : "success"}>
-                            {isPendingEmail ? "Pending" : "Verified"}
-                          </StatusIndicator>
-                        }
                       >
                         Account email
                       </Header>

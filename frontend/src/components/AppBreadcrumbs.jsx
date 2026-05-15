@@ -27,11 +27,18 @@ function buildBreadcrumbItems(pathname, patientName) {
     return [{text: "Dashboard", href: "/dashboard"}]
   }
 
+  if (pathname === "/departments") {
+    return [
+      {text: "Dashboard", href: "/dashboard"},
+      {text: "Departments", href: "/departments"},
+    ]
+  }
+
   if (pathname.startsWith("/departments/")) {
     const department = decodeURIComponent(pathname.replace("/departments/", ""))
     return [
       {text: "Dashboard", href: "/dashboard"},
-      {text: "Departments", href: "/dashboard"},
+      {text: "Departments", href: "/departments"},
       {text: department, href: pathname},
     ]
   }

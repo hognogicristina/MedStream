@@ -9,7 +9,6 @@ import {
   Modal,
   Select,
   SpaceBetween,
-  StatusIndicator,
 } from "@cloudscape-design/components"
 import {
   buildPatientPhoneNumber,
@@ -164,7 +163,6 @@ export default function EditPatientDialog({
         <Header
           variant="h2"
           description="Update identity, contact, and address information."
-          actions={<StatusIndicator type={step === 1 ? "pending" : "in-progress"}>Step {step} / {TOTAL_STEPS}</StatusIndicator>}
         >
           Edit Patient Details
         </Header>

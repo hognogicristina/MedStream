@@ -7,7 +7,6 @@ import {
   SegmentedControl,
   SpaceBetween,
   Steps,
-  StatusIndicator,
 } from "@cloudscape-design/components"
 import LoadingSpinner from "./LoadingSpinner.jsx"
 
@@ -272,7 +271,6 @@ export default function PostDischargeClinicalSummaryCard({summary, isLoading = f
           <Header
             variant="h2"
             description="The discharge record is available while generated insights are still pending."
-            actions={<StatusIndicator type="pending">Preparing</StatusIndicator>}
           >
             Post-Discharge Clinical Summary
           </Header>
@@ -326,7 +324,6 @@ export default function PostDischargeClinicalSummaryCard({summary, isLoading = f
         <Header
           variant="h2"
           description="Readmission overview generated from historical patient data."
-          actions={<StatusIndicator type="success">Ready</StatusIndicator>}
         >
           Post-Discharge Clinical Summary
         </Header>

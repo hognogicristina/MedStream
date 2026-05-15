@@ -47,8 +47,10 @@ export default function AwsLineChart({
   ariaLabel,
   data,
   height = 220,
+  highlightedSeriesTitle = undefined,
   hideFilter = true,
   hideLegend = false,
+  onHighlightedSeriesTitleChange = null,
   series,
   thresholds = EMPTY_THRESHOLDS,
   xKey = "time",
@@ -86,12 +88,20 @@ export default function AwsLineChart({
     })
   ), [xLabels, xTickFormatter])
   const resolvedXDomain = xDomain || [1, Math.max(2, chartData.length)]
+  const isHighlightControlled = highlightedSeriesTitle !== undefined
+  const highlightedSeries = isHighlightControlled
+    ? chartSeries.find((item) => item.title === highlightedSeriesTitle) || null
+    : undefined
+  const handleHighlightChange = isHighlightControlled
+    ? ({detail}) => onHighlightedSeriesTitleChange?.(detail.highlightedSeries?.title || null)
+    : undefined
 
   return (
     <LineChart
       ariaLabel={ariaLabel}
       empty={<Box color="text-body-secondary">No chart data available.</Box>}
       height={height}
+      highlightedSeries={highlightedSeries}
       hideFilter={hideFilter}
       hideLegend={hideLegend}
       i18nStrings={DEFAULT_I18N_STRINGS}
@@ -99,6 +109,7 @@ export default function AwsLineChart({
       statusType="finished"
       visibleSeries={chartSeries}
       onFilterChange={NOOP_FILTER_CHANGE}
+      onHighlightChange={handleHighlightChange}
       xDomain={resolvedXDomain}
       xScaleType={xScaleType}
       xTitle={xTitle}

@@ -8,7 +8,6 @@ import {
   Header,
   Select,
   SpaceBetween,
-  StatusIndicator,
 } from "@cloudscape-design/components"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
@@ -194,7 +193,6 @@ export default function AddPatientPage() {
             <Header
               variant="h2"
               description={step === 1 ? "Enter identity, contact, and arrival details." : "Enter the patient's address details."}
-              actions={<StatusIndicator type={step === 1 ? "pending" : "in-progress"}>{step === 1 ? "Basic info" : "Address"}</StatusIndicator>}
             >
               Create patient record
             </Header>

@@ -38,6 +38,20 @@ const AREA_CHART_I18N_STRINGS = {
   xAxisAriaRoleDescription: "x axis",
   yAxisAriaRoleDescription: "y axis",
 }
+const TREATMENT_ANALYSIS_HELP_STEPS = [
+  {
+    title: "Step 1: Latest alert summary",
+    body: "Review the latest vital alerts first. These values show what changed recently and whether abnormal readings are still active.",
+  },
+  {
+    title: "Step 2: Clinical context",
+    body: "Check diagnosis and conditions next. They provide the clinical context used to understand why medication is needed.",
+  },
+  {
+    title: "Step 3: Medication decision",
+    body: "Review the medication, dosage, frequency, and outcome. The decision is evaluated against later vitals and alerts.",
+  },
+]
 
 function normalizeOutcomeLabel(value) {
   const normalized = String(value || "").trim().toLowerCase()
@@ -243,6 +257,81 @@ function AttributeStatusValue({value}) {
   )
 }
 
+function TreatmentAnalysisInfoTour({
+  currentStep,
+  isOpen,
+  onClose,
+  onStepChange,
+  onToggle,
+}) {
+  const step = TREATMENT_ANALYSIS_HELP_STEPS[currentStep] || TREATMENT_ANALYSIS_HELP_STEPS[0]
+  const isLastStep = currentStep === TREATMENT_ANALYSIS_HELP_STEPS.length - 1
+
+  const goToPreviousStep = () => {
+    onStepChange(Math.max(0, currentStep - 1))
+  }
+
+  const goToNextStep = () => {
+    if (isLastStep) {
+      onClose()
+      return
+    }
+    onStepChange(Math.min(TREATMENT_ANALYSIS_HELP_STEPS.length - 1, currentStep + 1))
+  }
+
+  return (
+    <span className="medstream-aws-info-anchor">
+      <button
+        type="button"
+        className={`medstream-aws-info-trigger${isOpen ? " medstream-aws-info-trigger-open" : ""}`}
+        aria-expanded={isOpen}
+        aria-label={isOpen ? "Close treatment analysis guide" : "Open treatment analysis guide"}
+        onClick={onToggle}
+      />
+      {isOpen ? (
+        <span className="medstream-aws-info-card" role="dialog" aria-label="Treatment analysis guide">
+          <button
+            type="button"
+            className="medstream-aws-info-close"
+            aria-label="Close treatment analysis guide"
+            onClick={onClose}
+          />
+          <span className="medstream-aws-info-title">{step.title}</span>
+          <span className="medstream-aws-info-body">{step.body}</span>
+          <span className="medstream-aws-info-footer">
+            <span>Step {currentStep + 1}/{TREATMENT_ANALYSIS_HELP_STEPS.length}</span>
+            <span className="medstream-aws-info-actions">
+              {currentStep > 0 ? (
+                <button type="button" className="medstream-aws-info-link" onClick={goToPreviousStep}>
+                  Previous
+                </button>
+              ) : null}
+              <button type="button" className="medstream-aws-info-primary" onClick={goToNextStep}>
+                {isLastStep ? "Finish" : "Next"}
+              </button>
+            </span>
+          </span>
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
+function TreatmentStepTitle({children, stepIndex, analysisHelpStep, isAnalysisHelpOpen, onClose, onStepChange, onToggle}) {
+  return (
+    <span className="medstream-treatment-step-title">
+      <span>{children}</span>
+      <TreatmentAnalysisInfoTour
+        currentStep={analysisHelpStep}
+        isOpen={isAnalysisHelpOpen && analysisHelpStep === stepIndex}
+        onClose={onClose}
+        onStepChange={onStepChange}
+        onToggle={() => onToggle(stepIndex)}
+      />
+    </span>
+  )
+}
+
 function StepFunctionsMedicationDecision({
   displayedMedication,
   selectedTreatmentOutcome,
@@ -255,23 +344,17 @@ function StepFunctionsMedicationDecision({
 
   return (
     <section className="medstream-sfn-panel" aria-label="Medication decision details">
-      <div className="medstream-sfn-heading">
-        <div className="medstream-sfn-heading-main">
-          <h3>{formatDisplayValue(displayedMedication.medication_name)}</h3>
-          <p>Medication decision details</p>
-        </div>
-        <StatusIndicator type={statusType}>{formatDisplayValue(selectedTreatmentOutcome)}</StatusIndicator>
-      </div>
-
       <div className="medstream-sfn-content">
         <div className="medstream-sfn-main">
           <div className="medstream-sfn-section">
             <h4>Execution details</h4>
             <ColumnLayout columns={3} variant="text-grid">
+              <DetailField label="Medication">
+                {formatDisplayValue(displayedMedication.medication_name)}
+              </DetailField>
               <DetailField label="Status">
                 <StatusIndicator type={statusType}>{formatDisplayValue(selectedTreatmentOutcome)}</StatusIndicator>
               </DetailField>
-              <DetailField label="Type">Task</DetailField>
               <DetailField label="Started">{formatCompactDate(displayedMedication.timestamp || displayedMedication.created_at)}</DetailField>
               <DetailField label="Medication ID">{displayedMedication.id || "--"}</DetailField>
               <DetailField label="Dosage">{displayedMedication.dosage || "--"}</DetailField>
@@ -289,31 +372,84 @@ function StepFunctionsMedicationDecision({
   )
 }
 
-function DynamoAttributeTable({title, items, emptyText, pagination}) {
+function DynamoAttributeContent({items, emptyText, pagination}) {
   return (
-    <Container header={<Header variant="h2">{title}</Header>}>
-      <SpaceBetween size="s">
-        <div className="medstream-attribute-list">
-          {items.length ? (
-            items.map((item) => (
-              <article key={item.id} className="medstream-attribute-row">
-                <div className="medstream-attribute-entry">
-                  <div className="medstream-attribute-primary">
-                    <Box color="text-body-secondary" variant="awsui-key-label">Name</Box>
-                    <strong>{formatDisplayValue(item.name)}</strong>
-                  </div>
-                  <AttributeStatusValue value={item.status}/>
-                  <AttributeSummaryValue label="Doctor" value={formatDisplayValue(item.modifiedBy)}/>
-                  <p className="medstream-attribute-note">{formatDisplayValue(item.note)}</p>
+    <SpaceBetween size="s">
+      <div className="medstream-attribute-list">
+        {items.length ? (
+          items.map((item) => (
+            <article key={item.id} className="medstream-attribute-row">
+              <div className="medstream-attribute-entry">
+                <div className="medstream-attribute-primary">
+                  <Box color="text-body-secondary" variant="awsui-key-label">Name</Box>
+                  <strong>{formatDisplayValue(item.name)}</strong>
                 </div>
-              </article>
-            ))
-          ) : (
-            <p className="medstream-simple-empty">{formatDisplayValue(emptyText)}</p>
-          )}
-        </div>
-        {pagination ? <div className="medstream-simple-pagination">{pagination}</div> : null}
-      </SpaceBetween>
+                <AttributeStatusValue value={item.status}/>
+                <AttributeSummaryValue label="Doctor" value={formatDisplayValue(item.modifiedBy)}/>
+                <p className="medstream-attribute-note">{formatDisplayValue(item.note)}</p>
+              </div>
+            </article>
+          ))
+        ) : (
+          <p className="medstream-simple-empty">{formatDisplayValue(emptyText)}</p>
+        )}
+      </div>
+      {pagination ? <div className="medstream-simple-pagination">{pagination}</div> : null}
+    </SpaceBetween>
+  )
+}
+
+function ClinicalContextPanel({
+  diagnosisItems,
+  diagnosisEmptyText,
+  diagnosisPagination,
+  conditionItems,
+  conditionEmptyText,
+  conditionPagination,
+  analysisHelpStep,
+  isAnalysisHelpOpen,
+  onCloseHelp,
+  onStepChange,
+  onToggleHelp,
+}) {
+  return (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Diagnosis and conditions linked to the medication decision."
+        >
+          <TreatmentStepTitle
+            stepIndex={1}
+            analysisHelpStep={analysisHelpStep}
+            isAnalysisHelpOpen={isAnalysisHelpOpen}
+            onClose={onCloseHelp}
+            onStepChange={onStepChange}
+            onToggle={onToggleHelp}
+          >
+            Clinical context
+          </TreatmentStepTitle>
+        </Header>
+      }
+    >
+      <div className="medstream-clinical-context-panel">
+        <section className="medstream-clinical-context-section" aria-label="Conditions">
+          <h3>Conditions</h3>
+          <DynamoAttributeContent
+            items={conditionItems}
+            emptyText={conditionEmptyText}
+            pagination={conditionPagination}
+          />
+        </section>
+        <section className="medstream-clinical-context-section" aria-label="Diagnosis">
+          <h3>Diagnosis</h3>
+          <DynamoAttributeContent
+            items={diagnosisItems}
+            emptyText={diagnosisEmptyText}
+            pagination={diagnosisPagination}
+          />
+        </section>
+      </div>
     </Container>
   )
 }
@@ -599,7 +735,28 @@ export default function PatientTreatmentAnalysisSection({
   const [medicationPage, setMedicationPage] = useState(1)
   const [diagnosisPage, setDiagnosisPage] = useState(1)
   const [conditionPage, setConditionPage] = useState(1)
+  const [isAnalysisHelpOpen, setIsAnalysisHelpOpen] = useState(false)
+  const [analysisHelpStep, setAnalysisHelpStep] = useState(0)
   const analysisRefetchDebounceRef = useRef(null)
+
+  const closeAnalysisHelp = useCallback(() => {
+    setIsAnalysisHelpOpen(false)
+    setAnalysisHelpStep(0)
+  }, [])
+
+  const changeAnalysisHelpStep = useCallback((stepIndex) => {
+    setAnalysisHelpStep(stepIndex)
+    setIsAnalysisHelpOpen(true)
+  }, [])
+
+  const toggleAnalysisHelpStep = useCallback((stepIndex) => {
+    if (isAnalysisHelpOpen && analysisHelpStep === stepIndex) {
+      closeAnalysisHelp()
+      return
+    }
+    setAnalysisHelpStep(stepIndex)
+    setIsAnalysisHelpOpen(true)
+  }, [analysisHelpStep, closeAnalysisHelp, isAnalysisHelpOpen])
 
   const loadAnalysis = useCallback(async (patientId, options = {}) => {
     const {isBackground = false} = options
@@ -638,6 +795,8 @@ export default function PatientTreatmentAnalysisSection({
     setMedicationPage(1)
     setDiagnosisPage(1)
     setConditionPage(1)
+    setIsAnalysisHelpOpen(false)
+    setAnalysisHelpStep(0)
 
     const loadInitial = async () => {
       try {
@@ -1116,131 +1275,143 @@ export default function PatientTreatmentAnalysisSection({
             </Alert>
           ) : null}
 
-              {displayedMedication ? (
-                <SpaceBetween size="m">
-                  <Container
-                    header={
-                      <Header
-                        variant="h2"
-                        description="Medication decision, execution details, and clinical cause."
-                        actions={
-                          <Pagination
-                            currentPageIndex={medicationPage}
-                            pagesCount={totalMedicationPages}
-                            onChange={({detail}) => setMedicationPage(detail.currentPageIndex)}
-                          />
-                        }
+          <SpaceBetween size="m">
+            <Container
+              header={
+                <Header
+                  variant="h2"
+                  description={`Last update: ${latestAlertSummary.lastUpdated}`}
+                  actions={
+                    fullAlertHistory.length ? (
+                      <Button
+                        onClick={() => {
+                          setShowFullAlertHistory((current) => {
+                            const next = !current
+                            setAlertHistoryPage(1)
+                            return next
+                          })
+                        }}
                       >
-                        Medication decision
-                      </Header>
-                    }
+                        {showFullAlertHistory ? "Hide full history" : "View full history"}
+                      </Button>
+                    ) : null
+                  }
+                >
+                  <TreatmentStepTitle
+                    stepIndex={0}
+                    analysisHelpStep={analysisHelpStep}
+                    isAnalysisHelpOpen={isAnalysisHelpOpen}
+                    onClose={closeAnalysisHelp}
+                    onStepChange={changeAnalysisHelpStep}
+                    onToggle={toggleAnalysisHelpStep}
                   >
-                    <StepFunctionsMedicationDecision
-                      displayedMedication={displayedMedication}
-                      selectedTreatmentOutcome={selectedTreatmentOutcome}
+                    Latest alert summary
+                  </TreatmentStepTitle>
+                </Header>
+              }
+            >
+              <SpaceBetween size="m">
+                <ColumnLayout columns={3} variant="text-grid">
+                  <SummaryValue
+                    label="Heart rate"
+                    value={latestAlertSummary.heartRate != null ? `${latestAlertSummary.heartRate} bpm` : "--"}
+                    meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.heartRate?.created_at)}
+                  />
+                  <SummaryValue
+                    label="Oxygen"
+                    value={latestAlertSummary.oxygen != null ? `${latestAlertSummary.oxygen}%` : "--"}
+                    meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.oxygen?.created_at)}
+                  />
+                  <SummaryValue
+                    label="Temperature"
+                    value={latestAlertSummary.temperature != null ? `${latestAlertSummary.temperature}°C` : "--"}
+                    meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.temperature?.created_at)}
+                  />
+                </ColumnLayout>
+                <p className="medstream-latest-alert-copy">{latestAlertSummary.summary}</p>
+                {showFullAlertHistory ? (
+                  <div className="medstream-alert-history">
+                    <AlertHistoryTable
+                      items={paginatedAlertHistory}
+                      pagination={
+                        fullAlertHistory.length > ALERT_HISTORY_EXPANDED_PAGE_SIZE ? (
+                          <Pagination
+                            currentPageIndex={alertHistoryPage}
+                            pagesCount={totalAlertHistoryPages}
+                            onChange={({detail}) => setAlertHistoryPage(detail.currentPageIndex)}
+                          />
+                        ) : null
+                      }
                     />
-                  </Container>
+                  </div>
+                ) : null}
+              </SpaceBetween>
+            </Container>
 
-                  <Container
-                    header={
-                      <Header
-                        variant="h2"
-                        description={`Last update: ${latestAlertSummary.lastUpdated}`}
-                        actions={
-                          fullAlertHistory.length ? (
-                            <Button
-                              onClick={() => {
-                                setShowFullAlertHistory((current) => {
-                                  const next = !current
-                                  setAlertHistoryPage(1)
-                                  return next
-                                })
-                              }}
-                            >
-                              {showFullAlertHistory ? "Hide full history" : "View full history"}
-                            </Button>
-                          ) : null
-                        }
-                      >
-                        Latest alert summary
-                      </Header>
+            <ClinicalContextPanel
+              diagnosisItems={diagnosisStatusDetails.length ? diagnosisListItems : []}
+              diagnosisEmptyText={displayedMedication?.related_diagnoses?.length ? formatDisplayValue(displayedMedication.related_diagnoses) : "No linked diagnosis."}
+              diagnosisPagination={
+                <Pagination
+                  currentPageIndex={diagnosisPage}
+                  pagesCount={totalDiagnosisPages}
+                  onChange={({detail}) => setDiagnosisPage(detail.currentPageIndex)}
+                />
+              }
+              conditionItems={conditionStatusDetails.length ? conditionListItems : []}
+              conditionEmptyText={displayedMedication?.related_conditions?.length ? formatDisplayValue(displayedMedication.related_conditions) : "No linked conditions."}
+              conditionPagination={
+                <Pagination
+                  currentPageIndex={conditionPage}
+                  pagesCount={totalConditionPages}
+                  onChange={({detail}) => setConditionPage(detail.currentPageIndex)}
+                />
+              }
+              analysisHelpStep={analysisHelpStep}
+              isAnalysisHelpOpen={isAnalysisHelpOpen}
+              onCloseHelp={closeAnalysisHelp}
+              onStepChange={changeAnalysisHelpStep}
+              onToggleHelp={toggleAnalysisHelpStep}
+            />
+
+            {displayedMedication ? (
+              <Container
+                header={
+                  <Header
+                    variant="h2"
+                    description="Medication decision, execution details, and clinical cause."
+                    actions={
+                      <Pagination
+                        currentPageIndex={medicationPage}
+                        pagesCount={totalMedicationPages}
+                        onChange={({detail}) => setMedicationPage(detail.currentPageIndex)}
+                      />
                     }
                   >
-                    <SpaceBetween size="m">
-                      <ColumnLayout columns={3} variant="text-grid">
-                        <SummaryValue
-                          label="Heart rate"
-                          value={latestAlertSummary.heartRate != null ? `${latestAlertSummary.heartRate} bpm` : "--"}
-                          meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.heartRate?.created_at)}
-                        />
-                        <SummaryValue
-                          label="Oxygen"
-                          value={latestAlertSummary.oxygen != null ? `${latestAlertSummary.oxygen}%` : "--"}
-                          meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.oxygen?.created_at)}
-                        />
-                        <SummaryValue
-                          label="Temperature"
-                          value={latestAlertSummary.temperature != null ? `${latestAlertSummary.temperature}°C` : "--"}
-                          meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.temperature?.created_at)}
-                        />
-                      </ColumnLayout>
-                      <p className="medstream-latest-alert-copy">{latestAlertSummary.summary}</p>
-                      {showFullAlertHistory ? (
-                        <div className="medstream-alert-history">
-                          <AlertHistoryTable
-                            items={paginatedAlertHistory}
-                            pagination={
-                              fullAlertHistory.length > ALERT_HISTORY_EXPANDED_PAGE_SIZE ? (
-                                <Pagination
-                                  currentPageIndex={alertHistoryPage}
-                                  pagesCount={totalAlertHistoryPages}
-                                  onChange={({detail}) => setAlertHistoryPage(detail.currentPageIndex)}
-                                />
-                              ) : null
-                            }
-                          />
-                        </div>
-                      ) : null}
-                    </SpaceBetween>
-                  </Container>
-
-                  <div className="medstream-dashboard-split medstream-treatment-clinical-grid">
-                    <div className="medstream-stretch-container">
-                      <DynamoAttributeTable
-                        title="Diagnosis"
-                        items={diagnosisStatusDetails.length ? diagnosisListItems : []}
-                        emptyText={displayedMedication.related_diagnoses.length ? formatDisplayValue(displayedMedication.related_diagnoses) : "No linked diagnosis."}
-                        pagination={
-                          <Pagination
-                            currentPageIndex={diagnosisPage}
-                            pagesCount={totalDiagnosisPages}
-                            onChange={({detail}) => setDiagnosisPage(detail.currentPageIndex)}
-                          />
-                        }
-                      />
-                    </div>
-
-                    <div className="medstream-stretch-container">
-                      <DynamoAttributeTable
-                        title="Conditions"
-                        items={conditionStatusDetails.length ? conditionListItems : []}
-                        emptyText={displayedMedication.related_conditions.length ? formatDisplayValue(displayedMedication.related_conditions) : "No linked conditions."}
-                        pagination={
-                          <Pagination
-                            currentPageIndex={conditionPage}
-                            pagesCount={totalConditionPages}
-                            onChange={({detail}) => setConditionPage(detail.currentPageIndex)}
-                          />
-                        }
-                      />
-                    </div>
-                  </div>
-                </SpaceBetween>
-              ) : (
-                <Container>
-                  <Box color="text-body-secondary">No treatment history available.</Box>
-                </Container>
-              )}
+                    <TreatmentStepTitle
+                      stepIndex={2}
+                      analysisHelpStep={analysisHelpStep}
+                      isAnalysisHelpOpen={isAnalysisHelpOpen}
+                      onClose={closeAnalysisHelp}
+                      onStepChange={changeAnalysisHelpStep}
+                      onToggle={toggleAnalysisHelpStep}
+                    >
+                      Medication decision
+                    </TreatmentStepTitle>
+                  </Header>
+                }
+              >
+                <StepFunctionsMedicationDecision
+                  displayedMedication={displayedMedication}
+                  selectedTreatmentOutcome={selectedTreatmentOutcome}
+                />
+              </Container>
+            ) : (
+              <Container>
+                <Box color="text-body-secondary">No treatment history available.</Box>
+              </Container>
+            )}
+          </SpaceBetween>
           </SpaceBetween>
         ) : null}
 

@@ -110,8 +110,11 @@ function resolveStaticTitle(pathname) {
   if (pathname === "/alerts") {
     return "Alerting System"
   }
+  if (pathname === "/departments") {
+    return "All Departments"
+  }
   if (pathname.startsWith("/departments/")) {
-    return "Departemnts"
+    return "Departments"
   }
   return "MedStream"
 }
@@ -249,6 +252,7 @@ function App() {
             }
           >
             <Route path="/dashboard" element={<DashboardPage/>}/>
+            <Route path="/departments" element={<DepartmentPage/>}/>
             <Route path="/departments/:name" element={<DepartmentPage/>}/>
             <Route path="/patient/:id" element={<PatientPage/>}/>
             <Route path="/patients/:id/diagnosis" element={<PatientDiagnosisPage/>}/>

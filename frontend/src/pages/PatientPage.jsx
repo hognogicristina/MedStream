@@ -77,8 +77,14 @@ function formatArrivalMethod(value) {
 }
 
 const MAX_VITAL_POINTS = 100
-const PATIENT_ALERT_CHART_HEIGHT = "100%"
-const PATIENT_VITALS_CHART_HEIGHT = 292
+const PATIENT_CHART_PANEL_HEIGHT = 320
+const PATIENT_ALERT_CHART_HEIGHT = PATIENT_CHART_PANEL_HEIGHT
+const PATIENT_VITALS_CHART_HEIGHT = 252
+const PATIENT_VITALS_LEGEND_ITEMS = [
+  {label: "Heart Rate", color: "#f97316"},
+  {label: "Oxygen Saturation", color: "#3b82f6"},
+  {label: "Temperature", color: "#22c55e"},
+]
 
 export default function PatientPage() {
   const navigate = useNavigate()
@@ -93,6 +99,8 @@ export default function PatientPage() {
   const [department, setDepartment] = useState("")
   const [isPatientNotFound, setIsPatientNotFound] = useState(false)
   const [isUpdatingDepartment, setIsUpdatingDepartment] = useState(false)
+  const [highlightedVitalTitle, setHighlightedVitalTitle] = useState(null)
+  const [highlightedAlertSeverity, setHighlightedAlertSeverity] = useState(null)
   const [isLoadingPatient, setIsLoadingPatient] = useState(true)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isSavingPatient, setIsSavingPatient] = useState(false)
@@ -621,17 +629,39 @@ export default function PatientPage() {
             <div className="medstream-patient-chart-stack">
               <Container
                 className="medstream-patient-chart-container"
-                fitHeight
                 header={<Header variant="h2">Vitals timeline</Header>}
               >
                 <div className="medstream-chart-panel medstream-patient-vitals-chart-panel">
-                  <VitalsChart data={chartData} height={PATIENT_VITALS_CHART_HEIGHT} hideLegend/>
+                  <VitalsChart
+                    data={chartData}
+                    height={PATIENT_VITALS_CHART_HEIGHT}
+                    highlightedSeriesTitle={highlightedVitalTitle}
+                    hideLegend
+                    onHighlightedSeriesTitleChange={setHighlightedVitalTitle}
+                  />
                 </div>
               </Container>
-              <div className="medstream-patient-vitals-legend" aria-label="Vitals legend">
-                <span><i style={{backgroundColor: "#f97316"}}/>Heart Rate</span>
-                <span><i style={{backgroundColor: "#3b82f6"}}/>Oxygen Saturation</span>
-                <span><i style={{backgroundColor: "#22c55e"}}/>Temperature</span>
+              <div
+                className="medstream-patient-vitals-legend"
+                aria-label="Vitals legend"
+                onMouseLeave={() => setHighlightedVitalTitle(null)}
+              >
+                {PATIENT_VITALS_LEGEND_ITEMS.map((entry) => (
+                  <span
+                    className={[
+                      highlightedVitalTitle === entry.label ? "medstream-patient-chart-legend-item-active" : "",
+                      highlightedVitalTitle && highlightedVitalTitle !== entry.label ? "medstream-patient-chart-legend-item-muted" : "",
+                    ].filter(Boolean).join(" ")}
+                    key={entry.label}
+                    onBlur={() => setHighlightedVitalTitle(null)}
+                    onFocus={() => setHighlightedVitalTitle(entry.label)}
+                    onMouseEnter={() => setHighlightedVitalTitle(entry.label)}
+                    tabIndex={0}
+                  >
+                    <i style={{backgroundColor: entry.color}}/>
+                    {entry.label}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
@@ -643,7 +673,6 @@ export default function PatientPage() {
               <div className="medstream-patient-chart-stack">
                 <Container
                   className="medstream-alerts-container medstream-patient-chart-container"
-                  fitHeight
                   header={
                     <Header
                       variant="h2"
@@ -665,8 +694,10 @@ export default function PatientPage() {
                         data={alertDistributionData}
                         emptyText="No alerts available."
                         height={PATIENT_ALERT_CHART_HEIGHT}
+                        highlightedKey={highlightedAlertSeverity}
                         hideLegend
                         legendPosition="left"
+                        onHighlightedKeyChange={setHighlightedAlertSeverity}
                         seriesTitle="Alerts"
                         tooltipValueFormatter={(bar) => {
                           const count = Math.round(Number(bar.y) || 0)
@@ -678,9 +709,23 @@ export default function PatientPage() {
                   </div>
                 </Container>
                 {alertDistributionData.length > 0 ? (
-                  <div className="medstream-alert-chart-legend" aria-label="Patient alerts legend">
+                  <div
+                    className="medstream-alert-chart-legend"
+                    aria-label="Patient alerts legend"
+                    onMouseLeave={() => setHighlightedAlertSeverity(null)}
+                  >
                     {alertDistributionData.map((entry) => (
-                      <span key={entry.label}>
+                      <span
+                        className={[
+                          highlightedAlertSeverity === entry.label ? "medstream-patient-chart-legend-item-active" : "",
+                          highlightedAlertSeverity && highlightedAlertSeverity !== entry.label ? "medstream-patient-chart-legend-item-muted" : "",
+                        ].filter(Boolean).join(" ")}
+                        key={entry.label}
+                        onBlur={() => setHighlightedAlertSeverity(null)}
+                        onFocus={() => setHighlightedAlertSeverity(entry.label)}
+                        onMouseEnter={() => setHighlightedAlertSeverity(entry.label)}
+                        tabIndex={0}
+                      >
                         <i style={{backgroundColor: entry.color}}/>
                         {entry.label}
                       </span>

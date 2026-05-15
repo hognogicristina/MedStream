@@ -48,6 +48,7 @@ export default function AwsBarChart({
   data,
   emptyText = "No chart data available.",
   height = 260,
+  highlightedKey = undefined,
   hideFilter = true,
   hideLegend = false,
   hideZeroValues = false,
@@ -55,6 +56,7 @@ export default function AwsBarChart({
   legendPosition = "center",
   seriesTitle = "Value",
   tooltipValueFormatter = null,
+  onHighlightedKeyChange = null,
   valueFormatter = defaultValueFormatter,
   valueKey = "value",
   xTitle,
@@ -68,6 +70,16 @@ export default function AwsBarChart({
   const [chartSize, setChartSize] = useState({width: 0, height: 0})
   const [hoveredKey, setHoveredKey] = useState(null)
   const chartData = useMemo(() => Array.isArray(data) ? data : [], [data])
+  const isHighlightControlled = highlightedKey !== undefined
+  const activeKey = isHighlightControlled ? highlightedKey : hoveredKey
+  const updateActiveKey = (nextKey) => {
+    if (isHighlightControlled) {
+      onHighlightedKeyChange?.(nextKey)
+      return
+    }
+
+    setHoveredKey(nextKey)
+  }
 
   useLayoutEffect(() => {
     const node = chartRef.current
@@ -146,9 +158,9 @@ export default function AwsBarChart({
       y,
     }
   })
-  const hoveredBar = hoveredKey == null ? null : bars.find((bar) => bar.x === hoveredKey) || null
+  const hoveredBar = activeKey == null ? null : bars.find((bar) => bar.x === activeKey) || null
   const formatTooltipValue = tooltipValueFormatter || ((bar) => valueFormatter(bar.y))
-  const hasActiveBar = hoveredKey != null
+  const hasActiveBar = activeKey != null
   const legendItems = colorKey ? points : [{x: seriesTitle, color: barColor}]
   const tooltipLeft = hoveredBar ? Math.min(78, Math.max(22, (hoveredBar.centerX / CHART_WIDTH) * 100)) : 50
   const tooltipPlacement = hoveredBar && hoveredBar.centerX > CHART_WIDTH * 0.62 ? "left" : "right"
@@ -158,7 +170,7 @@ export default function AwsBarChart({
       aria-label={ariaLabel}
       ref={chartRef}
       className={["medstream-aws-bar-chart", className].filter(Boolean).join(" ")}
-      onMouseLeave={() => setHoveredKey(null)}
+      onMouseLeave={() => updateActiveKey(null)}
       role="img"
       style={{height, paddingBottom: svgBottomGap}}
     >
@@ -185,16 +197,16 @@ export default function AwsBarChart({
             {bars.map((bar) => (
               <g
                 key={bar.x}
-                onBlur={() => setHoveredKey(null)}
-                onFocus={() => setHoveredKey(bar.x)}
-                onMouseEnter={() => setHoveredKey(bar.x)}
+                onBlur={() => updateActiveKey(null)}
+                onFocus={() => updateActiveKey(bar.x)}
+                onMouseEnter={() => updateActiveKey(bar.x)}
                 tabIndex={0}
               >
                 <rect
                   className={[
                     "medstream-aws-bar-chart-bar",
-                    hoveredKey === bar.x ? "medstream-aws-bar-chart-bar-hovered" : "",
-                    hasActiveBar && hoveredKey !== bar.x ? "medstream-aws-bar-chart-bar-muted" : "",
+                    activeKey === bar.x ? "medstream-aws-bar-chart-bar-hovered" : "",
+                    hasActiveBar && activeKey !== bar.x ? "medstream-aws-bar-chart-bar-muted" : "",
                   ].filter(Boolean).join(" ")}
                   fill={bar.color}
                   height={bar.barHeight}
@@ -204,7 +216,7 @@ export default function AwsBarChart({
                   x={bar.svgX}
                   y={bar.y}
                 />
-                {hoveredKey === bar.x ? (
+                {activeKey === bar.x ? (
                   <rect
                     className="medstream-aws-bar-chart-bar-overlay"
                     height={bar.barHeight}
@@ -251,13 +263,13 @@ export default function AwsBarChart({
                 <span
                   className={[
                     "medstream-aws-bar-chart-legend-item",
-                    hoveredKey === item.x ? "medstream-aws-bar-chart-legend-item-active" : "",
-                    hasActiveBar && hoveredKey !== item.x ? "medstream-aws-bar-chart-legend-item-muted" : "",
+                    activeKey === item.x ? "medstream-aws-bar-chart-legend-item-active" : "",
+                    hasActiveBar && activeKey !== item.x ? "medstream-aws-bar-chart-legend-item-muted" : "",
                   ].filter(Boolean).join(" ")}
                   key={item.x}
-                  onBlur={() => setHoveredKey(null)}
-                  onFocus={() => setHoveredKey(item.x)}
-                  onMouseEnter={() => setHoveredKey(item.x)}
+                  onBlur={() => updateActiveKey(null)}
+                  onFocus={() => updateActiveKey(item.x)}
+                  onMouseEnter={() => updateActiveKey(item.x)}
                   tabIndex={0}
                 >
                   <i style={{backgroundColor: item.color}}/>

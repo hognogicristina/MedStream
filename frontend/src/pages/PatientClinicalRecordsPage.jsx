@@ -944,7 +944,6 @@ export default function PatientClinicalRecordsPage() {
               <Header
                 variant="h2"
                 description={isEditDialog ? "Update the selected clinical record." : "Create a new clinical record for this patient."}
-                actions={<StatusIndicator type={isEditDialog ? "in-progress" : "pending"}>{isEditDialog ? "Update" : "New record"}</StatusIndicator>}
               >
                 {dialogTitle}
               </Header>
@@ -1238,11 +1237,6 @@ export default function PatientClinicalRecordsPage() {
             <Header
               variant="h2"
               description="Doctors currently assigned to this patient."
-              actions={
-                <StatusIndicator type={doctors.length > 0 ? "success" : "pending"}>
-                  {doctors.length} assigned
-                </StatusIndicator>
-              }
             >
               Assigned Doctors
             </Header>

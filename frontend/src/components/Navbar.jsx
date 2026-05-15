@@ -12,6 +12,9 @@ import {getResponseData} from "../services/apiMessages.js"
 import {getDepartments} from "../services/patientApi.js"
 
 function resolveActiveHref(pathname) {
+  if (pathname === "/departments") {
+    return "/departments"
+  }
   if (pathname.startsWith("/departments/")) {
     return pathname
   }
@@ -122,11 +125,14 @@ function createNavigationItems(departments) {
       type: "section",
       text: "Departments",
       defaultExpanded: false,
-      items: departments.map((department) => ({
-        type: "link",
-        text: department,
-        href: `/departments/${encodeURIComponent(department)}`,
-      })),
+      items: [
+        {type: "link", text: "All departments", href: "/departments"},
+        ...departments.map((department) => ({
+          type: "link",
+          text: department,
+          href: `/departments/${encodeURIComponent(department)}`,
+        })),
+      ],
     },
     {type: "link", text: "Add Patient", href: "/patients/new"},
     {type: "link", text: "Alerts", href: "/alerts"},
@@ -279,9 +285,6 @@ export function AppSideNavigation({onCollapse}) {
         onFollow={(event) => {
           event.preventDefault()
           const href = event.detail.href
-          if (href === "/departments") {
-            return
-          }
           if (href) {
             navigate(href)
           }
@@ -298,12 +301,15 @@ export function AppIconRail({onOpen}) {
   const [departmentsDropdownRef, isDepartmentsDropdownOpen] = useButtonDropdownOpenState()
   const [metricsDropdownRef, isMetricsDropdownOpen] = useButtonDropdownOpenState()
   const activeHref = useMemo(() => resolveActiveHref(location.pathname), [location.pathname])
-  const isDepartmentsActive = activeHref.startsWith("/departments/")
+  const isDepartmentsActive = activeHref.startsWith("/departments")
   const isMetricsActive = activeHref.startsWith("/metrics/")
-  const departmentItems = useMemo(() => departments.map((department) => ({
-    id: `/departments/${encodeURIComponent(department)}`,
-    text: department,
-  })), [departments])
+  const departmentItems = useMemo(() => [
+    {id: "/departments", text: "All departments"},
+    ...departments.map((department) => ({
+      id: `/departments/${encodeURIComponent(department)}`,
+      text: department,
+    })),
+  ], [departments])
 
   useEffect(() => {
     let active = true

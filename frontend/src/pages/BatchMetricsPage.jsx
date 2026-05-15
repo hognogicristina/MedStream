@@ -1,5 +1,6 @@
 import {useEffect, useMemo, useRef, useState} from "react"
 import {
+  Alert,
   Box,
   Button,
   ColumnLayout,
@@ -37,6 +38,27 @@ const POLL_INTERVAL_MS = 30000
 const STATUS_POLL_INTERVAL_MS = 2500
 const PAGE_SIZE = 5
 const AGGREGATION_WINDOW_MINUTES = 60
+const RUN_STARTED_ALERT_STYLE = {
+  root: {
+    background: "#037f0c",
+    borderColor: "#037f0c",
+    borderRadius: "8px",
+    color: "#ffffff",
+  },
+  icon: {
+    color: "#ffffff",
+  },
+  dismissButton: {
+    color: {
+      active: "#ffffff",
+      default: "#ffffff",
+      hover: "#ffffff",
+    },
+    focusRing: {
+      borderColor: "#ffffff",
+    },
+  },
+}
 const WEEKDAY_OPTIONS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
 const SCHEDULE_TYPE_OPTIONS = [
   {label: "Every X seconds", value: "seconds"},
@@ -317,7 +339,7 @@ export default function BatchMetricsPage() {
   const [treatmentMode, setTreatmentMode] = useState("medication")
   const [selectedMedication, setSelectedMedication] = useState("")
   const [visibleOutcomeIds, setVisibleOutcomeIds] = useState(OUTCOME_FILTER_IDS)
-  const [activeOutcomeId, setActiveOutcomeId] = useState("effective")
+  const [activeOutcomeId, setActiveOutcomeId] = useState("")
   const [hoveredOutcomeId, setHoveredOutcomeId] = useState("")
   const lastBatchTimestampRef = useRef(null)
   const hasLoadedInitialDataRef = useRef(false)
@@ -508,6 +530,10 @@ export default function BatchMetricsPage() {
   }
 
   const handleRunBatchNow = async () => {
+    if (isRunningBatch || batchProgress.is_running) {
+      return
+    }
+
     try {
       setIsRunningBatch(true)
       setShowRunStartedBanner(false)
@@ -596,8 +622,8 @@ export default function BatchMetricsPage() {
       label: entry.name,
       value: entry.id,
       labelContent: (
-        <span className="medstream-overall-select-option">
-          <span className="medstream-overall-legend-swatch" style={{backgroundColor: entry.color}}/>
+        <span className="medstream-overall-select-option" style={{"--medstream-overall-option-color": entry.color}}>
+          <span className="medstream-overall-legend-swatch"/>
           <span>{entry.name}</span>
         </span>
       ),
@@ -606,8 +632,8 @@ export default function BatchMetricsPage() {
   )
   const selectedOutcomeOptions = outcomeFilterOptions.filter((option) => visibleOutcomeIds.includes(option.value))
   const visibleOutcomeTotal = visibleOutcomeData.reduce((sum, entry) => sum + entry.rawValue, 0)
-  const activeOutcomeIndex = visibleOutcomeChartData.findIndex((entry) => entry.id === activeOutcomeId)
-  const highlightedOutcomeId = hoveredOutcomeId || activeOutcomeId
+  const highlightedOutcomeId = activeOutcomeId || hoveredOutcomeId
+  const activeOutcomeIndex = visibleOutcomeChartData.findIndex((entry) => entry.id === highlightedOutcomeId)
 
   useEffect(() => {
     if (!medicationEffectiveness.length) {
@@ -625,13 +651,19 @@ export default function BatchMetricsPage() {
   useEffect(() => {
     if (!visibleOutcomeChartData.length) {
       setActiveOutcomeId("")
+      setHoveredOutcomeId("")
       return
     }
 
     setActiveOutcomeId((current) => (
       current && visibleOutcomeChartData.some((entry) => entry.id === current)
         ? current
-        : visibleOutcomeChartData[0].id
+        : ""
+    ))
+    setHoveredOutcomeId((current) => (
+      current && visibleOutcomeChartData.some((entry) => entry.id === current)
+        ? current
+        : ""
     ))
   }, [visibleOutcomeChartData])
 
@@ -663,6 +695,7 @@ export default function BatchMetricsPage() {
   const lastRunStatusType = getLastRunStatusType(batchProgress)
   const batchRunState = progressLabel
   const batchRunTone = batchRunState.toLowerCase()
+  const isBatchRunActionDisabled = isRunningBatch || Boolean(batchProgress.is_running)
 
   const handleExportAllMetrics = () => {
     const exportTimestamp = new Date().toISOString()
@@ -787,20 +820,16 @@ export default function BatchMetricsPage() {
             <Button iconName="download" onClick={handleExportAllMetrics}>Export</Button>
           </div>
           {showRunStartedBanner ? (
-            <div className="medstream-batch-run-banner" role="status">
-              <span className="medstream-batch-run-banner-icon" aria-hidden="true"/>
-              <span className="medstream-batch-run-banner-content">
-                <strong>Job run triggered</strong>
-                <span>The job run was submitted successfully and execution status is updating.</span>
-              </span>
-              <button
-                type="button"
-                className="medstream-batch-run-banner-dismiss"
-                onClick={() => setShowRunStartedBanner(false)}
-                aria-label="Dismiss run started message"
+            <div className="medstream-batch-run-alert">
+              <Alert
+                type="success"
+                header="Job run triggered"
+                dismissible
+                style={RUN_STARTED_ALERT_STYLE}
+                onDismiss={() => setShowRunStartedBanner(false)}
               >
-                x
-              </button>
+                The job run was submitted successfully and execution status is updating.
+              </Alert>
             </div>
           ) : null}
         </div>
@@ -883,9 +912,9 @@ export default function BatchMetricsPage() {
                   <Button
                     variant="primary"
                 onClick={handleRunBatchNow}
-                disabled={isRunningBatch}
+                disabled={isBatchRunActionDisabled}
               >
-                {isRunningBatch ? "Running..." : "Run Batch Now"}
+                {isBatchRunActionDisabled ? "Running..." : "Run Batch Now"}
                   </Button>
                 </SpaceBetween>
               </SpaceBetween>
@@ -1133,6 +1162,7 @@ export default function BatchMetricsPage() {
                                     stroke="none"
                                     strokeWidth={0}
                                     onMouseEnter={(entry) => setActiveOutcomeId(entry.id)}
+                                    onMouseLeave={() => setActiveOutcomeId("")}
                                   >
                                     {visibleOutcomeChartData.map((entry) => (
                                       <Cell
@@ -1198,14 +1228,8 @@ export default function BatchMetricsPage() {
                                 ].filter(Boolean).join(" ")}
                                 key={entry.id}
                                 onBlur={() => setHoveredOutcomeId("")}
-                                onFocus={() => {
-                                  setActiveOutcomeId(entry.id)
-                                  setHoveredOutcomeId(entry.id)
-                                }}
-                                onMouseEnter={() => {
-                                  setActiveOutcomeId(entry.id)
-                                  setHoveredOutcomeId(entry.id)
-                                }}
+                                onFocus={() => setHoveredOutcomeId(entry.id)}
+                                onMouseEnter={() => setHoveredOutcomeId(entry.id)}
                                 tabIndex={0}
                               >
                                 <span className="medstream-overall-legend-swatch" style={{backgroundColor: entry.color}}/>
