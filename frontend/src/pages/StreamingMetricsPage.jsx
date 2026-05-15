@@ -59,6 +59,11 @@ function toMillis(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function getPaddedAlertsRateYMax(points) {
+  const maxValue = Math.max(1, ...points.map((point) => Number(point.alerts_per_minute) || 0))
+  return Math.ceil(maxValue + Math.max(1, maxValue * 0.1))
+}
+
 export default function StreamingMetricsPage() {
   const {notifyError} = useNotifications()
   const [metrics, setMetrics] = useState(null)
@@ -204,6 +209,7 @@ export default function StreamingMetricsPage() {
   }
 
   const alertsTotalPages = Math.max(1, Math.ceil((recentAlerts.total || 0) / ALERTS_PAGE_SIZE))
+  const alertsRateYMax = getPaddedAlertsRateYMax(alertsRateHistory)
 
   const exportStreamingMetrics = () => {
     const exportTimestamp = new Date().toISOString()
@@ -350,7 +356,7 @@ export default function StreamingMetricsPage() {
                           {key: "alerts_per_minute", title: "Alerts/Minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} alerts`},
                         ]}
                         xTitle="Time"
-                        yDomain={[0, Math.max(1, ...alertsRateHistory.map((point) => Number(point.alerts_per_minute) || 0))]}
+                        yDomain={[0, alertsRateYMax]}
                         yTickFormatter={(value) => String(Math.round(value))}
                       />
                     </div>

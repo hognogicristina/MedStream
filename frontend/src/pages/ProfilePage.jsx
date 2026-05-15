@@ -54,6 +54,8 @@ import {formatPatientFullName} from "../utils/patients.js"
 import {buildPatientPhoneNumber, normalizeRomanianPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone.js"
 import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
 
+const DEACTIVATE_ACCOUNT_CONFIRMATION = "deactivate account"
+
 const buildDoctorProfileForm = (doctor) => ({
   first_name: doctor?.first_name || "",
   last_name: doctor?.last_name || "",
@@ -266,6 +268,7 @@ export default function ProfilePage() {
   const [patientDoctorCounts, setPatientDoctorCounts] = useState({})
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("")
   const [isActivityDialogOpen, setIsActivityDialogOpen] = useState(false)
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false)
   const [activityDialogMode, setActivityDialogMode] = useState("create")
@@ -296,6 +299,8 @@ export default function ProfilePage() {
     doctor
     && allDoctors.filter((item) => item.is_active && item.specialization === doctor.specialization).length <= 1,
   )
+  const isAccountStatusChangeBlocked = isOnlyDoctorInDepartment || hasIncomingActivities
+  const isDeleteConfirmationValid = deleteConfirmationText.trim() === DEACTIVATE_ACCOUNT_CONFIRMATION
 
   const loadAssignedDoctorCounts = async (patientsList) => {
     if (!Array.isArray(patientsList) || patientsList.length === 0) {
@@ -758,8 +763,13 @@ export default function ProfilePage() {
     await executePatientTransfer()
   }
 
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false)
+    setDeleteConfirmationText("")
+  }
+
   const handleDeleteAccount = async () => {
-    if (!doctor || isOnlyDoctorInDepartment) {
+    if (!doctor || isAccountStatusChangeBlocked || !isDeleteConfirmationValid) {
       return
     }
 
@@ -771,7 +781,7 @@ export default function ProfilePage() {
       setAssignedPatients([])
       setPatientDoctorCounts({})
       notifySuccess(getResponseMessage(response))
-      setShowDeleteModal(false)
+      closeDeleteModal()
       logout()
       navigate("/")
     } catch (error) {
@@ -1016,15 +1026,17 @@ export default function ProfilePage() {
                         <div className="login-field">
                           <span className="medstream-label-with-help">
                             <label className="login-label" htmlFor="specialization">Specialization</label>
-                            <InfoHelp
-                              ariaLabel="specialization help"
-                              title="Specialization changes"
-                              body={[
-                                "Specialization cannot be changed while incoming activities exist or you still have admitted assigned patients.",
-                                "A replacement active doctor must remain in the current department before your specialization changes.",
-                              ]}
-                              footer="This keeps patients and activities assigned to a doctor in the matching department."
-                            />
+                            {isSpecializationChangeBlocked ? (
+                              <InfoHelp
+                                ariaLabel="specialization help"
+                                title="Specialization changes"
+                                body={[
+                                  "Specialization cannot be changed while incoming activities exist or you still have admitted assigned patients.",
+                                  "A replacement active doctor must remain in the current department before your specialization changes.",
+                                ]}
+                                footer="This keeps patients and activities assigned to a doctor in the matching department."
+                              />
+                            ) : null}
                           </span>
                           <Select
                             selectedOption={getSelectedOption(departmentOptions, form.specialization)}
@@ -1202,15 +1214,17 @@ export default function ProfilePage() {
                       <Header variant="h2" description="Deactivate the current doctor account when policy allows it.">
                         <span className="medstream-transfer-title">
                           <span>Account status</span>
-                          <InfoHelp
-                            ariaLabel="account status help"
-                            title="Account deactivation"
-                            body={[
-                              "The account cannot be deactivated if you are the only active doctor in your department or if incoming activities are still assigned.",
-                              "When allowed, deactivation reassigns currently assigned patients to another doctor from the same department.",
-                            ]}
-                            footer="Resolve incoming activities and keep department coverage before deleting the account."
-                          />
+                          {isAccountStatusChangeBlocked ? (
+                            <InfoHelp
+                              ariaLabel="account status help"
+                              title="Account deactivation"
+                              body={[
+                                "The account cannot be deactivated if you are the only active doctor in your department or if incoming activities are still assigned.",
+                                "When allowed, deactivation reassigns currently assigned patients to another doctor from the same department.",
+                              ]}
+                              footer="Resolve incoming activities and keep department coverage before deleting the account."
+                            />
+                          ) : null}
                         </span>
                       </Header>
                     }
@@ -1227,7 +1241,7 @@ export default function ProfilePage() {
                         </SpaceBetween>
                       </ColumnLayout>
 
-                      {(isOnlyDoctorInDepartment || hasIncomingActivities) && (
+                      {isAccountStatusChangeBlocked && (
                         <Alert type="warning">
                           {isOnlyDoctorInDepartment
                             ? "You are the only doctor in this department. Account cannot be deleted."
@@ -1235,28 +1249,19 @@ export default function ProfilePage() {
                         </Alert>
                       )}
 
-                      <HoverTextDropdown
-                        content={
-                          isOnlyDoctorInDepartment
-                            ? "You are the only doctor in this department. Account cannot be deleted."
-                            : hasIncomingActivities
-                              ? "Cannot modify account while there are incoming activities."
-                              : ""
-                        }
+                      <Button
+                        variant="primary"
+                        className="medstream-submit-button"
+                        onClick={() => {
+                          if (!isAccountStatusChangeBlocked) {
+                            setDeleteConfirmationText("")
+                            setShowDeleteModal(true)
+                          }
+                        }}
+                        disabled={isDeletingAccount || isAccountStatusChangeBlocked}
                       >
-                        <Button
-                          variant="primary"
-                          className="medstream-submit-button"
-                          onClick={() => {
-                            if (!isOnlyDoctorInDepartment && !hasIncomingActivities) {
-                              setShowDeleteModal(true)
-                            }
-                          }}
-                          disabled={isDeletingAccount || isOnlyDoctorInDepartment || hasIncomingActivities}
-                        >
-                          {isDeletingAccount ? "Deactivating..." : "Delete account"}
-                        </Button>
-                      </HoverTextDropdown>
+                        {isDeletingAccount ? "Deactivating..." : "Deactivate account"}
+                      </Button>
                     </SpaceBetween>
                   </Container>
                 </div>
@@ -1275,7 +1280,7 @@ export default function ProfilePage() {
         {showDeleteModal && (
           <Modal
             visible={showDeleteModal}
-            onDismiss={isDeletingAccount ? undefined : () => setShowDeleteModal(false)}
+            onDismiss={isDeletingAccount ? undefined : closeDeleteModal}
             size="medium"
             header={
               <Header
@@ -1290,7 +1295,7 @@ export default function ProfilePage() {
                 <SpaceBetween direction="horizontal" size="xs">
                   <Button
                     className="medstream-cancel-button"
-                    onClick={() => setShowDeleteModal(false)}
+                    onClick={closeDeleteModal}
                     disabled={isDeletingAccount}
                   >
                     Cancel
@@ -1299,9 +1304,9 @@ export default function ProfilePage() {
                     variant="primary"
                     className="medstream-submit-button"
                     onClick={handleDeleteAccount}
-                    disabled={isDeletingAccount}
+                    disabled={isDeletingAccount || !isDeleteConfirmationValid}
                   >
-                    {isDeletingAccount ? "Deactivating..." : "Confirm"}
+                    {isDeletingAccount ? "Deactivating..." : "Deactivate account"}
                   </Button>
                 </SpaceBetween>
               </Box>
@@ -1310,6 +1315,20 @@ export default function ProfilePage() {
             <div className="medstream-modal-summary">
               This action deactivates the doctor account and automatically reassigns your patients to another doctor from the same
               department.
+            </div>
+            <div className="login-field">
+              <label className="login-label" htmlFor="deactivate-account-confirmation">
+                Type "{DEACTIVATE_ACCOUNT_CONFIRMATION}" to confirm.
+              </label>
+              <input
+                id="deactivate-account-confirmation"
+                type="text"
+                className="login-input"
+                value={deleteConfirmationText}
+                onChange={(event) => setDeleteConfirmationText(event.target.value)}
+                disabled={isDeletingAccount}
+                autoComplete="off"
+              />
             </div>
           </Modal>
         )}

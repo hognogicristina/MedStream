@@ -2015,6 +2015,7 @@ body {
 }
 
 .medstream-streaming-summary-tile {
+  position: relative;
   min-width: 0;
   padding: 0 16px;
 }
@@ -2034,6 +2035,20 @@ body {
 .medstream-streaming-summary-tile:nth-child(n + 4) {
   border-top: 1px solid var(--border-subtle);
   padding-top: 12px;
+}
+
+.medstream-streaming-summary-tile:nth-child(n + 4):not(:nth-child(3n + 1)) {
+  border-left: 0;
+}
+
+.medstream-streaming-summary-tile:nth-child(n + 4):not(:nth-child(3n + 1))::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: var(--border-subtle);
 }
 
 .medstream-streaming-summary-tile [class*="key-label"] {
@@ -2066,6 +2081,7 @@ body {
   margin-top: 12px;
 }
 
+.medstream-comparison-metrics-grid,
 .medstream-comparison-batch-metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2073,10 +2089,21 @@ body {
   align-items: start;
 }
 
+.medstream-throughput-chart-panel {
+  height: 260px;
+  min-height: 260px;
+}
+
+.medstream-throughput-legend {
+  margin-top: -4px;
+  padding: 0 20px 8px;
+}
+
 .medstream-comparison-metric-card {
   min-width: 0;
 }
 
+.medstream-comparison-metrics-grid .medstream-comparison-metric-card + .medstream-comparison-metric-card,
 .medstream-comparison-batch-metrics-grid .medstream-comparison-metric-card + .medstream-comparison-metric-card {
   border-left: 1px solid var(--border-subtle);
   padding-left: 12px;
@@ -2121,7 +2148,7 @@ body {
 
 .medstream-batch-latest-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   align-items: start;
 }
@@ -2133,6 +2160,18 @@ body {
 .medstream-batch-latest-metrics-grid .medstream-batch-metric-tile + .medstream-batch-metric-tile {
   border-left: 1px solid var(--border-subtle);
   padding-left: 16px;
+}
+
+.medstream-batch-latest-metrics-grid .medstream-batch-metric-tile:first-child,
+.medstream-batch-latest-metrics-grid .medstream-batch-metric-tile:nth-child(5) {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.medstream-batch-latest-metrics-divider {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: var(--border-subtle);
 }
 
 .medstream-batch-metric-tile-compact [class*="key-label"] {
@@ -2488,12 +2527,15 @@ body {
   background: var(--surface-muted);
 }
 
-.medstream-simple-list-table [class*="awsui_body-cell"] {
-  border-block-start: 1px solid var(--border-subtle) !important;
+.medstream-simple-list-table th[class*="awsui_header-cell"] {
+  border-block-end-color: transparent !important;
+  box-shadow: inset 0 -1px 0 var(--border-subtle);
 }
 
-.medstream-simple-list-table [class*="awsui_body-row"]:first-of-type [class*="awsui_body-cell"] {
-  border-block-start: 0 !important;
+.medstream-simple-list-table [class*="awsui_body-cell"] {
+  border-block-start-color: transparent !important;
+  border-block-end-color: transparent !important;
+  box-shadow: inset 0 -1px 0 var(--border-subtle);
 }
 
 .medstream-simple-list-table th[data-focus-id="header-patients"],
@@ -4164,6 +4206,10 @@ input[type="search"]::-webkit-search-cancel-button {
   .medstream-batch-latest-metrics-grid .medstream-batch-metric-tile + .medstream-batch-metric-tile {
     border-left: 0;
     padding-left: 0;
+  }
+
+  .medstream-streaming-summary-tile:nth-child(n + 4)::before {
+    display: none;
   }
 
   .medstream-comparison-chart-grid > .medstream-chart-panel + .medstream-chart-panel {

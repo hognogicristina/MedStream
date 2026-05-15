@@ -905,7 +905,7 @@ export default function BatchMetricsPage() {
                 <SpaceBetween direction="horizontal" size="xs">
                   <Button
                 onClick={handleApplySchedule}
-                disabled={isApplyingSchedule}
+                disabled={isApplyingSchedule || isBatchRunActionDisabled}
               >
                 {isApplyingSchedule ? "Applying..." : "Apply Schedule"}
                   </Button>
@@ -973,22 +973,15 @@ export default function BatchMetricsPage() {
             <MetricTile compact label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm", hasBatchData)}/>
             <MetricTile compact label="Avg Oxygen" value={formatMetric(data.avg_oxygen, "%", hasBatchData)}/>
             <MetricTile compact label="Avg Temperature" value={formatMetric(data.avg_temperature, " C", hasBatchData)}/>
+            <div className="medstream-batch-latest-metrics-divider" aria-hidden="true"/>
             <MetricTile compact label="Alerts Count" value={hasBatchData ? String(data.alerts ?? 0) : "Not available"}/>
             <MetricTile compact label="Execution Time" value={formatMetric(data.execution_time_ms, " ms", hasBatchData)}/>
-          </div>
-        </Container>
-
-        <Container header={<Header variant="h2">Post-Discharge Clinical Summary</Header>}>
-          <ColumnLayout columns={2} variant="text-grid">
             <MetricTile
-              label="Generated Summaries"
+              compact
+              label="Post-Discharge Clinical Summary"
               value={String(data.generated_discharge_summaries_count ?? 0)}
             />
-            <MetricTile
-              label="Pending Discharged Patients"
-              value={String(data.pending_discharge_summaries_count ?? 0)}
-            />
-          </ColumnLayout>
+          </div>
         </Container>
 
         <div className="medstream-dashboard-split">

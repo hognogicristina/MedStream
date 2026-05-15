@@ -11,9 +11,9 @@ const ROUTE_LABELS = {
   "/alerts": "Alerts",
   "/profile": "My Profile",
   "/how-it-works": "How it works",
-  "/metrics/streaming": "Streaming",
-  "/metrics/batch": "Batch",
-  "/metrics/comparison": "Comparison",
+  "/metrics/streaming": "Live Monitoring",
+  "/metrics/batch": "Batch Analytics",
+  "/metrics/comparison": "Streaming vs Batch",
 }
 
 const DASHBOARD_BREADCRUMB = {text: "Dashboard", href: "/dashboard"}
@@ -125,7 +125,6 @@ function buildBreadcrumbItems(pathname, patientName, searchParams) {
   if (pathname.startsWith("/metrics/")) {
     return [
       DASHBOARD_BREADCRUMB,
-      {text: "Metrics", href: "/metrics/streaming"},
       {text: ROUTE_LABELS[pathname] || "Metrics", href: pathname},
     ]
   }
