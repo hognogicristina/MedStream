@@ -12,6 +12,7 @@ import {
 } from "@cloudscape-design/components"
 import {getDepartments} from "../services/patientApi.js"
 import {getResponseData} from "../services/apiMessages.js"
+import InfoHelp from "./InfoHelp.jsx"
 
 export default function DepartmentTransferDialog({
                                                    currentDepartment,
@@ -25,7 +26,6 @@ export default function DepartmentTransferDialog({
   const [nextDoctorId, setNextDoctorId] = useState("")
   const [reason, setReason] = useState("")
   const [departments, setDepartments] = useState([])
-  const [isTransferHelpOpen, setIsTransferHelpOpen] = useState(false)
 
   const availableDepartments = departments.filter((dep) => dep !== currentDepartment)
   const availableDoctors = allDoctors.filter(d => d.specialization === nextDepartment)
@@ -66,7 +66,6 @@ export default function DepartmentTransferDialog({
       setNextDepartment("")
       setNextDoctorId("")
       setReason("")
-      setIsTransferHelpOpen(false)
     }, 0)
 
     return () => window.clearTimeout(resetTimer)
@@ -103,35 +102,15 @@ export default function DepartmentTransferDialog({
         >
           <span className="medstream-transfer-title">
             <span>Transfer Patient</span>
-            <span className="medstream-transfer-help-anchor">
-              <button
-                type="button"
-                className={`medstream-transfer-help-trigger${isTransferHelpOpen ? " medstream-transfer-help-trigger-open" : ""}`}
-                aria-expanded={isTransferHelpOpen}
-                aria-label={isTransferHelpOpen ? "Close transfer help" : "Open transfer help"}
-                onClick={() => setIsTransferHelpOpen((isOpen) => !isOpen)}
-              />
-              {isTransferHelpOpen ? (
-                <span className="medstream-transfer-help-card" role="dialog" aria-label="Before you confirm">
-                  <button
-                    type="button"
-                    className="medstream-transfer-help-close"
-                    aria-label="Close transfer help"
-                    onClick={() => setIsTransferHelpOpen(false)}
-                  />
-                  <span className="medstream-transfer-help-title">Before you confirm</span>
-                  <span className="medstream-transfer-help-body">
-                    After confirmation, the patient is moved to the selected department and assigned to the selected doctor.
-                  </span>
-                  <span className="medstream-transfer-help-body">
-                    Doctors from the previous department can be removed from this patient so responsibility follows the new department.
-                  </span>
-                  <span className="medstream-transfer-help-footer">
-                    The transfer reason is required before confirming.
-                  </span>
-                </span>
-              ) : null}
-            </span>
+            <InfoHelp
+              ariaLabel="transfer help"
+              title="Before you confirm"
+              body={[
+                "After confirmation, the patient is moved to the selected department and assigned to the selected doctor.",
+                "Doctors from the previous department can be removed from this patient so responsibility follows the new department.",
+              ]}
+              footer="The transfer reason is required before confirming."
+            />
           </span>
         </Header>
       }

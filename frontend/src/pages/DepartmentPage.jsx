@@ -347,6 +347,82 @@ export default function DepartmentPage() {
 
   const pagesCount = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE))
   const paginatedRows = sortedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const patientTableColumns = [
+    {
+      id: "patient",
+      header: "Patient",
+      width: isAllDepartments ? 150 : undefined,
+      minWidth: isAllDepartments ? 130 : undefined,
+      cell: ({patient, displayName}) => (
+        <Button variant="inline-link" onClick={() => navigate(`/patient/${patient.id}`)}>{displayName}</Button>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      width: isAllDepartments ? 118 : undefined,
+      minWidth: isAllDepartments ? 112 : undefined,
+      cell: ({patient}) => patient.is_discharged
+        ? <StatusIndicator type="stopped">Discharged</StatusIndicator>
+        : <StatusIndicator type="success">Admitted</StatusIndicator>,
+    },
+    {
+      id: "alerts",
+      header: "Alerts",
+      width: isAllDepartments ? 118 : undefined,
+      minWidth: isAllDepartments ? 112 : undefined,
+      cell: ({alertSummary}) => renderAlertStatus(alertSummary),
+    },
+    {
+      id: "alertCount",
+      header: "Alert count",
+      width: isAllDepartments ? 92 : undefined,
+      minWidth: isAllDepartments ? 86 : undefined,
+      cell: ({stat, alertSummary}) => <CountValue value={stat?.alerts_count ?? alertSummary.count}/>,
+    },
+    {
+      id: "heartRate",
+      header: "Avg HR",
+      width: isAllDepartments ? 74 : undefined,
+      minWidth: isAllDepartments ? 70 : undefined,
+      cell: ({stat}) => stat ? stat.avg_heart_rate.toFixed(1) : "--",
+    },
+    {
+      id: "temperature",
+      header: "Avg Temp",
+      width: isAllDepartments ? 88 : undefined,
+      minWidth: isAllDepartments ? 82 : undefined,
+      cell: ({stat}) => stat ? stat.avg_temperature.toFixed(1) : "--",
+    },
+    {
+      id: "oxygen",
+      header: "Avg O2",
+      width: isAllDepartments ? 74 : undefined,
+      minWidth: isAllDepartments ? 70 : undefined,
+      cell: ({stat}) => stat ? stat.avg_oxygen.toFixed(1) : "--",
+    },
+    {
+      id: "snapshot",
+      header: "Snapshot",
+      width: isAllDepartments ? 104 : undefined,
+      minWidth: isAllDepartments ? 96 : undefined,
+      cell: ({stat}) => stat?.computed_at ? new Date(stat.computed_at).toLocaleTimeString() : "--",
+    },
+    ...(isAllDepartments ? [{
+      id: "department",
+      header: "Department",
+      width: 126,
+      minWidth: 108,
+      cell: ({patient}) => {
+        const department = patient.department || "--"
+        return (
+          <span className="medstream-table-truncated-department" title={department}>
+            {department}
+          </span>
+        )
+      },
+    }] : []),
+  ]
 
   useEffect(() => {
     if (currentPage > pagesCount) {
@@ -486,57 +562,13 @@ export default function DepartmentPage() {
             </Header>
           }
         >
-          <div className="medstream-column-divider-table">
+          <div className={`medstream-column-divider-table${isAllDepartments ? " medstream-all-departments-table" : ""}`}>
             <Table
               variant="borderless"
+              resizableColumns={isAllDepartments}
               items={paginatedRows}
               empty={<Box color="text-body-secondary">{patients.length === 0 ? `No patients are currently assigned to ${pageTitle}.` : "No department patients match the current filters."}</Box>}
-              columnDefinitions={[
-                {
-                  id: "patient",
-                  header: "Patient",
-                  cell: ({patient, displayName}) => (
-                    <Button variant="inline-link" onClick={() => navigate(`/patient/${patient.id}`)}>{displayName}</Button>
-                  ),
-                },
-                {
-                  id: "status",
-                  header: "Status",
-                  cell: ({patient}) => patient.is_discharged
-                    ? <StatusIndicator type="stopped">Discharged</StatusIndicator>
-                    : <StatusIndicator type="success">Admitted</StatusIndicator>,
-                },
-                {
-                  id: "alerts",
-                  header: "Alerts",
-                  cell: ({alertSummary}) => renderAlertStatus(alertSummary),
-                },
-                {
-                  id: "alertCount",
-                  header: "Alert count",
-                  cell: ({stat, alertSummary}) => <CountValue value={stat?.alerts_count ?? alertSummary.count}/>,
-                },
-                {
-                  id: "heartRate",
-                  header: "Avg HR",
-                  cell: ({stat}) => stat ? stat.avg_heart_rate.toFixed(1) : "--",
-                },
-                {
-                  id: "temperature",
-                  header: "Avg Temp",
-                  cell: ({stat}) => stat ? stat.avg_temperature.toFixed(1) : "--",
-                },
-                {
-                  id: "oxygen",
-                  header: "Avg O2",
-                  cell: ({stat}) => stat ? stat.avg_oxygen.toFixed(1) : "--",
-                },
-                {
-                  id: "snapshot",
-                  header: "Snapshot",
-                  cell: ({stat}) => stat?.computed_at ? new Date(stat.computed_at).toLocaleTimeString() : "--",
-                },
-              ]}
+              columnDefinitions={patientTableColumns}
             />
           </div>
         </Container>

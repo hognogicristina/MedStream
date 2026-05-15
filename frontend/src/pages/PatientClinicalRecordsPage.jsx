@@ -22,6 +22,7 @@ import {
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import DataTable from "../components/DataTable.jsx"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
+import InfoHelp from "../components/InfoHelp.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {getCurrentDoctor} from "../services/doctorApi.js"
@@ -820,7 +821,20 @@ export default function PatientClinicalRecordsPage() {
               description="Review diagnosis, medication, allergy, and condition records."
               actions={recordActions}
             >
-              Clinical records
+              <span className="medstream-transfer-title">
+                <span>Clinical records</span>
+                {(patient?.is_discharged || (currentDoctor && !isDoctorAssigned)) ? (
+                  <InfoHelp
+                    ariaLabel="clinical records help"
+                    title="Clinical records actions"
+                    body={[
+                      "Clinical records are read-only for discharged patients.",
+                      "If the patient is not assigned to you, you can review records, but only assigned doctors can add or edit diagnosis, medication, allergy, or condition records.",
+                    ]}
+                    footer="Assignment and discharge status keep clinical changes tied to the responsible care team."
+                  />
+                ) : null}
+              </span>
             </Header>
           }
         >

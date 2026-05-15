@@ -22,6 +22,7 @@ import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import AwsDatePicker from "../components/AwsDatePicker.jsx"
 import HoverTextDropdown from "../components/HoverTextDropdown.jsx"
+import InfoHelp from "../components/InfoHelp.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import {resendVerificationEmail} from "../services/authApi.js"
@@ -1013,7 +1014,18 @@ export default function ProfilePage() {
                                  className="login-input" placeholder="Example: Popescu" required/>
                         </div>
                         <div className="login-field">
-                          <label className="login-label" htmlFor="specialization">Specialization</label>
+                          <span className="medstream-label-with-help">
+                            <label className="login-label" htmlFor="specialization">Specialization</label>
+                            <InfoHelp
+                              ariaLabel="specialization help"
+                              title="Specialization changes"
+                              body={[
+                                "Specialization cannot be changed while incoming activities exist or you still have admitted assigned patients.",
+                                "A replacement active doctor must remain in the current department before your specialization changes.",
+                              ]}
+                              footer="This keeps patients and activities assigned to a doctor in the matching department."
+                            />
+                          </span>
                           <Select
                             selectedOption={getSelectedOption(departmentOptions, form.specialization)}
                             onChange={({detail}) => handleFormChange({target: {name: "specialization", value: detail.selectedOption.value}})}
@@ -1188,7 +1200,18 @@ export default function ProfilePage() {
                   <Container
                     header={
                       <Header variant="h2" description="Deactivate the current doctor account when policy allows it.">
-                        Account status
+                        <span className="medstream-transfer-title">
+                          <span>Account status</span>
+                          <InfoHelp
+                            ariaLabel="account status help"
+                            title="Account deactivation"
+                            body={[
+                              "The account cannot be deactivated if you are the only active doctor in your department or if incoming activities are still assigned.",
+                              "When allowed, deactivation reassigns currently assigned patients to another doctor from the same department.",
+                            ]}
+                            footer="Resolve incoming activities and keep department coverage before deleting the account."
+                          />
+                        </span>
                       </Header>
                     }
                   >
@@ -1301,7 +1324,18 @@ export default function ProfilePage() {
                 variant="h2"
                 description={showTransferActivityConfirmation ? "Confirm transfer and activity reassignment." : "Choose another doctor from the same department."}
               >
-                Transfer assigned patient
+                <span className="medstream-transfer-title">
+                  <span>Transfer assigned patient</span>
+                  <InfoHelp
+                    ariaLabel="assigned patient transfer help"
+                    title="Before you transfer"
+                    body={[
+                      "Use this when you are the only doctor assigned to the patient. The patient must be moved to another doctor before you can be removed from their care team.",
+                      "If incoming activities exist, related activities are checked before confirming the transfer.",
+                    ]}
+                    footer="Existing activities may be canceled and reassigned."
+                  />
+                </span>
               </Header>
             }
             footer={
@@ -1392,7 +1426,18 @@ export default function ProfilePage() {
                 variant="h2"
                 description="Remove the patient from this doctor's assigned list."
               >
-                Remove assigned patient
+                <span className="medstream-transfer-title">
+                  <span>Remove assigned patient</span>
+                  <InfoHelp
+                    ariaLabel="assigned patient removal help"
+                    title="Before you remove"
+                    body={[
+                      "Removing a patient only removes this doctor from the assigned list.",
+                      "If this doctor is the last assigned doctor, the app requires a transfer instead so the patient keeps a responsible doctor.",
+                    ]}
+                    footer="Incoming activities can block removal until they are resolved."
+                  />
+                </span>
               </Header>
             }
             footer={

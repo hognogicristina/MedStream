@@ -18,6 +18,7 @@ import {
 import {getCityOptions, getCountyOptions} from "../utils/addressOptions.js"
 import {buildPatientAddressForm, normalizePatientAddress} from "../utils/patientAddress.js"
 import AwsDatePicker from "./AwsDatePicker.jsx"
+import InfoHelp from "./InfoHelp.jsx"
 import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
 
 const TOTAL_STEPS = 2
@@ -262,7 +263,22 @@ export default function EditPatientDialog({
                     placeholder={ROMANIA_PHONE_PLACEHOLDER}
                   />
                 </FormField>
-                <FormField label="Pregnant">
+                <FormField
+                  label={
+                    <span className="medstream-label-with-help">
+                      <span>Pregnant</span>
+                      <InfoHelp
+                        ariaLabel="pregnancy status help"
+                        title="Pregnancy status"
+                        body={[
+                          "Pregnancy status is enabled only when gender is Female.",
+                          "Selecting Male or Other clears pregnancy status to No.",
+                        ]}
+                        footer="Choose the patient's gender first, then set pregnancy status when applicable."
+                      />
+                    </span>
+                  }
+                >
                   <Select
                     selectedOption={getSelectedOption(pregnantOptions, form.is_pregnant ? "true" : "false")}
                     onChange={({detail}) => setForm((current) => ({...current, is_pregnant: detail.selectedOption.value === "true"}))}

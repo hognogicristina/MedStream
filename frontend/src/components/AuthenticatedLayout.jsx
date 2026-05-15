@@ -111,7 +111,7 @@ export default function AuthenticatedLayout() {
       <div id="top-nav">
         <AppTopNavigation/>
       </div>
-      <div className="medstream-main-frame">
+      <div className={`medstream-main-frame${navigationOpen ? "" : " medstream-main-frame-collapsed"}`}>
         {navigationOpen ? (
           <aside className="medstream-sidebar">
             <AppSideNavigation onCollapse={() => setNavigationOpen(false)}/>

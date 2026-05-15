@@ -20,6 +20,7 @@ import {getCityOptions, getCountyOptions} from "../utils/addressOptions.js"
 import {buildEmptyPatientAddress, normalizePatientAddress} from "../utils/patientAddress.js"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import AwsDatePicker from "../components/AwsDatePicker.jsx"
+import InfoHelp from "../components/InfoHelp.jsx"
 import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
 
 const TOTAL_STEPS = 2
@@ -83,7 +84,7 @@ export default function AddPatientPage() {
     const {name, value} = event.target
     setForm((prev) => {
       const updates = {[name]: name === "is_pregnant" ? value === "true" : value}
-      if (name === "gender" && value === "male") {
+      if (name === "gender" && value !== "female") {
         updates.is_pregnant = false
       }
       return {...prev, ...updates}
@@ -247,13 +248,24 @@ export default function AddPatientPage() {
                            placeholder={ROMANIA_PHONE_PLACEHOLDER} className="login-input" required/>
                   </div>
                   <div className="login-field">
-                    <label className="login-label" htmlFor="patient-pregnant">{"Pregnant"}</label>
+                    <span className="medstream-label-with-help">
+                      <label className="login-label" htmlFor="patient-pregnant">{"Pregnant"}</label>
+                      <InfoHelp
+                        ariaLabel="pregnancy status help"
+                        title="Pregnancy status"
+                        body={[
+                          "Pregnancy status is enabled only when gender is Female.",
+                          "Selecting Male or Other clears pregnancy status to No.",
+                        ]}
+                        footer="Choose the patient's gender first, then set pregnancy status when applicable."
+                      />
+                    </span>
                     <Select
                       selectedOption={getSelectedOption(PREGNANT_OPTIONS, String(form.is_pregnant))}
                       onChange={({detail}) => handleChange({target: {name: "is_pregnant", value: detail.selectedOption.value}})}
                       options={PREGNANT_OPTIONS}
                       selectedAriaLabel="Selected pregnancy status"
-                      disabled={!form.gender || form.gender === "male"}
+                      disabled={form.gender !== "female"}
                     />
                   </div>
                   <div className="login-field">

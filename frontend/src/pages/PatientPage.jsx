@@ -35,6 +35,7 @@ import {formatPatientPhoneWithCode} from "../utils/patientPhone.js"
 import {useAuth} from "../components/AuthContext.jsx"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import HoverTextDropdown from "../components/HoverTextDropdown.jsx"
+import InfoHelp from "../components/InfoHelp.jsx"
 
 function formatDateTime(value) {
   if (!value) {
@@ -505,7 +506,20 @@ export default function PatientPage() {
           description="Identity, department, contact, and admission details."
           actions={actionButtons}
         >
-          Patient details
+          <span className="medstream-transfer-title">
+            <span>Patient details</span>
+            {(patient?.is_discharged || (currentDoctor && !isDoctorAssigned)) ? (
+              <InfoHelp
+                ariaLabel="patient details help"
+                title="Patient details actions"
+                body={[
+                  "Discharged patients are read-only from this page. Editing details and department transfers are blocked after discharge.",
+                  "If the patient is not assigned to you, clinical ownership is missing. Assign the patient first before editing details or transferring them.",
+                ]}
+                footer="Assignment and discharge status protect the patient record from unintended changes."
+              />
+            ) : null}
+          </span>
         </Header>
       }
     >
