@@ -9,8 +9,8 @@ export function searchPatientsByCnp(cnp) {
   return api.get("/patients/search", {params: {cnp}})
 }
 
-export function createPatient(payload) {
-  return api.post("/patients", payload)
+export function createPatient(payload, headers) {
+  return api.post("/patients", payload, {headers})
 }
 
 export function getPatient(patientId) {

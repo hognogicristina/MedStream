@@ -62,7 +62,6 @@ class PatientUpdate(BaseModel):
     phone_number: str | None = None
     birth_date: date | None = None
     gender: str | None = None
-    arrival_method: str | None = None
     is_pregnant: bool | None = None
     address: PatientAddressUpdate | None = None
 

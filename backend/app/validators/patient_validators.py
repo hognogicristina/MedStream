@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
 from app.models.patient.patient import Patient
-from app.service.medical_history import DEPARTMENTS
+from app.service.clinical_records import DEPARTMENTS
 from app.validators.common_validators import (
     normalize_optional_text,
     require_non_empty,

@@ -35,7 +35,7 @@ from app.schemas.patient_diagnosis import (
 from app.schemas.patient_medication import MedicationUpdate, PatientMedicationCreate, PatientMedicationRead
 from app.schemas.patient_treatment_analysis import PatientSearchResultRead, PatientTreatmentAnalysisRead
 from app.schemas.patient_post_discharge_summary import PatientPostDischargeSummaryRead
-from app.service.medical_history import (
+from app.service.clinical_records import (
     ACTIVITY_TYPES,
     ALLERGIES,
     DIAGNOSIS,
@@ -98,9 +98,15 @@ def serialize_condition_rows(rows, doctor_names: dict[int, str] | None = None):
 
 
 @router.get("", response_model=ApiResponse[list[PatientRead]])
-def list_patients(condition_id: int | None = Query(default=None, ge=1)):
+def list_patients(
+    condition_id: int | None = Query(default=None, ge=1),
+    department: str | None = Query(default=None),
+    alert_presence: str | None = Query(default="all", pattern="^(all|critical|high|normal|any|none)$"),
+    status: str | None = Query(default="all", pattern="^(all|admitted|discharged)$"),
+    treatment_outcome: str | None = Query(default="all", pattern="^(all|effective|improving|ineffective)$"),
+):
     try:
-        patients = patient_service.list_patients(condition_id)
+        patients = patient_service.list_patients(condition_id, department, alert_presence, status, treatment_outcome)
         return success_response("Patients retrieved successfully.", serialize_many(patients, PatientRead))
     except Exception as error:
         raise_http_from_error(error)
@@ -355,7 +361,13 @@ def create_patient_diagnosis(id: int, payload: PatientDiagnosisCreate, authoriza
 def update_patient_diagnosis(diagnosis_id: int, payload: PatientDiagnosisUpdate, authorization: str | None = Header(default=None)):
     current_doctor = get_current_doctor(authorization)
     try:
-        diagnosis = patient_service.update_patient_diagnosis(diagnosis_id, current_doctor.id, payload.status, payload.note)
+        diagnosis = patient_service.update_patient_diagnosis(
+            diagnosis_id,
+            current_doctor.id,
+            payload.status,
+            payload.note,
+            payload.notes,
+        )
         result = serialize(diagnosis, PatientDiagnosisRead)
         result["modified_by"] = f"{current_doctor.last_name} {current_doctor.first_name}".strip()
         return success_response("Diagnosis updated successfully.", result)

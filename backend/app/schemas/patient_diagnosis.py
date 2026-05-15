@@ -32,3 +32,4 @@ class PatientDiagnosisPage(BaseModel):
 class PatientDiagnosisUpdate(BaseModel):
     status: str | None = None
     note: str | None = None
+    notes: str | None = None

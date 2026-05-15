@@ -238,7 +238,11 @@ class DoctorRepository:
 
     def update_current_doctor(self, doctor_id: int, payload):
         with SessionLocal() as db:
-            doctor = db.get(Doctor, doctor_id)
+            doctor = db.execute(
+                select(Doctor)
+                .options(selectinload(Doctor.patients))
+                .where(Doctor.id == doctor_id)
+            ).scalar_one_or_none()
             if doctor is None:
                 raise NotFoundError("DOCTOR_NOT_FOUND")
 
@@ -250,6 +254,29 @@ class DoctorRepository:
                 license_number=updates.get("license_number"),
                 doctor_id=doctor.id,
             )
+            requested_specialization = updates.get("specialization")
+            if requested_specialization is not None and requested_specialization != doctor.specialization:
+                validate_doctor_has_no_incoming_activities(db, doctor.id)
+                if any(not patient.is_discharged for patient in doctor.patients):
+                    raise ValidationError("DOCTOR_HAS_ADMITTED_ASSIGNED_PATIENTS")
+
+                replacement_doctor = db.execute(
+                    select(Doctor)
+                    .options(selectinload(Doctor.patients))
+                    .where(
+                        Doctor.is_active.is_(True),
+                        Doctor.specialization == doctor.specialization,
+                        Doctor.id != doctor.id,
+                    )
+                    .order_by(Doctor.last_name.asc(), Doctor.first_name.asc(), Doctor.id.asc())
+                ).scalar_one_or_none()
+                if replacement_doctor is None:
+                    raise ValidationError("SPECIALIZATION_CHANGE_REQUIRES_CURRENT_DEPARTMENT_REPLACEMENT")
+
+                for patient in list(doctor.patients):
+                    if not any(existing.id == patient.id for existing in replacement_doctor.patients):
+                        replacement_doctor.patients.append(patient)
+                    doctor.patients.remove(patient)
 
             for field, value in updates.items():
                 setattr(doctor, field, value)
@@ -280,6 +307,7 @@ class DoctorRepository:
             db.commit()
             db.refresh(doctor)
             raw_token, _ = create_email_verification_token(db, doctor, normalized_email)
+            db.refresh(doctor)
             return doctor, raw_token
 
     def request_password_reset(self, payload):
@@ -519,7 +547,16 @@ class DoctorRepository:
                                  None)
 
             if email_match and email_match.is_active:
-                raise ValidationError("EMAIL_ALREADY_REGISTERED")
+                if email_match.email_confirmed:
+                    raise ValidationError("EMAIL_ALREADY_REGISTERED")
+                if phone_match and phone_match.is_active and phone_match.id != email_match.id:
+                    raise ValidationError("PHONE_ALREADY_REGISTERED")
+                if license_match and license_match.is_active and license_match.id != email_match.id:
+                    raise ValidationError("LICENSE_ALREADY_REGISTERED")
+
+                raw_token, _ = create_email_verification_token(db, email_match, email_match.email)
+                send_registration_verification_email(email_match.email, email_match.first_name, raw_token)
+                return email_match
             if phone_match and phone_match.is_active:
                 raise ValidationError("PHONE_ALREADY_REGISTERED")
             if license_match and license_match.is_active:
@@ -597,14 +634,19 @@ class DoctorRepository:
 
             if verification is None:
                 raise ValidationError("INVALID_VERIFICATION_TOKEN")
-            if verification.used_at is not None:
-                raise ValidationError("INVALID_VERIFICATION_TOKEN")
             if to_utc(verification.expires_at) < now_utc():
                 raise ValidationError("EXPIRED_VERIFICATION_TOKEN")
 
             doctor = db.get(Doctor, verification.doctor_id)
             if doctor is None:
                 raise NotFoundError("DOCTOR_NOT_FOUND")
+
+            if verification.used_at is not None:
+                if doctor.email_confirmed and not doctor.pending_email and verification.target_email == doctor.email:
+                    return
+                if doctor.pending_email:
+                    raise ValidationError("REPLACED_VERIFICATION_TOKEN")
+                raise ValidationError("INVALID_VERIFICATION_TOKEN")
 
             if doctor.pending_email and verification.target_email == doctor.pending_email:
                 doctor.email = doctor.pending_email

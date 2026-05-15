@@ -1,4 +1,10 @@
 import {useCallback, useEffect, useState} from "react"
+import {Pagination, Select} from "@cloudscape-design/components"
+import LoadingSpinner from "./LoadingSpinner.jsx"
+
+function getSelectedOption(options, value) {
+  return options.find((option) => String(option.value) === String(value)) || null
+}
 
 export default function DataTable({
                                     items,
@@ -58,21 +64,6 @@ export default function DataTable({
   const sortedItems = activeSort ? [...filteredItems].sort(activeSort.compare) : filteredItems
   const maxPage = Math.max(1, Math.ceil(sortedItems.length / activePageSize))
   const paginatedItems = sortedItems.slice((currentPage - 1) * activePageSize, currentPage * activePageSize)
-  const pageNumbers = (() => {
-    if (maxPage <= 7) {
-      return Array.from({length: maxPage}, (_, index) => index + 1)
-    }
-
-    if (currentPage <= 4) {
-      return [1, 2, 3, 4, 5, "...", maxPage]
-    }
-
-    if (currentPage >= maxPage - 3) {
-      return [1, "...", maxPage - 4, maxPage - 3, maxPage - 2, maxPage - 1, maxPage]
-    }
-
-    return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", maxPage]
-  })()
 
   useEffect(() => {
     if (currentPage > maxPage) {
@@ -106,22 +97,18 @@ export default function DataTable({
                 className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[var(--text-subtle)]"
               />
             ) : (
-              <select
-                id={filter.id}
-                value={filterValues[filter.id] ?? filter.defaultValue ?? "all"}
-                onChange={(event) => {
-                  setFilterValues((current) => ({...current, [filter.id]: event.target.value}))
-                  filter.onChange?.(event.target.value)
+              <Select
+                selectedOption={getSelectedOption(filter.options, filterValues[filter.id] ?? filter.defaultValue ?? "all")}
+                onChange={({detail}) => {
+                  const value = detail.selectedOption.value
+                  setFilterValues((current) => ({...current, [filter.id]: value}))
+                  filter.onChange?.(value)
                 }}
+                options={filter.options}
+                placeholder={filter.placeholder}
                 disabled={filter.disabled}
-                className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[var(--text-subtle)]"
-              >
-                {filter.options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                selectedAriaLabel={`Selected ${filter.label}`}
+              />
             )}
           </div>
         ))}
@@ -131,18 +118,12 @@ export default function DataTable({
             <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]" htmlFor="dataTableSort">
               Sort Order
             </label>
-            <select
-              id="dataTableSort"
-              value={sortOrder}
-              onChange={(event) => setSortOrder(event.target.value)}
-              className="console-input w-full rounded-2xl px-4 py-3 outline-none"
-            >
-              {sortOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <Select
+              selectedOption={getSelectedOption(sortOptions, sortOrder)}
+              onChange={({detail}) => setSortOrder(detail.selectedOption.value)}
+              options={sortOptions}
+              selectedAriaLabel="Selected sort order"
+            />
           </div>
         )}
 
@@ -150,95 +131,49 @@ export default function DataTable({
           <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]" htmlFor="dataTablePageSize">
             Page Size
           </label>
-          <select
-            id="dataTablePageSize"
-            value={activePageSize}
-            onChange={(event) => setActivePageSize(Number(event.target.value))}
-            className="console-input w-full rounded-2xl px-4 py-3 outline-none"
-          >
-            {pageSizeOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          <Select
+            selectedOption={getSelectedOption(pageSizeOptions.map((option) => ({label: String(option), value: String(option)})), activePageSize)}
+            onChange={({detail}) => setActivePageSize(Number(detail.selectedOption.value))}
+            options={pageSizeOptions.map((option) => ({label: String(option), value: String(option)}))}
+            selectedAriaLabel="Selected page size"
+          />
         </div>
       </div>
 
-      <div className={shellClassName}>
-        {renderHeader?.()}
+      {loading ? (
+        <LoadingSpinner text={loadingMessage}/>
+      ) : (
+        <div className={shellClassName}>
+          {renderHeader?.()}
 
-        {loading && (
-          <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
-            {loadingMessage}
-          </div>
-        )}
+          {paginatedItems.length === 0 && (
+            <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
+              {emptyMessage}
+            </div>
+          )}
 
-        {!loading && paginatedItems.length === 0 && (
-          <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
-            {emptyMessage}
-          </div>
-        )}
-
-        {!loading && paginatedItems.length > 0 && (
-          <div className={bodyClassName}>
-            {paginatedItems.map((item) => (
-              <div key={getItemKey(item)} className={rowClassName?.(item)}>
-                {renderRow(item)}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="console-chip rounded-full px-4 py-2 text-sm font-medium">
-            Page {currentPage} of {maxPage}
-          </div>
-          {bottomControls}
-        </div>
-        <div className="console-pagination">
-          <button
-            className="console-pagination-button"
-            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-            aria-label="Previous page"
-          >
-            <span className="console-pagination-arrow" aria-hidden="true">‹</span>
-            <span className="console-pagination-label">Prev</span>
-          </button>
-          {!simplePagination && (
-            <div className="console-pagination-pages">
-              {pageNumbers.map((pageNumber, index) => (
-                pageNumber === "..." ? (
-                  <span key={`ellipsis-${index}`} className="console-pagination-ellipsis">
-                    ...
-                  </span>
-                ) : (
-                  <button
-                    key={pageNumber}
-                    type="button"
-                    className={`console-pagination-page ${pageNumber === currentPage ? "console-pagination-page-active" : ""}`}
-                    onClick={() => setCurrentPage(pageNumber)}
-                    aria-current={pageNumber === currentPage ? "page" : undefined}
-                  >
-                    {pageNumber}
-                  </button>
-                )
+          {paginatedItems.length > 0 && (
+            <div className={bodyClassName}>
+              {paginatedItems.map((item) => (
+                <div key={getItemKey(item)} className={rowClassName?.(item)}>
+                  {renderRow(item)}
+                </div>
               ))}
             </div>
           )}
-          <button
-            className="console-pagination-button"
-            onClick={() => setCurrentPage((prev) => Math.min(maxPage, prev + 1))}
-            disabled={currentPage >= maxPage}
-            aria-label="Next page"
-          >
-            <span className="console-pagination-label">Next</span>
-            <span className="console-pagination-arrow" aria-hidden="true">›</span>
-          </button>
         </div>
+      )}
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4 flex-wrap">
+          {bottomControls}
+        </div>
+        <Pagination
+          currentPageIndex={currentPage}
+          pagesCount={maxPage}
+          onChange={({detail}) => setCurrentPage(detail.currentPageIndex)}
+          openEnd={simplePagination}
+        />
       </div>
     </>
   )

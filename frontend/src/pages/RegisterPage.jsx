@@ -1,13 +1,20 @@
 import {useEffect, useState} from "react"
 import {Link, useNavigate} from "react-router-dom"
+import {Select} from "@cloudscape-design/components"
 import {registerDoctor} from "../services/authApi.js"
 import {getDepartments} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AwsDatePicker from "../components/AwsDatePicker.jsx"
 import {
   buildPatientPhoneNumber,
   ROMANIA_PHONE_PLACEHOLDER,
 } from "../utils/patientPhone.js"
+import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
+
+function getSelectedOption(options, value) {
+  return options.find((option) => option.value === value) || null
+}
 
 export default function RegisterPage() {
   const navigate = useNavigate()
@@ -27,6 +34,8 @@ export default function RegisterPage() {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [departments, setDepartments] = useState([])
+  const departmentOptions = departments.map((department) => ({label: department, value: department}))
+  const maxBirthDate = getTodayIsoDate()
 
   useEffect(() => {
     const loadDepartments = async () => {
@@ -52,7 +61,7 @@ export default function RegisterPage() {
   const isStepTwoValid = Boolean(
     form.specialization.trim()
     && form.license_number.trim()
-    && form.birth_date
+    && isIsoDateInRange(form.birth_date, {max: maxBirthDate})
   )
 
   const isStepThreeValid = Boolean(
@@ -131,8 +140,8 @@ export default function RegisterPage() {
           <aside className="login-aside">
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
-              <Link className="auth-link" to="/">
-                {"Back home"}
+              <Link className="auth-link" to="/login">
+                {"Back to login"}
               </Link>
             </div>
 
@@ -277,19 +286,13 @@ export default function RegisterPage() {
                       <label className="login-label" htmlFor="specialization">
                         {"Specialization"}
                       </label>
-                      <select
-                        id="specialization"
-                        name="specialization"
-                        value={form.specialization}
-                        onChange={handleChange}
-                        className="login-input w-full"
-                        required
-                      >
-                        <option value="">Specialization</option>
-                        {departments.map(dep => (
-                          <option key={dep} value={dep}>{dep}</option>
-                        ))}
-                      </select>
+                      <Select
+                        selectedOption={getSelectedOption(departmentOptions, form.specialization)}
+                        onChange={({detail}) => handleChange({target: {name: "specialization", value: detail.selectedOption.value}})}
+                        options={departmentOptions}
+                        placeholder="Specialization"
+                        selectedAriaLabel="Selected specialization"
+                      />
                     </div>
 
                     <div className="login-field relative z-0">
@@ -308,17 +311,17 @@ export default function RegisterPage() {
                       />
                     </div>
 
-                    <div className="login-field relative z-0 sm:col-span-2">
+                    <div className="login-field relative z-20 sm:col-span-2">
                       <label className="login-label" htmlFor="birth_date">
                         {"Birth Date"}
                       </label>
-                      <input
+                      <AwsDatePicker
                         id="birth_date"
                         name="birth_date"
-                        type="date"
                         value={form.birth_date}
-                        onChange={handleChange}
+                        onChange={(value) => handleChange({target: {name: "birth_date", value}})}
                         className="login-input w-full"
+                        max={maxBirthDate}
                         required
                       />
                     </div>
@@ -422,9 +425,6 @@ export default function RegisterPage() {
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <Link className="auth-link" to="/login">
                     {"Already have an account? Login"}
-                  </Link>
-                  <Link className="auth-link" to="/">
-                    {"Return home"}
                   </Link>
                 </div>
               </div>

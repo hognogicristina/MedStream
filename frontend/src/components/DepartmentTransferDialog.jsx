@@ -1,6 +1,18 @@
 import {useEffect, useState} from "react"
+import {
+  Box,
+  Button,
+  ColumnLayout,
+  FormField,
+  Header,
+  Modal,
+  Select,
+  SpaceBetween,
+  Textarea,
+} from "@cloudscape-design/components"
 import {getDepartments} from "../services/patientApi.js"
-import {getResponseData} from "../services/apiMessages.js";
+import {getResponseData} from "../services/apiMessages.js"
+import InfoHelp from "./InfoHelp.jsx"
 
 export default function DepartmentTransferDialog({
                                                    currentDepartment,
@@ -14,14 +26,21 @@ export default function DepartmentTransferDialog({
   const [nextDoctorId, setNextDoctorId] = useState("")
   const [reason, setReason] = useState("")
   const [departments, setDepartments] = useState([])
-  const [currentPage, setCurrentPage] = useState(1)
 
   const availableDepartments = departments.filter((dep) => dep !== currentDepartment)
-  const itemsPerPage = 4
-  const maxPage = Math.max(1, Math.ceil(availableDepartments.length / itemsPerPage))
-  const currentDepartments = availableDepartments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-
   const availableDoctors = allDoctors.filter(d => d.specialization === nextDepartment)
+  const departmentOptions = availableDepartments.map((department) => ({
+    label: department,
+    value: department,
+    description: "Available destination",
+  }))
+  const doctorOptions = availableDoctors.map((doc) => ({
+    label: `Dr. ${doc.first_name} ${doc.last_name}`,
+    value: String(doc.id),
+    description: doc.specialization,
+  }))
+  const selectedDepartmentOption = departmentOptions.find((option) => option.value === nextDepartment) || null
+  const selectedDoctorOption = doctorOptions.find((option) => option.value === String(nextDoctorId)) || null
 
   useEffect(() => {
     if (!isOpen) return
@@ -30,7 +49,8 @@ export default function DepartmentTransferDialog({
       try {
         const res = await getDepartments()
         setDepartments(getResponseData(res))
-      } catch {
+      } catch (error) {
+        void error
       }
     }
 
@@ -58,9 +78,7 @@ export default function DepartmentTransferDialog({
   const trimmedReason = reason.trim()
   const canSubmit = nextDepartment && nextDoctorId && trimmedReason.length > 0 && !isSubmitting
 
-  const handleSubmit = (event) => {
-    event.preventDefault()
-
+  const handleSubmit = () => {
     if (!canSubmit) {
       return
     }
@@ -73,148 +91,101 @@ export default function DepartmentTransferDialog({
   }
 
   return (
-    <div className="console-modal-overlay">
-      <div className="console-modal monitor-card rounded-[28px] p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Department Transfer</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Transfer Patient</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Cancel
-          </button>
-        </div>
-
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Current Department</p>
-            <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{currentDepartment || "--"}</p>
-          </div>
-          <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Transfer Target</p>
-            <p className="mt-2 text-lg font-semibold text-[var(--link)]">{nextDepartment || "Select department"}</p>
-          </div>
-        </div>
-
-        <form className="mt-5 space-y-5" onSubmit={handleSubmit}>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Select New Department</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {currentDepartments.map((department) => {
-                const isSelected = department === nextDepartment
-
-                return (
-                  <button
-                    key={department}
-                    type="button"
-                    onClick={() => {
-                      if (isSubmitting) {
-                        return
-                      }
-
-                      setNextDepartment(department)
-                      setNextDoctorId("")
-                    }}
-                    disabled={isSubmitting}
-                    className={`rounded-2xl border px-4 py-4 text-left transition ${
-                      isSelected
-                        ? "border-[#ff9900] bg-[var(--surface-1)]"
-                        : "border-[var(--border-primary)] bg-[var(--surface-2)] hover:border-[var(--border-strong)]"
-                    }`}
-                  >
-                    <p className={`text-sm font-semibold text-[var(--text-primary)]`}>{department}</p>
-                    <p className={`mt-1 text-sm text-[var(--text-secondary)]`}>
-                      Available destination
-                    </p>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]" htmlFor="doctor-select">
-              Assign Doctor
-            </label>
-            <select
-              id="doctor-select"
-              value={nextDoctorId}
-              onChange={(e) => setNextDoctorId(e.target.value)}
-              disabled={isSubmitting || !nextDepartment}
-              className="console-input mt-3 w-full rounded-2xl px-4 py-3 outline-none"
-            >
-              <option value="" disabled>
-                {nextDepartment ? "Select a doctor" : "Select a department first"}
-              </option>
-              {availableDoctors.map(doc => (
-                <option key={doc.id} value={doc.id}>
-                  Dr. {doc.first_name} {doc.last_name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]" htmlFor="transfer-reason">
-              Transfer Reason
-            </label>
-            <textarea
-              id="transfer-reason"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Enter the operational reason for this transfer."
-              rows={2}
-              className="console-input mt-3 w-full rounded-2xl px-4 py-3 outline-none"
-              disabled={isSubmitting}
-              required
+    <Modal
+      visible={isOpen}
+      onDismiss={isSubmitting ? undefined : onClose}
+      size="large"
+      header={
+        <Header
+          variant="h2"
+          description="Reassign the patient to another department and responsible doctor."
+        >
+          <span className="medstream-transfer-title">
+            <span>Transfer Patient</span>
+            <InfoHelp
+              ariaLabel="transfer help"
+              title="Before you confirm"
+              body={[
+                "After confirmation, the patient is moved to the selected department and assigned to the selected doctor.",
+                "Doctors from the previous department can be removed from this patient so responsibility follows the new department.",
+              ]}
+              footer="The transfer reason is required before confirming."
             />
-            <p className="mt-2 text-xs text-[var(--text-muted)]">Document why the patient is being reassigned before confirming the transfer.</p>
-          </div>
+          </span>
+        </Header>
+      }
+      footer={
+        <Box float="right">
+          <SpaceBetween direction="horizontal" size="xs">
+            <Button className="medstream-cancel-button" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              className="medstream-submit-button"
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+            >
+              {isSubmitting ? "Transferring..." : "Confirm Transfer"}
+            </Button>
+          </SpaceBetween>
+        </Box>
+      }
+    >
+      <SpaceBetween size="m">
+        <ColumnLayout columns={2} variant="text-grid">
+          <SpaceBetween size="xxs">
+            <Box color="text-body-secondary" variant="awsui-key-label">Current Department</Box>
+            <Box variant="h3">{currentDepartment || "--"}</Box>
+          </SpaceBetween>
+          <SpaceBetween size="xxs">
+            <Box color="text-body-secondary" variant="awsui-key-label">Transfer Target</Box>
+            <Box variant="h3" color={nextDepartment ? "text-status-info" : "text-body-secondary"}>
+              {nextDepartment || "Select department"}
+            </Box>
+          </SpaceBetween>
+        </ColumnLayout>
 
-          <div className="flex items-center justify-between">
-            <div>
-              {availableDepartments.length > itemsPerPage && (
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-[var(--text-muted)]">Page {currentPage} of {maxPage}</span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1 || isSubmitting}
-                      className="console-pagination-button"
-                    >
-                      Prev
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage(p => Math.min(maxPage, p + 1))}
-                      disabled={currentPage === maxPage || isSubmitting}
-                      className="console-pagination-button"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className="console-button-primary rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-              >
-                {isSubmitting ? "Transferring..." : "Confirm Transfer"}
-              </button>
-            </div>
+        <div className="medstream-form-grid">
+          <FormField label="New Department">
+            <Select
+              selectedOption={selectedDepartmentOption}
+              onChange={({detail}) => {
+                setNextDepartment(detail.selectedOption.value)
+                setNextDoctorId("")
+              }}
+              options={departmentOptions}
+              placeholder="Select department"
+              disabled={isSubmitting}
+            />
+          </FormField>
+          <FormField label="Assign Doctor">
+            <Select
+              selectedOption={selectedDoctorOption}
+              onChange={({detail}) => setNextDoctorId(detail.selectedOption.value)}
+              options={doctorOptions}
+              placeholder={nextDepartment ? "Select a doctor" : "Select a department first"}
+              disabled={isSubmitting || !nextDepartment}
+            />
+          </FormField>
+          <div className="medstream-form-field-wide">
+            <FormField
+              label="Transfer Reason"
+              description="Document why the patient is being reassigned before confirming the transfer."
+              stretch
+            >
+              <Textarea
+                value={reason}
+                onChange={({detail}) => setReason(detail.value)}
+                placeholder="Enter the operational reason for this transfer."
+                rows={3}
+                disabled={isSubmitting}
+              />
+            </FormField>
           </div>
-        </form>
-      </div>
-    </div>
+        </div>
+
+      </SpaceBetween>
+    </Modal>
   )
 }

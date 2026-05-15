@@ -34,6 +34,7 @@ def get_streaming_metrics():
             "avg_diastolic_bp": None,
             "alerts": streaming_metrics["total_alerts"],
             "execution_time_ms": streaming_metrics["execution_time_ms"],
+            "recent_vitals": streaming_metrics["recent_vitals"],
         },
     )
 

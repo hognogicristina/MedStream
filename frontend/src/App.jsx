@@ -1,34 +1,37 @@
 import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate} from "react-router-dom"
-import {useEffect} from "react"
+import {lazy, Suspense, useEffect} from "react"
 import AuthenticatedLayout from "./components/AuthenticatedLayout.jsx"
 import {useAuth} from "./components/AuthContext.jsx"
 import ProtectedRoute from "./components/ProtectedRoute.jsx"
 import PublicOnlyRoute from "./components/PublicOnlyRoute.jsx"
 import LoadingSpinner from "./components/LoadingSpinner.jsx"
 import {registerAuthFailureHandler} from "./services/api.js"
-import AddPatientPage from "./pages/AddPatientPage.jsx"
-import AlertsPage from "./pages/AlertsPage.jsx"
-import BatchMetricsPage from "./pages/BatchMetricsPage.jsx"
-import DepartmentPage from "./pages/DepartmentPage.jsx"
-import DashboardPage from "./pages/DashboardPage.jsx"
-import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx"
-import LoginPage from "./pages/LoginPage.jsx"
-import PatientPage from "./pages/PatientPage.jsx"
-import PatientDiagnosisPage from "./pages/PatientDiagnosisPage.jsx"
-import PatientAdmissionHistoryPage from "./pages/PatientAdmissionHistoryPage.jsx"
-import PatientMedicalHistoryPage from "./pages/PatientMedicalHistoryPage.jsx"
-import PatientTreatmentAnalysisPage from "./pages/PatientTreatmentAnalysisPage.jsx"
-import ProfilePage from "./pages/ProfilePage.jsx"
-import RecoverAccountPage from "./pages/RecoverAccountPage.jsx"
-import RecoverAccountVerifyPage from "./pages/RecoverAccountVerifyPage.jsx"
-import RegisterPage from "./pages/RegisterPage.jsx"
-import ResetPasswordPage from "./pages/ResetPasswordPage.jsx"
-import StreamingMetricsPage from "./pages/StreamingMetricsPage.jsx"
-import StreamingBatchPage from "./pages/StreamingBatchPage.jsx"
-import VerifyEmailPage from "./pages/VerifyEmailPage.jsx"
 import {getPatient} from "./services/patientApi.js"
 import {getResponseData} from "./services/apiMessages.js"
 import {formatPatientFullName} from "./utils/patients.js"
+
+const AddPatientPage = lazy(() => import("./pages/AddPatientPage.jsx"))
+const AlertsPage = lazy(() => import("./pages/AlertsPage.jsx"))
+const BatchMetricsPage = lazy(() => import("./pages/BatchMetricsPage.jsx"))
+const DepartmentPage = lazy(() => import("./pages/DepartmentPage.jsx"))
+const DashboardPage = lazy(() => import("./pages/DashboardPage.jsx"))
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage.jsx"))
+const HowItWorksPage = lazy(() => import("./pages/HowItWorksPage.jsx"))
+const LoginPage = lazy(() => import("./pages/LoginPage.jsx"))
+const PatientPage = lazy(() => import("./pages/PatientPage.jsx"))
+const PatientDiagnosisPage = lazy(() => import("./pages/PatientDiagnosisPage.jsx"))
+const PatientAdmissionHistoryPage = lazy(() => import("./pages/PatientAdmissionHistoryPage.jsx"))
+const PatientClinicalRecordsPage = lazy(() => import("./pages/PatientClinicalRecordsPage.jsx"))
+const PatientPostDischargeSummaryPage = lazy(() => import("./pages/PatientPostDischargeSummaryPage.jsx"))
+const PatientTreatmentAnalysisPage = lazy(() => import("./pages/PatientTreatmentAnalysisPage.jsx"))
+const ProfilePage = lazy(() => import("./pages/ProfilePage.jsx"))
+const RecoverAccountPage = lazy(() => import("./pages/RecoverAccountPage.jsx"))
+const RecoverAccountVerifyPage = lazy(() => import("./pages/RecoverAccountVerifyPage.jsx"))
+const RegisterPage = lazy(() => import("./pages/RegisterPage.jsx"))
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage.jsx"))
+const StreamingMetricsPage = lazy(() => import("./pages/StreamingMetricsPage.jsx"))
+const StreamingBatchPage = lazy(() => import("./pages/StreamingBatchPage.jsx"))
+const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage.jsx"))
 
 function RootRoute() {
   const {isAuthenticated, isAuthResolved} = useAuth()
@@ -83,6 +86,9 @@ function resolveStaticTitle(pathname) {
   if (pathname === "/metrics/comparison") {
     return "Streaming vs Batch"
   }
+  if (pathname === "/how-it-works") {
+    return "How it works"
+  }
   if (pathname === "/login") {
     return "Login"
   }
@@ -104,8 +110,11 @@ function resolveStaticTitle(pathname) {
   if (pathname === "/alerts") {
     return "Alerting System"
   }
+  if (pathname === "/departments") {
+    return "All Departments"
+  }
   if (pathname.startsWith("/departments/")) {
-    return "Departemnts"
+    return "Departments"
   }
   return "MedStream"
 }
@@ -119,7 +128,7 @@ function useDocumentTitle() {
     const staticTitle = resolveStaticTitle(pathname)
     document.title = staticTitle
 
-    const match = pathname.match(/^\/patients\/(\d+)\/(diagnosis|medical-history|admission-history|analysis)$/)
+    const match = pathname.match(/^\/patients\/(\d+)\/(diagnosis|clinical-records|admission-history|analysis|post-discharge-summary)$/)
       || pathname.match(/^\/patient\/(\d+)$/)
 
     if (!match) {
@@ -132,13 +141,15 @@ function useDocumentTitle() {
     const section = match[2] || ""
     const sectionTitle = section === "diagnosis"
       ? "Clinical Records"
-      : section === "medical-history"
-        ? "Medical History"
+      : section === "clinical-records"
+        ? "Clinical Records"
         : section === "admission-history"
           ? "Admission History"
           : section === "analysis"
             ? "Treatment Analysis"
-            : ""
+            : section === "post-discharge-summary"
+              ? "Post-Discharge Clinical Summary"
+              : ""
 
     const fallbackPatientTitle = sectionTitle ? `Patient: #${patientId} - ${sectionTitle}` : `Patient: #${patientId}`
     document.title = fallbackPatientTitle
@@ -151,7 +162,8 @@ function useDocumentTitle() {
         }
         const patientName = formatPatientFullName(getResponseData(response))
         document.title = sectionTitle ? `Patient: ${patientName} - ${sectionTitle}` : `Patient: ${patientName}`
-      } catch {
+      } catch (error) {
+        void error
       }
     }
 
@@ -173,87 +185,92 @@ function App() {
     <BrowserRouter>
       <TitleManager/>
       <ApiAuthBridge/>
-      <Routes>
-        <Route path="/" element={<RootRoute/>}/>
+      <Suspense fallback={<LoadingSpinner/>}>
+        <Routes>
+          <Route path="/" element={<RootRoute/>}/>
 
-        <Route
-          path="/login"
-          element={
-            <PublicOnlyRoute>
-              <LoginPage/>
-            </PublicOnlyRoute>
-          }
-        />
+          <Route
+            path="/login"
+            element={
+              <PublicOnlyRoute>
+                <LoginPage/>
+              </PublicOnlyRoute>
+            }
+          />
 
-        <Route
-          path="/register"
-          element={
-            <PublicOnlyRoute>
-              <RegisterPage/>
-            </PublicOnlyRoute>
-          }
-        />
+          <Route
+            path="/register"
+            element={
+              <PublicOnlyRoute>
+                <RegisterPage/>
+              </PublicOnlyRoute>
+            }
+          />
 
-        <Route
-          path="/forgot-password"
-          element={
-            <PublicOnlyRoute>
-              <ForgotPasswordPage/>
-            </PublicOnlyRoute>
-          }
-        />
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicOnlyRoute>
+                <ForgotPasswordPage/>
+              </PublicOnlyRoute>
+            }
+          />
 
-        <Route
-          path="/reset-password"
-          element={
-            <PublicOnlyRoute>
-              <ResetPasswordPage/>
-            </PublicOnlyRoute>
-          }
-        />
+          <Route
+            path="/reset-password"
+            element={
+              <PublicOnlyRoute>
+                <ResetPasswordPage/>
+              </PublicOnlyRoute>
+            }
+          />
 
-        <Route
-          path="/verify-email"
-          element={<VerifyEmailPage/>}
-        />
+          <Route
+            path="/verify-email"
+            element={<VerifyEmailPage/>}
+          />
 
-        <Route
-          path="/recover-account"
-          element={
-            <PublicOnlyRoute>
-              <RecoverAccountPage/>
-            </PublicOnlyRoute>
-          }
-        />
+          <Route
+            path="/recover-account"
+            element={
+              <PublicOnlyRoute>
+                <RecoverAccountPage/>
+              </PublicOnlyRoute>
+            }
+          />
 
-        <Route
-          path="/recover-account/verify"
-          element={<RecoverAccountVerifyPage/>}
-        />
+          <Route
+            path="/recover-account/verify"
+            element={<RecoverAccountVerifyPage/>}
+          />
 
-        <Route
-          element={
-            <ProtectedRoute>
-              <AuthenticatedLayout/>
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/dashboard" element={<DashboardPage/>}/>
-          <Route path="/departments/:name" element={<DepartmentPage/>}/>
-          <Route path="/patient/:id" element={<PatientPage/>}/>
-          <Route path="/patients/:id/diagnosis" element={<PatientDiagnosisPage/>}/>
-          <Route path="/patients/:id/medical-history" element={<PatientMedicalHistoryPage/>}/>
-          <Route path="/patients/:id/admission-history" element={<PatientAdmissionHistoryPage/>}/>
-          <Route path="/patients/:id/analysis" element={<PatientTreatmentAnalysisPage/>}/>
-          <Route path="/alerts" element={<AlertsPage/>}/>
-          <Route path="/metrics/streaming" element={<StreamingMetricsPage/>}/>
-          <Route path="/metrics/batch" element={<BatchMetricsPage/>}/>
-          <Route path="/metrics/comparison" element={<StreamingBatchPage/>}/>
-          <Route path="/patients/new" element={<AddPatientPage/>}/>
-          <Route path="/profile" element={<ProfilePage/>}/>
-        </Route>
-        <Route path="*" element={<RootRoute/>}/>
-      </Routes>
+          <Route
+            element={
+              <ProtectedRoute>
+                <AuthenticatedLayout/>
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<DashboardPage/>}/>
+            <Route path="/departments" element={<DepartmentPage/>}/>
+            <Route path="/departments/:name" element={<DepartmentPage/>}/>
+            <Route path="/patient/:id" element={<PatientPage/>}/>
+            <Route path="/patients/:id/diagnosis" element={<PatientDiagnosisPage/>}/>
+            <Route path="/patients/:id/clinical-records" element={<PatientClinicalRecordsPage/>}/>
+            <Route path="/patients/:id/admission-history" element={<PatientAdmissionHistoryPage/>}/>
+            <Route path="/patients/:id/analysis" element={<PatientTreatmentAnalysisPage/>}/>
+            <Route path="/patients/:id/post-discharge-summary" element={<PatientPostDischargeSummaryPage/>}/>
+            <Route path="/alerts" element={<AlertsPage/>}/>
+            <Route path="/metrics/streaming" element={<StreamingMetricsPage/>}/>
+            <Route path="/metrics/batch" element={<BatchMetricsPage/>}/>
+            <Route path="/metrics/comparison" element={<StreamingBatchPage/>}/>
+            <Route path="/how-it-works" element={<HowItWorksPage/>}/>
+            <Route path="/patients/new" element={<AddPatientPage/>}/>
+            <Route path="/profile" element={<ProfilePage/>}/>
+          </Route>
+          <Route path="*" element={<RootRoute/>}/>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

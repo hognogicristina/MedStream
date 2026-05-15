@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@cloudscape-design/components": "^3.0.1294",
+    "@cloudscape-design/design-tokens": "^3.0.86",
+    "@cloudscape-design/global-styles": "^1.0.59",
     "axios": "^1.14.0",
     "country-state-city": "^3.2.1",
     "react": "^19.2.4",

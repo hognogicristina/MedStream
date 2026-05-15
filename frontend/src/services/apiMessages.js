@@ -9,5 +9,9 @@ export function getResponseData(response) {
 }
 
 export function getErrorMessage(error) {
+  if (error?.request && !error?.response) {
+    return "Backend service is unavailable. Please start the API and try again."
+  }
+
   return error?.response?.data?.message || FALLBACK_API_ERROR_MESSAGE
 }

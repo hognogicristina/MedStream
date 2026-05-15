@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.core.errors import ValidationError
-from app.service.medical_history import DISCHARGE, DOSAGES, DRUGS, FREQUENCIES, STATUS
+from app.service.clinical_records import DISCHARGE, DOSAGES, DRUGS, FREQUENCIES, STATUS
 from app.validators.patient_validators import validate_required_text
 
 ALLOWED_DIAGNOSIS_STATUSES = {"active", "resolved", "chronic", "inactive"}

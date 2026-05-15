@@ -1,10 +1,22 @@
 import {useCallback, useEffect, useMemo, useState} from "react"
-import {Link, useParams} from "react-router-dom"
-import {Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
-import BackButton from "../components/BackButton.jsx"
+import {useLocation, useNavigate, useParams} from "react-router-dom"
+import {
+  Alert,
+  Badge,
+  Box,
+  Button,
+  ButtonDropdown,
+  ColumnLayout,
+  Container,
+  ContentLayout,
+  Header,
+  SpaceBetween,
+  StatusIndicator,
+} from "@cloudscape-design/components"
 import DepartmentTransferDialog from "../components/DepartmentTransferDialog.jsx"
 import EditPatientDialog from "../components/EditPatientDialog.jsx"
 import VitalsChart from "../components/VitalsChart.jsx"
+import AwsBarChart from "../components/AwsBarChart.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {
@@ -21,9 +33,9 @@ import {getErrorMessage, getResponseData, getResponseMessage} from "../services/
 import {createWebSocket} from "../services/ws.js"
 import {formatPatientPhoneWithCode} from "../utils/patientPhone.js"
 import {useAuth} from "../components/AuthContext.jsx"
-import {normalizeAlertType, ALERT_TYPE_SHORT_LABEL} from "../utils/alerts.js"
-import {useTheme} from "../components/ThemeContext.jsx"
-import {getChartTheme} from "../utils/theme.js"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
+import HoverTextDropdown from "../components/HoverTextDropdown.jsx"
+import InfoHelp from "../components/InfoHelp.jsx"
 
 function formatDateTime(value) {
   if (!value) {
@@ -66,50 +78,19 @@ function formatArrivalMethod(value) {
 }
 
 const MAX_VITAL_POINTS = 100
-const ALERT_COLOR_BY_SEVERITY = {
-  Critical: "#ef4444",
-  High: "#f97316",
-  Normal: "#3b82f6",
-}
-function AlertDistributionTooltip({active, payload, fullAlerts = [], patientId, chartTheme}) {
-  if (!active || !Array.isArray(payload) || !payload.length) {
-    return null
-  }
-
-  const row = payload[0]?.payload || {}
-  const label = String(row.name || "")
-  const count = Number(row.count || 0)
-  const severity = label.toLowerCase()
-
-  const uniqueTypes = [...new Set(
-    fullAlerts
-      .filter((alert) => String(alert.patient_id) === String(patientId))
-      .filter((alert) => String(alert.severity || "").trim().toLowerCase() === severity)
-      .map((alert) => normalizeAlertType(alert.type || alert.alert_type, alert.severity))
-      .filter(Boolean),
-  )]
-
-  const typeLabels = uniqueTypes.map((type) => ALERT_TYPE_SHORT_LABEL[type] || type)
-  const typesText = typeLabels.length ? typeLabels.join(", ") : "--"
-
-  return (
-    <div
-      className="rounded-xl px-3 py-2 shadow-lg"
-      style={{
-        border: `1px solid ${chartTheme.tooltipBorder}`,
-        backgroundColor: chartTheme.tooltipBg,
-      }}
-    >
-      <p className="text-base font-bold text-[var(--text-primary)]">{label}: {count}</p>
-      <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">Types: {typesText}</p>
-    </div>
-  )
-}
+const PATIENT_CHART_PANEL_HEIGHT = 320
+const PATIENT_ALERT_CHART_HEIGHT = PATIENT_CHART_PANEL_HEIGHT
+const PATIENT_VITALS_CHART_HEIGHT = 252
+const PATIENT_VITALS_LEGEND_ITEMS = [
+  {label: "Heart Rate", color: "#f97316"},
+  {label: "Oxygen Saturation", color: "#3b82f6"},
+  {label: "Temperature", color: "#22c55e"},
+]
 
 export default function PatientPage() {
+  const navigate = useNavigate()
+  const location = useLocation()
   const {notifyError, notifySuccess} = useNotifications()
-  const {theme} = useTheme()
-  const chartTheme = getChartTheme(theme)
   const {token} = useAuth()
   const {id} = useParams()
   const [currentDoctor, setCurrentDoctor] = useState(null)
@@ -120,6 +101,8 @@ export default function PatientPage() {
   const [department, setDepartment] = useState("")
   const [isPatientNotFound, setIsPatientNotFound] = useState(false)
   const [isUpdatingDepartment, setIsUpdatingDepartment] = useState(false)
+  const [highlightedVitalTitle, setHighlightedVitalTitle] = useState(null)
+  const [highlightedAlertSeverity, setHighlightedAlertSeverity] = useState(null)
   const [isLoadingPatient, setIsLoadingPatient] = useState(true)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isSavingPatient, setIsSavingPatient] = useState(false)
@@ -453,9 +436,9 @@ export default function PatientPage() {
     }
 
     return [
-      {name: "Critical", count: counts.critical},
-      {name: "High", count: counts.high},
-      {name: "Normal", count: counts.normal},
+      {label: "Critical", value: counts.critical, color: "var(--chart-outcome-ineffective)"},
+      {label: "High", value: counts.high, color: "var(--chart-outcome-improving)"},
+      {label: "Normal", value: counts.normal, color: "var(--chart-outcome-effective)"},
     ]
   }, [alerts, id])
   const averageHeartRate = Number.isFinite(batchMetrics?.avg_heart_rate) ? batchMetrics.avg_heart_rate.toFixed(1) : "--"
@@ -471,6 +454,28 @@ export default function PatientPage() {
     return "--"
   })()
 
+  const buildPatientAlertsHref = () => {
+    const params = new URLSearchParams({
+      cnp: patient.cnp,
+      patient: patientFullName,
+      sourcePatientId: String(id),
+      from: "patient",
+    })
+    const patientSourceParams = new URLSearchParams(location.search)
+    const patientSource = patientSourceParams.get("from")
+    const departmentSource = patientSourceParams.get("department")
+
+    if (patientSource) {
+      params.set("patientFrom", patientSource)
+    }
+
+    if (departmentSource) {
+      params.set("department", departmentSource)
+    }
+
+    return `/alerts?${params.toString()}`
+  }
+
   const patientMetadata = [
     {label: "CNP", value: patient?.cnp || "--"},
     {label: "Birth Date", value: patientBirthDate},
@@ -481,262 +486,304 @@ export default function PatientPage() {
     {label: "Phone Number", value: patient?.phone_number ? formatPatientPhoneWithCode(patient.phone_number) : "--"},
     {label: "Country", value: patientCountry},
     {label: "County", value: patientCounty},
-    {label: "Address", value: patientStreetAddress || "--", isWide: true},
+    {label: "Address", value: patientStreetAddress || "--"},
   ]
+
+  const handlePatientAction = ({detail}) => {
+    const sourceSearch = location.search || ""
+
+    if (detail.id === "edit") {
+      setIsEditDialogOpen(true)
+    }
+    if (detail.id === "move") {
+      setIsTransferDialogOpen(true)
+    }
+    if (detail.id === "clinical-records") {
+      navigate(`/patients/${id}/clinical-records${sourceSearch}`)
+    }
+    if (detail.id === "admission-history") {
+      navigate(`/patients/${id}/admission-history${sourceSearch}`)
+    }
+    if (detail.id === "treatment-analysis") {
+      navigate(`/patients/${id}/analysis${sourceSearch}`)
+    }
+  }
+
+  const actionButtons = (
+    <ButtonDropdown
+      items={[
+        {id: "edit", text: "Edit patient details", disabled: !canEditPatientRecord},
+        {id: "move", text: "Transfer patient", disabled: !canEditPatientRecord},
+        {id: "clinical-records", text: "Clinical records"},
+        {id: "admission-history", text: "Admission history"},
+        {id: "treatment-analysis", text: "Treatment analysis"},
+      ]}
+      onItemClick={handlePatientAction}
+    >
+      Actions
+    </ButtonDropdown>
+  )
+  const patientDetailsSection = (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Identity, department, contact, and admission details."
+          actions={actionButtons}
+        >
+          <span className="medstream-transfer-title">
+            <span>Patient details</span>
+            {(patient?.is_discharged || (currentDoctor && !isDoctorAssigned)) ? (
+              <InfoHelp
+                ariaLabel="patient details help"
+                title="Patient details actions"
+                body={[
+                  "Discharged patients are read-only from this page. Editing details and department transfers are blocked after discharge.",
+                  "If the patient is not assigned to you, clinical ownership is missing. Assign the patient first before editing details or transferring them.",
+                ]}
+                footer="Assignment and discharge status protect the patient record from unintended changes."
+              />
+            ) : null}
+          </span>
+        </Header>
+      }
+    >
+      <SpaceBetween size="m">
+        {!isDoctorAssigned && currentDoctor && !isLoadingDoctors && (
+          <Alert
+            type="info"
+            action={
+              <Button
+                onClick={handleAssignToMe}
+                disabled={!canAssignToCurrentPatient || isPatientLocked}
+              >
+                Assign to me
+              </Button>
+            }
+          >
+            This patient is not assigned to you.
+          </Alert>
+        )}
+
+        <div className="medstream-patient-details-grid">
+          {patientMetadata.map((item) => (
+            <SpaceBetween size="xxs" key={item.label}>
+              <Box color="text-body-secondary" variant="awsui-key-label">{item.label}</Box>
+              <div className="medstream-patient-detail-value">
+                <p className="medstream-patient-detail-text">{item.value}</p>
+              </div>
+            </SpaceBetween>
+          ))}
+        </div>
+
+        {patient?.is_discharged && (
+          <Alert type="info" header="Discharge summary">
+            Date: {formatDateTime(patient.discharge_date)}. Reason: {patient.discharge_reason || "--"}
+          </Alert>
+        )}
+      </SpaceBetween>
+    </Container>
+  )
 
   if (isLoadingPatient) {
     return (
-      <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-          <LoadingSpinner/>
-        </div>
-      </div>
+      <ContentLayout>
+        <LoadingSpinner/>
+      </ContentLayout>
     )
   }
 
   if (isPatientNotFound) {
     return (
-      <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-          <div className="console-topbar rounded-3xl p-6 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Patient Monitoring</p>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">Patient not found</h1>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">This patient record does not exist or is no longer available.</p>
-            <div className="mt-5">
-              <Link
-                to="/dashboard"
-                className="inline-flex rounded-full border border-[var(--border-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[#ff9900] hover:text-[var(--text-primary)]"
-              >
-                Back to dashboard
-              </Link>
+      <ContentLayout>
+        <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <AppBreadcrumbs/>
+          <div className="medstream-page-heading-row">
+            <div>
+              <h1 className="medstream-page-title">Patient not found</h1>
+              <p>This patient record does not exist or is no longer available.</p>
             </div>
           </div>
         </div>
-      </div>
+          <Alert type="error" header="Patient record unavailable">
+            The requested patient could not be loaded.
+          </Alert>
+        </SpaceBetween>
+      </ContentLayout>
     )
   }
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <header className="console-topbar rounded-3xl p-6 sm:p-8">
-          <div className="space-y-4">
+    <ContentLayout>
+      <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <AppBreadcrumbs/>
+          <div className="medstream-page-heading-row">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Patient Monitoring</p>
+              <h1 className="medstream-page-title">{pageTitle}</h1>
+              <p>Patient Monitoring</p>
+              <div className="medstream-page-filter-row">
+                <StatusIndicator type={patient?.is_discharged ? "stopped" : "success"}>
+                  {patient?.is_discharged ? "Discharged" : "Admitted"}
+                </StatusIndicator>
+                <StatusIndicator type={isDoctorAssigned ? "success" : "pending"}>
+                  {isDoctorAssigned ? "Assigned" : "Unassigned"}
+                </StatusIndicator>
+                <HoverTextDropdown content="Department where this patient is currently admitted" position="top">
+                  <span className="medstream-department-badge">
+                    <Badge color="blue">{department || "--"}</Badge>
+                  </span>
+                </HoverTextDropdown>
+              </div>
             </div>
+          </div>
+        </div>
 
-            <div>
-              <div className="mt-2 flex w-full items-start justify-between">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <h1 className="text-4xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-5xl">{pageTitle}</h1>
+        {patientDetailsSection}
 
-                  <div className="group relative flex items-center">
-                    <button
-                      type="button"
-                      onClick={() => setIsTransferDialogOpen(true)}
-                      disabled={!canEditPatientRecord}
-                      className="inline-flex rounded-full border border-[var(--border-primary)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-primary)] transition hover:border-[#ff9900] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:bg-[var(--surface-3)] disabled:text-[var(--text-subtle)]"
-                    >
-                      {department || "--"}
-                    </button>
+        <Container>
+          <ColumnLayout columns={4} variant="text-grid">
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Heart rate</Box>
+              <Box variant="h2">{averageHeartRate}</Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">O2 saturation</Box>
+              <Box variant="h2">{averageOxygen}</Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Temperature</Box>
+              <Box variant="h2">{averageTemperature}</Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Blood pressure</Box>
+              <Box variant="h2">{averageBloodPressure}</Box>
+            </SpaceBetween>
+          </ColumnLayout>
+        </Container>
 
-                    <span
-                      className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs font-medium text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-        Move patient
-      </span>
-                  </div>
-
+        <div className="medstream-dashboard-split medstream-patient-chart-grid">
+          <div className="medstream-stretch-container">
+            <div className="medstream-patient-chart-stack">
+              <Container
+                className="medstream-patient-chart-container"
+                header={<Header variant="h2">Vitals timeline</Header>}
+              >
+                <div className="medstream-chart-panel medstream-patient-vitals-chart-panel">
+                  <VitalsChart
+                    data={chartData}
+                    height={PATIENT_VITALS_CHART_HEIGHT}
+                    highlightedSeriesTitle={highlightedVitalTitle}
+                    hideLegend
+                    onHighlightedSeriesTitleChange={setHighlightedVitalTitle}
+                  />
+                </div>
+              </Container>
+              <div
+                className="medstream-patient-vitals-legend"
+                aria-label="Vitals legend"
+                onMouseLeave={() => setHighlightedVitalTitle(null)}
+              >
+                {PATIENT_VITALS_LEGEND_ITEMS.map((entry) => (
                   <span
-                    className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
-                      patient?.is_discharged
-                        ? "status-pill status-pill-danger"
-                        : "status-pill status-pill-success"
-                    }`}
+                    className={[
+                      highlightedVitalTitle === entry.label ? "medstream-patient-chart-legend-item-active" : "",
+                      highlightedVitalTitle && highlightedVitalTitle !== entry.label ? "medstream-patient-chart-legend-item-muted" : "",
+                    ].filter(Boolean).join(" ")}
+                    key={entry.label}
+                    onBlur={() => setHighlightedVitalTitle(null)}
+                    onFocus={() => setHighlightedVitalTitle(entry.label)}
+                    onMouseEnter={() => setHighlightedVitalTitle(entry.label)}
+                    tabIndex={0}
                   >
-      {patient?.is_discharged ? "Discharged" : "Admitted"}
-    </span>
-                  {!isDoctorAssigned && currentDoctor && !isLoadingDoctors && (
-                    <button
-                      onClick={handleAssignToMe}
-                      disabled={!canAssignToCurrentPatient || isPatientLocked}
-                      className="inline-flex rounded-full border border-[var(--border-primary)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--link)] transition hover:border-[var(--link)] hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:bg-[var(--surface-3)] disabled:text-[var(--text-subtle)]"
-                    >
-                      Assign to Me
-                    </button>
-                  )}
-                  {isDoctorAssigned && currentDoctor && !isLoadingDoctors && (
-                    <span
-                      className="status-pill status-pill-success inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]">
-                     Assigned
-                   </span>
-                  )}
-                </div>
-
-                <BackButton/>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                <button
-                  type="button"
-                  onClick={() => canEditPatientRecord && setIsEditDialogOpen(true)}
-                  disabled={!canEditPatientRecord}
-                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--link)] transition hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:text-[var(--text-subtle)]"
-                >
-                  Edit patient
-                </button>
-
-                <Link
-                  to={`/patients/${id}/medical-history`}
-                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#ffcc80] transition hover:text-[var(--text-primary)]"
-                >
-                  Clinical Records
-                </Link>
-
-                <Link
-                  to={`/patients/${id}/admission-history`}
-                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#b8f5c8] transition hover:text-[var(--text-primary)]"
-                >
-                  Admission history
-                </Link>
-
-                <Link
-                  to={`/patients/${id}/analysis`}
-                  className="inline-flex w-fit px-0 py-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#c084fc] transition hover:border-[#a855f7] hover:text-[#d8b4fe]"
-                >
-                  TREATMENT ANALYSIS
-                </Link>
-              </div>
-
-              <div className="mt-4 border-t border-[var(--border-subtle)] pt-4">
-                <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-                  {patientMetadata.map((item) => (
-                    <div
-                      key={item.label}
-                      className={item.isWide ? "xl:col-span-2" : ""}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                          {item.label}
-                        </p>
-                        {item.label === "Phone Number"}
-                      </div>
-                      <p
-                        className={`mt-1 text-base font-semibold text-[var(--text-primary)] ${item.isWide ? "wrap-break-word whitespace-normal leading-relaxed" : ""}`}
-                      >
-                        {item.value}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                {patient?.is_discharged && (
-                  <div className="discharge-summary-banner mt-6 rounded-2xl p-4">
-                    <p className="discharge-summary-title text-xs font-semibold uppercase tracking-[0.24em]">Discharge Summary</p>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <p className="discharge-summary-label text-[11px] font-semibold uppercase tracking-[0.18em]">Date</p>
-                        <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">{formatDateTime(patient.discharge_date)}</p>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <p className="discharge-summary-label text-[11px] font-semibold uppercase tracking-[0.18em]">Reason</p>
-                        <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">{patient.discharge_reason || "--"}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                    <i style={{backgroundColor: entry.color}}/>
+                    {entry.label}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
-        </header>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="monitor-card rounded-3xl p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Heart Rate</p>
-            <p className="mt-3 text-3xl font-semibold text-[#ffb84d]">{averageHeartRate}</p>
-          </div>
-
-          <div className="monitor-card rounded-3xl p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">O2 Saturation</p>
-            <p className="mt-3 text-3xl font-semibold text-[var(--link)]">{averageOxygen}</p>
-          </div>
-
-          <div className="monitor-card rounded-3xl p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Temperature</p>
-            <p className="mt-3 text-3xl font-semibold text-[#ffd699]">{averageTemperature}</p>
-          </div>
-
-          <div className="monitor-card rounded-3xl p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]">Blood Pressure</p>
-            <p className="mt-3 text-3xl font-semibold text-[var(--text-primary)]">{averageBloodPressure}</p>
-          </div>
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-[1.5fr_0.9fr]">
-          <div className="monitor-card rounded-[28px] p-6">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Vitals</p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Vitals Timeline</h2>
-              </div>
-            </div>
-
-            {chartData.length > 0 ? (
-              <VitalsChart data={chartData}/>
+          <div className="medstream-stretch-container">
+            {alerts === null ? (
+              <LoadingSpinner text="Loading alerts..."/>
             ) : (
-              <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
-                No vital samples available for visualization.
+              <div className="medstream-patient-chart-stack">
+                <Container
+                  className="medstream-alerts-container medstream-patient-chart-container"
+                  header={
+                    <Header
+                      variant="h2"
+                      actions={patient?.cnp ? (
+                        <Button
+                          onClick={() => navigate(buildPatientAlertsHref())}
+                        >
+                          View alerts feed
+                        </Button>
+                      ) : null}
+                    >
+                      Patient alerts
+                    </Header>
+                  }
+                >
+                  <div className="medstream-chart-panel medstream-alert-chart-panel">
+                    {alertDistributionData.length === 0 ? (
+                      <Box color="text-body-secondary">No alerts available.</Box>
+                    ) : (
+                      <AwsBarChart
+                        ariaLabel="Patient alerts by severity"
+                        barWidthRatio={0.82}
+                        className="medstream-patient-alert-bar-chart"
+                        colorKey="color"
+                        data={alertDistributionData}
+                        emptyText="No alerts available."
+                        height={PATIENT_ALERT_CHART_HEIGHT}
+                        highlightedKey={highlightedAlertSeverity}
+                        hideLegend
+                        legendPosition="left"
+                        onHighlightedKeyChange={setHighlightedAlertSeverity}
+                        seriesTitle="Alerts"
+                        tooltipValueFormatter={(bar) => {
+                          const count = Math.round(Number(bar.y) || 0)
+                          return String(count)
+                        }}
+                        xTitle="Severity"
+                      />
+                    )}
+                  </div>
+                </Container>
+                {alertDistributionData.length > 0 ? (
+                  <div
+                    className="medstream-alert-chart-legend"
+                    aria-label="Patient alerts legend"
+                    onMouseLeave={() => setHighlightedAlertSeverity(null)}
+                  >
+                    {alertDistributionData.map((entry) => (
+                      <span
+                        className={[
+                          highlightedAlertSeverity === entry.label ? "medstream-patient-chart-legend-item-active" : "",
+                          highlightedAlertSeverity && highlightedAlertSeverity !== entry.label ? "medstream-patient-chart-legend-item-muted" : "",
+                        ].filter(Boolean).join(" ")}
+                        key={entry.label}
+                        onBlur={() => setHighlightedAlertSeverity(null)}
+                        onFocus={() => setHighlightedAlertSeverity(entry.label)}
+                        onMouseEnter={() => setHighlightedAlertSeverity(entry.label)}
+                        tabIndex={0}
+                      >
+                        <i style={{backgroundColor: entry.color}}/>
+                        {entry.label}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
-          <div className="grid gap-6">
-            <div className="monitor-card rounded-[28px] p-6">
-              <div className="mb-5 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Escalations</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Patient Alerts</h2>
-                </div>
-              </div>
+        </div>
 
-              <div className="h-64 rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-3">
-                {alerts === null ? (
-                  <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
-                    Loading alerts...
-                  </div>
-                ) : alertDistributionData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
-                    No alerts available
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={alertDistributionData} margin={{top: 8, right: 8, left: 0, bottom: 6}}>
-                      <XAxis dataKey="name" stroke={chartTheme.axis} tick={{fill: chartTheme.axisTickFill, fontSize: 12}}/>
-                      <YAxis allowDecimals={false} stroke={chartTheme.axis} tick={{fill: chartTheme.axisTickFill, fontSize: 12}}/>
-                      <Tooltip
-                        content={<AlertDistributionTooltip fullAlerts={alerts || []} patientId={id} chartTheme={chartTheme}/>}
-                      />
-                      <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                        {alertDistributionData.map((entry) => (
-                          <Cell key={`alert-bar-${entry.name}`} fill={ALERT_COLOR_BY_SEVERITY[entry.name] || "#9ca3af"}/>
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-              {patient?.cnp && (
-                <div className="mt-4">
-                  <Link
-                    className="console-button-secondary block rounded-2xl px-4 py-3 text-center text-sm font-semibold"
-                    to={`/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`}
-                  >
-                    View Alerts Feed
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-      </div>
+      </SpaceBetween>
+
       <EditPatientDialog
         isOpen={isEditDialogOpen}
         isSubmitting={isSavingPatient}
@@ -753,6 +800,6 @@ export default function PatientPage() {
         onClose={() => setIsTransferDialogOpen(false)}
         onSubmit={handleDepartmentTransfer}
       />
-    </div>
+    </ContentLayout>
   )
 }

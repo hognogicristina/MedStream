@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer
+from sqlalchemy import DateTime, Float, Integer, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -22,3 +22,7 @@ class BatchAnalytics(Base):
     alerts_high_count: Mapped[int] = mapped_column(Integer, default=0)
     alerts_stable_count: Mapped[int] = mapped_column(Integer, default=0)
     patients_count: Mapped[int] = mapped_column(Integer)
+    patients_per_department_snapshot: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    top_diagnosis_snapshot: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    treatment_effectiveness_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    medication_effectiveness_snapshot: Mapped[list[dict]] = mapped_column(JSON, default=list)

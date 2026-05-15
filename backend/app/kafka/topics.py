@@ -1,11 +1,17 @@
+from confluent_kafka import KafkaException
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from app.core.config import settings
 
 
-def ensure_topics():
+def ensure_topics() -> bool:
     admin = AdminClient({"bootstrap.servers": settings.kafka_bootstrap_servers})
-    metadata = admin.list_topics(timeout=10)
+    try:
+        metadata = admin.list_topics(timeout=10)
+    except KafkaException as error:
+        print(f"Kafka topics unavailable, continuing startup without topic verification: {error}")
+        return False
+
     existing_topics = set(metadata.topics.keys())
     required_topics = [
         settings.kafka_vitals_topic,
@@ -19,7 +25,7 @@ def ensure_topics():
     ]
 
     if not missing_topics:
-        return
+        return True
 
     futures = admin.create_topics(missing_topics)
 
@@ -30,4 +36,7 @@ def ensure_topics():
         except Exception as e:
             if "TOPIC_ALREADY_EXISTS" in str(e):
                 continue
-            raise
+            print(f"Kafka topic {topic} could not be created, continuing startup: {e}")
+            return False
+
+    return True

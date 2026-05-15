@@ -70,9 +70,6 @@ export default function LoginPage() {
           <aside className="login-aside">
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
-              <Link className="auth-link" to="/">
-                {"Back home"}
-              </Link>
             </div>
             <h1 className="login-title">{"Doctor Access"}</h1>
             <p
@@ -92,7 +89,6 @@ export default function LoginPage() {
           </aside>
 
           <div className="auth-divider" aria-hidden="true"/>
-          <div className="hidden lg:block w-px bg-[var(--border-subtle)] mx-6"/>
 
           <div className="login-panel">
             <div className="login-header">
@@ -147,9 +143,6 @@ export default function LoginPage() {
               <div className="flex items-center justify-between gap-3 text-sm">
                 <Link className="auth-link" to="/register">
                   {"Need an account? Register"}
-                </Link>
-                <Link className="auth-link" to="/">
-                  {"Return home"}
                 </Link>
               </div>
             </form>

@@ -1,5 +1,23 @@
 import {useEffect, useMemo, useRef, useState} from "react"
-import {Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts"
+import {
+  Alert,
+  Box,
+  Button,
+  ColumnLayout,
+  Container,
+  ContentLayout,
+  FormField,
+  Header,
+  Input,
+  Multiselect,
+  Pagination,
+  Select,
+  SpaceBetween,
+  StatusIndicator,
+  Table,
+  Tabs,
+} from "@cloudscape-design/components"
+import {Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip} from "recharts"
 import {
   getBatchInsights,
   getBatchMetrics,
@@ -14,14 +32,45 @@ import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
-import {useTheme} from "../components/ThemeContext.jsx"
-import {getChartTheme} from "../utils/theme.js"
+import AwsBarChart from "../components/AwsBarChart.jsx"
 
 const POLL_INTERVAL_MS = 30000
 const STATUS_POLL_INTERVAL_MS = 2500
 const PAGE_SIZE = 5
 const AGGREGATION_WINDOW_MINUTES = 60
+const RUN_STARTED_ALERT_STYLE = {
+  root: {
+    background: "#037f0c",
+    borderColor: "#037f0c",
+    borderRadius: "8px",
+    color: "#ffffff",
+  },
+  icon: {
+    color: "#ffffff",
+  },
+  dismissButton: {
+    color: {
+      active: "#ffffff",
+      default: "#ffffff",
+      hover: "#ffffff",
+    },
+    focusRing: {
+      borderColor: "#ffffff",
+    },
+  },
+}
 const WEEKDAY_OPTIONS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
+const SCHEDULE_TYPE_OPTIONS = [
+  {label: "Every X seconds", value: "seconds"},
+  {label: "Every X minutes", value: "minutes"},
+  {label: "Every X hours", value: "hours"},
+  {label: "Daily at", value: "daily"},
+  {label: "Weekly", value: "weekly"},
+]
+
+function getSelectedOption(options, value) {
+  return options.find((option) => option.value === value) || null
+}
 
 const EMPTY_METRICS = {
   avg_heart_rate: 0,
@@ -56,6 +105,7 @@ const TREATMENT_CATEGORY_DESCRIPTION = {
   Improving: "Patients with partial recovery where at least one vital improved but unresolved issues remain.",
   Ineffective: "Patients whose condition showed no improvement or worsened after treatment.",
 }
+const OUTCOME_FILTER_IDS = ["effective", "improving", "ineffective"]
 
 function formatBatchTimestamp(value) {
   if (!value) {
@@ -74,68 +124,172 @@ function formatMetric(value, unit = "", hasData = false) {
   return `${safeValue.toFixed(2)}${unit}`
 }
 
-function MetricTile({label, value}) {
+function toTreatmentCount(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return 0
+  }
+
+  return Math.max(0, Math.round(numericValue))
+}
+
+function MetricTile({label, value, compact = false}) {
   return (
-    <div className="monitor-panel rounded-2xl px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{value}</p>
+    <div className={compact ? "medstream-batch-metric-tile medstream-batch-metric-tile-compact" : "medstream-batch-metric-tile"}>
+      <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
+      <div className="medstream-batch-metric-value">{value}</div>
     </div>
   )
 }
 
-function SimpleCasesTooltip({active, payload, chartTheme}) {
+function formatOutcomePercentage(value, total) {
+  if (!total) {
+    return "0%"
+  }
+
+  return `${((value / total) * 100).toFixed(0)}%`
+}
+
+function OverallOutcomeTooltip({active, payload, total}) {
   if (!active || !Array.isArray(payload) || !payload.length) {
     return null
   }
 
   const row = payload[0]?.payload || {}
-  const label = String(row.label || row.name || "")
-  const value = Number.isFinite(Number(row.count)) ? row.count : (row.rawValue ?? row.value ?? 0)
+  const value = Number(row.rawValue ?? row.value ?? 0)
+  const percentage = formatOutcomePercentage(value, total)
+  const lastUpdate = row.timestamp ? new Date(row.timestamp).toLocaleDateString("en-US", {month: "short", day: "numeric", year: "numeric"}) : "No batch run"
 
   return (
     <div
+      className="medstream-overall-tooltip"
       style={{
-        backgroundColor: chartTheme.tooltipBg,
-        border: `1px solid ${chartTheme.tooltipBorder}`,
-        borderRadius: "12px",
-        color: chartTheme.tooltipText,
-        padding: "8px 10px",
-        fontSize: "12px",
-        fontWeight: 600,
+        "--overall-tooltip-color": row.color,
       }}
     >
-      {label}: {value}
+      <div className="medstream-overall-tooltip-title">{row.name}</div>
+      <div className="medstream-overall-tooltip-row">
+        <span>Treatment count</span>
+        <strong>{value}</strong>
+      </div>
+      <div className="medstream-overall-tooltip-row">
+        <span>Percentage</span>
+        <strong>{percentage}</strong>
+      </div>
+      <div className="medstream-overall-tooltip-row">
+        <span>Last update on</span>
+        <strong>{lastUpdate}</strong>
+      </div>
     </div>
   )
 }
 
-function DownloadIcon() {
+function renderActivePieShape(props) {
+  const {cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload} = props
+
   return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 21h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/>
-    </svg>
+    <g>
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        stroke="none"
+        strokeWidth={0}
+      />
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={outerRadius + 10}
+        outerRadius={outerRadius + 14}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={payload.color}
+        stroke="none"
+        strokeWidth={0}
+      />
+      {renderOverallPieLabel(props)}
+    </g>
   )
 }
 
-function getStageProgress(progress, stage, isRunning) {
-  if (!isRunning && progress >= 100) {
-    return 100
-  }
+function renderOverallPieLabel(props) {
+  const {cx, cy, midAngle, outerRadius, percent, name, value} = props
+  const RADIAN = Math.PI / 180
+  const sin = Math.sin(-RADIAN * midAngle)
+  const cos = Math.cos(-RADIAN * midAngle)
+  const startX = cx + (outerRadius + 8) * cos
+  const startY = cy + (outerRadius + 8) * sin
+  const middleX = cx + (outerRadius + 34) * cos
+  const middleY = cy + (outerRadius + 34) * sin
+  const endX = middleX + (cos >= 0 ? 70 : -70)
+  const textAnchor = cos >= 0 ? "start" : "end"
+  const percentage = `${(percent * 100).toFixed(0)}%`
 
-  const normalizedStage = (stage || "").toLowerCase()
-  if (normalizedStage.includes("loading")) {
-    return Math.max(progress, 10)
+  return (
+    <g className="medstream-overall-pie-label">
+      <polyline points={`${startX},${startY} ${middleX},${middleY} ${endX},${middleY}`}/>
+      <text x={endX + (cos >= 0 ? 8 : -8)} y={middleY - 8} textAnchor={textAnchor} className="medstream-overall-pie-label-name">
+        {name}
+      </text>
+      <text x={endX + (cos >= 0 ? 8 : -8)} y={middleY + 18} textAnchor={textAnchor} className="medstream-overall-pie-label-value">
+        {value} treatments, {percentage}
+      </text>
+    </g>
+  )
+}
+
+function resolveLastRunStatus(batchProgress) {
+  const normalizedStatus = (batchProgress.last_run_status || "").toLowerCase()
+  const normalizedStage = (batchProgress.stage || "").toLowerCase()
+
+  if (normalizedStatus && normalizedStatus !== "idle") {
+    return normalizedStatus
   }
-  if (normalizedStage.includes("aggregating")) {
-    return Math.max(progress, 40)
+  if (normalizedStage.includes("failed")) {
+    return "failed"
   }
-  if (normalizedStage.includes("computing")) {
-    return Math.max(progress, 70)
+  if (normalizedStage.includes("completed") || (!batchProgress.is_running && Number(batchProgress.progress) >= 100 && batchProgress.last_run)) {
+    return "success"
   }
-  if (normalizedStage.includes("finalizing") || normalizedStage.includes("completed")) {
-    return Math.max(progress, 100)
+  if (batchProgress.is_running) {
+    return "running"
   }
-  return progress
+  return normalizedStatus || "idle"
+}
+
+function formatBatchRunState(batchProgress) {
+  return batchProgress.is_running ? "Running" : "Idle"
+}
+
+function formatLastRunStatus(batchProgress) {
+  const normalizedStatus = resolveLastRunStatus(batchProgress)
+
+  if (!normalizedStatus) {
+    return "Idle"
+  }
+  if (normalizedStatus === "success") {
+    return "Success"
+  }
+  return normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)
+}
+
+function getLastRunStatusType(batchProgress) {
+  const normalizedStatus = resolveLastRunStatus(batchProgress)
+
+  if (normalizedStatus === "success") {
+    return "success"
+  }
+  if (normalizedStatus === "failed") {
+    return "error"
+  }
+  if (normalizedStatus === "running") {
+    return "in-progress"
+  }
+  return "stopped"
 }
 
 function formatScheduleSummary(schedule) {
@@ -167,13 +321,10 @@ function formatScheduleSummary(schedule) {
 
 export default function BatchMetricsPage() {
   const {notifyError, notifySuccess} = useNotifications()
-  const {theme} = useTheme()
-  const chartTheme = getChartTheme(theme)
   const [metrics, setMetrics] = useState(null)
   const [insights, setInsights] = useState(null)
   const [comparison, setComparison] = useState(null)
   const [batchProgress, setBatchProgress] = useState({is_running: false, progress: 0, stage: "Idle", last_run: null})
-  const [progressDisplay, setProgressDisplay] = useState(0)
   const [schedule, setSchedule] = useState(EMPTY_SCHEDULE)
   const [scheduleType, setScheduleType] = useState("seconds")
   const [scheduleValue, setScheduleValue] = useState("30")
@@ -182,12 +333,19 @@ export default function BatchMetricsPage() {
   const [isApplyingSchedule, setIsApplyingSchedule] = useState(false)
   const [departmentsPage, setDepartmentsPage] = useState(1)
   const [diagnosesPage, setDiagnosesPage] = useState(1)
+  const [insightsFallbackPage, setInsightsFallbackPage] = useState(1)
   const [isRunningBatch, setIsRunningBatch] = useState(false)
+  const [showRunStartedBanner, setShowRunStartedBanner] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isInsightsLoading, setIsInsightsLoading] = useState(false)
   const [treatmentMode, setTreatmentMode] = useState("medication")
   const [selectedMedication, setSelectedMedication] = useState("")
+  const [visibleOutcomeIds, setVisibleOutcomeIds] = useState(OUTCOME_FILTER_IDS)
+  const [activeOutcomeId, setActiveOutcomeId] = useState("")
+  const [hoveredOutcomeId, setHoveredOutcomeId] = useState("")
   const lastBatchTimestampRef = useRef(null)
   const hasLoadedInitialDataRef = useRef(false)
+  const hasLoadedInsightsRef = useRef(false)
 
   const hasBatchData = Boolean(metrics?.timestamp)
 
@@ -204,18 +362,13 @@ export default function BatchMetricsPage() {
   useEffect(() => {
     let active = true
 
-    const loadData = async (nextDepartmentsPage = departmentsPage, nextDiagnosesPage = diagnosesPage) => {
+    const loadData = async () => {
       if (!hasLoadedInitialDataRef.current) {
         setIsLoading(true)
       }
       try {
-        const [metricsResponse, insightsResponse, scheduleResponse, comparisonResponse] = await Promise.all([
+        const [metricsResponse, scheduleResponse, comparisonResponse] = await Promise.all([
           getBatchMetrics(),
-          getBatchInsights({
-            page_size: PAGE_SIZE,
-            departments_page: nextDepartmentsPage,
-            diagnoses_page: nextDiagnosesPage,
-          }),
           getBatchSchedule(),
           getMetricsComparison(),
         ])
@@ -225,7 +378,6 @@ export default function BatchMetricsPage() {
         }
 
         const nextMetrics = getResponseData(metricsResponse)
-        const nextInsights = getResponseData(insightsResponse)
         const nextSchedule = getResponseData(scheduleResponse)
         const nextComparison = getResponseData(comparisonResponse)
         setComparison(nextComparison || null)
@@ -238,12 +390,7 @@ export default function BatchMetricsPage() {
           if (shouldReplaceMetrics) {
             lastBatchTimestampRef.current = incomingTimestamp
             setMetrics(nextMetrics)
-            if (nextInsights) {
-              setInsights(nextInsights)
-            }
           }
-        } else {
-          setInsights((current) => current || nextInsights || EMPTY_INSIGHTS)
         }
 
         syncScheduleForm(nextSchedule)
@@ -266,7 +413,52 @@ export default function BatchMetricsPage() {
       active = false
       window.clearInterval(intervalId)
     }
-  }, [departmentsPage, diagnosesPage, notifyError])
+  }, [notifyError])
+
+  useEffect(() => {
+    let active = true
+
+    const loadInsights = async (
+      nextDepartmentsPage = departmentsPage,
+      nextDiagnosesPage = diagnosesPage,
+      nextInsightsFallbackPage = insightsFallbackPage,
+    ) => {
+      if (!hasLoadedInsightsRef.current) {
+        setIsInsightsLoading(true)
+      }
+      try {
+        const response = await getBatchInsights({
+          page: nextInsightsFallbackPage,
+          page_size: PAGE_SIZE,
+          departments_page: nextDepartmentsPage,
+          diagnoses_page: nextDiagnosesPage,
+        })
+
+        if (!active) {
+          return
+        }
+
+        setInsights(getResponseData(response) || EMPTY_INSIGHTS)
+      } catch (loadError) {
+        if (active) {
+          notifyError(getErrorMessage(loadError), {duration: 5000})
+        }
+      } finally {
+        if (active) {
+          hasLoadedInsightsRef.current = true
+          setIsInsightsLoading(false)
+        }
+      }
+    }
+
+    loadInsights()
+    const intervalId = window.setInterval(loadInsights, POLL_INTERVAL_MS)
+
+    return () => {
+      active = false
+      window.clearInterval(intervalId)
+    }
+  }, [departmentsPage, diagnosesPage, insightsFallbackPage, notifyError])
 
   useEffect(() => {
     let active = true
@@ -293,25 +485,6 @@ export default function BatchMetricsPage() {
   }, [])
 
   useEffect(() => {
-    const nextProgress = getStageProgress(batchProgress.progress, batchProgress.stage, batchProgress.is_running)
-
-    if (batchProgress.is_running) {
-      setProgressDisplay(nextProgress)
-      return
-    }
-
-    if (nextProgress >= 100) {
-      setProgressDisplay(100)
-      const timeoutId = window.setTimeout(() => {
-        setProgressDisplay(0)
-      }, 1200)
-      return () => window.clearTimeout(timeoutId)
-    }
-
-    setProgressDisplay(0)
-  }, [batchProgress])
-
-  useEffect(() => {
     if (batchProgress.next_run_in_seconds == null) {
       return
     }
@@ -332,10 +505,27 @@ export default function BatchMetricsPage() {
     return () => window.clearInterval(intervalId)
   }, [batchProgress.is_running, batchProgress.next_run_in_seconds])
 
-  const refreshData = async (nextDepartmentsPage = departmentsPage, nextDiagnosesPage = diagnosesPage) => {
+  useEffect(() => {
+    if (!showRunStartedBanner) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowRunStartedBanner(false)
+    }, 7000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [showRunStartedBanner])
+
+  const refreshData = async (
+    nextDepartmentsPage = departmentsPage,
+    nextDiagnosesPage = diagnosesPage,
+    nextInsightsFallbackPage = insightsFallbackPage,
+  ) => {
     const [metricsResponse, insightsResponse, batchStatusResponse, scheduleResponse] = await Promise.all([
       getBatchMetrics(),
       getBatchInsights({
+        page: nextInsightsFallbackPage,
         page_size: PAGE_SIZE,
         departments_page: nextDepartmentsPage,
         diagnoses_page: nextDiagnosesPage,
@@ -350,8 +540,8 @@ export default function BatchMetricsPage() {
     if (nextMetrics?.timestamp) {
       lastBatchTimestampRef.current = nextMetrics.timestamp
       setMetrics(nextMetrics)
-      setInsights(nextInsights)
     }
+    setInsights(nextInsights || EMPTY_INSIGHTS)
 
     setBatchProgress(getResponseData(batchStatusResponse))
     syncScheduleForm(getResponseData(scheduleResponse))
@@ -382,12 +572,24 @@ export default function BatchMetricsPage() {
   }
 
   const handleRunBatchNow = async () => {
+    if (isRunningBatch || batchProgress.is_running) {
+      return
+    }
+
     try {
       setIsRunningBatch(true)
+      setShowRunStartedBanner(false)
       await runBatchNow()
+      setBatchProgress((current) => ({
+        ...current,
+        is_running: true,
+        last_run_status: "running",
+        progress: Math.max(Number(current.progress) || 0, 10),
+        stage: "Loading data",
+      }))
+      setShowRunStartedBanner(true)
       await new Promise((resolve) => window.setTimeout(resolve, 800))
       await refreshData()
-      notifySuccess("Batch run started successfully.", {duration: 5000})
     } catch (runError) {
       notifyError(getErrorMessage(runError), {duration: 5000})
     } finally {
@@ -412,32 +614,68 @@ export default function BatchMetricsPage() {
     () => insightsData.medication_effectiveness || [],
     [insightsData.medication_effectiveness],
   )
-  const progressLabel = batchProgress.is_running ? "Running" : "Idle"
+  const progressLabel = formatBatchRunState(batchProgress)
   const departmentsTotalPages = Math.max(1, Math.ceil((patientsPerDepartment.total || 0) / PAGE_SIZE))
   const diagnosesTotalPages = Math.max(1, Math.ceil((topDiagnosis.total || 0) / PAGE_SIZE))
   const totalTreatments = treatmentEffectiveness.effective + treatmentEffectiveness.improving + treatmentEffectiveness.ineffective
-  const overallEffectivenessData = totalTreatments > 0
-    ? [
-      {
-        name: "Effective",
-        value: treatmentEffectiveness.effective,
-        rawValue: treatmentEffectiveness.effective,
-        color: "#22c55e",
-      },
-      {
-        name: "Improving",
-        value: treatmentEffectiveness.improving,
-        rawValue: treatmentEffectiveness.improving,
-        color: "#f59e0b",
-      },
-      {
-        name: "Ineffective",
-        value: treatmentEffectiveness.ineffective,
-        rawValue: treatmentEffectiveness.ineffective,
-        color: "#ef4444",
-      },
-    ]
-    : []
+  const overallEffectivenessData = useMemo(() => (
+    totalTreatments > 0
+      ? [
+        {
+          id: "effective",
+          name: "Effective",
+          value: treatmentEffectiveness.effective,
+          rawValue: treatmentEffectiveness.effective,
+          color: "var(--chart-outcome-effective)",
+          timestamp: data.timestamp,
+          description: TREATMENT_CATEGORY_DESCRIPTION.Effective,
+        },
+        {
+          id: "improving",
+          name: "Improving",
+          value: treatmentEffectiveness.improving,
+          rawValue: treatmentEffectiveness.improving,
+          color: "var(--chart-outcome-improving)",
+          timestamp: data.timestamp,
+          description: TREATMENT_CATEGORY_DESCRIPTION.Improving,
+        },
+        {
+          id: "ineffective",
+          name: "Ineffective",
+          value: treatmentEffectiveness.ineffective,
+          rawValue: treatmentEffectiveness.ineffective,
+          color: "var(--chart-outcome-ineffective)",
+          timestamp: data.timestamp,
+          description: TREATMENT_CATEGORY_DESCRIPTION.Ineffective,
+        },
+      ]
+      : []
+  ), [data.timestamp, totalTreatments, treatmentEffectiveness.effective, treatmentEffectiveness.improving, treatmentEffectiveness.ineffective])
+  const visibleOutcomeData = useMemo(
+    () => overallEffectivenessData.filter((entry) => visibleOutcomeIds.includes(entry.id)),
+    [overallEffectivenessData, visibleOutcomeIds],
+  )
+  const visibleOutcomeChartData = useMemo(
+    () => visibleOutcomeData.filter((entry) => entry.rawValue > 0),
+    [visibleOutcomeData],
+  )
+  const outcomeFilterOptions = useMemo(
+    () => overallEffectivenessData.map((entry) => ({
+      label: entry.name,
+      value: entry.id,
+      labelContent: (
+        <span className="medstream-overall-select-option" style={{"--medstream-overall-option-color": entry.color}}>
+          <span className="medstream-overall-legend-swatch"/>
+          <span>{entry.name}</span>
+        </span>
+      ),
+    })),
+    [overallEffectivenessData],
+  )
+  const selectedOutcomeOptions = outcomeFilterOptions.filter((option) => visibleOutcomeIds.includes(option.value))
+  const visibleOutcomeTotal = visibleOutcomeData.reduce((sum, entry) => sum + entry.rawValue, 0)
+  const highlightedOutcomeId = activeOutcomeId || hoveredOutcomeId
+  const activeOutcomeIndex = visibleOutcomeChartData.findIndex((entry) => entry.id === highlightedOutcomeId)
 
   useEffect(() => {
     if (!medicationEffectiveness.length) {
@@ -452,25 +690,42 @@ export default function BatchMetricsPage() {
     ))
   }, [medicationEffectiveness])
 
+  useEffect(() => {
+    if (!visibleOutcomeChartData.length) {
+      setActiveOutcomeId("")
+      setHoveredOutcomeId("")
+      return
+    }
+
+    setActiveOutcomeId((current) => (
+      current && visibleOutcomeChartData.some((entry) => entry.id === current)
+        ? current
+        : ""
+    ))
+    setHoveredOutcomeId((current) => (
+      current && visibleOutcomeChartData.some((entry) => entry.id === current)
+        ? current
+        : ""
+    ))
+  }, [visibleOutcomeChartData])
+
   const selectedMedicationEffectiveness = medicationEffectiveness.find((item) => item.name === selectedMedication) || null
+  const medicationSelectOptions = medicationEffectiveness.map((item) => ({label: item.name, value: item.name}))
   const medicationBarData = [
     {
       label: "Effective",
-      count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.effective : 0,
-      fill: "#22c55e",
-      description: TREATMENT_CATEGORY_DESCRIPTION.Effective,
+      count: toTreatmentCount(selectedMedicationEffectiveness?.effective),
+      color: "#22c55e",
     },
     {
       label: "Improving",
-      count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.improving : 0,
-      fill: "#f59e0b",
-      description: TREATMENT_CATEGORY_DESCRIPTION.Improving,
+      count: toTreatmentCount(selectedMedicationEffectiveness?.improving),
+      color: "#f59e0b",
     },
     {
       label: "Ineffective",
-      count: selectedMedicationEffectiveness ? selectedMedicationEffectiveness.ineffective : 0,
-      fill: "#ef4444",
-      description: TREATMENT_CATEGORY_DESCRIPTION.Ineffective,
+      count: toTreatmentCount(selectedMedicationEffectiveness?.ineffective),
+      color: "#ef4444",
     },
   ]
 
@@ -478,6 +733,21 @@ export default function BatchMetricsPage() {
   const effectivePercentage = totalTreatments ? (treatmentEffectiveness.effective / totalTreatments) * 100 : 0
   const improvingPercentage = totalTreatments ? (treatmentEffectiveness.improving / totalTreatments) * 100 : 0
   const ineffectivePercentage = totalTreatments ? (treatmentEffectiveness.ineffective / totalTreatments) * 100 : 0
+  const lastRunStatusLabel = formatLastRunStatus(batchProgress)
+  const lastRunStatusType = getLastRunStatusType(batchProgress)
+  const batchRunState = progressLabel
+  const batchRunTone = batchRunState.toLowerCase()
+  const isBatchRunActionDisabled = isRunningBatch || Boolean(batchProgress.is_running)
+
+  const handleDepartmentsPageChange = (nextPage) => {
+    setDepartmentsPage(nextPage)
+    setInsightsFallbackPage(nextPage)
+  }
+
+  const handleDiagnosesPageChange = (nextPage) => {
+    setDiagnosesPage(nextPage)
+    setInsightsFallbackPage(nextPage)
+  }
 
   const handleExportAllMetrics = () => {
     const exportTimestamp = new Date().toISOString()
@@ -582,545 +852,455 @@ export default function BatchMetricsPage() {
 
   if (isLoading) {
     return (
-      <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-          <LoadingSpinner/>
-        </div>
-      </div>
+      <ContentLayout>
+        <LoadingSpinner/>
+      </ContentLayout>
     )
   }
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">
-                  Demo View
-                </p>
-
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">
-                  Batch Metrics
-                </h1>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  title="Download all metrics"
-                  aria-label="Download all metrics"
-                  className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
-                  onClick={handleExportAllMetrics}
-                >
-                  <DownloadIcon/>
-                </button>
-                <BackButton fallbackTo="/dashboard"/>
-              </div>
+    <ContentLayout>
+      <div className="medstream-batch-metrics-page">
+        <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <BackButton fallbackTo="/dashboard"/>
+          <div className="medstream-page-heading-row">
+            <div>
+              <h1 className="medstream-page-title">Batch Metrics</h1>
+              <p>Scheduled analytics, aggregate patient metrics, and treatment effectiveness.</p>
             </div>
-            <p className="mt-4 text-[var(--text-secondary)]">
-              This view shows aggregated data computed over a time window (e.g., last 5 minutes).
-              Batch processing analyzes large volumes of historical data, providing more stable and accurate insights.
-            </p>
+            <Button iconName="download" onClick={handleExportAllMetrics}>Export</Button>
           </div>
-        </header>
-
-        <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Control</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Scheduling</h2>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              Configure how often batch analytics should run. All timestamps are shown in Europe/Bucharest.
-            </p>
-
-            <div className="mt-6 monitor-panel rounded-2xl px-4 py-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Current Schedule</p>
-              <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{scheduleSummary}</p>
+          {showRunStartedBanner ? (
+            <div className="medstream-batch-run-alert">
+              <Alert
+                type="success"
+                header="Job run triggered"
+                dismissible
+                style={RUN_STARTED_ALERT_STYLE}
+                onDismiss={() => setShowRunStartedBanner(false)}
+              >
+                The job run was submitted successfully and execution status is updating.
+              </Alert>
             </div>
+          ) : null}
+        </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Run Frequency</span>
-                <select
-                  className="mt-3 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
-                  value={scheduleType}
-                  onChange={(event) => setScheduleType(event.target.value)}
-                >
-                  <option value="seconds">Every X seconds</option>
-                  <option value="minutes">Every X minutes</option>
-                  <option value="hours">Every X hours</option>
-                  <option value="daily">Daily at</option>
-                  <option value="weekly">Weekly</option>
-                </select>
-              </label>
+        <div className="medstream-dashboard-split">
+          <div className="medstream-stretch-container">
+            <Container
+              header={
+                <Header variant="h2" description="Configure how often batch analytics should run.">
+                  Scheduling
+                </Header>
+              }
+            >
+              <SpaceBetween size="m">
+                <ColumnLayout columns={2} variant="text-grid">
+                  <SpaceBetween size="xs">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Current schedule</Box>
+                    <Box variant="h3">{scheduleSummary}</Box>
+                  </SpaceBetween>
+                </ColumnLayout>
 
-              {(scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") ? (
-                <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
-                  <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                    {scheduleType === "seconds" ? "Seconds" : scheduleType === "minutes" ? "Minutes" : "Hours"}
-                  </span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={scheduleValue}
-                    onChange={(event) => setScheduleValue(event.target.value)}
-                    className="mt-3 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
-                  />
-                </label>
-              ) : null}
+                <div className="medstream-schedule-frequency-row">
+                  <FormField label="Run frequency">
+                    <Select
+                      selectedOption={getSelectedOption(SCHEDULE_TYPE_OPTIONS, scheduleType)}
+                      onChange={({detail}) => setScheduleType(detail.selectedOption.value)}
+                      options={SCHEDULE_TYPE_OPTIONS}
+                      selectedAriaLabel="Selected run frequency"
+                    />
+                  </FormField>
 
-              {(scheduleType === "daily" || scheduleType === "weekly") ? (
-                <label className="monitor-panel flex flex-col rounded-2xl px-4 py-3">
-                  <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Time</span>
-                  <input
-                    type="time"
-                    value={scheduleTime}
-                    onChange={(event) => setScheduleTime(event.target.value)}
-                    className="mt-3 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
-                  />
-                </label>
-              ) : null}
-            </div>
+                  {(scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") ? (
+                    <FormField label={scheduleType === "seconds" ? "Seconds" : scheduleType === "minutes" ? "Minutes" : "Hours"}>
+                      <Input
+                        type="number"
+                        value={scheduleValue}
+                        onChange={({detail}) => setScheduleValue(detail.value)}
+                      />
+                    </FormField>
+                  ) : null}
 
-            {scheduleType === "weekly" ? (
-              <div className="mt-3 monitor-panel rounded-2xl px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Days</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {WEEKDAY_OPTIONS.map((day) => {
+                  {(scheduleType === "daily" || scheduleType === "weekly") ? (
+                    <FormField label="Time">
+                      <Input
+                        value={scheduleTime}
+                        onChange={({detail}) => setScheduleTime(detail.value)}
+                        placeholder="08:00"
+                      />
+                    </FormField>
+                  ) : null}
+                </div>
+
+                {scheduleType === "weekly" ? (
+                  <SpaceBetween size="xs">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Days</Box>
+                    <SpaceBetween direction="horizontal" size="xs">
+                      {WEEKDAY_OPTIONS.map((day) => {
                     const isSelected = scheduleDays.includes(day)
                     return (
-                      <button
+                          <Button
                         key={day}
-                        type="button"
                         onClick={() => toggleWeekday(day)}
-                        className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
-                          isSelected
-                            ? "border border-[#ff9900] bg-[#2b2217] text-[#ffd08a]"
-                            : "border border-[var(--border-strong)] bg-[var(--surface-2)] text-[var(--text-primary)]"
-                        }`}
+                            variant={isSelected ? "primary" : "normal"}
                       >
                         {day.slice(0, 3)}
-                      </button>
+                          </Button>
                     )
                   })}
-                </div>
-              </div>
-            ) : null}
+                    </SpaceBetween>
+                  </SpaceBetween>
+                ) : null}
 
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                type="button"
-                className="console-button-secondary rounded-xl px-4 py-3 text-sm font-semibold"
+                <SpaceBetween direction="horizontal" size="xs">
+                  <Button
                 onClick={handleApplySchedule}
-                disabled={isApplyingSchedule}
+                disabled={isApplyingSchedule || isBatchRunActionDisabled}
               >
                 {isApplyingSchedule ? "Applying..." : "Apply Schedule"}
-              </button>
-              <button
-                type="button"
-                className="console-button-primary rounded-xl px-4 py-3 text-sm font-semibold"
+                  </Button>
+                  <Button
+                    variant="primary"
                 onClick={handleRunBatchNow}
-                disabled={isRunningBatch}
+                disabled={isBatchRunActionDisabled}
               >
-                {isRunningBatch ? "Running..." : "Run Batch Now"}
-              </button>
-            </div>
+                {isBatchRunActionDisabled ? "Running..." : "Run Batch Now"}
+                  </Button>
+                </SpaceBetween>
+              </SpaceBetween>
+            </Container>
           </div>
 
-          <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Job Status</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Execution Progress</h2>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              The batch job executes in stages (loading, aggregating, computing, finalizing),
-              each representing a phase of data processing.
-            </p>
+          <div className="medstream-stretch-container">
+            <Container
+              header={
+                <Header variant="h2" description="Current batch execution stage and progress.">
+                  Execution progress
+                </Header>
+              }
+            >
+              <SpaceBetween size="m">
+                <ColumnLayout columns={4} variant="text-grid">
+                  <SpaceBetween size="xs">
+                    <Box color="text-body-secondary" variant="awsui-key-label">Status</Box>
+                    <StatusIndicator type={lastRunStatusType}>
+                      {lastRunStatusLabel}
+                    </StatusIndicator>
+                  </SpaceBetween>
+                  <MetricTile label="Stage" value={batchProgress.stage || "Idle"}/>
+                  <MetricTile
+                    label="Next Run In"
+                    value={
+                      batchProgress.is_running
+                        ? "Running now"
+                        : batchProgress.next_run_in_seconds == null
+                          ? "Not scheduled"
+                          : `${batchProgress.next_run_in_seconds}s`
+                    }
+                  />
+                  <MetricTile label="Last Run" value={formatBatchTimestamp(batchProgress.last_run)}/>
+                </ColumnLayout>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Status</p>
-                <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{progressLabel}</p>
-              </div>
-              <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Stage</p>
-                <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">{batchProgress.stage || "Idle"}</p>
-              </div>
-              <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Next Run In</p>
-                <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">
-                  {batchProgress.is_running
-                    ? "Running now"
-                    : batchProgress.next_run_in_seconds == null
-                      ? "Not scheduled"
-                      : `${batchProgress.next_run_in_seconds}s`}
-                </p>
-              </div>
-              <div className="monitor-panel rounded-2xl px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Last Run</p>
-                <p className="mt-2 text-sm font-semibold text-[var(--text-primary)]">
-                  {formatBatchTimestamp(batchProgress.last_run)}
-                </p>
-              </div>
-            </div>
+                <div className={`medstream-batch-job-state medstream-batch-job-state-${batchRunTone}`}>
+                  <div className="medstream-batch-job-state-indicator" aria-hidden="true">
+                    {batchRunState === "Running" ? (
+                      <span className="medstream-batch-job-spinner"/>
+                    ) : (
+                      <span className="medstream-batch-job-status-icon"/>
+                    )}
+                  </div>
+                  <div className="medstream-batch-job-state-copy">
+                    <strong>{batchRunState}</strong>
+                  </div>
+                </div>
+              </SpaceBetween>
+            </Container>
+          </div>
+        </div>
 
-            <div className="mt-6 monitor-panel rounded-2xl px-4 py-4">
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Progress</p>
-                <p className="text-sm font-semibold text-[var(--text-primary)]">{progressDisplay}%</p>
-              </div>
-              <div className="mt-3 h-3 rounded-full bg-[var(--surface-4)]">
-                <div
-                  className="h-3 rounded-full bg-[#ff9900] transition-all duration-500 ease-out"
-                  style={{width: `${progressDisplay}%`}}
+        <Container header={<Header variant="h2">Latest Metrics</Header>}>
+          <div className="medstream-batch-latest-metrics-grid">
+            <MetricTile compact label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm", hasBatchData)}/>
+            <MetricTile compact label="Avg Oxygen" value={formatMetric(data.avg_oxygen, "%", hasBatchData)}/>
+            <MetricTile compact label="Avg Temperature" value={formatMetric(data.avg_temperature, " C", hasBatchData)}/>
+            <div className="medstream-batch-latest-metrics-divider" aria-hidden="true"/>
+            <MetricTile compact label="Alerts Count" value={hasBatchData ? String(data.alerts ?? 0) : "Not available"}/>
+            <MetricTile compact label="Execution Time" value={formatMetric(data.execution_time_ms, " ms", hasBatchData)}/>
+            <MetricTile
+              compact
+              label="Post-Discharge Clinical Summary"
+              value={String(data.generated_discharge_summaries_count ?? 0)}
+            />
+          </div>
+        </Container>
+
+        <div className="medstream-dashboard-split">
+          <div className="medstream-stretch-container">
+            <Container header={<Header variant="h2">Patients per Department</Header>}>
+              <div className="medstream-simple-list-table">
+                <Table
+                  variant="borderless"
+                  items={patientsPerDepartment.items || []}
+                  trackBy="department"
+                  loading={isInsightsLoading}
+                  loadingText="Loading department snapshot"
+                  empty={<Box color="text-body-secondary">No department snapshot available yet.</Box>}
+                  columnDefinitions={[
+                    {
+                      id: "department",
+                      header: "Department",
+                      cell: (entry) => entry.department,
+                    },
+                    {
+                      id: "patients",
+                      header: "Patients",
+                      cell: (entry) => `${entry.patients} patients`,
+                    },
+                  ]}
                 />
               </div>
-            </div>
-          </div>
-        </section>
 
-        <section className="monitor-card rounded-[24px] p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Snapshot</p>
-          <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Latest Metrics</h2>
-
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <MetricTile label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm", hasBatchData)}/>
-            <MetricTile label="Avg Oxygen" value={formatMetric(data.avg_oxygen, "%", hasBatchData)}/>
-            <MetricTile label="Avg Temperature" value={formatMetric(data.avg_temperature, " C", hasBatchData)}/>
-            <MetricTile label="Alerts Count" value={hasBatchData ? String(data.alerts ?? 0) : "Not available"}/>
-            <MetricTile label="Execution Time" value={formatMetric(data.execution_time_ms, " ms", hasBatchData)}/>
-          </div>
-
-          <div className="mt-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Post-Discharge Clinical Summary</p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <MetricTile
-                label="Generated Summaries"
-                value={String(data.generated_discharge_summaries_count ?? 0)}
+              <div className="mt-4 flex justify-end">
+              <Pagination
+                currentPageIndex={departmentsPage}
+                pagesCount={departmentsTotalPages}
+                onChange={({detail}) => handleDepartmentsPageChange(detail.currentPageIndex)}
               />
-              <MetricTile
-                label="Pending Discharged Patients"
-                value={String(data.pending_discharge_summaries_count ?? 0)}
+              </div>
+            </Container>
+          </div>
+
+          <div className="medstream-stretch-container">
+            <Container header={<Header variant="h2">Top Diagnoses by Patient Count</Header>}>
+              <div className="medstream-simple-list-table">
+                <Table
+                  variant="borderless"
+                  items={topDiagnosis.items || []}
+                  trackBy="name"
+                  loading={isInsightsLoading}
+                  loadingText="Loading diagnosis snapshot"
+                  empty={<Box color="text-body-secondary">No diagnosis snapshot available yet.</Box>}
+                  columnDefinitions={[
+                    {
+                      id: "diagnosis",
+                      header: "Diagnosis",
+                      cell: (diagnosis) => diagnosis.name,
+                    },
+                    {
+                      id: "patients",
+                      header: "Patients",
+                      cell: (diagnosis) => `${diagnosis.patients} patients`,
+                    },
+                  ]}
+                />
+              </div>
+              <div className="mt-2 flex justify-end">
+              <Pagination
+                currentPageIndex={diagnosesPage}
+                pagesCount={diagnosesTotalPages}
+                onChange={({detail}) => handleDiagnosesPageChange(detail.currentPageIndex)}
               />
-            </div>
+              </div>
+            </Container>
           </div>
-        </section>
+        </div>
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Insight</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Patients per Department</h2>
-
-            <div className="mt-6 space-y-3">
-              {patientsPerDepartment.items?.length ? patientsPerDepartment.items.map((entry) => (
-                <div key={entry.department} className="monitor-panel rounded-2xl px-4 py-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">{entry.department}</p>
-                    <div className="rounded-full border border-[var(--border-strong)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)]">
-                      {entry.patients} patients
-                    </div>
-                  </div>
-                </div>
-              )) : (
-                <div className="monitor-panel rounded-2xl px-4 py-6 text-sm text-[var(--text-secondary)]">
-                  No department snapshot available yet.
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                disabled={patientsPerDepartment.page <= 1}
-                onClick={() => setDepartmentsPage((current) => Math.max(1, current - 1))}
-              >
-                Previous
-              </button>
-              <p className="text-sm text-[var(--text-secondary)]">
-                Page {patientsPerDepartment.page || 1} of {departmentsTotalPages}
-              </p>
-              <button
-                type="button"
-                className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                disabled={(patientsPerDepartment.page || 1) >= departmentsTotalPages}
-                onClick={() => setDepartmentsPage((current) => Math.min(departmentsTotalPages, current + 1))}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-
-          <div className="monitor-card rounded-[24px] p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Batch Insight</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Top Diagnosis</h2>
-
-            <div className="mt-6 space-y-3">
-              {topDiagnosis.items?.length ? topDiagnosis.items.map((diagnosis) => (
-                <div key={diagnosis.name} className="monitor-panel rounded-2xl px-4 py-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="group relative flex flex-1 min-w-0 items-center">
-                      <p className="flex-1 min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">
-                        {diagnosis.name}
-                      </p>
-                      <span
-                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-[var(--border-soft)] bg-[var(--surface-4)] px-2 py-1 text-xs font-medium text-[var(--text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                        {diagnosis.name}
-                      </span>
-                    </div>
-                    <div
-                      className="shrink-0 w-[110px] text-center rounded-full border border-[var(--border-strong)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)]">
-                      {diagnosis.patients} patients
-                    </div>
-                  </div>
-                </div>
-              )) : (
-                <div className="monitor-panel rounded-2xl px-4 py-6 text-sm text-[var(--text-secondary)]">
-                  No diagnosis snapshot available yet.
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                disabled={topDiagnosis.page <= 1}
-                onClick={() => setDiagnosesPage((current) => Math.max(1, current - 1))}
-              >
-                Previous
-              </button>
-              <p className="text-sm text-[var(--text-secondary)]">
-                Page {topDiagnosis.page || 1} of {diagnosesTotalPages}
-              </p>
-              <button
-                type="button"
-                className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                disabled={(topDiagnosis.page || 1) >= diagnosesTotalPages}
-                onClick={() => setDiagnosesPage((current) => Math.min(diagnosesTotalPages, current + 1))}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="monitor-card rounded-[24px] p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Treatment Analysis</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Treatment Effectiveness</h2>
-            </div>
-            {treatmentMode === "medication" && selectedMedication ? (
-              <button
-                type="button"
-                title="Export selected medication data"
-                aria-label="Export selected medication data"
-                className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
-                onClick={handleExportSelectedMedication}
-              >
-                <DownloadIcon/>
-              </button>
-            ) : null}
-          </div>
-
-          <div className="mt-5 inline-flex rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-1">
-            <button
-              type="button"
-              onClick={() => setTreatmentMode("medication")}
-              className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                treatmentMode === "medication"
-                  ? "bg-[var(--surface-muted)] text-[var(--text-primary)]"
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              }`}
+        <Container
+          header={
+            <Header
+              variant="h2"
+              actions={treatmentMode === "medication" && selectedMedication ? (
+                <Button iconName="download" onClick={handleExportSelectedMedication}>Export medication</Button>
+              ) : null}
             >
-              Medication
-            </button>
-            <button
-              type="button"
-              onClick={() => setTreatmentMode("overall")}
-              className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                treatmentMode === "overall"
-                  ? "bg-[var(--surface-muted)] text-[var(--text-primary)]"
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              }`}
-            >
-              Overall
-            </button>
-          </div>
-
-          {treatmentMode === "medication" ? (
-            <div className="mt-6 space-y-5">
-              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                <p className="text-sm font-semibold text-[var(--text-primary)]">What this chart measures</p>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                  The chart shows treatment outcomes for the selected medication across all recorded treatment instances.
-                </p>
-                <div className="mt-3 grid gap-2">
-                  {medicationBarData.map((item) => (
-                    <div key={`explain-${item.label}`} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{color: item.fill}}>
-                        {item.label}: {item.count}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--text-secondary)]">{item.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="monitor-panel rounded-2xl p-4">
-                <label htmlFor="medication-select" className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                  Select medication
-                </label>
-                <select
-                  id="medication-select"
-                  className="mt-3 w-full rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
-                  value={selectedMedication}
-                  onChange={(event) => setSelectedMedication(event.target.value)}
-                  disabled={!medicationEffectiveness.length}
-                >
-                  {medicationEffectiveness.length
-                    ? medicationEffectiveness.map((item) => (
-                      <option key={item.name} value={item.name}>{item.name}</option>
-                    ))
-                    : <option value="">No medication data available</option>}
-                </select>
-              </div>
-
-              <div className="h-[280px] rounded-2xl border p-3" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={medicationBarData} margin={{top: 8, right: 10, left: 0, bottom: 8}}>
-                    <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3"/>
-                    <XAxis dataKey="label" stroke={chartTheme.axis} tick={{fontSize: 11}}/>
-                    <YAxis allowDecimals={false} stroke={chartTheme.axis} tick={{fontSize: 11}}/>
-                    <Tooltip content={<SimpleCasesTooltip chartTheme={chartTheme}/>}/>
-                    <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                      <LabelList dataKey="count" position="top" fill={chartTheme.label} fontSize={12}/>
-                      {medicationBarData.map((item) => (
-                        <Cell key={item.label} fill={item.fill}/>
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-6 rounded-2xl border p-3" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
-              <div className="mb-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                <p className="text-sm font-semibold text-[var(--text-primary)]">What this chart measures</p>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                  This chart summarizes treatment outcomes across all medications and patients in the selected batch window.
-                </p>
-              </div>
-              <div className="h-[300px]">
-                {totalTreatments > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={overallEffectivenessData}
-                        dataKey="value"
-                        nameKey="name"
-                        outerRadius={112}
-                        startAngle={90}
-                        endAngle={-270}
-                        paddingAngle={4}
-                        stroke={chartTheme.pieStroke}
-                        strokeWidth={2}
-                      >
-                        {overallEffectivenessData.map((entry) => (
-                          <Cell key={entry.name} fill={entry.color}/>
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={<SimpleCasesTooltip chartTheme={chartTheme}/>}
+              Treatment Effectiveness
+            </Header>
+          }
+        >
+          <Tabs
+            activeTabId={treatmentMode}
+            onChange={({detail}) => setTreatmentMode(detail.activeTabId)}
+            tabs={[
+              {
+                id: "medication",
+                label: "Medication",
+                content: (
+                  <SpaceBetween size="m">
+                    <Box color="text-body-secondary">
+                      The chart shows treatment outcomes for the selected medication across all recorded treatment instances.
+                    </Box>
+                    <FormField label="Select medication">
+                      <Select
+                        selectedOption={getSelectedOption(medicationSelectOptions, selectedMedication)}
+                        onChange={({detail}) => setSelectedMedication(detail.selectedOption.value)}
+                        options={medicationSelectOptions}
+                        placeholder={medicationEffectiveness.length ? "Select medication" : "No medication data available"}
+                        selectedAriaLabel="Selected medication"
+                        disabled={!medicationEffectiveness.length}
                       />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
-                    No treatment data available yet.
-                  </div>
-                )}
-              </div>
-              <div className="mt-3 flex items-center justify-center gap-5 text-sm text-[var(--text-secondary)]">
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]"/>
-                  Effective: {treatmentEffectiveness.effective}
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#f59e0b]"/>
-                  Improving: {treatmentEffectiveness.improving}
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#ef4444]"/>
-                  Ineffective: {treatmentEffectiveness.ineffective}
-                </span>
-              </div>
-            </div>
-          )}
-        </section>
+                    </FormField>
+                    <div className="medstream-chart-panel medstream-medication-effectiveness-chart-panel">
+                      <AwsBarChart
+                        ariaLabel="Treatment outcomes for selected medication"
+                        barWidthRatio={0.86}
+                        colorKey="color"
+                        data={medicationBarData}
+                        emptyText="No medication treatment data available."
+                        height={390}
+                        hideZeroValues
+                        legendPosition="left"
+                        seriesTitle="Treatments"
+                        tooltipValueFormatter={(bar) => String(toTreatmentCount(bar.y))}
+                        valueKey="count"
+                        xTitle="Outcome"
+                      />
+                    </div>
+                  </SpaceBetween>
+                ),
+              },
+              {
+                id: "overall",
+                label: "Overall",
+                content: (
+                  <SpaceBetween size="m">
+                    <Box color="text-body-secondary">
+                      This chart summarizes treatment outcomes across all medications and patients in the selected batch window.
+                    </Box>
+                    <div className="medstream-chart-panel medstream-overall-chart-panel">
+                      {totalTreatments > 0 ? (
+                        <>
+                          <div className="medstream-overall-filter">
+                            <FormField label="Filter displayed data">
+                              <Multiselect
+                                selectedOptions={selectedOutcomeOptions}
+                                onChange={({detail}) => {
+                                  setVisibleOutcomeIds(detail.selectedOptions.map((option) => option.value).filter(Boolean))
+                                }}
+                                options={outcomeFilterOptions}
+                                placeholder="Filter data"
+                                selectedAriaLabel="Selected"
+                                deselectAriaLabel={(option) => `Remove ${option.label}`}
+                                hideTokens
+                                keepOpen
+                              />
+                            </FormField>
+                          </div>
 
-        <section className="monitor-card rounded-[24px] p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Understanding Batch Processing</p>
-          <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">How Batch Processing Works</h2>
+                          {visibleOutcomeChartData.length ? (
+                            <div className="medstream-overall-pie" aria-label={`Overall treatment outcomes: ${visibleOutcomeTotal} visible treatments`}>
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart margin={{top: 42, right: 130, bottom: 62, left: 130}}>
+                                  <Pie
+                                    activeIndex={activeOutcomeIndex >= 0 ? activeOutcomeIndex : undefined}
+                                    activeShape={renderActivePieShape}
+                                    data={visibleOutcomeChartData}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    cx="50%"
+                                    cy="54%"
+                                    innerRadius={0}
+                                    outerRadius={118}
+                                    startAngle={90}
+                                    endAngle={-270}
+                                    paddingAngle={0}
+                                    label={renderOverallPieLabel}
+                                    labelLine={false}
+                                    isAnimationActive={false}
+                                    stroke="none"
+                                    strokeWidth={0}
+                                    onMouseEnter={(entry) => setActiveOutcomeId(entry.id)}
+                                    onMouseLeave={() => setActiveOutcomeId("")}
+                                  >
+                                    {visibleOutcomeChartData.map((entry) => (
+                                      <Cell
+                                        className={highlightedOutcomeId === entry.id ? "medstream-overall-pie-cell-active" : ""}
+                                        fill={entry.color}
+                                        key={entry.id}
+                                        opacity={highlightedOutcomeId ? (highlightedOutcomeId === entry.id ? 1 : 0.34) : 1}
+                                        stroke="none"
+                                        strokeWidth={0}
+                                      />
+                                    ))}
+                                  </Pie>
+                                  {highlightedOutcomeId ? (
+                                    <Pie
+                                      className="medstream-overall-active-ring"
+                                      data={visibleOutcomeChartData}
+                                      dataKey="value"
+                                      nameKey="name"
+                                      cx="50%"
+                                      cy="54%"
+                                      innerRadius={128}
+                                      outerRadius={132}
+                                      startAngle={90}
+                                      endAngle={-270}
+                                      paddingAngle={0}
+                                      label={false}
+                                      labelLine={false}
+                                      isAnimationActive={false}
+                                      stroke="none"
+                                      strokeWidth={0}
+                                    >
+                                      {visibleOutcomeChartData.map((entry) => (
+                                        <Cell
+                                          fill={highlightedOutcomeId === entry.id ? entry.color : "transparent"}
+                                          key={entry.id}
+                                          stroke="none"
+                                          strokeWidth={0}
+                                        />
+                                      ))}
+                                    </Pie>
+                                  ) : null}
+                                  <Tooltip content={<OverallOutcomeTooltip total={visibleOutcomeTotal}/>}/>
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          ) : (
+                            <div className="medstream-overall-empty">
+                              <Box color="text-body-secondary">No treatment data selected.</Box>
+                            </div>
+                          )}
 
-          <div className="mt-4 space-y-4 text-sm text-[var(--text-secondary)] leading-6">
-            <p>
-              This page represents the batch processing layer of the system. Data is collected over time and processed in intervals rather
-              than instantly.
-            </p>
-
-            <p>
-              Instead of reacting to each event individually, batch processing aggregates data across multiple patients and time windows to
-              generate more stable and reliable insights.
-            </p>
-
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-              <p className="font-semibold text-[var(--text-primary)] mb-2">What you are seeing:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Aggregated metrics computed over a time window</li>
-                <li>Stable averages across multiple patients</li>
-                <li>Reduced noise compared to real-time values</li>
-                <li>Summary insights derived from historical data</li>
-              </ul>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-              <p className="font-semibold text-[var(--text-primary)] mb-2">Why batch processing matters:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Provides more accurate and consistent results</li>
-                <li>Enables long-term trend analysis</li>
-                <li>Helps evaluate treatment effectiveness</li>
-                <li>Supports reporting and decision-making</li>
-              </ul>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-              <p className="font-semibold text-[var(--text-primary)] mb-2">Technical flow:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Data is collected over time (streaming layer)</li>
-                <li>Events are accumulated into a dataset</li>
-                <li>Batch jobs process the dataset periodically</li>
-                <li>Metrics and insights are computed</li>
-                <li>Results are exposed via API and visualized</li>
-              </ul>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-              <p className="font-semibold text-[var(--text-primary)] mb-2">Trade-offs:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Higher latency (results are delayed)</li>
-                <li>More stable and reliable outputs</li>
-                <li>Better suited for analytics than monitoring</li>
-                <li>Requires scheduled execution</li>
-              </ul>
-            </div>
-
-            <p>
-              This layer complements streaming processing: batch provides accuracy and deeper insights, while streaming provides speed and
-              real-time visibility.
-            </p>
-          </div>
-        </section>
+                          <div
+                            className="medstream-overall-legend"
+                            aria-label="Overall treatment outcome legend"
+                            onMouseLeave={() => setHoveredOutcomeId("")}
+                          >
+                            {visibleOutcomeData.map((entry) => (
+                              <div
+                                className={[
+                                  "medstream-overall-legend-item",
+                                  hoveredOutcomeId === entry.id ? "medstream-overall-legend-item-active" : "",
+                                  hoveredOutcomeId && hoveredOutcomeId !== entry.id ? "medstream-overall-legend-item-muted" : "",
+                                ].filter(Boolean).join(" ")}
+                                key={entry.id}
+                                onBlur={() => setHoveredOutcomeId("")}
+                                onFocus={() => setHoveredOutcomeId(entry.id)}
+                                onMouseEnter={() => setHoveredOutcomeId(entry.id)}
+                                tabIndex={0}
+                              >
+                                <span className="medstream-overall-legend-swatch" style={{backgroundColor: entry.color}}/>
+                                <span>{entry.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="medstream-overall-empty">
+                          <Box color="text-body-secondary">No treatment data available yet.</Box>
+                        </div>
+                      )}
+                    </div>
+                  </SpaceBetween>
+                ),
+              },
+            ]}
+          />
+        </Container>
+        </SpaceBetween>
       </div>
-    </div>
+    </ContentLayout>
   )
 }

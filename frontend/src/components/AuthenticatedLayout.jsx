@@ -1,6 +1,6 @@
 import {Outlet, useLocation} from "react-router-dom"
-import Navbar from "./Navbar.jsx"
 import {useCallback, useEffect, useMemo, useState} from "react"
+import {AppIconRail, AppSideNavigation, AppTopNavigation} from "./Navbar.jsx"
 import {useAuth} from "./AuthContext.jsx"
 import {resendVerificationEmail} from "../services/authApi.js"
 import {getCurrentDoctor} from "../services/doctorApi.js"
@@ -18,6 +18,7 @@ export default function AuthenticatedLayout() {
   const {notifyError, notifySuccess, notifyWarning} = useNotifications()
   const [doctor, setDoctor] = useState(null)
   const [isResending, setIsResending] = useState(false)
+  const [navigationOpen, setNavigationOpen] = useState(true)
 
   const authHeaders = useMemo(() => token ? {Authorization: `Bearer ${token}`} : undefined, [token])
 
@@ -106,9 +107,24 @@ export default function AuthenticatedLayout() {
   }, [doctor, handleResend, isResending, notifyWarning, showResend])
 
   return (
-    <div className="min-h-screen">
-      <Navbar/>
-      <Outlet/>
+    <div className="medstream-shell">
+      <div id="top-nav">
+        <AppTopNavigation/>
+      </div>
+      <div className={`medstream-main-frame${navigationOpen ? "" : " medstream-main-frame-collapsed"}`}>
+        {navigationOpen ? (
+          <aside className="medstream-sidebar">
+            <AppSideNavigation onCollapse={() => setNavigationOpen(false)}/>
+          </aside>
+        ) : (
+          <aside className="medstream-sidebar medstream-sidebar-collapsed">
+            <AppIconRail onOpen={() => setNavigationOpen(true)}/>
+          </aside>
+        )}
+        <main className="medstream-content-inner">
+          <Outlet/>
+        </main>
+      </div>
     </div>
   )
 }

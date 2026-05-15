@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import threading
 from email.message import EmailMessage
 from urllib.parse import urlencode
 
@@ -11,6 +13,9 @@ from app.validators.notification_validators import (
     validate_notification_subject,
     validate_smtp_host,
 )
+
+logger = logging.getLogger(__name__)
+LOCAL_SMTP_HOSTS = {"localhost", "127.0.0.1", "mailcatcher", "mailhog", "mailpit"}
 
 
 def _build_frontend_link(path: str, token: str):
@@ -34,22 +39,25 @@ def _render_html_email(title: str, message: str, action_label: str, action_url: 
     return f"""\
 <!doctype html>
 <html lang=\"en\">
-  <body style=\"margin:0;padding:0;background:#16191f;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif;color:#f2f3f3;\">
-    <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"padding:32px 16px;background:#16191f;\">
+  <body style=\"margin:0;padding:0;background:#f7f8fa;font-family:Segoe UI,Helvetica Neue,Arial,sans-serif;color:#232f3e;\">
+    <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"padding:32px 16px;background:#f7f8fa;\">
       <tr>
         <td align=\"center\">
-          <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:600px;border:1px solid #3b424b;background:#1b2430;border-radius:20px;overflow:hidden;\">
+          <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:600px;border:1px solid #d5dbdb;background:#ffffff;border-radius:8px;overflow:hidden;\">
+            <tr>
+              <td style=\"height:4px;background:#ff9900;font-size:0;line-height:0;\">&nbsp;</td>
+            </tr>
             <tr>
               <td style=\"padding:32px;\">
-                <p style=\"margin:0 0 12px;font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#ff9900;font-weight:700;\">MedStream</p>
-                <h1 style=\"margin:0 0 16px;font-size:28px;line-height:1.2;color:#ffffff;\">{title}</h1>
-                <p style=\"margin:0 0 24px;font-size:16px;line-height:1.6;color:#d5dbdb;\">{message}</p>
-                <a href=\"{action_url}\" style=\"display:inline-block;padding:14px 22px;border-radius:14px;background:#ec7211;color:#16191f;text-decoration:none;font-weight:700;\">
+                <p style=\"margin:0 0 12px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#5f6b7a;font-weight:700;\">MedStream</p>
+                <h1 style=\"margin:0 0 16px;font-size:26px;line-height:1.2;color:#232f3e;\">{title}</h1>
+                <p style=\"margin:0 0 24px;font-size:15px;line-height:1.6;color:#5f6b7a;\">{message}</p>
+                <a href=\"{action_url}\" style=\"display:inline-block;padding:10px 18px;border-radius:8px;background:#0972d3;color:#ffffff;text-decoration:none;font-weight:700;\">
                   {action_label}
                 </a>
-                <p style=\"margin:24px 0 8px;font-size:13px;color:#879196;\">If the button does not work, use this link:</p>
+                <p style=\"margin:24px 0 8px;font-size:13px;color:#5f6b7a;\">If the button does not work, use this link:</p>
                 <p style=\"margin:0;font-size:13px;line-height:1.6;word-break:break-all;\">
-                  <a href=\"{action_url}\" style=\"color:#9dccff;text-decoration:none;\">{action_url}</a>
+                  <a href=\"{action_url}\" style=\"color:#0972d3;text-decoration:none;\">{action_url}</a>
                 </p>
               </td>
             </tr>
@@ -70,32 +78,60 @@ async def send_email_async(recipient: str, subject: str, text_body: str, html_bo
     email.set_content(validate_notification_body(text_body, "Text body"))
     email.add_alternative(validate_notification_body(html_body, "HTML body"), subtype="html")
 
+    smtp_host = validate_smtp_host(settings.smtp_host)
+    logger.info(
+        "Sending email to %s via SMTP %s:%s.",
+        recipient,
+        smtp_host,
+        settings.smtp_port,
+    )
     await aiosmtplib.send(
         email,
-        hostname=validate_smtp_host(settings.smtp_host),
+        hostname=smtp_host,
         port=settings.smtp_port,
         username=settings.smtp_user or None,
         password=settings.smtp_pass or None,
         start_tls=settings.smtp_port not in (465, 1025),
         use_tls=settings.smtp_port == 465,
     )
+    logger.info("Email accepted by SMTP server for %s.", recipient)
+    print(f"Email accepted by SMTP server for {recipient}", flush=True)
 
 
 def send_email(recipient: str, subject: str, text_body: str, html_body: str):
     validate_smtp_host(settings.smtp_host)
-
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.run(send_email_async(recipient, subject, text_body, html_body))
-        else:
-            loop.run_until_complete(send_email_async(recipient, subject, text_body, html_body))
+        asyncio.get_running_loop()
     except RuntimeError:
         asyncio.run(send_email_async(recipient, subject, text_body, html_body))
+        return
+
+    result: dict[str, BaseException | None] = {"error": None}
+
+    def send_in_thread():
+        try:
+            asyncio.run(send_email_async(recipient, subject, text_body, html_body))
+        except BaseException as error:
+            result["error"] = error
+
+    thread = threading.Thread(target=send_in_thread, daemon=True)
+    thread.start()
+    thread.join()
+
+    if result["error"] is not None:
+        raise result["error"]
+
+
+def _log_local_action_link(action_label: str, action_url: str):
+    if settings.smtp_host.strip().lower() in LOCAL_SMTP_HOSTS:
+        logger.info("%s link: %s", action_label, action_url)
+        print(f"{action_label} link: {action_url}", flush=True)
 
 
 def send_registration_verification_email(email: str, first_name: str, token: str):
     action_url = build_verify_email_link(token)
+    _log_local_action_link("Registration verification", action_url)
+    print(f"Sending registration verification email to {email} via {settings.smtp_host}:{settings.smtp_port}", flush=True)
     message = f"Hello Dr. {first_name}, your MedStream account is ready. Validate your email address to complete registration."
     send_email(
         email,
@@ -107,6 +143,8 @@ def send_registration_verification_email(email: str, first_name: str, token: str
 
 def send_password_reset_email(email: str, first_name: str, token: str):
     action_url = build_password_reset_link(token)
+    _log_local_action_link("Password reset", action_url)
+    print(f"Sending password reset email to {email} via {settings.smtp_host}:{settings.smtp_port}", flush=True)
     message = f"Hello Dr. {first_name}, we received a request to reset your MedStream password. This link expires shortly."
     send_email(
         email,
@@ -118,6 +156,8 @@ def send_password_reset_email(email: str, first_name: str, token: str):
 
 def send_email_change_verification_email(email: str, first_name: str, token: str):
     action_url = build_verify_email_link(token)
+    _log_local_action_link("Email change verification", action_url)
+    print(f"Sending email change verification email to {email} via {settings.smtp_host}:{settings.smtp_port}", flush=True)
     message = f"Hello Dr. {first_name}, confirm your new email address to finish updating your MedStream account."
     send_email(
         email,
@@ -129,6 +169,8 @@ def send_email_change_verification_email(email: str, first_name: str, token: str
 
 def send_account_recovery_email(email: str, first_name: str, token: str):
     action_url = build_account_recovery_link(token)
+    _log_local_action_link("Account recovery", action_url)
+    print(f"Sending account recovery email to {email} via {settings.smtp_host}:{settings.smtp_port}", flush=True)
     message = (
         f"Hello Dr. {first_name}, we received a request to recover access to your MedStream account. "
         "Use this secure link to continue to login."

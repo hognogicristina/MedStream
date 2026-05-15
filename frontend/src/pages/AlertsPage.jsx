@@ -1,16 +1,46 @@
 import {useEffect, useMemo, useRef, useState} from "react"
-import {Link, useSearchParams} from "react-router-dom"
-import BackButton from "../components/BackButton.jsx"
+import {useNavigate, useSearchParams} from "react-router-dom"
+import {
+  Alert,
+  Box,
+  Button,
+  ColumnLayout,
+  Container,
+  ContentLayout,
+  Header,
+  Pagination,
+  Select,
+  SpaceBetween,
+  StatusIndicator,
+  Table,
+  TextFilter,
+} from "@cloudscape-design/components"
 import CountValue from "../components/CountValue.jsx"
-import DataTable from "../components/DataTable.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {getAlerts, getPatientAlerts, listPatients} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import {formatPatientFullName} from "../utils/patients.js"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
+import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const ALL_ALERTS_TITLE = "Alert System"
 const PATIENT_TITLE_FALLBACK = "Alert System - Patient"
+const DEFAULT_PAGE_SIZE = 10
+
+const SEVERITY_OPTIONS = [
+  {value: "all", label: "All severities"},
+  {value: "critical", label: "Critical"},
+  {value: "high", label: "High"},
+  {value: "normal", label: "Normal"},
+]
+
+const SORT_OPTIONS = [
+  {value: "newest", label: "Newest first"},
+  {value: "oldest", label: "Oldest first"},
+]
+
+const PAGE_SIZE_OPTIONS = [5, 10, 15, 25].map((value) => ({value: String(value), label: String(value)}))
 
 function normalizeTimestamp(value) {
   const timestamp = new Date(value).getTime()
@@ -66,7 +96,22 @@ function formatDateTimeWithSeconds(value) {
   }).format(date)
 }
 
+function getSeverityIndicator(severity) {
+  if (severity === "critical") {
+    return <StatusIndicator type="error">Critical</StatusIndicator>
+  }
+  if (severity === "high") {
+    return <StatusIndicator type="warning">High</StatusIndicator>
+  }
+  return <StatusIndicator type="success">Normal</StatusIndicator>
+}
+
+function getSelectedOption(options, value) {
+  return options.find((option) => option.value === String(value)) || options[0]
+}
+
 export default function AlertsPage() {
+  const navigate = useNavigate()
   const {notifyError} = useNotifications()
   const [searchParams, setSearchParams] = useSearchParams()
   const [alerts, setAlerts] = useState([])
@@ -74,6 +119,11 @@ export default function AlertsPage() {
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(true)
   const [alertsError, setAlertsError] = useState("")
   const [flashAlertId, setFlashAlertId] = useState(null)
+  const [severityFilter, setSeverityFilter] = useState("all")
+  const [cnpFilter, setCnpFilter] = useState(searchParams.get("cnp") || "")
+  const [sortOrder, setSortOrder] = useState("newest")
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const [currentPage, setCurrentPage] = useState(1)
   const requestSerialRef = useRef(0)
 
   const scopedCnp = searchParams.get("cnp") || ""
@@ -94,6 +144,10 @@ export default function AlertsPage() {
   const scopedPatient = scopedPatientId
     ? patientById[scopedPatientId]
     : (scopedCnp ? patientByCnp[scopedCnp] : null)
+
+  useEffect(() => {
+    setCnpFilter(scopedCnp)
+  }, [scopedCnp])
 
   useEffect(() => {
     if (!scopedPatientId && !scopedCnp) {
@@ -215,6 +269,36 @@ export default function AlertsPage() {
     [chronologicallySortedAlerts],
   )
 
+  const filteredAlerts = useMemo(() => {
+    const query = cnpFilter.trim()
+    return chronologicallySortedAlerts.filter((alert) => {
+      const severityMatches = severityFilter === "all" || String(alert.severity || "").toLowerCase() === severityFilter
+      const cnpMatches = query === "" || String(patientCnpById[alert.patient_id] || "").includes(query)
+      return severityMatches && cnpMatches
+    })
+  }, [chronologicallySortedAlerts, cnpFilter, patientCnpById, severityFilter])
+
+  const sortedAlerts = useMemo(() => {
+    const compare = sortOrder === "oldest" ? compareOldestFirst : compareNewestFirst
+    return [...filteredAlerts].sort(compare)
+  }, [filteredAlerts, sortOrder])
+
+  const pagesCount = Math.max(1, Math.ceil(sortedAlerts.length / pageSize))
+  const paginatedAlerts = useMemo(
+    () => sortedAlerts.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, pageSize, sortedAlerts],
+  )
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [cnpFilter, scopedCnp, scopedPatientId, severityFilter, sortOrder, pageSize])
+
+  useEffect(() => {
+    if (currentPage > pagesCount) {
+      setCurrentPage(pagesCount)
+    }
+  }, [currentPage, pagesCount])
+
   useEffect(() => {
     if (!scopedAlertId) {
       return
@@ -236,164 +320,209 @@ export default function AlertsPage() {
       row.scrollIntoView({behavior: "smooth", block: "center"})
     })
     return () => window.cancelAnimationFrame(animationFrameId)
-  }, [chronologicallySortedAlerts, isLoadingAlerts, scopedAlertId])
+  }, [paginatedAlerts, isLoadingAlerts, scopedAlertId])
+
+  const handleCnpFilterChange = (value) => {
+    setCnpFilter(value)
+    const next = value.trim()
+    if (next === "") {
+      setSearchParams({})
+      return
+    }
+
+    if (scopedCnp && next !== scopedCnp) {
+      if (next.length === 13 && /^\d{13}$/.test(next)) {
+        setSearchParams({cnp: next})
+      } else {
+        setSearchParams({})
+      }
+      return
+    }
+
+    if (next.length === 13 && /^\d{13}$/.test(next)) {
+      setSearchParams({cnp: next})
+    }
+  }
+
+  if (isLoadingAlerts) {
+    return (
+      <ContentLayout>
+        <SpaceBetween size="m">
+          <div className="medstream-page-header">
+            <AppBreadcrumbs/>
+            <div className="medstream-page-heading-row">
+              <div>
+                <h1 className="medstream-page-title">Alerts</h1>
+                <p>Live alert queue with filters, sort order, and paging.</p>
+              </div>
+            </div>
+          </div>
+          <LoadingSpinner text="Loading alert queue..."/>
+        </SpaceBetween>
+      </ContentLayout>
+    )
+  }
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Alert Center</p>
-              <BackButton/>
-            </div>
+    <ContentLayout>
+      <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <AppBreadcrumbs/>
+          <div className="medstream-page-heading-row">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">Alerts</h1>
-              <p className="mt-2 max-w-2xl text-sm text-[var(--text-secondary)] sm:text-base">Live alert queue with filters, sort order, and paging.</p>
-              {(scopedCnp || scopedPatientId) && (
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
-                    Patient: {scopedPatient ? (
-                      <Link to={`/patient/${scopedPatient.id}`} className="hover:underline text-inherit">{formatPatientFullName(scopedPatient)}</Link>
-                    ) : "Unknown patient"}
-                  </span>
-                  <Link className="console-link text-sm font-semibold" to="/alerts">
-                    Clear filter
-                  </Link>
-                </div>
-              )}
+              <h1 className="medstream-page-title">Alerts</h1>
+              <p>Live alert queue with filters, sort order, and paging.</p>
             </div>
           </div>
-        </header>
-        <section className="monitor-card rounded-[28px] p-6">
-          <div className="mb-6 grid gap-3 lg:grid-cols-4">
-            <div className="monitor-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">Total Alerts</p>
-              <p className="mt-2 text-2xl font-semibold text-[var(--text-primary)]"><CountValue value={visibleAlerts.length}/></p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Full live dataset currently in memory.</p>
-            </div>
-            <div className="monitor-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">Critical</p>
-              <p className="mt-2 text-2xl font-semibold text-[#ffb3bc]"><CountValue value={severityCounts.critical}/></p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Highest priority alerts.</p>
-            </div>
-            <div className="monitor-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">High</p>
-              <p className="mt-2 text-2xl font-semibold text-[#ffcf85]"><CountValue value={severityCounts.high}/></p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Prompt review needed.</p>
-            </div>
-            <div className="monitor-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">Normal</p>
-              <p className="mt-2 text-2xl font-semibold text-[var(--link)]"><CountValue value={severityCounts.normal}/></p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Lower-severity signals.</p>
-            </div>
-          </div>
+        </div>
 
-          {alertsError && !isLoadingAlerts ? (
-            <div className="mb-6 rounded-2xl border border-[#5f2323] bg-[#281515] px-4 py-3 text-sm text-[#ffd7d7]">
-              {alertsError}
-            </div>
-          ) : null}
+        <Container>
+          <ColumnLayout columns={4} variant="text-grid">
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Total alerts</Box>
+              <Box variant="h2"><CountValue value={visibleAlerts.length}/></Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Critical</Box>
+              <Box variant="h2"><CountValue value={severityCounts.critical}/></Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">High</Box>
+              <Box variant="h2"><CountValue value={severityCounts.high}/></Box>
+            </SpaceBetween>
+            <SpaceBetween size="xs">
+              <Box color="text-body-secondary" variant="awsui-key-label">Normal</Box>
+              <Box variant="h2"><CountValue value={severityCounts.normal}/></Box>
+            </SpaceBetween>
+          </ColumnLayout>
+        </Container>
 
-          <DataTable
-            key={`alerts-${scopedPatientId || scopedCnp || "all"}`}
-            items={chronologicallySortedAlerts}
-            loading={isLoadingAlerts}
-            loadingMessage="Loading alert queue..."
-            emptyMessage="No alerts match the current filters."
-            pageSize={10}
-            defaultSort="newest"
-            controlsLayoutClassName="mb-6 grid gap-4 rounded-[24px] border border-[var(--border-primary)] bg-[var(--surface-2)] p-4 lg:grid-cols-[1fr_1fr_1fr_auto]"
-            sortOptions={[
-              {
-                value: "newest",
-                label: "Newest first",
-                compare: compareNewestFirst,
-              },
-              {
-                value: "oldest",
-                label: "Oldest first",
-                compare: compareOldestFirst,
-              },
-            ]}
-            filters={[
-              {
-                id: "severityFilter",
-                label: "Severity",
-                type: "select",
-                defaultValue: "all",
-                options: [
-                  {value: "all", label: "All severities"},
-                  {value: "critical", label: "Critical"},
-                  {value: "high", label: "High"},
-                  {value: "normal", label: "Normal"},
-                ],
-                matches: (alert, value) => {
-                  if (value === "all") {
-                    return true
-                  }
+        {alertsError && !isLoadingAlerts ? (
+          <Alert type="error" header="Unable to load alerts">
+            {alertsError}
+          </Alert>
+        ) : null}
 
-                  return String(alert.severity || "").toLowerCase() === String(value).toLowerCase()
-                },
-              },
-              {
-                id: "patientCnpFilter",
-                label: "Patient CNP",
-                type: "text",
-                placeholder: "Filter by CNP",
-                defaultValue: scopedCnp,
-                disabled: Boolean(scopedPatientId),
-                onChange: (value) => {
-                  const next = value.trim()
-                  if (next === "") {
-                    setSearchParams({})
-                    return
-                  }
-
-                  if (next.length === 13 && /^\d{13}$/.test(next)) {
-                    setSearchParams({cnp: next})
-                  }
-                },
-                matches: (alert, value) => {
-                  const query = value.trim()
-
-                  if (query === "") {
-                    return true
-                  }
-
-                  return String(patientCnpById[alert.patient_id] || "").includes(query)
-                },
-              },
-            ]}
-            getItemKey={(alert) => alert.id}
-            renderHeader={() => (
-              <div
-                className="grid grid-cols-[0.9fr_1.2fr_1fr_2.2fr_1.1fr] gap-3 border-b border-[var(--border-primary)] bg-[var(--surface-1)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
-                <div>Severity</div>
-                <div>CNP</div>
-                <div>Patient</div>
-                <div>Message</div>
-                <div>Created</div>
-              </div>
-            )}
-            rowClassName={(alert) => `alert-row-${alert.id} grid grid-cols-[0.9fr_1.2fr_1fr_2.2fr_1.1fr] gap-3 px-4 py-4 ${alert.severity === "critical" ? "alert-row-critical" : alert.severity === "high" ? "alert-row-high" : "alert-row-normal"} ${flashAlertId === alert.id ? "alert-row-flash" : ""}`}
-            renderRow={(alert) => (
-              <>
-                <div>
-                  <span
-                    className={`alert-severity-chip inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${alert.severity === "critical" ? "alert-severity-chip-critical" : alert.severity === "high" ? "alert-severity-chip-high" : "alert-severity-chip-normal"}`}>
-                    {alert.severity}
-                  </span>
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Review patient alerts using AWS-style filtering, status indicators, and table controls."
+            >
+              Alert queue
+            </Header>
+          }
+        >
+          <SpaceBetween size="m">
+            <div className="medstream-controls-grid medstream-alert-controls-grid">
+              <SpaceBetween size="xxs">
+                <Box color="text-body-secondary" variant="awsui-key-label">Severity</Box>
+                <Select
+                  selectedOption={getSelectedOption(SEVERITY_OPTIONS, severityFilter)}
+                  onChange={({detail}) => setSeverityFilter(detail.selectedOption.value)}
+                  options={SEVERITY_OPTIONS}
+                  ariaLabel="Filter by severity"
+                />
+              </SpaceBetween>
+              <SpaceBetween size="xxs" className="medstream-alert-cnp-filter">
+                <Box color="text-body-secondary" variant="awsui-key-label">Patient CNP</Box>
+                <div className="medstream-alert-cnp-filter-control">
+                  <TextFilter
+                    filteringText={cnpFilter}
+                    filteringPlaceholder="Filter by CNP"
+                    filteringAriaLabel="Filter alerts by patient CNP"
+                    disabled={Boolean(scopedPatientId)}
+                    onChange={({detail}) => handleCnpFilterChange(detail.filteringText)}
+                  />
                 </div>
-                <div className="text-sm font-semibold text-[var(--text-primary)]">{patientCnpById[alert.patient_id] || "--"}</div>
-                <div className="text-sm text-[var(--text-secondary)]">{patientNameById[alert.patient_id] || "Unknown patient"}</div>
-                <div className="text-sm text-[var(--text-primary)]">{alert.message}</div>
-                <div className="text-sm text-[var(--text-secondary)]">{formatDateTimeWithSeconds(alert.created_at)}</div>
-              </>
-            )}
-          />
-        </section>
-      </div>
-    </div>
+              </SpaceBetween>
+              <SpaceBetween size="xxs">
+                <Box color="text-body-secondary" variant="awsui-key-label">Sort order</Box>
+                <Select
+                  selectedOption={getSelectedOption(SORT_OPTIONS, sortOrder)}
+                  onChange={({detail}) => setSortOrder(detail.selectedOption.value)}
+                  options={SORT_OPTIONS}
+                  ariaLabel="Sort alerts"
+                />
+              </SpaceBetween>
+              <SpaceBetween size="xxs">
+                <Box color="text-body-secondary" variant="awsui-key-label">Page size</Box>
+                <Select
+                  selectedOption={getSelectedOption(PAGE_SIZE_OPTIONS, pageSize)}
+                  onChange={({detail}) => setPageSize(Number(detail.selectedOption.value))}
+                  options={PAGE_SIZE_OPTIONS}
+                  ariaLabel="Rows per page"
+                />
+              </SpaceBetween>
+            </div>
+
+            <div className="medstream-column-divider-table">
+              <Table
+                variant="borderless"
+                items={paginatedAlerts}
+                trackBy="id"
+                empty={<Box color="text-body-secondary">No alerts match the current filters.</Box>}
+                pagination={
+                  <Pagination
+                    currentPageIndex={currentPage}
+                    pagesCount={pagesCount}
+                    onChange={({detail}) => setCurrentPage(detail.currentPageIndex)}
+                  />
+                }
+                columnDefinitions={[
+                  {
+                    id: "severity",
+                    header: "Severity",
+                    cell: (item) => (
+                      <span className={`alert-row-${item.id} ${flashAlertId === item.id ? "alert-row-flash" : ""}`}>
+                        {getSeverityIndicator(item.severity)}
+                      </span>
+                    ),
+                  },
+                  {
+                    id: "cnp",
+                    header: "CNP",
+                    cell: (item) => patientCnpById[item.patient_id] || "--",
+                  },
+                  {
+                    id: "patient",
+                    header: "Patient",
+                    cell: (item) => {
+                      const patient = patientById[item.patient_id]
+                      if (!patient) {
+                        return patientNameById[item.patient_id] || "Unknown patient"
+                      }
+                      return formatPatientFullName(patient)
+                    },
+                  },
+                  {
+                    id: "message",
+                    header: "Message",
+                    cell: (item) => item.message,
+                  },
+                  {
+                    id: "created",
+                    header: "Created",
+                    cell: (item) => formatDateTimeWithSeconds(item.created_at),
+                  },
+                  {
+                    id: "action",
+                    header: "Action",
+                    cell: (item) => (
+                      <Button
+                        variant="inline-link"
+                        onClick={() => navigate(`/patient/${item.patient_id}?from=alerts`)}
+                      >
+                        Open
+                      </Button>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          </SpaceBetween>
+        </Container>
+      </SpaceBetween>
+    </ContentLayout>
   )
 }

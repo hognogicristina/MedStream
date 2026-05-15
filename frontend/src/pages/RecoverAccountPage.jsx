@@ -36,8 +36,8 @@ export default function RecoverAccountPage() {
           <aside className="login-aside">
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
-              <Link className="auth-link" to="/">
-                {"Back home"}
+              <Link className="auth-link" to="/login">
+                {"Back to login"}
               </Link>
             </div>
             <h1 className="login-title">{"Account Recovery"}</h1>
@@ -57,7 +57,6 @@ export default function RecoverAccountPage() {
           </aside>
 
           <div className="auth-divider" aria-hidden="true"/>
-          <div className="hidden lg:block w-px bg-[var(--border-subtle)] mx-6"/>
 
           <div className="login-panel">
             <div className="login-header">

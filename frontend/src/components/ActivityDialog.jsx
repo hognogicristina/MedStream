@@ -1,4 +1,42 @@
 import {useMemo, useState} from "react"
+import {Box, Button, Header, Modal, Pagination, Select, SpaceBetween} from "@cloudscape-design/components"
+import AwsDatePicker from "./AwsDatePicker.jsx"
+import AwsTimeInput from "./AwsTimeInput.jsx"
+import {isValidTime} from "../utils/time.js"
+
+function ClearableInput({disabled = false, onChange, required = false, type = "text", value, ...props}) {
+  return (
+    <div className="medstream-clearable-field">
+      <input
+        {...props}
+        className="medstream-clearable-input"
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        required={required}
+        type={type}
+        value={value}
+      />
+    </div>
+  )
+}
+
+function ClearableTextarea({disabled = false, onChange, value, ...props}) {
+  return (
+    <div className="medstream-clearable-field medstream-clearable-textarea-field">
+      <textarea
+        {...props}
+        className="medstream-clearable-input medstream-activity-description"
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      />
+    </div>
+  )
+}
+
+function getSelectedOption(options, value) {
+  return options.find((option) => option.value === value) || null
+}
 
 function toDateParts(value) {
   if (!value) {
@@ -60,7 +98,7 @@ export default function ActivityDialog({
     const {date, time} = toDateParts(activity?.scheduled_at)
 
     return {
-      type: activity?.type || activityTypes[0] || "",
+      type: activity?.type || "",
       title: activity?.title || "",
       description: activity?.description || "",
       scheduledDate: date,
@@ -72,6 +110,7 @@ export default function ActivityDialog({
   const [form, setForm] = useState(buildInitialForm)
   const [patientQuery, setPatientQuery] = useState("")
   const [patientPage, setPatientPage] = useState(1)
+  const activityTypeOptions = activityTypes.map((activityType) => ({label: activityType, value: activityType}))
 
   const filteredPatients = useMemo(
     () => patients
@@ -121,87 +160,104 @@ export default function ActivityDialog({
   const isValid = form.title.trim()
     && form.type
     && form.scheduledDate
-    && form.scheduledTime
+    && isValidTime(form.scheduledTime)
     && form.doctorIds.length > 0
     && form.patientIds.length > 0
 
+  const handleSubmit = () => {
+    if (!isValid || isSubmitting) {
+      return
+    }
+
+    const payload = {
+      type: form.type,
+      title: form.title.trim(),
+      description: form.description.trim(),
+      scheduled_at: buildScheduledAt(form.scheduledDate, form.scheduledTime),
+      doctor_ids: Array.from(new Set([currentDoctorId, ...form.doctorIds].filter(Boolean))),
+    }
+
+    if (mode !== "edit") {
+      payload.patient_ids = form.patientIds
+    }
+
+    onSubmit(payload)
+  }
+
   return (
-    <div className="console-modal-overlay z-50">
-      <div className="console-modal monitor-card rounded-[28px] p-6 w-full max-w-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Activities</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{mode === "edit" ? "Edit Activity" : "Add Activity"}</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="console-button-secondary rounded-xl px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Cancel
-          </button>
-        </div>
-
-        <form
-          className="mt-5 space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const payload = {
-              type: form.type,
-              title: form.title.trim(),
-              description: form.description.trim(),
-              scheduled_at: buildScheduledAt(form.scheduledDate, form.scheduledTime),
-              doctor_ids: Array.from(new Set([currentDoctorId, ...form.doctorIds].filter(Boolean))),
-            }
-
-            if (mode !== "edit") {
-              payload.patient_ids = form.patientIds
-            }
-
-            onSubmit(payload)
-          }}
+    <Modal
+      visible={isOpen}
+      onDismiss={isSubmitting ? undefined : onClose}
+      size="large"
+      header={
+        <Header
+          variant="h2"
+          description={mode === "edit" ? "Update the schedule, details, and assigned doctors." : "Schedule a new care activity and assign the responsible team."}
         >
-          <div className="grid gap-4 sm:grid-cols-2">
+          {mode === "edit" ? "Edit Activity" : "Add Activity"}
+        </Header>
+      }
+      footer={
+        <Box float="right">
+          <SpaceBetween direction="horizontal" size="xs">
+            <Button
+              className="medstream-cancel-button"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              className="medstream-submit-button"
+              onClick={handleSubmit}
+              disabled={!isValid || isSubmitting}
+            >
+              {isSubmitting ? "Saving..." : mode === "edit" ? "Save Changes" : "Add Activity"}
+            </Button>
+          </SpaceBetween>
+        </Box>
+      }
+    >
+      <form
+        className="medstream-form medstream-activity-dialog-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          handleSubmit()
+        }}
+      >
+          <div className="medstream-form-grid">
             <div className="login-field">
               <label className="login-label" htmlFor="activity-type">Type</label>
-              <select
-                id="activity-type"
-                value={form.type}
-                onChange={(event) => setForm((current) => ({...current, type: event.target.value}))}
-                className="login-input"
-                required
-              >
-                <option value="">Select type</option>
-                {activityTypes.map((activityType) => (
-                  <option key={activityType} value={activityType}>
-                    {activityType}
-                  </option>
-                ))}
-              </select>
+              <Select
+                selectedOption={getSelectedOption(activityTypeOptions, form.type)}
+                onChange={({detail}) => setForm((current) => ({...current, type: detail.selectedOption.value}))}
+                options={activityTypeOptions}
+                placeholder="Select type"
+                selectedAriaLabel="Selected activity type"
+              />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="medstream-activity-date-grid">
               <div className="login-field">
                 <label className="login-label" htmlFor="activity-date">Date</label>
-                <input
+                <AwsDatePicker
                   id="activity-date"
-                  type="date"
                   value={form.scheduledDate}
-                  onChange={(event) => setForm((current) => ({...current, scheduledDate: event.target.value}))}
-                  className="login-input"
+                  onChange={(value) => setForm((current) => ({...current, scheduledDate: value}))}
+                  className="medstream-clearable-input"
+                  autoComplete="off"
                   required
                 />
               </div>
 
               <div className="login-field">
                 <label className="login-label" htmlFor="activity-time">Time</label>
-                <input
+                <AwsTimeInput
                   id="activity-time"
-                  type="time"
                   value={form.scheduledTime}
-                  onChange={(event) => setForm((current) => ({...current, scheduledTime: event.target.value}))}
-                  className="login-input"
+                  onChange={(value) => setForm((current) => ({...current, scheduledTime: value}))}
+                  className="medstream-clearable-input"
                   required
                 />
               </div>
@@ -210,110 +266,111 @@ export default function ActivityDialog({
 
           <div className="login-field">
             <label className="login-label" htmlFor="activity-title">Title</label>
-            <input
+            <ClearableInput
               id="activity-title"
               type="text"
               value={form.title}
-              onChange={(event) => setForm((current) => ({...current, title: event.target.value}))}
-              className="login-input"
-              placeholder="Example: Post-op monitoring review"
+              onChange={(value) => setForm((current) => ({...current, title: value}))}
+              placeholder="Post-op monitoring review"
               required
             />
           </div>
 
-          <div className="login-field">
+          <div className="login-field medstream-form-field-wide">
             <label className="login-label" htmlFor="activity-description">Description</label>
-            <textarea
+            <ClearableTextarea
               id="activity-description"
               value={form.description}
-              onChange={(event) => setForm((current) => ({...current, description: event.target.value}))}
-              className="login-input min-h-28"
+              onChange={(value) => setForm((current) => ({...current, description: value}))}
               placeholder="Optional details"
+              rows={2}
             />
           </div>
 
-          <div className={`grid gap-4 ${patientSelectionMode === "hidden" ? "" : "sm:grid-cols-2"}`}>
+          <div className={`medstream-activity-participants ${patientSelectionMode === "hidden" || mode === "edit" ? "medstream-activity-participants-single" : ""}`}>
             {patientSelectionMode !== "hidden" && mode !== "edit" && (
-              <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">
+              <section className="medstream-activity-participant-panel">
+                <div className="medstream-activity-panel-header">
+                  <p className="medstream-activity-panel-title">
                     {patientSelectionMode === "single" ? "Patient" : "Patients Involved"}
                   </p>
-                  <span className="text-xs text-[var(--text-muted)]">{filteredPatients.length}</span>
+                  <span className="medstream-activity-panel-count">{filteredPatients.length}</span>
                 </div>
 
-                <div className="login-field mt-3">
+                <div className="login-field medstream-activity-search">
                   <label className="login-label" htmlFor="activity-patient-search">Search patient</label>
-                  <input
+                  <ClearableInput
                     id="activity-patient-search"
-                    type="text"
                     value={patientQuery}
-                    onChange={(event) => {
-                      setPatientQuery(event.target.value)
+                    onChange={(value) => {
+                      setPatientQuery(value)
                       setPatientPage(1)
                     }}
-                    className="login-input"
                     placeholder="Search by name"
                   />
                 </div>
 
-                <div className="mt-3 space-y-2 max-h-44 overflow-y-auto pr-1">
+                <div className="medstream-activity-choice-list custom-scrollbar" role="listbox" aria-label={patientSelectionMode === "single" ? "Patient" : "Patients involved"}>
                   {visiblePatients.map((patient) => (
-                    <label key={patient.id} className="flex items-center gap-3 text-sm text-[var(--text-primary)]">
+                    <label
+                      key={patient.id}
+                      className="medstream-activity-choice"
+                      role="option"
+                      aria-selected={form.patientIds.includes(patient.id)}
+                    >
                       <input
+                        className="medstream-choice-input"
                         type={patientSelectionMode === "single" ? "radio" : "checkbox"}
                         name={patientSelectionMode === "single" ? "activity-patient" : undefined}
                         checked={form.patientIds.includes(patient.id)}
                         onChange={() => selectPatient(patient.id)}
                       />
-                      <span>
+                      <span className="medstream-activity-choice-text">
                         {patient.last_name} {patient.first_name}
                         {patient.isCurrent ? " (Current patient)" : ""}
                       </span>
                     </label>
                   ))}
                   {visiblePatients.length === 0 && (
-                    <p className="text-sm text-[var(--text-muted)]">No patients match the current search.</p>
+                    <p className="medstream-activity-empty">No patients match the current search.</p>
                   )}
                 </div>
 
                 {maxPatientPage > 1 && (
-                  <div className="mt-4 flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      className="console-button-secondary rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => setPatientPage((current) => Math.max(1, current - 1))}
-                      disabled={currentPatientPage === 1}
-                    >
-                      Previous
-                    </button>
-                    <span className="text-xs text-[var(--text-muted)]">Page {currentPatientPage} / {maxPatientPage}</span>
-                    <button
-                      type="button"
-                      className="console-button-secondary rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => setPatientPage((current) => Math.min(maxPatientPage, current + 1))}
-                      disabled={currentPatientPage >= maxPatientPage}
-                    >
-                      Next
-                    </button>
+                  <div className="medstream-activity-pagination">
+                    <Pagination
+                      currentPageIndex={currentPatientPage}
+                      pagesCount={maxPatientPage}
+                      onChange={({detail}) => setPatientPage(detail.currentPageIndex)}
+                    />
                   </div>
                 )}
-              </div>
+              </section>
             )}
-            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--surface-2)] p-3 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">Doctors Involved</p>
-              <div className="mt-3 space-y-2 max-h-36 overflow-y-auto pr-1">
+            <section className="medstream-activity-participant-panel">
+              <div className="medstream-activity-panel-header">
+                <p className="medstream-activity-panel-title">Doctors Involved</p>
+                <span className="medstream-activity-panel-count">{doctors.length}</span>
+              </div>
+              <div className="medstream-activity-choice-list medstream-activity-doctor-list custom-scrollbar" role="listbox" aria-label="Doctors involved">
                 {doctors.map((doctor) => {
                   const isCurrentDoctor = doctor.id === currentDoctorId
+                  const isSelectedDoctor = form.doctorIds.includes(doctor.id) || isCurrentDoctor
                   return (
-                    <label key={doctor.id} className="flex items-center gap-2 text-xs text-[var(--text-primary)]">
+                    <label
+                      key={doctor.id}
+                      className="medstream-activity-choice"
+                      role="option"
+                      aria-selected={isSelectedDoctor}
+                    >
                       <input
+                        className="medstream-choice-input"
                         type="checkbox"
-                        checked={form.doctorIds.includes(doctor.id) || isCurrentDoctor}
+                        checked={isSelectedDoctor}
                         disabled={isCurrentDoctor}
                         onChange={() => toggleDoctorSelection(doctor.id, isCurrentDoctor)}
                       />
-                      <span>
+                      <span className="medstream-activity-choice-text">
                         Dr. {doctor.first_name} {doctor.last_name}
                         {isCurrentDoctor ? " (You)" : ""}
                       </span>
@@ -321,20 +378,10 @@ export default function ActivityDialog({
                   )
                 })}
               </div>
-            </div>
+            </section>
           </div>
 
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={!isValid || isSubmitting}
-              className="console-button-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
-            >
-              {isSubmitting ? "Saving..." : mode === "edit" ? "Save Changes" : "Add Activity"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   )
 }

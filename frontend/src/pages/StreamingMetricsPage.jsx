@@ -1,31 +1,76 @@
 import {useEffect, useState} from "react"
 import {
+  Box,
+  Button,
+  Container,
+  ContentLayout,
+  Header,
+  Pagination,
+  SpaceBetween,
+  StatusIndicator,
+} from "@cloudscape-design/components"
+import {
   getMetricsComparison,
   getStreamingAlerts,
   getStreamingMetrics,
 } from "../services/patientApi.js"
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AwsLineChart from "../components/AwsLineChart.jsx"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
-import {useTheme} from "../components/ThemeContext.jsx"
-import {getChartTheme} from "../utils/theme.js"
 
 const POLL_INTERVAL_MS = 2500
 const MAX_POINTS = 30
-const ALERTS_PAGE_SIZE = 3
+const ALERTS_PAGE_SIZE = 2
 const ALERTS_TELEMETRY_SIZE = 10
 const ALERTS_WINDOW_SECONDS = 60
+
+const VITAL_STREAMS = [
+  {
+    key: "heart_rate",
+    avgKey: "avg_heart_rate",
+    title: "Heart Rate",
+    color: "#60a5fa",
+    unit: "bpm",
+    yDomain: [40, 150],
+    thresholds: [
+      {title: "High > 110", y: 110, color: "#f97316"},
+      {title: "Critical > 130", y: 130, color: "#dc2626"},
+    ],
+    valueFormatter: (value) => `${value.toFixed(0)} bpm`,
+    yTickFormatter: (value) => String(Math.round(value)),
+  },
+  {
+    key: "oxygen_saturation",
+    avgKey: "avg_oxygen",
+    title: "Oxygen Saturation",
+    color: "#22c55e",
+    unit: "%",
+    yDomain: [84, 100],
+    thresholds: [
+      {title: "Low < 92", y: 92, color: "#f97316"},
+      {title: "Critical < 88", y: 88, color: "#dc2626"},
+    ],
+    valueFormatter: (value) => `${value.toFixed(0)}%`,
+    yTickFormatter: (value) => String(Math.round(value)),
+  },
+  {
+    key: "temperature",
+    avgKey: "avg_temperature",
+    title: "Temperature",
+    color: "#f97316",
+    unit: "°C",
+    yDomain: [35, 40],
+    thresholds: [
+      {title: "High > 38", y: 38, color: "#f97316"},
+      {title: "Critical > 39", y: 39, color: "#dc2626"},
+    ],
+    valueFormatter: (value) => `${value.toFixed(1)}°C`,
+    yTickFormatter: (value) => value.toFixed(1),
+  },
+]
 
 function formatMetric(value, unit = "") {
   const safeValue = Number.isFinite(value) ? value : 0
@@ -34,18 +79,10 @@ function formatMetric(value, unit = "") {
 
 function MetricTile({label, value}) {
   return (
-    <div className="monitor-panel rounded-2xl px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{value}</p>
+    <div className="medstream-streaming-summary-tile">
+      <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
+      <div className="medstream-streaming-summary-value">{value}</div>
     </div>
-  )
-}
-
-function DownloadIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 21h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/>
-    </svg>
   )
 }
 
@@ -62,24 +99,60 @@ function formatAlertTime(value) {
   })
 }
 
+function formatStreamTime(value, fallback = "") {
+  if (!value) {
+    return fallback
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return fallback
+  }
+
+  return date.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
+}
+
 function toMillis(value) {
   const parsed = new Date(value).getTime()
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function normalizeRecentVitals(rawVitals) {
+  return (Array.isArray(rawVitals) ? rawVitals : [])
+    .map((point) => ({
+      time: formatStreamTime(point?.recorded_at),
+      recorded_at: point?.recorded_at,
+      patient_id: point?.patient_id,
+      heart_rate: Number(point?.heart_rate),
+      oxygen_saturation: Number(point?.oxygen_saturation),
+      temperature: Number(point?.temperature),
+    }))
+    .filter((point) => (
+      Number.isFinite(point.heart_rate)
+      && Number.isFinite(point.oxygen_saturation)
+      && Number.isFinite(point.temperature)
+    ))
+    .slice(-MAX_POINTS)
+}
+
+function getPaddedAlertsRateYMax(points) {
+  const maxValue = Math.max(1, ...points.map((point) => Number(point.alerts_per_minute) || 0))
+  return Math.ceil(maxValue + Math.max(1, maxValue * 0.1))
+}
+
 export default function StreamingMetricsPage() {
   const {notifyError} = useNotifications()
-  const {theme} = useTheme()
-  const chartTheme = getChartTheme(theme)
   const [metrics, setMetrics] = useState(null)
   const [comparison, setComparison] = useState(null)
   const [alertsPage, setAlertsPage] = useState(1)
   const [recentAlerts, setRecentAlerts] = useState({items: [], total: 0, page: 1, page_size: ALERTS_PAGE_SIZE})
-  const [heartRateHistory, setHeartRateHistory] = useState([])
+  const [vitalsHistory, setVitalsHistory] = useState([])
   const [alertsRateHistory, setAlertsRateHistory] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [seenAlertIds, setSeenAlertIds] = useState({})
-  const [lastAlertTime, setLastAlertTime] = useState(null)
+  const [, setSeenAlertIds] = useState({})
+  const [, setLastAlertTime] = useState(null)
+  const [highlightedAlertsRateSeries, setHighlightedAlertsRateSeries] = useState(null)
+  const [highlightedVitalSeries, setHighlightedVitalSeries] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -117,14 +190,21 @@ export default function StreamingMetricsPage() {
         setRecentAlerts(nextAlerts)
 
         const tickTime = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
+        const nextVitalHistory = normalizeRecentVitals(nextMetrics.recent_vitals)
 
-        setHeartRateHistory((current) => [
-          ...current.slice(-(MAX_POINTS - 1)),
-          {
-            time: tickTime,
-            heart_rate: nextMetrics.avg_heart_rate,
-          },
-        ])
+        if (nextVitalHistory.length) {
+          setVitalsHistory(nextVitalHistory)
+        } else {
+          setVitalsHistory((current) => [
+            ...current.slice(-(MAX_POINTS - 1)),
+            {
+              time: tickTime,
+              heart_rate: nextMetrics.avg_heart_rate,
+              oxygen_saturation: nextMetrics.avg_oxygen,
+              temperature: nextMetrics.avg_temperature,
+            },
+          ])
+        }
 
         const telemetryItems = Array.isArray(telemetryAlerts.items) ? telemetryAlerts.items : []
         const newestAlert = telemetryItems[0]
@@ -202,6 +282,7 @@ export default function StreamingMetricsPage() {
     avg_temperature: 0,
     alerts: 0,
     execution_time_ms: 0,
+    recent_vitals: [],
   }
 
   const latestRatePoint = alertsRateHistory[alertsRateHistory.length - 1] || {
@@ -211,81 +292,112 @@ export default function StreamingMetricsPage() {
   }
 
   const alertsTotalPages = Math.max(1, Math.ceil((recentAlerts.total || 0) / ALERTS_PAGE_SIZE))
+  const alertsRateYMax = getPaddedAlertsRateYMax(alertsRateHistory)
+
+  const exportStreamingMetrics = () => {
+    const exportTimestamp = new Date().toISOString()
+    const totalEvents = Number(comparison?.total_events) || 0
+    const totalAlerts = Number(comparison?.total_alerts) || Number(data.alerts) || 0
+    const alertsPerSecond = Number(comparison?.events_per_second) > 0
+      ? (Number(comparison?.alert_rate) || 0) * Number(comparison?.events_per_second)
+      : Number(latestRatePoint.alerts_per_second) || 0
+    const alertsPerMinute = alertsPerSecond * 60
+    const alertRate = totalEvents > 0 ? totalAlerts / totalEvents : 0
+    const streamingLatencyAvgMs = Number(comparison?.streaming_latency_avg) || 0
+    const rows = [
+      [
+        "timestamp",
+        "total_events",
+        "total_alerts",
+        "alerts_per_second",
+        "alerts_per_minute",
+        "alert_rate",
+        "streaming_latency_avg_ms",
+      ],
+      [
+        exportTimestamp,
+        totalEvents,
+        totalAlerts,
+        Number(alertsPerSecond.toFixed(4)),
+        Number(alertsPerMinute.toFixed(2)),
+        Number(alertRate.toFixed(4)),
+        Number(streamingLatencyAvgMs.toFixed(2)),
+      ],
+      [],
+      ["recent_alert_id", "recent_alert_patient_id", "recent_alert_type", "recent_alert_severity", "recent_alert_message", "recent_alert_created_at"],
+      ...(recentAlerts.items || []).map((alert) => [
+        alert.id,
+        alert.patient_id,
+        alert.alert_type,
+        alert.severity,
+        alert.message,
+        alert.created_at ? new Date(alert.created_at).toISOString() : "",
+      ]),
+    ]
+    downloadCSV("streaming_all_metrics.csv", rows)
+  }
+
+  const exportVitalStreams = () => {
+    const exportTimestamp = new Date().toISOString()
+    const summaryRows = VITAL_STREAMS.map((vital) => {
+      const values = vitalsHistory
+        .map((point) => Number(point?.[vital.key]))
+        .filter(Number.isFinite)
+      const latestValue = values[values.length - 1]
+      const averageValue = values.length
+        ? values.reduce((sum, value) => sum + value, 0) / values.length
+        : Number(data[vital.avgKey]) || 0
+
+      return [
+        vital.title,
+        vital.unit,
+        Number.isFinite(latestValue) ? Number(latestValue.toFixed(2)) : "",
+        Number(averageValue.toFixed(2)),
+        values.length ? Number(Math.min(...values).toFixed(2)) : "",
+        values.length ? Number(Math.max(...values).toFixed(2)) : "",
+        vital.thresholds.map((threshold) => threshold.title).join("; "),
+        vitalsHistory.length,
+      ]
+    })
+
+    const historyRows = vitalsHistory.map((point) => [
+      point.recorded_at || point.time || "",
+      point.patient_id || "",
+      Number.isFinite(Number(point.heart_rate)) ? Number(Number(point.heart_rate).toFixed(2)) : "",
+      Number.isFinite(Number(point.oxygen_saturation)) ? Number(Number(point.oxygen_saturation).toFixed(2)) : "",
+      Number.isFinite(Number(point.temperature)) ? Number(Number(point.temperature).toFixed(2)) : "",
+    ])
+
+    downloadCSV("streaming_vital_streams.csv", [
+      ["exported_at", exportTimestamp],
+      [],
+      ["metric", "unit", "latest", "average", "minimum", "maximum", "alert_thresholds", "visible_points"],
+      ...summaryRows,
+      [],
+      ["timestamp", "patient_id", "heart_rate_bpm", "oxygen_saturation_percent", "temperature_celsius"],
+      ...historyRows,
+    ])
+  }
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="console-topbar rounded-[24px] p-6 sm:p-8">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="console-eyebrow text-xs font-semibold uppercase tracking-[0.35em]">Demo View</p>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">Streaming Alert Processing</h1>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  title="Download all metrics"
-                  aria-label="Download all metrics"
-                  className="console-button-primary self-start shrink-0 rounded-xl p-3 text-sm font-semibold"
-                  onClick={() => {
-                    const exportTimestamp = new Date().toISOString()
-                    const totalEvents = Number(comparison?.total_events) || 0
-                    const totalAlerts = Number(comparison?.total_alerts) || Number(data.alerts) || 0
-                    const alertsPerSecond = Number(comparison?.events_per_second) > 0
-                      ? (Number(comparison?.alert_rate) || 0) * Number(comparison?.events_per_second)
-                      : Number(latestRatePoint.alerts_per_second) || 0
-                    const alertsPerMinute = alertsPerSecond * 60
-                    const alertRate = totalEvents > 0 ? totalAlerts / totalEvents : 0
-                    const streamingLatencyAvgMs = Number(comparison?.streaming_latency_avg) || 0
-                    const rows = [
-                      [
-                        "timestamp",
-                        "total_events",
-                        "total_alerts",
-                        "alerts_per_second",
-                        "alerts_per_minute",
-                        "alert_rate",
-                        "streaming_latency_avg_ms",
-                      ],
-                      [
-                        exportTimestamp,
-                        totalEvents,
-                        totalAlerts,
-                        Number(alertsPerSecond.toFixed(4)),
-                        Number(alertsPerMinute.toFixed(2)),
-                        Number(alertRate.toFixed(4)),
-                        Number(streamingLatencyAvgMs.toFixed(2)),
-                      ],
-                      [],
-                      ["recent_alert_id", "recent_alert_patient_id", "recent_alert_type", "recent_alert_severity", "recent_alert_message", "recent_alert_created_at"],
-                      ...(recentAlerts.items || []).map((alert) => [
-                        alert.id,
-                        alert.patient_id,
-                        alert.alert_type,
-                        alert.severity,
-                        alert.message,
-                        alert.created_at ? new Date(alert.created_at).toISOString() : "",
-                      ]),
-                    ]
-                    downloadCSV("streaming_all_metrics.csv", rows)
-                  }}
-                >
-                  <DownloadIcon/>
-                </button>
-                <BackButton fallbackTo="/dashboard"/>
-              </div>
+    <ContentLayout>
+      <SpaceBetween size="m">
+        <div className="medstream-page-header">
+          <BackButton fallbackTo="/dashboard"/>
+          <div className="medstream-page-heading-row">
+            <div>
+              <h1 className="medstream-page-title">Streaming Alert Processing</h1>
+              <p>Live alert throughput, recent alerts, and low-latency vital trends.</p>
             </div>
-            <p className="mt-4 text-[var(--text-secondary)]">
-              This view prioritizes live alert processing. You can see throughput changing in real time,
-              new alerts appearing immediately, and processing latency indicators updating every poll cycle.
-            </p>
+            <Button iconName="download" onClick={exportStreamingMetrics}>Export</Button>
           </div>
-        </header>
+        </div>
 
-        <section className="monitor-card rounded-[24px] p-6">
-          {isLoading ? <LoadingSpinner/> : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        {isLoading ? (
+          <LoadingSpinner/>
+        ) : (
+          <Container>
+            <div className="medstream-streaming-summary-grid">
               <MetricTile label="Alerts per Second" value={formatMetric(latestRatePoint.alerts_per_second)}/>
               <MetricTile label="Alerts per Minute" value={formatMetric(latestRatePoint.alerts_per_minute)}/>
               <MetricTile label="New Alerts (last tick)" value={String(latestRatePoint.new_alerts_tick ?? 0)}/>
@@ -293,194 +405,216 @@ export default function StreamingMetricsPage() {
               <MetricTile label="Avg Heart Rate" value={formatMetric(data.avg_heart_rate, " bpm")}/>
               <MetricTile label="Execution Time" value={formatMetric(data.execution_time_ms, " ms")}/>
             </div>
-          )}
-        </section>
+          </Container>
+        )}
 
         {!isLoading && (
           <>
-            <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-              <div className="monitor-card rounded-[24px] p-6">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Primary Signal</p>
-                    <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Streaming Alert Feed</h2>
-                  </div>
-                  <div className="rounded-full border border-[var(--border-strong)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)]">
-                    Last alert: {formatAlertTime(lastAlertTime)}
-                  </div>
-                </div>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                  Alerts are appended as soon as threshold checks trigger. This is the fastest view of abnormal vitals.
-                </p>
-
-                <div className="mt-6 space-y-3">
+            <div className="medstream-dashboard-split">
+              <div className="medstream-stretch-container">
+                <Container
+                  className="medstream-streaming-card"
+                  fitHeight
+                  header={
+                    <Header
+                      variant="h2"
+                      description="Alerts are appended with their metric, severity, patient, and processing time."
+                    >
+                      Generated alert timeline
+                    </Header>
+                  }
+                >
+                  <SpaceBetween size="xs">
                   {recentAlerts.items?.length ? recentAlerts.items.map((alert) => (
-                    <div key={alert.id} className="monitor-panel rounded-2xl px-4 py-3">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--text-primary)]">{alert.message}</p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                    <Container key={alert.id} fitHeight>
+                      <SpaceBetween size="xxs">
+                        <Box variant="small">
+                          <StatusIndicator type={alert.severity === "critical" ? "error" : alert.severity === "high" ? "warning" : "success"}>
+                            {alert.severity}
+                          </StatusIndicator>
+                        </Box>
+                        <Box variant="small">{alert.message}</Box>
+                        <Box color="text-body-secondary" variant="small">
                             {alert.alert_type} | Patient #{alert.patient_id} | {formatAlertTime(alert.created_at)}
-                          </p>
-                        </div>
-                        <div className="rounded-full border border-[var(--border-strong)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)]">
-                          {alert.severity}
-                        </div>
-                      </div>
-                    </div>
+                        </Box>
+                      </SpaceBetween>
+                    </Container>
                   )) : (
-                    <div className="monitor-panel rounded-2xl px-4 py-6 text-sm text-[var(--text-secondary)]">
-                      No alerts in the current feed.
-                    </div>
+                    <Box color="text-body-secondary">No alerts in the current feed.</Box>
                   )}
-                </div>
+                  </SpaceBetween>
 
-                <div className="mt-6 flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                    disabled={(recentAlerts.page || 1) <= 1}
-                    onClick={() => setAlertsPage((current) => Math.max(1, current - 1))}
-                  >
-                    Previous
-                  </button>
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    Page {recentAlerts.page || 1} of {alertsTotalPages}
-                  </p>
-                  <button
-                    type="button"
-                    className="console-button-secondary rounded-xl px-4 py-2 text-sm font-semibold"
-                    disabled={(recentAlerts.page || 1) >= alertsTotalPages}
-                    onClick={() => setAlertsPage((current) => Math.min(alertsTotalPages, current + 1))}
-                  >
-                    Next
-                  </button>
-                </div>
+                  <div className="mt-4 flex justify-end">
+                  <Pagination
+                    currentPageIndex={recentAlerts.page || 1}
+                    pagesCount={alertsTotalPages}
+                    onChange={({detail}) => setAlertsPage(detail.currentPageIndex)}
+                  />
+                  </div>
+                </Container>
               </div>
 
-              <div className="monitor-card rounded-[24px] p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Live Throughput</p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Alerts per Minute</h2>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                  Throughput is computed from newly observed alerts in the rolling 60-second window.
-                </p>
-
-                <div className="mt-6 h-[280px] rounded-2xl border p-4" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={alertsRateHistory}>
-                      <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
-                      <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={20}/>
-                      <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={[0, "auto"]}/>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: chartTheme.tooltipBg,
-                          border: `1px solid ${chartTheme.tooltipBorder}`,
-                          borderRadius: "12px",
-                          color: chartTheme.tooltipText,
-                        }}
+              <div className="medstream-stretch-container">
+                <div className="medstream-alerts-rate-stack">
+                  <Container
+                    className="medstream-streaming-card"
+                    fitHeight
+                    header={
+                      <Header variant="h2" description="Computed from newly observed alerts in a rolling 60-second window.">
+                        Alerts per minute
+                      </Header>
+                    }
+                  >
+                    <div
+                      className={[
+                        "medstream-chart-panel medstream-alerts-rate-chart-panel",
+                        highlightedAlertsRateSeries === "Alerts/Minute" ? "medstream-alerts-rate-chart-panel-active" : "",
+                      ].filter(Boolean).join(" ")}
+                    >
+                      <AwsLineChart
+                        ariaLabel="Alerts per minute"
+                        data={alertsRateHistory}
+                        highlightedSeriesTitle={highlightedAlertsRateSeries}
+                        hideLegend
+                        onHighlightedSeriesTitleChange={setHighlightedAlertsRateSeries}
+                        series={[
+                          {key: "alerts_per_minute", title: "Alerts/Minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} alerts`},
+                        ]}
+                        xTitle="Time"
+                        yDomain={[0, alertsRateYMax]}
+                        yTickFormatter={(value) => String(Math.round(value))}
                       />
-                      <Line type="monotone" dataKey="alerts_per_minute" name="Alerts/Minute" stroke="#f97316" strokeWidth={3} dot={false}/>
-                    </LineChart>
-                  </ResponsiveContainer>
+                    </div>
+                    <div
+                      className="medstream-alerts-rate-legend"
+                      role="toolbar"
+                      aria-label="Legend"
+                      onMouseLeave={() => setHighlightedAlertsRateSeries(null)}
+                    >
+                      <button
+                        className={[
+                          "medstream-alerts-rate-legend-item",
+                          highlightedAlertsRateSeries === "Alerts/Minute" ? "medstream-alerts-rate-legend-item-active" : "",
+                        ].filter(Boolean).join(" ")}
+                        type="button"
+                        aria-pressed={highlightedAlertsRateSeries === "Alerts/Minute"}
+                        onBlur={() => setHighlightedAlertsRateSeries(null)}
+                        onFocus={() => setHighlightedAlertsRateSeries("Alerts/Minute")}
+                        onMouseEnter={() => setHighlightedAlertsRateSeries("Alerts/Minute")}
+                      >
+                        <span className="medstream-alerts-rate-legend-line" aria-hidden="true"/>
+                        Alerts/Minute
+                      </button>
+                    </div>
+                  </Container>
                 </div>
               </div>
-            </section>
+            </div>
 
-            <section className="monitor-card rounded-[24px] p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">
-                Supporting Signal
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">
-                Vital Signs Trend (Heart Rate)
-              </h2>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Displays the evolution of patient vitals over time, providing context for alert generation in the streaming pipeline.
-              </p>
+            <div className="medstream-streaming-vitals-spacer">
+              <Container
+                header={
+                  <Header
+                    variant="h2"
+                    description="Each stream uses its own clinical scale and alert thresholds, so changes are visible as events arrive."
+                    actions={
+                      <Button iconName="download" onClick={exportVitalStreams}>Export metrics</Button>
+                    }
+                  >
+                    Vital streams by alert rule
+                  </Header>
+                }
+              >
+                <div className="medstream-streaming-vitals-grid">
+                  {VITAL_STREAMS.map((vital) => {
+                    const latestPoint = vitalsHistory[vitalsHistory.length - 1]
+                    const latestValue = Number(latestPoint?.[vital.key])
+                    const fallbackValue = Number(data[vital.avgKey])
+                    const displayValue = Number.isFinite(latestValue) ? latestValue : fallbackValue
 
-              <div className="mt-6 h-[250px] rounded-2xl border p-4" style={{borderColor: chartTheme.cardBorder, backgroundColor: chartTheme.cardBg}}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={heartRateHistory}>
-                    <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false}/>
-                    <XAxis dataKey="time" stroke={chartTheme.axis} tick={{fontSize: 11}} minTickGap={24}/>
-                    <YAxis stroke={chartTheme.axis} tick={{fontSize: 11}} domain={["auto", "auto"]}/>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: chartTheme.tooltipBg,
-                        border: `1px solid ${chartTheme.tooltipBorder}`,
-                        borderRadius: "12px",
-                        color: chartTheme.tooltipText,
-                      }}
-                    />
-                    <Line type="monotone" dataKey="heart_rate" stroke="#60a5fa" strokeWidth={2} dot={false}/>
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
-
-            <section className="monitor-card rounded-[24px] p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-muted)]">Understanding Streaming Processing</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">How this page works</h2>
-
-              <div className="mt-4 space-y-4 text-sm text-[var(--text-secondary)] leading-6">
-                <p>
-                  This page represents the <strong>streaming (real-time) processing layer</strong> of the system.
-                  Data is processed immediately as it is generated, without waiting for accumulation.
-                </p>
-
-                <p>
-                  Patient vitals such as heart rate, oxygen level, and temperature are continuously ingested,
-                  analyzed, and displayed in near real-time. This allows instant visibility into patient conditions.
-                </p>
-
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                  <p className="font-semibold text-[var(--text-primary)] mb-2">What you are seeing:</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Live averages updated every few seconds</li>
-                    <li>A continuously updating heart rate trend</li>
-                    <li>A real-time alert feed triggered by abnormal values</li>
-                    <li>Execution time of streaming computations</li>
-                  </ul>
+                    return (
+                      <section className="medstream-streaming-vital-panel" key={vital.key} aria-label={`${vital.title} stream`}>
+                        <div className="medstream-streaming-vital-panel-header">
+                          <div>
+                            <Box color="text-body-secondary" variant="awsui-key-label">{vital.title}</Box>
+                            <div className="medstream-streaming-vital-value">
+                              {Number.isFinite(displayValue) ? vital.valueFormatter(displayValue) : "--"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="medstream-streaming-vital-rules" aria-label={`${vital.title} alert rules`}>
+                          {vital.thresholds.map((threshold) => (
+                            <span key={threshold.title} style={{"--medstream-rule-color": threshold.color}}>
+                              {threshold.title}
+                            </span>
+                          ))}
+                        </div>
+                        <div
+                          className={[
+                            "medstream-streaming-vital-chart",
+                            highlightedVitalSeries === vital.title ? "medstream-streaming-vital-chart-active" : "",
+                          ].filter(Boolean).join(" ")}
+                          style={{"--medstream-vital-series-color": vital.color}}
+                        >
+                          <AwsLineChart
+                            ariaLabel={`${vital.title} streaming trend`}
+                            data={vitalsHistory}
+                            height={170}
+                            highlightedSeriesTitle={highlightedVitalSeries === vital.title ? vital.title : null}
+                            hideLegend
+                            onHighlightedSeriesTitleChange={setHighlightedVitalSeries}
+                            series={[
+                              {
+                                key: vital.key,
+                                title: vital.title,
+                                color: vital.color,
+                                valueFormatter: vital.valueFormatter,
+                              },
+                            ]}
+                            thresholds={vital.thresholds}
+                            xTitle="Time"
+                            yDomain={vital.yDomain}
+                            yTickFormatter={vital.yTickFormatter}
+                            yTitle={vital.unit}
+                          />
+                        </div>
+                      </section>
+                    )
+                  })}
                 </div>
-
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                  <p className="font-semibold text-[var(--text-primary)] mb-2">Why streaming processing matters:</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Enables immediate detection of critical conditions</li>
-                    <li>Supports real-time monitoring systems (e.g., ICU dashboards)</li>
-                    <li>Allows instant reaction to anomalies (alerts)</li>
-                  </ul>
+                <div
+                  className="medstream-alerts-rate-legend medstream-streaming-vitals-legend"
+                  role="toolbar"
+                  aria-label="Legend"
+                  onMouseLeave={() => setHighlightedVitalSeries(null)}
+                >
+                  {VITAL_STREAMS.map((vital) => (
+                    <button
+                      className={[
+                        "medstream-alerts-rate-legend-item",
+                        highlightedVitalSeries === vital.title ? "medstream-alerts-rate-legend-item-active" : "",
+                      ].filter(Boolean).join(" ")}
+                      key={vital.key}
+                      type="button"
+                      aria-pressed={highlightedVitalSeries === vital.title}
+                      onBlur={() => setHighlightedVitalSeries(null)}
+                      onFocus={() => setHighlightedVitalSeries(vital.title)}
+                      onMouseEnter={() => setHighlightedVitalSeries(vital.title)}
+                    >
+                      <span
+                        className="medstream-alerts-rate-legend-line"
+                        style={{backgroundColor: vital.color}}
+                        aria-hidden="true"
+                      />
+                      {vital.title}
+                    </button>
+                  ))}
                 </div>
-
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                  <p className="font-semibold text-[var(--text-primary)] mb-2">Technical flow:</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Data is produced continuously (simulated sensors or real inputs)</li>
-                    <li>Events are sent through a streaming platform (Kafka)</li>
-                    <li>A streaming processor consumes and processes events in real-time</li>
-                    <li>Alerts are generated instantly when thresholds are exceeded</li>
-                    <li>Results are exposed via API and updated in the UI every few seconds</li>
-                  </ul>
-                </div>
-
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-3)] p-4">
-                  <p className="font-semibold text-[var(--text-primary)] mb-2">Trade-offs:</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Very low latency (near instant updates)</li>
-                    <li>Higher variability (values may fluctuate)</li>
-                    <li>Less suitable for deep historical analysis</li>
-                    <li>More complex infrastructure (event streaming systems)</li>
-                  </ul>
-                </div>
-
-                <p>
-                  This layer complements batch processing: streaming provides <strong>speed and reactivity</strong>,
-                  while batch provides <strong>accuracy and deeper insights</strong>.
-                </p>
-              </div>
-            </section>
+              </Container>
+            </div>
           </>
         )}
-      </div>
-    </div>
+      </SpaceBetween>
+    </ContentLayout>
   )
 }

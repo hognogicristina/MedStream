@@ -10,6 +10,7 @@ from app.utils.datetime import now_utc
 class Alert(Base):
     __tablename__ = "alerts"
     __table_args__ = (
+        Index("ix_alerts_patient_created_at", "patient_id", "created_at"),
         Index("ix_alerts_created_at_desc", "created_at"),
         Index("ix_alerts_severity_created_at", "severity", "created_at"),
     )

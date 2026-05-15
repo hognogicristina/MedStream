@@ -1,8 +1,11 @@
 import {useEffect, useState} from "react"
 import {Link, useNavigate, useSearchParams} from "react-router-dom"
 import {resendVerificationEmail, verifyEmailToken} from "../services/authApi.js"
-import {getErrorMessage} from "../services/apiMessages.js"
-import {VERIFICATION_LINK_EXPIRED_MESSAGE} from "../services/appMessages.js"
+import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
+import {
+  VERIFICATION_LINK_EXPIRED_MESSAGE,
+  VERIFICATION_LINK_REPLACED_MESSAGE,
+} from "../services/appMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 
 export default function VerifyEmailPage() {
@@ -36,8 +39,12 @@ export default function VerifyEmailPage() {
 
         const nextMessage = getErrorMessage(error)
         notifyError(nextMessage, {duration: 5000})
-        setResultMessage(nextMessage === VERIFICATION_LINK_EXPIRED_MESSAGE ? "Verification link expired." : "Invalid link.")
-        setShowResendButton(nextMessage === VERIFICATION_LINK_EXPIRED_MESSAGE)
+        setResultMessage(nextMessage)
+        setShowResendButton(Boolean(token) && (
+          nextMessage === VERIFICATION_LINK_EXPIRED_MESSAGE
+          || nextMessage === VERIFICATION_LINK_REPLACED_MESSAGE
+          || nextMessage === "Invalid verification link."
+        ))
       } finally {
         if (active) {
           setIsLoading(false)
@@ -76,8 +83,8 @@ export default function VerifyEmailPage() {
           <aside className="login-aside">
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
-              <Link className="auth-link" to="/">
-                {"Back home"}
+              <Link className="auth-link" to="/login">
+                {"Back to login"}
               </Link>
             </div>
             <h1 className="login-title">{"Email Verification"}</h1>
@@ -85,7 +92,6 @@ export default function VerifyEmailPage() {
           </aside>
 
           <div className="auth-divider" aria-hidden="true"/>
-          <div className="hidden lg:block w-px bg-[var(--border-subtle)] mx-6"/>
 
           <div className="login-panel">
             <div className="login-header">

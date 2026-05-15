@@ -112,6 +112,7 @@ def get_batch_status():
             "progress": snapshot["progress"],
             "stage": snapshot["stage"],
             "last_run": snapshot["last_run"],
+            "last_run_status": snapshot["last_run_status"],
             "next_run_in_seconds": snapshot["next_run_in_seconds"],
         }).model_dump(mode="json"),
     )

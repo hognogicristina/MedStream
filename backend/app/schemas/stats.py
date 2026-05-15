@@ -32,6 +32,7 @@ class BatchProgressRead(BaseModel):
     progress: int
     stage: str
     last_run: datetime | None
+    last_run_status: str
     next_run_in_seconds: int | None = None
 
 
@@ -64,6 +65,7 @@ class ComparisonMetricsRead(BaseModel):
     execution_time_ms: float
     generated_discharge_summaries_count: int | None = None
     pending_discharge_summaries_count: int | None = None
+    recent_vitals: list[dict] | None = None
 
 
 class MetricsComparisonRead(BaseModel):

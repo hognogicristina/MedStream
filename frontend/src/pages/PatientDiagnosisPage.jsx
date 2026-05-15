@@ -1,5 +1,6 @@
 import {useCallback, useEffect, useState} from "react"
 import {useParams} from "react-router-dom"
+import {Button, Pagination} from "@cloudscape-design/components"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
@@ -144,13 +145,14 @@ export default function PatientDiagnosisPage() {
                   className="console-input min-h-28 w-full rounded-2xl px-4 py-3 outline-none"
                 />
 
-                <button
-                  type="submit"
+                <Button
+                  formAction="submit"
+                  variant="primary"
+                  className="medstream-submit-button"
                   disabled={!form.diagnosis.trim() || isSubmitting}
-                  className="console-button-primary w-full rounded-2xl px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
                 >
                   {isSubmitting ? "Saving..." : "Add Diagnosis"}
-                </button>
+                </Button>
               </form>
             </div>
 
@@ -165,30 +167,12 @@ export default function PatientDiagnosisPage() {
               </span>
               </div>
 
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="console-chip rounded-full px-3 py-1 text-xs font-medium">
-                  Page {diagnosisPage}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:text-[var(--text-subtle)]"
-                    onClick={() => setDiagnosisPage((prev) => Math.max(1, prev - 1))}
-                    disabled={diagnosisPage === 1}
-                    type="button"
-                  >
-                    Previous
-                  </button>
-
-                  <button
-                    className="console-button-ghost rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:text-[var(--text-subtle)]"
-                    onClick={() => setDiagnosisPage((prev) => prev + 1)}
-                    disabled={diagnosisPage >= maxDiagnosisPage}
-                    type="button"
-                  >
-                    Next
-                  </button>
-                </div>
+              <div className="mb-4 flex justify-end">
+                <Pagination
+                  currentPageIndex={diagnosisPage}
+                  pagesCount={maxDiagnosisPage}
+                  onChange={({detail}) => setDiagnosisPage(detail.currentPageIndex)}
+                />
               </div>
 
               <ul className="space-y-3">

@@ -7,8 +7,21 @@ class PatientService:
     def __init__(self, repository: PatientRepository | None = None):
         self.repository = repository or PatientRepository()
 
-    def list_patients(self, condition_id: int | None = None):
-        return self.repository.list_patients(condition_id)
+    def list_patients(
+        self,
+        condition_id: int | None = None,
+        department: str | None = None,
+        alert_presence: str | None = None,
+        status: str | None = None,
+        treatment_outcome: str | None = None,
+    ):
+        return self.repository.list_patients(
+            condition_id=condition_id,
+            department=department,
+            alert_presence=alert_presence,
+            status=status,
+            treatment_outcome=treatment_outcome,
+        )
 
     def search_patients_by_cnp(self, cnp: str):
         return self.repository.search_patients_by_cnp(cnp)
@@ -70,8 +83,15 @@ class PatientService:
     def create_patient_diagnosis(self, patient_id: int, doctor_id: int, diagnosis: str, notes: str | None):
         return self.repository.create_patient_diagnosis(patient_id, doctor_id, diagnosis, notes)
 
-    def update_patient_diagnosis(self, diagnosis_id: int, doctor_id: int, status: str | None, note: str | None):
-        return self.repository.update_patient_diagnosis(diagnosis_id, doctor_id, status, note)
+    def update_patient_diagnosis(
+            self,
+            diagnosis_id: int,
+            doctor_id: int,
+            status: str | None,
+            note: str | None,
+            notes: str | None,
+    ):
+        return self.repository.update_patient_diagnosis(diagnosis_id, doctor_id, status, note, notes)
 
     def administer_medication(
             self,

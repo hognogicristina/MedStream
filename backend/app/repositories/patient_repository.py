@@ -458,6 +458,39 @@ class PatientRepository:
         return payload
 
     @classmethod
+    def _current_alert_level(cls, sequence_alerts: list[Alert]) -> str:
+        if not sequence_alerts:
+            return "none"
+
+        alert_state = cls._get_latest_vital_specific_alert_state(
+            sequence_alerts=sequence_alerts,
+            window_end=now_utc(),
+        )
+        has_high = False
+        has_normal = False
+
+        for bucket in alert_state.values():
+            latest_alert = bucket.get("latest")
+            if latest_alert is None:
+                continue
+
+            latest_state = str(bucket.get("latest_state") or "none").strip().lower()
+            if latest_state == "abnormal":
+                canonical_type = normalize_alert_type(latest_alert.alert_type, latest_alert.severity)
+                severity = str(latest_alert.severity or "").strip().lower()
+                if severity == "critical" or canonical_type.endswith("_critical"):
+                    return "critical"
+                has_high = True
+            elif latest_state == "normalized":
+                has_normal = True
+
+        if has_high:
+            return "high"
+        if has_normal:
+            return "normal"
+        return "none"
+
+    @classmethod
     def _format_vital_label(cls, vital_key: str) -> str:
         normalized = str(vital_key or "").strip().lower()
         if normalized in cls.VITAL_LABELS:
@@ -1480,8 +1513,6 @@ class PatientRepository:
             updates["phone_number"] = normalize_phone_value(payload.get("phone_number"))
         if "gender" in payload:
             updates["gender"] = validate_required_text(payload.get("gender"), "Gender")
-        if "arrival_method" in payload:
-            updates["arrival_method"] = validate_arrival_method(payload.get("arrival_method"))
         if "birth_date" in payload:
             updates["birth_date"] = payload.get("birth_date")
         if "is_pregnant" in payload:
@@ -1490,7 +1521,14 @@ class PatientRepository:
         address_updates = payload.get("address") if "address" in payload else None
         return updates, address_updates
 
-    def list_patients(self, condition_id: int | None = None) -> list[Patient]:
+    def list_patients(
+        self,
+        condition_id: int | None = None,
+        department: str | None = None,
+        alert_presence: str | None = None,
+        status: str | None = None,
+        treatment_outcome: str | None = None,
+    ) -> list[Patient]:
         with SessionLocal() as db:
             patient_query = select(Patient).options(joinedload(Patient.address))
 
@@ -1500,7 +1538,90 @@ class PatientRepository:
                     PatientConditionAssignment.patient_id == Patient.id,
                 ).where(PatientConditionAssignment.condition_id == condition_id)
 
-            return db.execute(patient_query.order_by(desc(Patient.id))).scalars().all()
+            if department:
+                patient_query = patient_query.where(Patient.department == validate_department_value(department))
+
+            normalized_status = str(status or "all").strip().lower()
+            if normalized_status == "admitted":
+                patient_query = patient_query.where(Patient.is_discharged.is_(False))
+            elif normalized_status == "discharged":
+                patient_query = patient_query.where(Patient.is_discharged.is_(True))
+
+            patients = db.execute(patient_query.order_by(desc(Patient.id))).scalars().all()
+
+            normalized_treatment_outcome = str(treatment_outcome or "all").strip().lower()
+            if normalized_treatment_outcome not in {"all", ""} and patients:
+                patients = self._filter_patients_by_treatment_outcome(db, patients, normalized_treatment_outcome)
+
+            normalized_alert_presence = str(alert_presence or "all").strip().lower()
+            if normalized_alert_presence in {"all", ""} or not patients:
+                return patients
+
+            patient_ids = [patient.id for patient in patients]
+            alerts = db.execute(
+                select(Alert)
+                .where(Alert.patient_id.in_(patient_ids))
+                .order_by(Alert.created_at.asc(), Alert.id.asc())
+            ).scalars().all()
+            alerts_by_patient: dict[int, list[Alert]] = {}
+            for alert in alerts:
+                alerts_by_patient.setdefault(alert.patient_id, []).append(alert)
+
+            def matches_alert_filter(patient: Patient) -> bool:
+                current_level = self._current_alert_level(alerts_by_patient.get(patient.id, []))
+                if normalized_alert_presence == "any":
+                    return current_level != "none"
+                if normalized_alert_presence == "none":
+                    return current_level == "none"
+                return current_level == normalized_alert_presence
+
+            return [patient for patient in patients if matches_alert_filter(patient)]
+
+    @classmethod
+    def _filter_patients_by_treatment_outcome(cls, db, patients: list[Patient], outcome: str) -> list[Patient]:
+        patient_ids = [patient.id for patient in patients]
+        medications = db.execute(
+            select(PatientMedication)
+            .where(PatientMedication.patient_id.in_(patient_ids))
+            .order_by(PatientMedication.created_at.asc(), PatientMedication.id.asc())
+        ).scalars().all()
+        vitals = db.execute(
+            select(Vital)
+            .where(Vital.patient_id.in_(patient_ids))
+            .order_by(Vital.recorded_at.asc(), Vital.id.asc())
+        ).scalars().all()
+        alerts = db.execute(
+            select(Alert)
+            .where(Alert.patient_id.in_(patient_ids))
+            .order_by(Alert.created_at.asc(), Alert.id.asc())
+        ).scalars().all()
+
+        medications_by_patient: dict[int, list[PatientMedication]] = {}
+        vitals_by_patient: dict[int, list[Vital]] = {}
+        alerts_by_patient: dict[int, list[Alert]] = {}
+
+        for medication in medications:
+            medications_by_patient.setdefault(medication.patient_id, []).append(medication)
+        for vital in vitals:
+            vitals_by_patient.setdefault(vital.patient_id, []).append(vital)
+        for alert in alerts:
+            alerts_by_patient.setdefault(alert.patient_id, []).append(alert)
+
+        def has_matching_treatment_outcome(patient: Patient) -> bool:
+            treatment_actions = cls._build_treatment_actions(medications_by_patient.get(patient.id, []))
+            for action_index in range(len(treatment_actions)):
+                evaluation = cls._evaluate_treatment_action(
+                    patient=patient,
+                    action_index=action_index,
+                    treatment_actions=treatment_actions,
+                    sequence_vitals=vitals_by_patient.get(patient.id, []),
+                    sequence_alerts=alerts_by_patient.get(patient.id, []),
+                )
+                if str(evaluation.get("outcome") or "").strip().lower() == outcome:
+                    return True
+            return False
+
+        return [patient for patient in patients if has_matching_treatment_outcome(patient)]
 
     def search_patients_by_cnp(self, cnp: str, limit: int = 10) -> list[Patient]:
         normalized_cnp = (cnp or "").strip()
@@ -2631,7 +2752,14 @@ class PatientRepository:
             )
             return diagnosis_entry
 
-    def update_patient_diagnosis(self, diagnosis_id: int, doctor_id: int, status: str | None, note: str | None) -> PatientDiagnosis:
+    def update_patient_diagnosis(
+            self,
+            diagnosis_id: int,
+            doctor_id: int,
+            status: str | None,
+            note: str | None,
+            notes: str | None,
+    ) -> PatientDiagnosis:
         with SessionLocal() as db:
             diagnosis = db.get(PatientDiagnosis, diagnosis_id)
             if diagnosis is None:
@@ -2663,6 +2791,11 @@ class PatientRepository:
 
             if note is not None:
                 diagnosis.status_note = validate_required_text(note, "Note")
+                updated = True
+
+            if notes is not None:
+                diagnosis.notes = normalize_optional_text(notes)
+                diagnosis.doctor_id = doctor_id
                 updated = True
 
             validate_non_empty_update(updated, "NO_DIAGNOSIS_UPDATES")
@@ -2731,28 +2864,16 @@ class PatientRepository:
             validate_patient_assignment(db, doctor_id, medication.patient_id)
             validate_patient_editable(get_patient_or_raise(db, medication.patient_id))
 
-            latest_medication = db.execute(
-                select(PatientMedication)
-                .where(PatientMedication.patient_id == medication.patient_id)
-                .order_by(
-                    desc(func.coalesce(PatientMedication.updated_at, PatientMedication.created_at)),
-                    desc(PatientMedication.id),
-                )
-                .limit(1)
-            ).scalar_one_or_none()
-            if latest_medication is None:
-                raise NotFoundError("MEDICATION_NOT_FOUND")
-
             updated = False
             if dosage is not None:
-                latest_medication.dosage = self._clamp_text(
+                medication.dosage = self._clamp_text(
                     validate_dosage(dosage),
                     self.MEDICATION_DOSAGE_MAX_LENGTH,
                 )
                 updated = True
 
             if frequency is not None:
-                latest_medication.frequency = self._clamp_text(
+                medication.frequency = self._clamp_text(
                     validate_frequency(frequency),
                     self.MEDICATION_FREQUENCY_MAX_LENGTH,
                 )
@@ -2760,12 +2881,12 @@ class PatientRepository:
 
             validate_non_empty_update(updated, "NO_MEDICATION_UPDATES")
 
-            latest_medication.last_updated_note = validate_required_text(note, "Note")
-            latest_medication.updated_at = now_utc()
+            medication.last_updated_note = validate_required_text(note, "Note")
+            medication.updated_at = now_utc()
 
             db.commit()
-            db.refresh(latest_medication)
-            return latest_medication
+            db.refresh(medication)
+            return medication
 
     def get_patient_activities(self, patient_id: int) -> list[DoctorActivity]:
         with SessionLocal() as db:
