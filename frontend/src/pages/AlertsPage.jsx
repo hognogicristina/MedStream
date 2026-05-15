@@ -492,7 +492,7 @@ export default function AlertsPage() {
                       if (!patient) {
                         return patientNameById[item.patient_id] || "Unknown patient"
                       }
-                      return <Button variant="inline-link" onClick={() => navigate(`/patient/${patient.id}?from=alerts`)}>{formatPatientFullName(patient)}</Button>
+                      return formatPatientFullName(patient)
                     },
                   },
                   {
@@ -504,6 +504,18 @@ export default function AlertsPage() {
                     id: "created",
                     header: "Created",
                     cell: (item) => formatDateTimeWithSeconds(item.created_at),
+                  },
+                  {
+                    id: "action",
+                    header: "Action",
+                    cell: (item) => (
+                      <Button
+                        variant="inline-link"
+                        onClick={() => navigate(`/patient/${item.patient_id}?from=alerts`)}
+                      >
+                        Open
+                      </Button>
+                    ),
                   },
                 ]}
               />

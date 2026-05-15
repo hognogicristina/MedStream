@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from "react"
+import {useCallback, useEffect, useRef, useState} from "react"
 import {useNavigate} from "react-router-dom"
 import {
   Box,
@@ -9,17 +9,15 @@ import {
   Header,
   SpaceBetween,
   StatusIndicator,
-  Table,
   Tabs,
 } from "@cloudscape-design/components"
 import CountValue from "../components/CountValue.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
-import {getAlertDashboardSummary, listPatients} from "../services/patientApi.js"
+import {getAlertDashboardSummary, getBatchMetrics, getDepartments} from "../services/patientApi.js"
 import {listDoctors} from "../services/doctorApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import VitalsChart from "../components/VitalsChart.jsx"
-import {formatPatientFullName} from "../utils/patients.js"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const MAX_PREVIEW_ALERTS = 4
@@ -97,8 +95,9 @@ export default function DashboardPage() {
   const [vitals, setVitals] = useState([])
   const [previewAlerts, setPreviewAlerts] = useState(null)
   const [totalAlerts, setTotalAlerts] = useState(0)
-  const [patients, setPatients] = useState([])
+  const [activePatientsCount, setActivePatientsCount] = useState(0)
   const [doctors, setDoctors] = useState([])
+  const [departments, setDepartments] = useState([])
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true)
   const alertAudioRef = useRef(null)
   const [chartData, setChartData] = useState([])
@@ -124,14 +123,17 @@ export default function DashboardPage() {
 
   const loadDashboardData = useCallback(async () => {
     try {
-      const [patientsRes, doctorsRes, alertsSummaryRes] = await Promise.all([
-        listPatients({page: 1, limit: 100}),
+      const [batchMetricsRes, doctorsRes, departmentsRes, alertsSummaryRes] = await Promise.all([
+        getBatchMetrics(),
         listDoctors(),
+        getDepartments(),
         getAlertDashboardSummary(),
       ])
 
-      setPatients(getResponseData(patientsRes))
+      const batchMetrics = getResponseData(batchMetricsRes) || {}
+      setActivePatientsCount(Number(batchMetrics.patients_count || 0))
       setDoctors(getResponseData(doctorsRes) || [])
+      setDepartments(getResponseData(departmentsRes) || [])
       const summary = getResponseData(alertsSummaryRes)
       setTotalAlerts(Number(summary?.total_alerts || 0))
       upsertPreviewAlerts(summary?.preview_alerts)
@@ -199,16 +201,8 @@ export default function DashboardPage() {
   }, [upsertPreviewAlerts])
 
   const latestVital = vitals[0]
-  const patientNameById = Object.fromEntries(patients.map((patient) => [patient.id, formatPatientFullName(patient)]))
-  const validPatientIds = new Set(patients.map((patient) => patient.id))
-  const visiblePreviewAlerts = (previewAlerts || []).filter((alert) => validPatientIds.has(alert.patient_id))
-  const limitedVisiblePreviewAlerts = visiblePreviewAlerts.slice(0, MAX_PREVIEW_ALERTS)
+  const limitedVisiblePreviewAlerts = (previewAlerts || []).slice(0, MAX_PREVIEW_ALERTS)
   const recentVitals = vitals.slice(0, 5)
-
-  const criticalAlerts = useMemo(
-    () => visiblePreviewAlerts.filter((alert) => alert?.severity === "critical").length,
-    [visiblePreviewAlerts],
-  )
 
   const averageHeartRate = recentVitals.length
     ? (recentVitals.reduce((sum, vital) => sum + vital.heart_rate, 0) / recentVitals.length).toFixed(1)
@@ -223,28 +217,6 @@ export default function DashboardPage() {
   const oxygenDelta = recentVitals.length >= 2 ? recentVitals[0].oxygen_saturation - recentVitals[recentVitals.length - 1].oxygen_saturation : 0
   const temperatureDelta = recentVitals.length >= 2 ? recentVitals[0].temperature - recentVitals[recentVitals.length - 1].temperature : 0
   const formatDelta = (value) => value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1)
-
-  const patientStatusById = useMemo(() => {
-    const map = new Map()
-    visiblePreviewAlerts.forEach((alert) => {
-      const current = map.get(alert.patient_id)
-      if (alert.severity === "critical") {
-        map.set(alert.patient_id, "critical")
-      } else if (!current && alert.severity === "high") {
-        map.set(alert.patient_id, "warning")
-      }
-    })
-    return map
-  }, [visiblePreviewAlerts])
-
-  const patientRows = patients.slice(0, 10).map((patient) => {
-    const severity = patientStatusById.get(patient.id) || "normal"
-    return {
-      ...patient,
-      fullName: formatPatientFullName(patient),
-      clinicalStatus: severity,
-    }
-  })
 
   if (isLoadingDashboard) {
     return (
@@ -272,11 +244,11 @@ export default function DashboardPage() {
           <ColumnLayout columns={4} variant="text-grid">
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Active patients</Box>
-              <Box variant="h2"><CountValue value={patients.length}/></Box>
+              <Box variant="h2"><CountValue value={activePatientsCount}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
-              <Box color="text-body-secondary" variant="awsui-key-label">Critical alerts</Box>
-              <Box variant="h2"><CountValue value={criticalAlerts}/></Box>
+              <Box color="text-body-secondary" variant="awsui-key-label">Total departments</Box>
+              <Box variant="h2"><CountValue value={departments.length}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Total doctors</Box>
@@ -347,7 +319,7 @@ export default function DashboardPage() {
                           {alert.severity === "critical" ? "Critical" : "Warning"}
                         </StatusIndicator>
                       </Box>
-                      <Box variant="small">{patientNameById[alert.patient_id] || `Patient #${alert.patient_id}`}</Box>
+                      <Box variant="small">{`Patient #${alert.patient_id}`}</Box>
                       <Box color="text-body-secondary" variant="small">{alert.message}</Box>
                       <Box color="text-body-secondary" variant="small">{new Date(alert.created_at || Date.now()).toLocaleString()}</Box>
                     </SpaceBetween>
@@ -357,47 +329,6 @@ export default function DashboardPage() {
             </Container>
           </div>
         </div>
-
-        <Container header={<Header variant="h2">Patients</Header>}>
-          <div className="medstream-column-divider-table">
-            <Table
-              variant="borderless"
-              items={patientRows}
-              trackBy="id"
-              empty={<Box color="text-body-secondary">No patients available.</Box>}
-              columnDefinitions={[
-                {
-                  id: "name",
-                  header: "Patient",
-                  cell: (item) => item.fullName,
-                },
-                {
-                  id: "status",
-                  header: "Status",
-                  cell: (item) => {
-                    if (item.clinicalStatus === "critical") {
-                      return <StatusIndicator type="error">Critical</StatusIndicator>
-                    }
-                    if (item.clinicalStatus === "warning") {
-                      return <StatusIndicator type="warning">Warning</StatusIndicator>
-                    }
-                    return <StatusIndicator type="success">Normal</StatusIndicator>
-                  },
-                },
-                {
-                  id: "cnp",
-                  header: "CNP",
-                  cell: (item) => item.cnp,
-                },
-                {
-                  id: "actions",
-                  header: "Actions",
-                  cell: (item) => <Button variant="inline-link" onClick={() => navigate(`/patient/${item.id}`)}>Open</Button>,
-                },
-              ]}
-            />
-          </div>
-        </Container>
 
         <Container>
           <Tabs
