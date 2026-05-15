@@ -44,6 +44,10 @@ def _ensure_updated_at_columns():
             "alerts_critical_count": "INTEGER DEFAULT 0",
             "alerts_high_count": "INTEGER DEFAULT 0",
             "alerts_stable_count": "INTEGER DEFAULT 0",
+            "patients_per_department_snapshot": "JSONB DEFAULT '[]'::jsonb",
+            "top_diagnosis_snapshot": "JSONB DEFAULT '[]'::jsonb",
+            "treatment_effectiveness_snapshot": "JSONB DEFAULT '{}'::jsonb",
+            "medication_effectiveness_snapshot": "JSONB DEFAULT '[]'::jsonb",
         },
     }
 
@@ -56,5 +60,14 @@ def _ensure_updated_at_columns():
                 connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"))
                 if column_name == "updated_at":
                     connection.execute(text(f"UPDATE {table_name} SET {column_name} = created_at WHERE {column_name} IS NULL"))
+                elif column_type.startswith("JSONB DEFAULT '[]'"):
+                    connection.execute(text(f"UPDATE {table_name} SET {column_name} = '[]'::jsonb WHERE {column_name} IS NULL"))
+                elif column_type.startswith("JSONB DEFAULT '{}'"):
+                    connection.execute(text(f"UPDATE {table_name} SET {column_name} = '{{}}'::jsonb WHERE {column_name} IS NULL"))
                 else:
                     connection.execute(text(f"UPDATE {table_name} SET {column_name} = 0 WHERE {column_name} IS NULL"))
+
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_patient_medications_patient_created_at ON patient_medications (patient_id, created_at)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_alerts_patient_created_at ON alerts (patient_id, created_at)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_patient_diagnosis_patient_status ON patient_diagnosis (patient_id, status)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_patient_stats_patient_id ON patient_stats (patient_id)"))

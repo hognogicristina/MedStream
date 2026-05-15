@@ -244,11 +244,12 @@ function getAttributeStatusType(value) {
 
 function AttributeStatusValue({value}) {
   const displayValue = value == null || value === "" ? "--" : value
+  const isImproving = String(displayValue).trim().toLowerCase() === "improving"
 
   return (
     <div className="medstream-attribute-summary-cell medstream-attribute-status-cell">
       <Box color="text-body-secondary" variant="awsui-key-label">Status</Box>
-      <div className="medstream-attribute-status-value">
+      <div className={`medstream-attribute-status-value${isImproving ? " medstream-status-improving" : ""}`}>
         <StatusIndicator type={getAttributeStatusType(displayValue)}>
           {formatDisplayValue(displayValue)}
         </StatusIndicator>
@@ -336,9 +337,10 @@ function StepFunctionsMedicationDecision({
   displayedMedication,
   selectedTreatmentOutcome,
 }) {
+  const isImprovingOutcome = selectedTreatmentOutcome === "Improving"
   const statusType = selectedTreatmentOutcome === "Effective"
     ? "success"
-    : selectedTreatmentOutcome === "Improving"
+    : isImprovingOutcome
       ? "in-progress"
       : "error"
 
@@ -353,7 +355,9 @@ function StepFunctionsMedicationDecision({
                 {formatDisplayValue(displayedMedication.medication_name)}
               </DetailField>
               <DetailField label="Status">
-                <StatusIndicator type={statusType}>{formatDisplayValue(selectedTreatmentOutcome)}</StatusIndicator>
+                <span className={isImprovingOutcome ? "medstream-status-improving" : undefined}>
+                  <StatusIndicator type={statusType}>{formatDisplayValue(selectedTreatmentOutcome)}</StatusIndicator>
+                </span>
               </DetailField>
               <DetailField label="Started">{formatCompactDate(displayedMedication.timestamp || displayedMedication.created_at)}</DetailField>
               <DetailField label="Medication ID">{displayedMedication.id || "--"}</DetailField>

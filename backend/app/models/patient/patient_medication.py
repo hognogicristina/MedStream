@@ -1,6 +1,6 @@
 from datetime import date
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, Integer, UniqueConstraint, String, Date, Text, DateTime
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, UniqueConstraint, String, Date, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -9,6 +9,9 @@ from app.utils.datetime import now_utc
 
 class PatientMedication(Base):
     __tablename__ = "patient_medications"
+    __table_args__ = (
+        Index("ix_patient_medications_patient_created_at", "patient_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))

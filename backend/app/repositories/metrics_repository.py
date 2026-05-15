@@ -43,6 +43,26 @@ def _empty_metrics():
     }
 
 
+def _empty_treatment_effectiveness():
+    return {
+        "effective": 0,
+        "improving": 0,
+        "ineffective": 0,
+        "effective_rate": 0.0,
+        "improving_rate": 0.0,
+        "ineffective_rate": 0.0,
+    }
+
+
+def _empty_insights_snapshot():
+    return {
+        "patients_per_department": [],
+        "top_diagnosis": [],
+        "treatment_effectiveness": _empty_treatment_effectiveness(),
+        "medication_effectiveness": [],
+    }
+
+
 class StreamingMetricsStore:
     def __init__(self):
         self._lock = Lock()
@@ -167,6 +187,7 @@ def paginate_items(items, page: int, page_size: int):
 
 def refresh_batch_snapshot(db: Session, execution_time_ms: float):
     snapshot_timestamp = utc_now()
+    insights_snapshot = build_batch_insights_snapshot(db)
     metrics_row = db.execute(
         select(
             func.avg(PatientStats.avg_heart_rate),
@@ -213,6 +234,10 @@ def refresh_batch_snapshot(db: Session, execution_time_ms: float):
         alerts_high_count=severity_counts["high"],
         alerts_stable_count=severity_counts["stable"],
         patients_count=int(metrics_row[4] or 0),
+        patients_per_department_snapshot=insights_snapshot["patients_per_department"],
+        top_diagnosis_snapshot=insights_snapshot["top_diagnosis"],
+        treatment_effectiveness_snapshot=insights_snapshot["treatment_effectiveness"],
+        medication_effectiveness_snapshot=insights_snapshot["medication_effectiveness"],
     )
     db.add(batch_row)
 
@@ -369,7 +394,7 @@ def get_comparison_metrics(db: Session) -> dict:
     }
 
 
-def get_batch_insights_repo(db: Session, *, departments_page: int, diagnoses_page: int, page_size: int) -> dict:
+def build_batch_insights_snapshot(db: Session) -> dict:
     department_rows = db.execute(
         select(Patient.department, func.count(PatientStats.patient_id))
         .join(PatientStats, PatientStats.patient_id == Patient.id)
@@ -500,25 +525,17 @@ def get_batch_insights_repo(db: Session, *, departments_page: int, diagnoses_pag
     total_treatments = treatment_effective_total + treatment_improving_total + treatment_ineffective_total
 
     return {
-        "patients_per_department": paginate_items(
-            [
-                {"department": department, "patients": int(patients)}
-                for department, patients in department_rows
-            ],
-            departments_page,
-            page_size,
-        ),
-        "top_diagnosis": paginate_items(
-            [
-                {
-                    "name": diagnosis,
-                    "patients": int(patient_count),
-                }
-                for diagnosis, patient_count in top_diagnosis_rows
-            ],
-            diagnoses_page,
-            page_size,
-        ),
+        "patients_per_department": [
+            {"department": department, "patients": int(patients)}
+            for department, patients in department_rows
+        ],
+        "top_diagnosis": [
+            {
+                "name": diagnosis,
+                "patients": int(patient_count),
+            }
+            for diagnosis, patient_count in top_diagnosis_rows
+        ],
         "treatment_effectiveness": {
             "effective": treatment_effective_total,
             "improving": treatment_improving_total,
@@ -564,6 +581,28 @@ def get_batch_insights_repo(db: Session, *, departments_page: int, diagnoses_pag
             ],
             key=lambda item: (-item["total"], item["name"]),
         ),
+    }
+
+
+def get_batch_insights_repo(db: Session, *, departments_page: int, diagnoses_page: int, page_size: int) -> dict:
+    latest = get_latest_batch_analytics(db)
+    snapshot = _empty_insights_snapshot()
+    if latest is not None:
+        snapshot = {
+            "patients_per_department": list(latest.patients_per_department_snapshot or []),
+            "top_diagnosis": list(latest.top_diagnosis_snapshot or []),
+            "treatment_effectiveness": {
+                **_empty_treatment_effectiveness(),
+                **(latest.treatment_effectiveness_snapshot or {}),
+            },
+            "medication_effectiveness": list(latest.medication_effectiveness_snapshot or []),
+        }
+
+    return {
+        "patients_per_department": paginate_items(snapshot["patients_per_department"], departments_page, page_size),
+        "top_diagnosis": paginate_items(snapshot["top_diagnosis"], diagnoses_page, page_size),
+        "treatment_effectiveness": snapshot["treatment_effectiveness"],
+        "medication_effectiveness": snapshot["medication_effectiveness"],
     }
 
 

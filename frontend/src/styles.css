@@ -3363,6 +3363,19 @@ body {
   white-space: nowrap;
 }
 
+.medstream-status-improving [class*="awsui_status-in-progress"],
+.medstream-status-improving [class*="awsui_icon"] {
+  color: var(--color-text-status-warning-6meo06, #855900) !important;
+}
+
+.medstream-status-improving svg circle {
+  stroke: currentColor !important;
+}
+
+.medstream-status-improving svg .filled {
+  fill: currentColor !important;
+}
+
 .medstream-attribute-main {
   min-width: 0;
 }

@@ -337,6 +337,7 @@ export default function BatchMetricsPage() {
   const [isRunningBatch, setIsRunningBatch] = useState(false)
   const [showRunStartedBanner, setShowRunStartedBanner] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isInsightsLoading, setIsInsightsLoading] = useState(false)
   const [treatmentMode, setTreatmentMode] = useState("medication")
   const [selectedMedication, setSelectedMedication] = useState("")
   const [visibleOutcomeIds, setVisibleOutcomeIds] = useState(OUTCOME_FILTER_IDS)
@@ -344,6 +345,7 @@ export default function BatchMetricsPage() {
   const [hoveredOutcomeId, setHoveredOutcomeId] = useState("")
   const lastBatchTimestampRef = useRef(null)
   const hasLoadedInitialDataRef = useRef(false)
+  const hasLoadedInsightsRef = useRef(false)
 
   const hasBatchData = Boolean(metrics?.timestamp)
 
@@ -360,23 +362,13 @@ export default function BatchMetricsPage() {
   useEffect(() => {
     let active = true
 
-    const loadData = async (
-      nextDepartmentsPage = departmentsPage,
-      nextDiagnosesPage = diagnosesPage,
-      nextInsightsFallbackPage = insightsFallbackPage,
-    ) => {
+    const loadData = async () => {
       if (!hasLoadedInitialDataRef.current) {
         setIsLoading(true)
       }
       try {
-        const [metricsResponse, insightsResponse, scheduleResponse, comparisonResponse] = await Promise.all([
+        const [metricsResponse, scheduleResponse, comparisonResponse] = await Promise.all([
           getBatchMetrics(),
-          getBatchInsights({
-            page: nextInsightsFallbackPage,
-            page_size: PAGE_SIZE,
-            departments_page: nextDepartmentsPage,
-            diagnoses_page: nextDiagnosesPage,
-          }),
           getBatchSchedule(),
           getMetricsComparison(),
         ])
@@ -386,7 +378,6 @@ export default function BatchMetricsPage() {
         }
 
         const nextMetrics = getResponseData(metricsResponse)
-        const nextInsights = getResponseData(insightsResponse)
         const nextSchedule = getResponseData(scheduleResponse)
         const nextComparison = getResponseData(comparisonResponse)
         setComparison(nextComparison || null)
@@ -401,7 +392,6 @@ export default function BatchMetricsPage() {
             setMetrics(nextMetrics)
           }
         }
-        setInsights(nextInsights || EMPTY_INSIGHTS)
 
         syncScheduleForm(nextSchedule)
       } catch (loadError) {
@@ -418,6 +408,51 @@ export default function BatchMetricsPage() {
 
     loadData()
     const intervalId = window.setInterval(loadData, POLL_INTERVAL_MS)
+
+    return () => {
+      active = false
+      window.clearInterval(intervalId)
+    }
+  }, [notifyError])
+
+  useEffect(() => {
+    let active = true
+
+    const loadInsights = async (
+      nextDepartmentsPage = departmentsPage,
+      nextDiagnosesPage = diagnosesPage,
+      nextInsightsFallbackPage = insightsFallbackPage,
+    ) => {
+      if (!hasLoadedInsightsRef.current) {
+        setIsInsightsLoading(true)
+      }
+      try {
+        const response = await getBatchInsights({
+          page: nextInsightsFallbackPage,
+          page_size: PAGE_SIZE,
+          departments_page: nextDepartmentsPage,
+          diagnoses_page: nextDiagnosesPage,
+        })
+
+        if (!active) {
+          return
+        }
+
+        setInsights(getResponseData(response) || EMPTY_INSIGHTS)
+      } catch (loadError) {
+        if (active) {
+          notifyError(getErrorMessage(loadError), {duration: 5000})
+        }
+      } finally {
+        if (active) {
+          hasLoadedInsightsRef.current = true
+          setIsInsightsLoading(false)
+        }
+      }
+    }
+
+    loadInsights()
+    const intervalId = window.setInterval(loadInsights, POLL_INTERVAL_MS)
 
     return () => {
       active = false
@@ -1009,6 +1044,8 @@ export default function BatchMetricsPage() {
                   variant="borderless"
                   items={patientsPerDepartment.items || []}
                   trackBy="department"
+                  loading={isInsightsLoading}
+                  loadingText="Loading department snapshot"
                   empty={<Box color="text-body-secondary">No department snapshot available yet.</Box>}
                   columnDefinitions={[
                     {
@@ -1042,6 +1079,8 @@ export default function BatchMetricsPage() {
                   variant="borderless"
                   items={topDiagnosis.items || []}
                   trackBy="name"
+                  loading={isInsightsLoading}
+                  loadingText="Loading diagnosis snapshot"
                   empty={<Box color="text-body-secondary">No diagnosis snapshot available yet.</Box>}
                   columnDefinitions={[
                     {
