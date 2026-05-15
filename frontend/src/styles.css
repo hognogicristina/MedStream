@@ -1927,6 +1927,108 @@ body {
   margin-top: 12px;
 }
 
+.medstream-streaming-vitals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  min-width: 0;
+}
+
+.medstream-streaming-vital-panel {
+  min-width: 0;
+  padding: 0 16px;
+}
+
+.medstream-streaming-vital-panel:first-child {
+  padding-left: 0;
+}
+
+.medstream-streaming-vital-panel:last-child {
+  padding-right: 0;
+}
+
+.medstream-streaming-vital-panel + .medstream-streaming-vital-panel {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.medstream-streaming-vital-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 50px;
+  margin-bottom: 8px;
+}
+
+.medstream-streaming-vital-value {
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.medstream-streaming-vital-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 26px;
+  margin-bottom: 6px;
+}
+
+.medstream-streaming-vital-rules span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 4px 8px;
+}
+
+.medstream-streaming-vital-rules span::before {
+  content: "";
+  width: 8px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--medstream-rule-color);
+}
+
+.medstream-streaming-vital-chart {
+  height: 220px;
+  min-height: 220px;
+  overflow: hidden;
+}
+
+.medstream-streaming-vital-chart [class*="chart-container"],
+.medstream-streaming-vital-chart [class*="chart-container-outer"],
+.medstream-streaming-vital-chart [class*="chart-container-inner"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.medstream-streaming-vital-chart svg {
+  max-width: 100%;
+}
+
+.medstream-streaming-vital-chart [class*="series"] path {
+  transition: filter 0.16s ease, stroke-width 0.16s ease;
+}
+
+.medstream-streaming-vital-chart-active [class*="series"] path {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--medstream-vital-series-color) 42%, transparent));
+  stroke-width: 3px;
+}
+
+.medstream-streaming-vitals-legend {
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
 .medstream-alerts-rate-stack {
   display: flex;
   width: 100%;
@@ -2528,14 +2630,18 @@ body {
 }
 
 .medstream-simple-list-table th[class*="awsui_header-cell"] {
-  border-block-end-color: transparent !important;
-  box-shadow: inset 0 -1px 0 var(--border-subtle);
+  border-block-end: 1px solid color-mix(in srgb, var(--border-strong) 74%, transparent) !important;
+  box-shadow: none;
 }
 
-.medstream-simple-list-table [class*="awsui_body-cell"] {
+.medstream-simple-list-table td[class*="awsui_body-cell"] {
   border-block-start-color: transparent !important;
   border-block-end-color: transparent !important;
-  box-shadow: inset 0 -1px 0 var(--border-subtle);
+  box-shadow: none;
+}
+
+.medstream-simple-list-table tbody tr + tr > td[class*="awsui_body-cell"] {
+  border-block-start: 1px solid color-mix(in srgb, var(--border-strong) 74%, transparent) !important;
 }
 
 .medstream-simple-list-table th[data-focus-id="header-patients"],
@@ -3488,6 +3594,10 @@ body {
   gap: 12px;
 }
 
+.medstream-department-controls-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .medstream-clinical-controls-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
@@ -4210,6 +4320,23 @@ input[type="search"]::-webkit-search-cancel-button {
 
   .medstream-streaming-summary-tile:nth-child(n + 4)::before {
     display: none;
+  }
+
+  .medstream-streaming-vitals-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .medstream-streaming-vital-panel,
+  .medstream-streaming-vital-panel:first-child,
+  .medstream-streaming-vital-panel:last-child {
+    border-left: 0;
+    padding: 0;
+  }
+
+  .medstream-streaming-vital-panel + .medstream-streaming-vital-panel {
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 18px;
+    margin-top: 18px;
   }
 
   .medstream-comparison-chart-grid > .medstream-chart-panel + .medstream-chart-panel {
@@ -6027,6 +6154,10 @@ textarea::placeholder {
   font-size: 14px;
   line-height: 1.5;
   padding: 16px;
+}
+
+.deactivate-account-confirmation-field {
+  margin-top: 16px;
 }
 
 .medstream-modal-summary p {

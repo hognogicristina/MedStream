@@ -333,6 +333,7 @@ export default function BatchMetricsPage() {
   const [isApplyingSchedule, setIsApplyingSchedule] = useState(false)
   const [departmentsPage, setDepartmentsPage] = useState(1)
   const [diagnosesPage, setDiagnosesPage] = useState(1)
+  const [insightsFallbackPage, setInsightsFallbackPage] = useState(1)
   const [isRunningBatch, setIsRunningBatch] = useState(false)
   const [showRunStartedBanner, setShowRunStartedBanner] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -359,7 +360,11 @@ export default function BatchMetricsPage() {
   useEffect(() => {
     let active = true
 
-    const loadData = async (nextDepartmentsPage = departmentsPage, nextDiagnosesPage = diagnosesPage) => {
+    const loadData = async (
+      nextDepartmentsPage = departmentsPage,
+      nextDiagnosesPage = diagnosesPage,
+      nextInsightsFallbackPage = insightsFallbackPage,
+    ) => {
       if (!hasLoadedInitialDataRef.current) {
         setIsLoading(true)
       }
@@ -367,6 +372,7 @@ export default function BatchMetricsPage() {
         const [metricsResponse, insightsResponse, scheduleResponse, comparisonResponse] = await Promise.all([
           getBatchMetrics(),
           getBatchInsights({
+            page: nextInsightsFallbackPage,
             page_size: PAGE_SIZE,
             departments_page: nextDepartmentsPage,
             diagnoses_page: nextDiagnosesPage,
@@ -393,13 +399,9 @@ export default function BatchMetricsPage() {
           if (shouldReplaceMetrics) {
             lastBatchTimestampRef.current = incomingTimestamp
             setMetrics(nextMetrics)
-            if (nextInsights) {
-              setInsights(nextInsights)
-            }
           }
-        } else {
-          setInsights((current) => current || nextInsights || EMPTY_INSIGHTS)
         }
+        setInsights(nextInsights || EMPTY_INSIGHTS)
 
         syncScheduleForm(nextSchedule)
       } catch (loadError) {
@@ -421,7 +423,7 @@ export default function BatchMetricsPage() {
       active = false
       window.clearInterval(intervalId)
     }
-  }, [departmentsPage, diagnosesPage, notifyError])
+  }, [departmentsPage, diagnosesPage, insightsFallbackPage, notifyError])
 
   useEffect(() => {
     let active = true
@@ -480,10 +482,15 @@ export default function BatchMetricsPage() {
     return () => window.clearTimeout(timeoutId)
   }, [showRunStartedBanner])
 
-  const refreshData = async (nextDepartmentsPage = departmentsPage, nextDiagnosesPage = diagnosesPage) => {
+  const refreshData = async (
+    nextDepartmentsPage = departmentsPage,
+    nextDiagnosesPage = diagnosesPage,
+    nextInsightsFallbackPage = insightsFallbackPage,
+  ) => {
     const [metricsResponse, insightsResponse, batchStatusResponse, scheduleResponse] = await Promise.all([
       getBatchMetrics(),
       getBatchInsights({
+        page: nextInsightsFallbackPage,
         page_size: PAGE_SIZE,
         departments_page: nextDepartmentsPage,
         diagnoses_page: nextDiagnosesPage,
@@ -498,8 +505,8 @@ export default function BatchMetricsPage() {
     if (nextMetrics?.timestamp) {
       lastBatchTimestampRef.current = nextMetrics.timestamp
       setMetrics(nextMetrics)
-      setInsights(nextInsights)
     }
+    setInsights(nextInsights || EMPTY_INSIGHTS)
 
     setBatchProgress(getResponseData(batchStatusResponse))
     syncScheduleForm(getResponseData(scheduleResponse))
@@ -696,6 +703,16 @@ export default function BatchMetricsPage() {
   const batchRunState = progressLabel
   const batchRunTone = batchRunState.toLowerCase()
   const isBatchRunActionDisabled = isRunningBatch || Boolean(batchProgress.is_running)
+
+  const handleDepartmentsPageChange = (nextPage) => {
+    setDepartmentsPage(nextPage)
+    setInsightsFallbackPage(nextPage)
+  }
+
+  const handleDiagnosesPageChange = (nextPage) => {
+    setDiagnosesPage(nextPage)
+    setInsightsFallbackPage(nextPage)
+  }
 
   const handleExportAllMetrics = () => {
     const exportTimestamp = new Date().toISOString()
@@ -1010,9 +1027,9 @@ export default function BatchMetricsPage() {
 
               <div className="mt-4 flex justify-end">
               <Pagination
-                currentPageIndex={patientsPerDepartment.page || 1}
+                currentPageIndex={departmentsPage}
                 pagesCount={departmentsTotalPages}
-                onChange={({detail}) => setDepartmentsPage(detail.currentPageIndex)}
+                onChange={({detail}) => handleDepartmentsPageChange(detail.currentPageIndex)}
               />
               </div>
             </Container>
@@ -1042,9 +1059,9 @@ export default function BatchMetricsPage() {
               </div>
               <div className="mt-2 flex justify-end">
               <Pagination
-                currentPageIndex={topDiagnosis.page || 1}
+                currentPageIndex={diagnosesPage}
                 pagesCount={diagnosesTotalPages}
-                onChange={({detail}) => setDiagnosesPage(detail.currentPageIndex)}
+                onChange={({detail}) => handleDiagnosesPageChange(detail.currentPageIndex)}
               />
               </div>
             </Container>

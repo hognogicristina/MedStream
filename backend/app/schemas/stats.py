@@ -65,6 +65,7 @@ class ComparisonMetricsRead(BaseModel):
     execution_time_ms: float
     generated_discharge_summaries_count: int | None = None
     pending_discharge_summaries_count: int | None = None
+    recent_vitals: list[dict] | None = None
 
 
 class MetricsComparisonRead(BaseModel):

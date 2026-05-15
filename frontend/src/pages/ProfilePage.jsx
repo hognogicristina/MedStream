@@ -1316,7 +1316,7 @@ export default function ProfilePage() {
               This action deactivates the doctor account and automatically reassigns your patients to another doctor from the same
               department.
             </div>
-            <div className="login-field">
+            <div className="login-field deactivate-account-confirmation-field">
               <label className="login-label" htmlFor="deactivate-account-confirmation">
                 Type "{DEACTIVATE_ACCOUNT_CONFIRMATION}" to confirm.
               </label>
@@ -1324,6 +1324,7 @@ export default function ProfilePage() {
                 id="deactivate-account-confirmation"
                 type="text"
                 className="login-input"
+                placeholder={DEACTIVATE_ACCOUNT_CONFIRMATION}
                 value={deleteConfirmationText}
                 onChange={(event) => setDeleteConfirmationText(event.target.value)}
                 disabled={isDeletingAccount}

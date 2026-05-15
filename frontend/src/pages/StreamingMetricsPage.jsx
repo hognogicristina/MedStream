@@ -27,6 +27,51 @@ const ALERTS_PAGE_SIZE = 2
 const ALERTS_TELEMETRY_SIZE = 10
 const ALERTS_WINDOW_SECONDS = 60
 
+const VITAL_STREAMS = [
+  {
+    key: "heart_rate",
+    avgKey: "avg_heart_rate",
+    title: "Heart Rate",
+    color: "#60a5fa",
+    unit: "bpm",
+    yDomain: [40, 150],
+    thresholds: [
+      {title: "High > 110", y: 110, color: "#f97316"},
+      {title: "Critical > 130", y: 130, color: "#dc2626"},
+    ],
+    valueFormatter: (value) => `${value.toFixed(0)} bpm`,
+    yTickFormatter: (value) => String(Math.round(value)),
+  },
+  {
+    key: "oxygen_saturation",
+    avgKey: "avg_oxygen",
+    title: "Oxygen Saturation",
+    color: "#22c55e",
+    unit: "%",
+    yDomain: [84, 100],
+    thresholds: [
+      {title: "Low < 92", y: 92, color: "#f97316"},
+      {title: "Critical < 88", y: 88, color: "#dc2626"},
+    ],
+    valueFormatter: (value) => `${value.toFixed(0)}%`,
+    yTickFormatter: (value) => String(Math.round(value)),
+  },
+  {
+    key: "temperature",
+    avgKey: "avg_temperature",
+    title: "Temperature",
+    color: "#f97316",
+    unit: "°C",
+    yDomain: [35, 40],
+    thresholds: [
+      {title: "High > 38", y: 38, color: "#f97316"},
+      {title: "Critical > 39", y: 39, color: "#dc2626"},
+    ],
+    valueFormatter: (value) => `${value.toFixed(1)}°C`,
+    yTickFormatter: (value) => value.toFixed(1),
+  },
+]
+
 function formatMetric(value, unit = "") {
   const safeValue = Number.isFinite(value) ? value : 0
   return `${safeValue.toFixed(2)}${unit}`
@@ -54,9 +99,40 @@ function formatAlertTime(value) {
   })
 }
 
+function formatStreamTime(value, fallback = "") {
+  if (!value) {
+    return fallback
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return fallback
+  }
+
+  return date.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
+}
+
 function toMillis(value) {
   const parsed = new Date(value).getTime()
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function normalizeRecentVitals(rawVitals) {
+  return (Array.isArray(rawVitals) ? rawVitals : [])
+    .map((point) => ({
+      time: formatStreamTime(point?.recorded_at),
+      recorded_at: point?.recorded_at,
+      patient_id: point?.patient_id,
+      heart_rate: Number(point?.heart_rate),
+      oxygen_saturation: Number(point?.oxygen_saturation),
+      temperature: Number(point?.temperature),
+    }))
+    .filter((point) => (
+      Number.isFinite(point.heart_rate)
+      && Number.isFinite(point.oxygen_saturation)
+      && Number.isFinite(point.temperature)
+    ))
+    .slice(-MAX_POINTS)
 }
 
 function getPaddedAlertsRateYMax(points) {
@@ -76,6 +152,7 @@ export default function StreamingMetricsPage() {
   const [, setSeenAlertIds] = useState({})
   const [, setLastAlertTime] = useState(null)
   const [highlightedAlertsRateSeries, setHighlightedAlertsRateSeries] = useState(null)
+  const [highlightedVitalSeries, setHighlightedVitalSeries] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -113,16 +190,21 @@ export default function StreamingMetricsPage() {
         setRecentAlerts(nextAlerts)
 
         const tickTime = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
+        const nextVitalHistory = normalizeRecentVitals(nextMetrics.recent_vitals)
 
-        setVitalsHistory((current) => [
-          ...current.slice(-(MAX_POINTS - 1)),
-          {
-            time: tickTime,
-            heart_rate: nextMetrics.avg_heart_rate,
-            oxygen_saturation: nextMetrics.avg_oxygen,
-            temperature: nextMetrics.avg_temperature,
-          },
-        ])
+        if (nextVitalHistory.length) {
+          setVitalsHistory(nextVitalHistory)
+        } else {
+          setVitalsHistory((current) => [
+            ...current.slice(-(MAX_POINTS - 1)),
+            {
+              time: tickTime,
+              heart_rate: nextMetrics.avg_heart_rate,
+              oxygen_saturation: nextMetrics.avg_oxygen,
+              temperature: nextMetrics.avg_temperature,
+            },
+          ])
+        }
 
         const telemetryItems = Array.isArray(telemetryAlerts.items) ? telemetryAlerts.items : []
         const newestAlert = telemetryItems[0]
@@ -200,6 +282,7 @@ export default function StreamingMetricsPage() {
     avg_temperature: 0,
     alerts: 0,
     execution_time_ms: 0,
+    recent_vitals: [],
   }
 
   const latestRatePoint = alertsRateHistory[alertsRateHistory.length - 1] || {
@@ -254,6 +337,48 @@ export default function StreamingMetricsPage() {
     downloadCSV("streaming_all_metrics.csv", rows)
   }
 
+  const exportVitalStreams = () => {
+    const exportTimestamp = new Date().toISOString()
+    const summaryRows = VITAL_STREAMS.map((vital) => {
+      const values = vitalsHistory
+        .map((point) => Number(point?.[vital.key]))
+        .filter(Number.isFinite)
+      const latestValue = values[values.length - 1]
+      const averageValue = values.length
+        ? values.reduce((sum, value) => sum + value, 0) / values.length
+        : Number(data[vital.avgKey]) || 0
+
+      return [
+        vital.title,
+        vital.unit,
+        Number.isFinite(latestValue) ? Number(latestValue.toFixed(2)) : "",
+        Number(averageValue.toFixed(2)),
+        values.length ? Number(Math.min(...values).toFixed(2)) : "",
+        values.length ? Number(Math.max(...values).toFixed(2)) : "",
+        vital.thresholds.map((threshold) => threshold.title).join("; "),
+        vitalsHistory.length,
+      ]
+    })
+
+    const historyRows = vitalsHistory.map((point) => [
+      point.recorded_at || point.time || "",
+      point.patient_id || "",
+      Number.isFinite(Number(point.heart_rate)) ? Number(Number(point.heart_rate).toFixed(2)) : "",
+      Number.isFinite(Number(point.oxygen_saturation)) ? Number(Number(point.oxygen_saturation).toFixed(2)) : "",
+      Number.isFinite(Number(point.temperature)) ? Number(Number(point.temperature).toFixed(2)) : "",
+    ])
+
+    downloadCSV("streaming_vital_streams.csv", [
+      ["exported_at", exportTimestamp],
+      [],
+      ["metric", "unit", "latest", "average", "minimum", "maximum", "alert_thresholds", "visible_points"],
+      ...summaryRows,
+      [],
+      ["timestamp", "patient_id", "heart_rate_bpm", "oxygen_saturation_percent", "temperature_celsius"],
+      ...historyRows,
+    ])
+  }
+
   return (
     <ContentLayout>
       <SpaceBetween size="m">
@@ -293,9 +418,9 @@ export default function StreamingMetricsPage() {
                   header={
                     <Header
                       variant="h2"
-                      description="Alerts are appended as soon as threshold checks trigger."
+                      description="Alerts are appended with their metric, severity, patient, and processing time."
                     >
-                      Streaming alert feed
+                      Generated alert timeline
                     </Header>
                   }
                 >
@@ -391,23 +516,99 @@ export default function StreamingMetricsPage() {
                 header={
                   <Header
                     variant="h2"
-                    description="Heart rate, oxygen saturation, and temperature context for alert generation in the streaming pipeline."
+                    description="Each stream uses its own clinical scale and alert thresholds, so changes are visible as events arrive."
+                    actions={
+                      <Button iconName="download" onClick={exportVitalStreams}>Export metrics</Button>
+                    }
                   >
-                    Vital signs trend
+                    Vital streams by alert rule
                   </Header>
                 }
               >
-                <div className="medstream-chart-panel">
-                  <AwsLineChart
-                    ariaLabel="Vital signs trend"
-                    data={vitalsHistory}
-                    series={[
-                      {key: "heart_rate", title: "Heart Rate", color: "#60a5fa", valueFormatter: (value) => `${value.toFixed(0)} bpm`},
-                      {key: "oxygen_saturation", title: "Oxygen Saturation", color: "#22c55e", valueFormatter: (value) => `${value.toFixed(0)}%`},
-                      {key: "temperature", title: "Temperature", color: "#f97316", valueFormatter: (value) => `${value.toFixed(1)}°C`},
-                    ]}
-                    xTitle="Time"
-                  />
+                <div className="medstream-streaming-vitals-grid">
+                  {VITAL_STREAMS.map((vital) => {
+                    const latestPoint = vitalsHistory[vitalsHistory.length - 1]
+                    const latestValue = Number(latestPoint?.[vital.key])
+                    const fallbackValue = Number(data[vital.avgKey])
+                    const displayValue = Number.isFinite(latestValue) ? latestValue : fallbackValue
+
+                    return (
+                      <section className="medstream-streaming-vital-panel" key={vital.key} aria-label={`${vital.title} stream`}>
+                        <div className="medstream-streaming-vital-panel-header">
+                          <div>
+                            <Box color="text-body-secondary" variant="awsui-key-label">{vital.title}</Box>
+                            <div className="medstream-streaming-vital-value">
+                              {Number.isFinite(displayValue) ? vital.valueFormatter(displayValue) : "--"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="medstream-streaming-vital-rules" aria-label={`${vital.title} alert rules`}>
+                          {vital.thresholds.map((threshold) => (
+                            <span key={threshold.title} style={{"--medstream-rule-color": threshold.color}}>
+                              {threshold.title}
+                            </span>
+                          ))}
+                        </div>
+                        <div
+                          className={[
+                            "medstream-streaming-vital-chart",
+                            highlightedVitalSeries === vital.title ? "medstream-streaming-vital-chart-active" : "",
+                          ].filter(Boolean).join(" ")}
+                          style={{"--medstream-vital-series-color": vital.color}}
+                        >
+                          <AwsLineChart
+                            ariaLabel={`${vital.title} streaming trend`}
+                            data={vitalsHistory}
+                            height={170}
+                            highlightedSeriesTitle={highlightedVitalSeries === vital.title ? vital.title : null}
+                            hideLegend
+                            onHighlightedSeriesTitleChange={setHighlightedVitalSeries}
+                            series={[
+                              {
+                                key: vital.key,
+                                title: vital.title,
+                                color: vital.color,
+                                valueFormatter: vital.valueFormatter,
+                              },
+                            ]}
+                            thresholds={vital.thresholds}
+                            xTitle="Time"
+                            yDomain={vital.yDomain}
+                            yTickFormatter={vital.yTickFormatter}
+                            yTitle={vital.unit}
+                          />
+                        </div>
+                      </section>
+                    )
+                  })}
+                </div>
+                <div
+                  className="medstream-alerts-rate-legend medstream-streaming-vitals-legend"
+                  role="toolbar"
+                  aria-label="Legend"
+                  onMouseLeave={() => setHighlightedVitalSeries(null)}
+                >
+                  {VITAL_STREAMS.map((vital) => (
+                    <button
+                      className={[
+                        "medstream-alerts-rate-legend-item",
+                        highlightedVitalSeries === vital.title ? "medstream-alerts-rate-legend-item-active" : "",
+                      ].filter(Boolean).join(" ")}
+                      key={vital.key}
+                      type="button"
+                      aria-pressed={highlightedVitalSeries === vital.title}
+                      onBlur={() => setHighlightedVitalSeries(null)}
+                      onFocus={() => setHighlightedVitalSeries(vital.title)}
+                      onMouseEnter={() => setHighlightedVitalSeries(vital.title)}
+                    >
+                      <span
+                        className="medstream-alerts-rate-legend-line"
+                        style={{backgroundColor: vital.color}}
+                        aria-hidden="true"
+                      />
+                      {vital.title}
+                    </button>
+                  ))}
                 </div>
               </Container>
             </div>

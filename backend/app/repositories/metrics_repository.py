@@ -96,13 +96,14 @@ class StreamingMetricsStore:
             )
             self._purge_expired_alerts(cutoff)
 
-    def snapshot(self):
+    def snapshot(self, vitals_limit: int = 30):
         cutoff = utc_now() - WINDOW_DELTA
 
         with self._lock:
             self._purge_expired(cutoff)
             self._purge_expired_alerts(cutoff)
             count = len(self._vitals)
+            recent_vitals = list(self._vitals)[-max(1, vitals_limit):]
 
             return {
                 "avg_heart_rate": validate_metric_value(self._heart_rate_sum / count) if count else 0.0,
@@ -111,6 +112,16 @@ class StreamingMetricsStore:
                 "total_alerts": len(self._alerts),
                 "active_patients": len(self._patient_counts),
                 "execution_time_ms": self._last_execution_time_ms,
+                "recent_vitals": [
+                    {
+                        "recorded_at": to_utc(recorded_at),
+                        "patient_id": patient_id,
+                        "heart_rate": heart_rate,
+                        "oxygen_saturation": oxygen,
+                        "temperature": temperature,
+                    }
+                    for recorded_at, patient_id, heart_rate, oxygen, temperature, _ in recent_vitals
+                ],
             }
 
     def alerts_snapshot(self, page: int, page_size: int):

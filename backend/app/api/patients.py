@@ -103,9 +103,10 @@ def list_patients(
     department: str | None = Query(default=None),
     alert_presence: str | None = Query(default="all", pattern="^(all|critical|high|normal|any|none)$"),
     status: str | None = Query(default="all", pattern="^(all|admitted|discharged)$"),
+    treatment_outcome: str | None = Query(default="all", pattern="^(all|effective|improving|ineffective)$"),
 ):
     try:
-        patients = patient_service.list_patients(condition_id, department, alert_presence, status)
+        patients = patient_service.list_patients(condition_id, department, alert_presence, status, treatment_outcome)
         return success_response("Patients retrieved successfully.", serialize_many(patients, PatientRead))
     except Exception as error:
         raise_http_from_error(error)

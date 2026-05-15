@@ -38,6 +38,12 @@ const STATUS_FILTERS = [
   {value: "discharged", label: "Discharged"},
 ]
 
+const TREATMENT_OUTCOME_FILTERS = [
+  {value: "all", label: "All treatment outcomes"},
+  {value: "effective", label: "Had effective treatments"},
+  {value: "ineffective", label: "Had ineffective treatments"},
+]
+
 const SORT_OPTIONS = [
   {value: "status_then_name", label: "Admitted first, then name"},
   {value: "patient_name", label: "Patient name"},
@@ -179,6 +185,7 @@ export default function DepartmentPage() {
   const [departments, setDepartments] = useState([])
   const [severityFilter, setSeverityFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [treatmentOutcomeFilter, setTreatmentOutcomeFilter] = useState("all")
   const [sortOrder, setSortOrder] = useState("status_then_name")
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -204,6 +211,7 @@ export default function DepartmentPage() {
         const patientParams = {
           alert_presence: severityFilter,
           status: statusFilter,
+          treatment_outcome: treatmentOutcomeFilter,
         }
 
         if (!isAllDepartments) {
@@ -237,11 +245,11 @@ export default function DepartmentPage() {
     }
 
     loadDepartmentData()
-  }, [departmentName, isAllDepartments, notifyError, severityFilter, statusFilter])
+  }, [departmentName, isAllDepartments, notifyError, severityFilter, statusFilter, treatmentOutcomeFilter])
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [departmentName, severityFilter, statusFilter, sortOrder])
+  }, [departmentName, severityFilter, statusFilter, treatmentOutcomeFilter, sortOrder])
 
   const departmentOptions = [
     {label: "All departments", value: ALL_DEPARTMENTS_VALUE},
@@ -500,7 +508,7 @@ export default function DepartmentPage() {
         </Container>
 
         <Container header={<Header variant="h2">Department controls</Header>}>
-          <div className="medstream-controls-grid">
+          <div className="medstream-controls-grid medstream-department-controls-grid">
             <Select
               selectedOption={getSelectedOption(departmentOptions, selectedDepartmentValue)}
               options={departmentOptions}
@@ -526,6 +534,12 @@ export default function DepartmentPage() {
               options={STATUS_FILTERS}
               selectedAriaLabel="Selected patient status"
               onChange={({detail}) => setStatusFilter(detail.selectedOption.value || "all")}
+            />
+            <Select
+              selectedOption={getSelectedOption(TREATMENT_OUTCOME_FILTERS, treatmentOutcomeFilter)}
+              options={TREATMENT_OUTCOME_FILTERS}
+              selectedAriaLabel="Selected treatment outcome"
+              onChange={({detail}) => setTreatmentOutcomeFilter(detail.selectedOption.value || "all")}
             />
             <Select
               selectedOption={getSelectedOption(SORT_OPTIONS, sortOrder)}

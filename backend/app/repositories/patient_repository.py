@@ -1527,6 +1527,7 @@ class PatientRepository:
         department: str | None = None,
         alert_presence: str | None = None,
         status: str | None = None,
+        treatment_outcome: str | None = None,
     ) -> list[Patient]:
         with SessionLocal() as db:
             patient_query = select(Patient).options(joinedload(Patient.address))
@@ -1547,6 +1548,10 @@ class PatientRepository:
                 patient_query = patient_query.where(Patient.is_discharged.is_(True))
 
             patients = db.execute(patient_query.order_by(desc(Patient.id))).scalars().all()
+
+            normalized_treatment_outcome = str(treatment_outcome or "all").strip().lower()
+            if normalized_treatment_outcome not in {"all", ""} and patients:
+                patients = self._filter_patients_by_treatment_outcome(db, patients, normalized_treatment_outcome)
 
             normalized_alert_presence = str(alert_presence or "all").strip().lower()
             if normalized_alert_presence in {"all", ""} or not patients:
@@ -1571,6 +1576,52 @@ class PatientRepository:
                 return current_level == normalized_alert_presence
 
             return [patient for patient in patients if matches_alert_filter(patient)]
+
+    @classmethod
+    def _filter_patients_by_treatment_outcome(cls, db, patients: list[Patient], outcome: str) -> list[Patient]:
+        patient_ids = [patient.id for patient in patients]
+        medications = db.execute(
+            select(PatientMedication)
+            .where(PatientMedication.patient_id.in_(patient_ids))
+            .order_by(PatientMedication.created_at.asc(), PatientMedication.id.asc())
+        ).scalars().all()
+        vitals = db.execute(
+            select(Vital)
+            .where(Vital.patient_id.in_(patient_ids))
+            .order_by(Vital.recorded_at.asc(), Vital.id.asc())
+        ).scalars().all()
+        alerts = db.execute(
+            select(Alert)
+            .where(Alert.patient_id.in_(patient_ids))
+            .order_by(Alert.created_at.asc(), Alert.id.asc())
+        ).scalars().all()
+
+        medications_by_patient: dict[int, list[PatientMedication]] = {}
+        vitals_by_patient: dict[int, list[Vital]] = {}
+        alerts_by_patient: dict[int, list[Alert]] = {}
+
+        for medication in medications:
+            medications_by_patient.setdefault(medication.patient_id, []).append(medication)
+        for vital in vitals:
+            vitals_by_patient.setdefault(vital.patient_id, []).append(vital)
+        for alert in alerts:
+            alerts_by_patient.setdefault(alert.patient_id, []).append(alert)
+
+        def has_matching_treatment_outcome(patient: Patient) -> bool:
+            treatment_actions = cls._build_treatment_actions(medications_by_patient.get(patient.id, []))
+            for action_index in range(len(treatment_actions)):
+                evaluation = cls._evaluate_treatment_action(
+                    patient=patient,
+                    action_index=action_index,
+                    treatment_actions=treatment_actions,
+                    sequence_vitals=vitals_by_patient.get(patient.id, []),
+                    sequence_alerts=alerts_by_patient.get(patient.id, []),
+                )
+                if str(evaluation.get("outcome") or "").strip().lower() == outcome:
+                    return True
+            return False
+
+        return [patient for patient in patients if has_matching_treatment_outcome(patient)]
 
     def search_patients_by_cnp(self, cnp: str, limit: int = 10) -> list[Patient]:
         normalized_cnp = (cnp or "").strip()

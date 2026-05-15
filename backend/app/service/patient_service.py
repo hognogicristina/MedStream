@@ -13,12 +13,14 @@ class PatientService:
         department: str | None = None,
         alert_presence: str | None = None,
         status: str | None = None,
+        treatment_outcome: str | None = None,
     ):
         return self.repository.list_patients(
             condition_id=condition_id,
             department=department,
             alert_presence=alert_presence,
             status=status,
+            treatment_outcome=treatment_outcome,
         )
 
     def search_patients_by_cnp(self, cnp: str):
