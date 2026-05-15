@@ -1245,7 +1245,7 @@ export default function PatientTreatmentAnalysisSection({
               <div className="medstream-chart-panel medstream-treatment-chart-panel">
                 <AreaChart
                   ariaLabel="Treatment outcome trend"
-                  height={210}
+                  height={240}
                   hideFilter
                   i18nStrings={AREA_CHART_I18N_STRINGS}
                   series={treatmentOutcomeAreaSeries}
