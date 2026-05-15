@@ -330,6 +330,15 @@ export default function AlertsPage() {
       return
     }
 
+    if (scopedCnp && next !== scopedCnp) {
+      if (next.length === 13 && /^\d{13}$/.test(next)) {
+        setSearchParams({cnp: next})
+      } else {
+        setSearchParams({})
+      }
+      return
+    }
+
     if (next.length === 13 && /^\d{13}$/.test(next)) {
       setSearchParams({cnp: next})
     }
@@ -483,7 +492,7 @@ export default function AlertsPage() {
                       if (!patient) {
                         return patientNameById[item.patient_id] || "Unknown patient"
                       }
-                      return <Button variant="inline-link" onClick={() => navigate(`/patient/${patient.id}`)}>{formatPatientFullName(patient)}</Button>
+                      return <Button variant="inline-link" onClick={() => navigate(`/patient/${patient.id}?from=alerts`)}>{formatPatientFullName(patient)}</Button>
                     },
                   },
                   {

@@ -861,7 +861,7 @@ export default function ProfilePage() {
                           <div className="medstream-profile-row-main">
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}`}>
+                                <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}?from=profile`}>
                                   {formatPatientFullName(patient)}
                                 </Link>
                                 {patient.is_discharged && (
@@ -1006,12 +1006,12 @@ export default function ProfilePage() {
                         <div className="login-field">
                           <label className="login-label" htmlFor="first_name">First Name</label>
                           <input id="first_name" name="first_name" type="text" value={form.first_name} onChange={handleFormChange}
-                                 className="login-input" placeholder="Example: Elena" required/>
+                                 className="login-input" placeholder="Elena" required/>
                         </div>
                         <div className="login-field">
                           <label className="login-label" htmlFor="last_name">Last Name</label>
                           <input id="last_name" name="last_name" type="text" value={form.last_name} onChange={handleFormChange}
-                                 className="login-input" placeholder="Example: Popescu" required/>
+                                 className="login-input" placeholder="Popescu" required/>
                         </div>
                         <div className="login-field">
                           <span className="medstream-label-with-help">
@@ -1038,7 +1038,7 @@ export default function ProfilePage() {
                         <div className="login-field">
                           <label className="login-label" htmlFor="license_number">License Number</label>
                           <input id="license_number" name="license_number" type="text" value={form.license_number} onChange={handleFormChange}
-                                 className="login-input" placeholder="Example: DOC-20458" required/>
+                                 className="login-input" placeholder="DOC-20458" required/>
                         </div>
                         <div className="login-field">
                           <label className="login-label" htmlFor="doctor-birth-date">Birth Date</label>
@@ -1096,7 +1096,7 @@ export default function ProfilePage() {
                           value={assignmentQuery}
                           onChange={(event) => setAssignmentQuery(event.target.value)}
                           className="login-input"
-                          placeholder="Example: 6010101123451 or Popescu Andrei"
+                          placeholder="6010101123451 or Popescu Andrei"
                           autoComplete="off"
                           disabled={filteredAssignedPatients.length === 0 || isAssigningPatient}
                         />
@@ -1167,7 +1167,7 @@ export default function ProfilePage() {
                           value={emailInput}
                           onChange={(event) => setEmailInput(event.target.value)}
                           className="login-input"
-                          placeholder="Example: doctor@medstream.local"
+                          placeholder="doctor@medstream.local"
                           required
                         />
                       </div>

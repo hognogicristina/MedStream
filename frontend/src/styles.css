@@ -305,6 +305,7 @@ body {
   align-items: center;
   gap: 8px;
   background: var(--surface-1);
+  box-shadow: inset 0 2px 0 var(--border-primary);
   overflow: visible;
   padding: 16px 8px 24px;
 }
@@ -5378,6 +5379,13 @@ textarea.console-input {
 [class*="dropdown-content-wrapper"] [role="option"] * {
   background-color: transparent !important;
   color: var(--input-avc-text) !important;
+}
+
+[class*="dropdown-content-wrapper"] [role="option"],
+[class*="dropdown-content-wrapper"] [class*="selectable-item"],
+[class*="dropdown-content-wrapper"] [role="menuitem"],
+[class*="dropdown-content-wrapper"] [class*="menu-item"] {
+  border-radius: 6px !important;
 }
 
 [class*="dropdown-content-wrapper"] [role="option"][aria-selected="true"] {

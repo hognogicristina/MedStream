@@ -271,7 +271,7 @@ export default function ActivityDialog({
               type="text"
               value={form.title}
               onChange={(value) => setForm((current) => ({...current, title: value}))}
-              placeholder="Example: Post-op monitoring review"
+              placeholder="Post-op monitoring review"
               required
             />
           </div>

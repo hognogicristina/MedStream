@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useMemo, useState} from "react"
-import {useNavigate, useParams} from "react-router-dom"
+import {useLocation, useNavigate, useParams} from "react-router-dom"
 import {
   Alert,
   Badge,
@@ -89,6 +89,7 @@ const PATIENT_VITALS_LEGEND_ITEMS = [
 
 export default function PatientPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const {notifyError, notifySuccess} = useNotifications()
   const {token} = useAuth()
   const {id} = useParams()
@@ -453,6 +454,28 @@ export default function PatientPage() {
     return "--"
   })()
 
+  const buildPatientAlertsHref = () => {
+    const params = new URLSearchParams({
+      cnp: patient.cnp,
+      patient: patientFullName,
+      sourcePatientId: String(id),
+      from: "patient",
+    })
+    const patientSourceParams = new URLSearchParams(location.search)
+    const patientSource = patientSourceParams.get("from")
+    const departmentSource = patientSourceParams.get("department")
+
+    if (patientSource) {
+      params.set("patientFrom", patientSource)
+    }
+
+    if (departmentSource) {
+      params.set("department", departmentSource)
+    }
+
+    return `/alerts?${params.toString()}`
+  }
+
   const patientMetadata = [
     {label: "CNP", value: patient?.cnp || "--"},
     {label: "Birth Date", value: patientBirthDate},
@@ -467,6 +490,8 @@ export default function PatientPage() {
   ]
 
   const handlePatientAction = ({detail}) => {
+    const sourceSearch = location.search || ""
+
     if (detail.id === "edit") {
       setIsEditDialogOpen(true)
     }
@@ -474,13 +499,13 @@ export default function PatientPage() {
       setIsTransferDialogOpen(true)
     }
     if (detail.id === "clinical-records") {
-      navigate(`/patients/${id}/clinical-records`)
+      navigate(`/patients/${id}/clinical-records${sourceSearch}`)
     }
     if (detail.id === "admission-history") {
-      navigate(`/patients/${id}/admission-history`)
+      navigate(`/patients/${id}/admission-history${sourceSearch}`)
     }
     if (detail.id === "treatment-analysis") {
-      navigate(`/patients/${id}/analysis`)
+      navigate(`/patients/${id}/analysis${sourceSearch}`)
     }
   }
 
@@ -690,7 +715,13 @@ export default function PatientPage() {
                   header={
                     <Header
                       variant="h2"
-                      actions={patient?.cnp ? <Button onClick={() => navigate(`/alerts?cnp=${encodeURIComponent(patient.cnp)}&patient=${encodeURIComponent(patientFullName)}`)}>View alerts feed</Button> : null}
+                      actions={patient?.cnp ? (
+                        <Button
+                          onClick={() => navigate(buildPatientAlertsHref())}
+                        >
+                          View alerts feed
+                        </Button>
+                      ) : null}
                     >
                       Patient alerts
                     </Header>

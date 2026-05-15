@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react"
-import {useNavigate, useParams} from "react-router-dom"
+import {useLocation, useNavigate, useParams} from "react-router-dom"
 import {
   Badge,
   Button,
@@ -18,6 +18,7 @@ import LoadingSpinner from "../components/LoadingSpinner.jsx"
 export default function PatientTreatmentAnalysisPage() {
   const {id} = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const {notifyError} = useNotifications()
   const [patient, setPatient] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -80,7 +81,7 @@ export default function PatientTreatmentAnalysisPage() {
                 </span>
               </div>
             </div>
-            <Button onClick={() => navigate(`/patients/${id}/post-discharge-summary`)}>
+            <Button onClick={() => navigate(`/patients/${id}/post-discharge-summary${location.search || ""}`)}>
               Post-discharge summary
             </Button>
           </div>

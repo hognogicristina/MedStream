@@ -88,7 +88,7 @@ export default function ResetPasswordPage() {
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
                   className="login-input"
-                  placeholder={"Example: MedstreamSecure123"}
+                  placeholder={"MedstreamSecure123"}
                   required
                 />
               </div>

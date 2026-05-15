@@ -207,12 +207,12 @@ export default function AddPatientPage() {
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-first-name">{"First Name"}</label>
                     <input id="patient-first-name" type="text" name="first_name" value={form.first_name} onChange={handleChange}
-                           placeholder={"Example: Andrei"} className="login-input" required/>
+                           placeholder={"Andrei"} className="login-input" required/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-last-name">{"Last Name"}</label>
                     <input id="patient-last-name" type="text" name="last_name" value={form.last_name} onChange={handleChange}
-                           placeholder={"Example: Popescu"} className="login-input" required/>
+                           placeholder={"Popescu"} className="login-input" required/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-gender">{"Gender"}</label>
@@ -239,7 +239,7 @@ export default function AddPatientPage() {
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-cnp">CNP</label>
                     <input id="patient-cnp" type="text" name="cnp" value={form.cnp} onChange={handleChange}
-                           placeholder={"Example: 6010101123451"} className="login-input" required/>
+                           placeholder={"6010101123451"} className="login-input" required/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-phone-number">{"Phone Number"}</label>
@@ -288,17 +288,17 @@ export default function AddPatientPage() {
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-street">{"Street"}</label>
                     <input id="add-street" type="text" name="street" value={address.street} onChange={handleAddressChange}
-                           placeholder={"Example: Liberty Street"} className="login-input" required/>
+                           placeholder={"Liberty Street"} className="login-input" required/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-number">{"Number"}</label>
                     <input id="add-number" type="text" name="number" value={address.number} onChange={handleAddressChange}
-                           placeholder={"Example: 12A"} className="login-input" required/>
+                           placeholder={"12A"} className="login-input" required/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-apartment">{"Apartment"}</label>
                     <input id="add-apartment" type="text" name="apartment" value={address.apartment} onChange={handleAddressChange}
-                           placeholder={"Example: 24"} className="login-input"/>
+                           placeholder={"24"} className="login-input"/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-county">{"County"}</label>

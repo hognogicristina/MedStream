@@ -20,6 +20,7 @@ import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {formatPatientFullName} from "../utils/patients.js"
 import {alertTypeToVital, getAlertSeverityLevel, normalizeAlertType} from "../utils/alerts.js"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 
 const PAGE_SIZE = 10
 const ALL_DEPARTMENTS_VALUE = "__all_departments__"
@@ -347,6 +348,13 @@ export default function DepartmentPage() {
 
   const pagesCount = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE))
   const paginatedRows = sortedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const getPatientHref = (patientId) => {
+    if (isAllDepartments) {
+      return `/patient/${patientId}?from=departments`
+    }
+
+    return `/patient/${patientId}?from=department&department=${encodeURIComponent(departmentName)}`
+  }
   const patientTableColumns = [
     {
       id: "patient",
@@ -354,7 +362,7 @@ export default function DepartmentPage() {
       width: isAllDepartments ? 150 : undefined,
       minWidth: isAllDepartments ? 130 : undefined,
       cell: ({patient, displayName}) => (
-        <Button variant="inline-link" onClick={() => navigate(`/patient/${patient.id}`)}>{displayName}</Button>
+        <Button variant="inline-link" onClick={() => navigate(getPatientHref(patient.id))}>{displayName}</Button>
       ),
     },
     {
@@ -435,6 +443,7 @@ export default function DepartmentPage() {
       <ContentLayout>
         <SpaceBetween size="m">
           <div className="medstream-page-header">
+            <AppBreadcrumbs/>
             <h1 className="medstream-page-title">{pageTitle}</h1>
             <p>{pageDescription}</p>
           </div>
@@ -448,6 +457,7 @@ export default function DepartmentPage() {
     <ContentLayout>
       <SpaceBetween size="m">
         <div className="medstream-page-header">
+          <AppBreadcrumbs/>
           <h1 className="medstream-page-title">{pageTitle}</h1>
           <p>{pageDescription}</p>
         </div>

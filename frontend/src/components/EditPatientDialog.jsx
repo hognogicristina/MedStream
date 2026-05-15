@@ -229,14 +229,14 @@ export default function EditPatientDialog({
                   <Input
                     value={form.first_name}
                     onChange={({detail}) => handleFormValueChange("first_name", detail.value)}
-                    placeholder="Example: Andrei"
+                    placeholder="Andrei"
                   />
                 </FormField>
                 <FormField label="Last Name">
                   <Input
                     value={form.last_name}
                     onChange={({detail}) => handleFormValueChange("last_name", detail.value)}
-                    placeholder="Example: Popescu"
+                    placeholder="Popescu"
                   />
                 </FormField>
                 <FormField label="Gender">
@@ -298,21 +298,21 @@ export default function EditPatientDialog({
                   <Input
                     value={address.street}
                     onChange={({detail}) => handleAddressChange({target: {name: "street", value: detail.value}})}
-                    placeholder="Example: Liberty Street"
+                    placeholder="Liberty Street"
                   />
                 </FormField>
                 <FormField label="Number">
                   <Input
                     value={address.number}
                     onChange={({detail}) => handleAddressChange({target: {name: "number", value: detail.value}})}
-                    placeholder="Example: 12A"
+                    placeholder="12A"
                   />
                 </FormField>
                 <FormField label="Apartment">
                   <Input
                     value={address.apartment}
                     onChange={({detail}) => handleAddressChange({target: {name: "apartment", value: detail.value}})}
-                    placeholder="Example: 24"
+                    placeholder="24"
                   />
                 </FormField>
                 <FormField label="County">

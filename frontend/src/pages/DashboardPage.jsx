@@ -297,8 +297,6 @@ export default function DashboardPage() {
               <SpaceBetween size="m">
                 {isLoadingDashboard ? (
                   <Box color="text-body-secondary">Loading dashboard data...</Box>
-                ) : vitals.length === 0 ? (
-                  <Box color="text-body-secondary">Waiting for live vitals stream.</Box>
                 ) : (
                   <VitalsChart data={chartData}/>
                 )}

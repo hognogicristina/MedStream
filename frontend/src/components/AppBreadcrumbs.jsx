@@ -16,20 +16,100 @@ const ROUTE_LABELS = {
   "/metrics/comparison": "Comparison",
 }
 
+const DASHBOARD_BREADCRUMB = {text: "Dashboard", href: "/dashboard"}
+
 function getPatientIdFromPathname(pathname) {
   return pathname.match(/^\/patients\/(\d+)\/(?:diagnosis|clinical-records|admission-history|analysis|post-discharge-summary)$/)?.[1]
     || pathname.match(/^\/patient\/(\d+)$/)?.[1]
     || null
 }
 
-function buildBreadcrumbItems(pathname, patientName) {
+function getSourceSearch(searchParams, sourceKey = "from") {
+  const source = searchParams.get(sourceKey)
+  const params = new URLSearchParams()
+
+  if (source) {
+    params.set("from", source)
+  }
+
+  const department = searchParams.get("department")
+  if (department) {
+    params.set("department", department)
+  }
+
+  const value = params.toString()
+  return value ? `?${value}` : ""
+}
+
+function getPatientSourceBreadcrumb(searchParams, sourceKey = "from") {
+  const source = searchParams.get(sourceKey)
+
+  if (source === "department") {
+    const department = searchParams.get("department") || ""
+    return {
+      text: department ? `Department: ${department}` : "Departments",
+      href: department ? `/departments/${encodeURIComponent(department)}` : "/departments",
+    }
+  }
+
+  if (source === "departments") {
+    return {text: "Departments", href: "/departments"}
+  }
+
+  if (source === "alerts") {
+    return {text: "Alerts", href: "/alerts"}
+  }
+
+  if (source === "profile") {
+    return {text: "Profile", href: "/profile"}
+  }
+
+  return null
+}
+
+function getPatientSourceBreadcrumbs(searchParams, sourceKey = "from") {
+  const sourceBreadcrumb = getPatientSourceBreadcrumb(searchParams, sourceKey)
+  return sourceBreadcrumb ? [DASHBOARD_BREADCRUMB, sourceBreadcrumb] : [DASHBOARD_BREADCRUMB]
+}
+
+function buildAlertsBreadcrumbItems(searchParams) {
+  const source = searchParams.get("from")
+  const patientName = searchParams.get("patient") || ""
+  const sourcePatientId = searchParams.get("sourcePatientId")
+  const scopedCnp = searchParams.get("cnp") || ""
+
+  if (source === "patient" && patientName && scopedCnp) {
+    const patientSourceBreadcrumbs = getPatientSourceBreadcrumbs(searchParams, "patientFrom")
+    const patientSourceSearch = getSourceSearch(searchParams, "patientFrom")
+
+    return [
+      ...patientSourceBreadcrumbs,
+      {
+        text: `Patient: ${patientName}`,
+        href: sourcePatientId ? `/patient/${sourcePatientId}${patientSourceSearch}` : undefined,
+      },
+      {text: `Alerts: ${patientName}`, href: "/alerts"},
+    ]
+  }
+
+  return [
+    DASHBOARD_BREADCRUMB,
+    {text: "Alerts", href: "/alerts"},
+  ]
+}
+
+function buildBreadcrumbItems(pathname, patientName, searchParams) {
   if (pathname === "/dashboard") {
-    return [{text: "Dashboard", href: "/dashboard"}]
+    return [DASHBOARD_BREADCRUMB]
+  }
+
+  if (pathname === "/alerts") {
+    return buildAlertsBreadcrumbItems(searchParams)
   }
 
   if (pathname === "/departments") {
     return [
-      {text: "Dashboard", href: "/dashboard"},
+      DASHBOARD_BREADCRUMB,
       {text: "Departments", href: "/departments"},
     ]
   }
@@ -37,15 +117,14 @@ function buildBreadcrumbItems(pathname, patientName) {
   if (pathname.startsWith("/departments/")) {
     const department = decodeURIComponent(pathname.replace("/departments/", ""))
     return [
-      {text: "Dashboard", href: "/dashboard"},
-      {text: "Departments", href: "/departments"},
-      {text: department, href: pathname},
+      DASHBOARD_BREADCRUMB,
+      {text: `Department: ${department}`, href: pathname},
     ]
   }
 
   if (pathname.startsWith("/metrics/")) {
     return [
-      {text: "Dashboard", href: "/dashboard"},
+      DASHBOARD_BREADCRUMB,
       {text: "Metrics", href: "/metrics/streaming"},
       {text: ROUTE_LABELS[pathname] || "Metrics", href: pathname},
     ]
@@ -55,6 +134,8 @@ function buildBreadcrumbItems(pathname, patientName) {
   if (patientSectionMatch) {
     const [, patientId, section] = patientSectionMatch
     const patientLabel = patientName ? `Patient: ${patientName}` : "Patient"
+    const sourceSearch = getSourceSearch(searchParams)
+    const sourceBreadcrumbs = getPatientSourceBreadcrumbs(searchParams)
     const sectionLabel = {
       diagnosis: "Clinical Records",
       "clinical-records": "Clinical Records",
@@ -65,16 +146,16 @@ function buildBreadcrumbItems(pathname, patientName) {
 
     if (section === "post-discharge-summary") {
       return [
-        {text: "Dashboard", href: "/dashboard"},
-        {text: patientLabel, href: `/patient/${patientId}`},
-        {text: "Treatment Analysis", href: `/patients/${patientId}/analysis`},
+        ...sourceBreadcrumbs,
+        {text: patientLabel, href: `/patient/${patientId}${sourceSearch}`},
+        {text: "Treatment Analysis", href: `/patients/${patientId}/analysis${sourceSearch}`},
         {text: sectionLabel, href: pathname},
       ]
     }
 
     return [
-      {text: "Dashboard", href: "/dashboard"},
-      {text: patientLabel, href: `/patient/${patientId}`},
+      ...sourceBreadcrumbs,
+      {text: patientLabel, href: `/patient/${patientId}${sourceSearch}`},
       {text: sectionLabel, href: pathname},
     ]
   }
@@ -83,13 +164,13 @@ function buildBreadcrumbItems(pathname, patientName) {
   if (patientMatch) {
     const patientLabel = patientName ? `Patient: ${patientName}` : "Patient"
     return [
-      {text: "Dashboard", href: "/dashboard"},
+      ...getPatientSourceBreadcrumbs(searchParams),
       {text: patientLabel, href: pathname},
     ]
   }
 
   return [
-    {text: "Dashboard", href: "/dashboard"},
+    DASHBOARD_BREADCRUMB,
     {text: ROUTE_LABELS[pathname] || "MedStream", href: pathname},
   ]
 }
@@ -131,11 +212,12 @@ export default function AppBreadcrumbs({items}) {
   const patientName = loadedPatientName.patientId === patientId ? loadedPatientName.name : ""
 
   const breadcrumbItems = useMemo(() => {
-    const sourceItems = items || buildBreadcrumbItems(location.pathname, patientName)
+    const searchParams = new URLSearchParams(location.search)
+    const sourceItems = items || buildBreadcrumbItems(location.pathname, patientName, searchParams)
     return sourceItems.map((item, index) => (
       index === sourceItems.length - 1 ? {...item, href: undefined} : item
     ))
-  }, [items, location.pathname, patientName])
+  }, [items, location.pathname, location.search, patientName])
 
   return (
     <div className="medstream-breadcrumbs">
