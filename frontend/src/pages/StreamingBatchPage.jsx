@@ -28,8 +28,8 @@ const CHART_TIME_RANGE_OPTIONS = [
   {id: "1h", text: "1h", seconds: 60 * 60},
 ]
 const THROUGHPUT_CHART_SERIES = [
-  {key: "streaming_alerts_per_minute", title: "Streaming Alerts/Minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} alerts/min`},
-  {key: "batch_alerts_per_run", title: "Batch Alerts/Run", color: "#60a5fa", valueFormatter: (value) => `${value.toFixed(0)} alerts/run`},
+  {key: "streaming_alerts_per_minute", title: "Streaming Alerts/minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)}`},
+  {key: "batch_alerts_per_run", title: "Batch Alerts/run", color: "#60a5fa", valueFormatter: (value) => `${value.toFixed(0)}`},
 ]
 const LATENCY_CHART_SERIES = [
   {key: "streaming_latency_ms", title: "Streaming Latency", color: "#f97316", valueFormatter: (value) => formatLatencyDuration(value)},
@@ -536,12 +536,15 @@ export default function StreamingBatchPage() {
                       const isDimmed = highlightedThroughputSeries && !isHighlighted
 
                       return (
-                        <div
-                          className={[
-                            "awsui_marker_1kjc7_qgpiu_153",
-                            isHighlighted ? "awsui_marker--highlighted_1kjc7_qgpiu_255" : "",
-                            isDimmed ? "awsui_marker--dimmed_1kjc7_qgpiu_252" : "",
-                          ].filter(Boolean).join(" ")}
+                          <div
+                            className={[
+                              "awsui_marker_1kjc7_qgpiu_153",
+                              "medstream-throughput-legend-item",
+                              isHighlighted ? "awsui_marker--highlighted_1kjc7_qgpiu_255" : "",
+                              isHighlighted ? "medstream-throughput-legend-item-active" : "",
+                              isDimmed ? "awsui_marker--dimmed_1kjc7_qgpiu_252" : "",
+                              isDimmed ? "medstream-throughput-legend-item-dimmed" : "",
+                            ].filter(Boolean).join(" ")}
                           key={item.key}
                           role="button"
                           aria-pressed={isHighlighted}

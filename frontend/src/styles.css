@@ -2282,6 +2282,25 @@ body {
   padding: 0 20px 8px;
 }
 
+.medstream-throughput-legend-item {
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.medstream-throughput-legend-item:hover,
+.medstream-throughput-legend-item-active {
+  color: var(--text-primary);
+}
+
+.medstream-throughput-legend-item-dimmed {
+  opacity: 0.55;
+}
+
 .medstream-comparison-metric-card {
   min-width: 0;
 }
