@@ -729,6 +729,71 @@ class PatientRepository:
         return sorted(recovered)
 
     @classmethod
+    def _find_complete_recovery_snapshot(
+            cls,
+            *,
+            sequence_alerts: list[Alert],
+            window_start: datetime,
+            window_end: datetime,
+    ) -> dict[str, Any] | None:
+        normalized_start = cls._normalize_datetime_for_comparison(window_start)
+        normalized_end = cls._normalize_datetime_for_comparison(window_end)
+        if normalized_start is None or normalized_end is None:
+            return None
+
+        state = {
+            "heart_rate": {"latest": None, "latest_abnormal": None, "latest_normalized": None, "latest_state": "none"},
+            "oxygen_saturation": {"latest": None, "latest_abnormal": None, "latest_normalized": None, "latest_state": "none"},
+            "temperature": {"latest": None, "latest_abnormal": None, "latest_normalized": None, "latest_state": "none"},
+        }
+        recovered_vitals: set[str] = set()
+
+        for alert in sequence_alerts:
+            alert_created_at = cls._normalize_datetime_for_comparison(alert.created_at)
+            if alert_created_at is None:
+                continue
+            if alert_created_at > normalized_end:
+                break
+
+            canonical_type = normalize_alert_type(alert.alert_type, alert.severity)
+            vital_key = vital_for_alert_type(canonical_type)
+            if vital_key is None:
+                continue
+
+            mapped_vital_key = "oxygen_saturation" if vital_key == "oxygen" else vital_key
+            bucket = state.get(mapped_vital_key)
+            if bucket is None:
+                continue
+
+            bucket["latest"] = alert
+            alert_state = cls._classify_alert_state(canonical_type)
+            if alert_state == "normalized":
+                bucket["latest_normalized"] = alert
+                bucket["latest_state"] = "normalized"
+                if alert_created_at > normalized_start:
+                    recovered_vitals.add(mapped_vital_key)
+            elif alert_state == "abnormal":
+                bucket["latest_abnormal"] = alert
+                bucket["latest_state"] = "abnormal"
+
+            if alert_created_at <= normalized_start:
+                continue
+
+            unresolved_vitals = [
+                key
+                for key, current in state.items()
+                if str((current or {}).get("latest_state") or "").strip().lower() == "abnormal"
+            ]
+            if recovered_vitals and not unresolved_vitals:
+                return {
+                    "recovered_at": alert.created_at,
+                    "recovered_vitals": sorted(recovered_vitals),
+                    "latest_alerts": cls._build_latest_alert_debug_payload(state),
+                }
+
+        return None
+
+    @classmethod
     def _has_unresolved_abnormal_alerts_after_in_sequence(
             cls,
             *,
@@ -1140,6 +1205,7 @@ class PatientRepository:
 
         if treatment_timestamp is None:
             recovered_vitals: list[str] = []
+            complete_recovery_snapshot = None
         else:
             recovered_vitals = cls._get_recovered_vitals_after_treatment(
                 sequence_alerts=sequence_alerts,
@@ -1147,6 +1213,11 @@ class PatientRepository:
                 window_end=window_end,
                 post_treatment_alert_state=post_treatment_alert_state,
                 full_alert_state=full_alert_state,
+            )
+            complete_recovery_snapshot = cls._find_complete_recovery_snapshot(
+                sequence_alerts=sequence_alerts,
+                window_start=treatment_timestamp,
+                window_end=window_end,
             )
 
         unresolved_vitals = cls._get_unresolved_abnormal_vitals(
@@ -1182,7 +1253,7 @@ class PatientRepository:
             unstable_signals.append(
                 "Latest vital values are not fully stable (heart_rate, oxygen_saturation, temperature)."
             )
-        if next_treatment_escalation:
+        if next_treatment_escalation and (has_unresolved or has_unstable_values):
             unstable_signals.append(
                 "A follow-up treatment escalation indicates persistent or worsening clinical instability."
             )
@@ -1197,6 +1268,11 @@ class PatientRepository:
             "unresolved_vitals": unresolved_vitals,
             "has_unresolved_abnormal_alerts": has_unresolved,
             "next_treatment_escalation_detected": next_treatment_escalation,
+            "complete_recovery_at": (
+                complete_recovery_snapshot.get("recovered_at")
+                if complete_recovery_snapshot is not None
+                else None
+            ),
             "action_index": action_index + 1,
             "total_actions": total_actions,
             "stable_vital_count_before": stable_vital_count_before,
@@ -1205,7 +1281,7 @@ class PatientRepository:
             "latest_alerts": latest_alerts,
         }
 
-        if all_latest_vitals_stable and not has_unresolved and not next_treatment_escalation:
+        if all_latest_vitals_stable and not has_unresolved:
             if recovered_vitals:
                 reason = (
                     "Treatment is effective because "
@@ -1215,6 +1291,28 @@ class PatientRepository:
             else:
                 reason = "Treatment is effective because latest vital values are stable and no unresolved abnormal alerts remain."
             return "Effective", reason, evidence
+
+        if next_action is not None and complete_recovery_snapshot is not None:
+            complete_recovered_vitals = list(complete_recovery_snapshot.get("recovered_vitals") or [])
+            complete_recovered_labels = complete_recovered_vitals or recovered_vitals
+            if complete_recovered_labels:
+                reason = (
+                    "Treatment was effective because "
+                    + ", ".join(cls._format_vital_label(item) for item in complete_recovered_labels)
+                    + " normalized after treatment before later alerts appeared."
+                )
+            else:
+                reason = "Treatment was effective because abnormal alerts resolved before later alerts appeared."
+            effective_evidence = {
+                **evidence,
+                "unstable_signals": [],
+                "recovered_vitals": complete_recovered_vitals,
+                "recovery_signals_vitals": sorted(set(recovery_signals_vitals) | set(complete_recovered_vitals)),
+                "unresolved_vitals": [],
+                "has_unresolved_abnormal_alerts": False,
+                "latest_alerts": complete_recovery_snapshot.get("latest_alerts"),
+            }
+            return "Effective", reason, effective_evidence
 
         treatment_number = action_index + 1
         phase_bonus = 0
@@ -1364,6 +1462,16 @@ class PatientRepository:
             unresolved_after_treatment_vitals=unresolved_after_treatment_details.get("unresolved_vitals", []),
             next_action=next_action,
         )
+        complete_recovery_at = (outcome_evidence or {}).get("complete_recovery_at")
+        if outcome == "Effective" and complete_recovery_at is not None:
+            recovery_vital, recovery_vital_source = cls._get_latest_vital_state_for_window(
+                sequence_vitals=sequence_vitals,
+                window_start=window_start,
+                window_end=complete_recovery_at,
+            )
+            if recovery_vital is not None:
+                evaluated_vital = recovery_vital
+                evaluated_vital_source = f"{recovery_vital_source}_at_complete_recovery"
 
         evaluated_vital_payload = (
             {
@@ -1547,11 +1655,39 @@ class PatientRepository:
             elif normalized_status == "discharged":
                 patient_query = patient_query.where(Patient.is_discharged.is_(True))
 
+            normalized_treatment_outcome = str(treatment_outcome or "all").strip().lower()
+            if normalized_treatment_outcome not in {"all", ""} and normalized_status not in {"admitted", "discharged"}:
+                patient_query = patient_query.where(Patient.is_discharged.is_(True))
+
             patients = db.execute(patient_query.order_by(desc(Patient.id))).scalars().all()
 
-            normalized_treatment_outcome = str(treatment_outcome or "all").strip().lower()
             if normalized_treatment_outcome not in {"all", ""} and patients:
-                patients = self._filter_patients_by_treatment_outcome(db, patients, normalized_treatment_outcome)
+                patient_ids = [patient.id for patient in patients]
+                latest_summary_dates = (
+                    select(
+                        PatientDischargeSummary.patient_id,
+                        func.max(PatientDischargeSummary.discharge_date).label("latest_discharge_date"),
+                    )
+                    .where(PatientDischargeSummary.patient_id.in_(patient_ids))
+                    .group_by(PatientDischargeSummary.patient_id)
+                    .subquery()
+                )
+                treatment_rows = db.execute(
+                    select(PatientDischargeSummary.patient_id, PatientDischargeSummary.final_treatment_outcome)
+                    .join(
+                        latest_summary_dates,
+                        (
+                            (PatientDischargeSummary.patient_id == latest_summary_dates.c.patient_id)
+                            & (PatientDischargeSummary.discharge_date == latest_summary_dates.c.latest_discharge_date)
+                        ),
+                    )
+                ).all()
+                matching_patient_ids = {
+                    patient_id
+                    for patient_id, final_treatment_outcome in treatment_rows
+                    if str(final_treatment_outcome or "").strip().lower() == normalized_treatment_outcome
+                }
+                patients = [patient for patient in patients if patient.id in matching_patient_ids]
 
             normalized_alert_presence = str(alert_presence or "all").strip().lower()
             if normalized_alert_presence in {"all", ""} or not patients:
@@ -1576,52 +1712,6 @@ class PatientRepository:
                 return current_level == normalized_alert_presence
 
             return [patient for patient in patients if matches_alert_filter(patient)]
-
-    @classmethod
-    def _filter_patients_by_treatment_outcome(cls, db, patients: list[Patient], outcome: str) -> list[Patient]:
-        patient_ids = [patient.id for patient in patients]
-        medications = db.execute(
-            select(PatientMedication)
-            .where(PatientMedication.patient_id.in_(patient_ids))
-            .order_by(PatientMedication.created_at.asc(), PatientMedication.id.asc())
-        ).scalars().all()
-        vitals = db.execute(
-            select(Vital)
-            .where(Vital.patient_id.in_(patient_ids))
-            .order_by(Vital.recorded_at.asc(), Vital.id.asc())
-        ).scalars().all()
-        alerts = db.execute(
-            select(Alert)
-            .where(Alert.patient_id.in_(patient_ids))
-            .order_by(Alert.created_at.asc(), Alert.id.asc())
-        ).scalars().all()
-
-        medications_by_patient: dict[int, list[PatientMedication]] = {}
-        vitals_by_patient: dict[int, list[Vital]] = {}
-        alerts_by_patient: dict[int, list[Alert]] = {}
-
-        for medication in medications:
-            medications_by_patient.setdefault(medication.patient_id, []).append(medication)
-        for vital in vitals:
-            vitals_by_patient.setdefault(vital.patient_id, []).append(vital)
-        for alert in alerts:
-            alerts_by_patient.setdefault(alert.patient_id, []).append(alert)
-
-        def has_matching_treatment_outcome(patient: Patient) -> bool:
-            treatment_actions = cls._build_treatment_actions(medications_by_patient.get(patient.id, []))
-            for action_index in range(len(treatment_actions)):
-                evaluation = cls._evaluate_treatment_action(
-                    patient=patient,
-                    action_index=action_index,
-                    treatment_actions=treatment_actions,
-                    sequence_vitals=vitals_by_patient.get(patient.id, []),
-                    sequence_alerts=alerts_by_patient.get(patient.id, []),
-                )
-                if str(evaluation.get("outcome") or "").strip().lower() == outcome:
-                    return True
-            return False
-
-        return [patient for patient in patients if has_matching_treatment_outcome(patient)]
 
     def search_patients_by_cnp(self, cnp: str, limit: int = 10) -> list[Patient]:
         normalized_cnp = (cnp or "").strip()

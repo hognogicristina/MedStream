@@ -185,9 +185,31 @@ def paginate_items(items, page: int, page_size: int):
     }
 
 
+def _apply_patient_treatment_outcomes(db: Session, patient_treatment_outcomes: list[dict]):
+    if not patient_treatment_outcomes:
+        return
+
+    outcomes_by_patient_id = {
+        int(item["patient_id"]): ",".join(item.get("outcomes") or [])
+        for item in patient_treatment_outcomes
+        if item.get("patient_id") is not None
+    }
+    if not outcomes_by_patient_id:
+        return
+
+    stats_rows = db.execute(
+        select(PatientStats).where(PatientStats.patient_id.in_(outcomes_by_patient_id.keys()))
+    ).scalars().all()
+    for stat in stats_rows:
+        stat.treatment_outcomes = outcomes_by_patient_id.get(int(stat.patient_id), "")
+
+
 def refresh_batch_snapshot(db: Session, execution_time_ms: float):
     snapshot_timestamp = utc_now()
     insights_snapshot = build_batch_insights_snapshot(db)
+    window_start = snapshot_timestamp - WINDOW_DELTA
+    window_seconds = max(1, int(WINDOW_DELTA.total_seconds()))
+    _apply_patient_treatment_outcomes(db, insights_snapshot.get("patient_treatment_outcomes", []))
     metrics_row = db.execute(
         select(
             func.avg(PatientStats.avg_heart_rate),
@@ -203,10 +225,34 @@ def refresh_batch_snapshot(db: Session, execution_time_ms: float):
             func.avg(Vital.diastolic_bp),
         )
     ).one()
+    total_events_count = int(
+        db.execute(
+            select(func.count(Vital.id)).where(
+                Vital.recorded_at >= window_start,
+                Vital.recorded_at <= snapshot_timestamp,
+            )
+        ).scalar_one()
+        or 0
+    )
+    batch_latency_seconds = db.execute(
+        select(
+            func.avg(
+                func.extract(
+                    "epoch",
+                    snapshot_timestamp - Vital.recorded_at,
+                )
+            )
+        )
+        .select_from(Vital)
+        .where(
+            Vital.recorded_at >= window_start,
+            Vital.recorded_at <= snapshot_timestamp,
+        )
+    ).scalar_one()
     alert_severity_rows = db.execute(
         select(Alert.severity, func.count(Alert.id))
         .where(
-            Alert.created_at >= (snapshot_timestamp - WINDOW_DELTA),
+            Alert.created_at >= window_start,
             Alert.created_at <= snapshot_timestamp,
         )
         .group_by(Alert.severity)
@@ -234,6 +280,10 @@ def refresh_batch_snapshot(db: Session, execution_time_ms: float):
         alerts_high_count=severity_counts["high"],
         alerts_stable_count=severity_counts["stable"],
         patients_count=int(metrics_row[4] or 0),
+        total_events_count=total_events_count,
+        events_per_second=round(total_events_count / window_seconds, 4),
+        alert_rate=round((int(metrics_row[3] or 0) / total_events_count), 4) if total_events_count > 0 else 0.0,
+        batch_latency_avg_seconds=round(float(batch_latency_seconds or 0), 2),
         patients_per_department_snapshot=insights_snapshot["patients_per_department"],
         top_diagnosis_snapshot=insights_snapshot["top_diagnosis"],
         treatment_effectiveness_snapshot=insights_snapshot["treatment_effectiveness"],
@@ -366,31 +416,20 @@ def get_comparison_metrics(db: Session) -> dict:
     ).scalar_one()
 
     latest_batch = get_latest_batch_analytics(db)
-    batch_latency_seconds = None
-    if latest_batch and latest_batch.timestamp:
-        batch_latency_seconds = db.execute(
-            select(
-                func.avg(
-                    func.extract(
-                        "epoch",
-                        latest_batch.timestamp - Vital.recorded_at,
-                    )
-                )
-            )
-            .select_from(Vital)
-            .where(
-                Vital.recorded_at >= (latest_batch.timestamp - WINDOW_DELTA),
-                Vital.recorded_at <= latest_batch.timestamp,
-            )
-        ).scalar_one()
+    batch_total_events = int(latest_batch.total_events_count or 0) if latest_batch is not None else 0
+    batch_total_alerts = int(latest_batch.alerts_count or 0) if latest_batch is not None else 0
 
     return {
         "streaming_latency_avg": round(float((streaming_latency_seconds or 0) * 1000), 2),
-        "batch_latency_avg": round(float(batch_latency_seconds or 0), 2),
+        "batch_latency_avg": round(float(latest_batch.batch_latency_avg_seconds or 0), 2) if latest_batch is not None else 0.0,
         "total_events": total_events,
         "total_alerts": total_alerts,
         "events_per_second": round(total_events / window_seconds, 4),
         "alert_rate": round((total_alerts / total_events), 4) if total_events > 0 else 0.0,
+        "batch_total_events": batch_total_events,
+        "batch_total_alerts": batch_total_alerts,
+        "batch_events_per_second": round(float(latest_batch.events_per_second or 0), 4) if latest_batch is not None else 0.0,
+        "batch_alert_rate": round(float(latest_batch.alert_rate or 0), 4) if latest_batch is not None else 0.0,
     }
 
 
@@ -456,6 +495,7 @@ def build_batch_insights_snapshot(db: Session) -> dict:
         vitals_by_patient.setdefault(int(vital.patient_id), []).append(vital)
 
     medication_effectiveness: dict[str, dict] = {}
+    patient_treatment_outcomes: dict[int, set[str]] = {}
     treatment_effective_total = 0
     treatment_improving_total = 0
     treatment_ineffective_total = 0
@@ -515,12 +555,15 @@ def build_batch_insights_snapshot(db: Session) -> dict:
             if outcome == "Effective":
                 entry["effective"] += 1
                 treatment_effective_total += 1
+                patient_treatment_outcomes.setdefault(patient_id, set()).add("effective")
             elif outcome == "Improving":
                 entry["improving"] += 1
                 treatment_improving_total += 1
+                patient_treatment_outcomes.setdefault(patient_id, set()).add("improving")
             else:
                 entry["ineffective"] += 1
                 treatment_ineffective_total += 1
+                patient_treatment_outcomes.setdefault(patient_id, set()).add("ineffective")
 
     total_treatments = treatment_effective_total + treatment_improving_total + treatment_ineffective_total
 
@@ -544,6 +587,13 @@ def build_batch_insights_snapshot(db: Session) -> dict:
             "improving_rate": round((treatment_improving_total / total_treatments) * 100, 2) if total_treatments else 0.0,
             "ineffective_rate": round((treatment_ineffective_total / total_treatments) * 100, 2) if total_treatments else 0.0,
         },
+        "patient_treatment_outcomes": [
+            {
+                "patient_id": patient_id,
+                "outcomes": sorted(outcomes),
+            }
+            for patient_id, outcomes in sorted(patient_treatment_outcomes.items())
+        ],
         "medication_effectiveness": sorted(
             [
                 {

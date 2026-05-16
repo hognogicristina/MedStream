@@ -47,7 +47,9 @@ export default function VitalsChart({
   height = 250,
   highlightedSeriesTitle = undefined,
   hideLegend = false,
+  detailPopoverSeriesContent = undefined,
   onHighlightedSeriesTitleChange = null,
+  xTickFormatter = undefined,
 }) {
   if (!Array.isArray(data) || data.length === 0) {
     return <EmptyVitalsChart height={height}/>
@@ -60,6 +62,7 @@ export default function VitalsChart({
       height={height}
       highlightedSeriesTitle={highlightedSeriesTitle}
       hideLegend={hideLegend}
+      detailPopoverSeriesContent={detailPopoverSeriesContent}
       onHighlightedSeriesTitleChange={onHighlightedSeriesTitleChange}
       series={[
         {key: "heart_rate", title: "Heart Rate", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} bpm`},
@@ -67,6 +70,7 @@ export default function VitalsChart({
         {key: "temperature", title: "Temperature", color: "#22c55e", valueFormatter: (value) => `${value.toFixed(1)}°C`},
       ]}
       xTitle="Time"
+      xTickFormatter={xTickFormatter}
     />
   )
 }

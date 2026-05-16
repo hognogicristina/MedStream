@@ -517,9 +517,7 @@ export default function StreamingMetricsPage() {
                   <Header
                     variant="h2"
                     description="Each stream uses its own clinical scale and alert thresholds, so changes are visible as events arrive."
-                    actions={
-                      <Button iconName="download" onClick={exportVitalStreams}>Export metrics</Button>
-                    }
+                    actions={<Button iconName="download" onClick={exportVitalStreams}>Export metrics</Button>}
                   >
                     Vital streams by alert rule
                   </Header>

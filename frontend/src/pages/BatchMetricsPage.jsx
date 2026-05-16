@@ -752,8 +752,8 @@ export default function BatchMetricsPage() {
   const handleExportAllMetrics = () => {
     const exportTimestamp = new Date().toISOString()
     const batchTimestampIso = data.timestamp ? new Date(data.timestamp).toISOString() : ""
-    const totalEventsProcessed = Number(comparison?.total_events) || 0
-    const totalAlertsDetected = Number(comparison?.total_alerts) || Number(data.alerts) || 0
+    const totalEventsProcessed = Number(comparison?.batch_total_events) || 0
+    const totalAlertsDetected = Number(comparison?.batch_total_alerts) || Number(data.alerts) || 0
     const alertsPerMinute = AGGREGATION_WINDOW_MINUTES > 0
       ? totalAlertsDetected / AGGREGATION_WINDOW_MINUTES
       : 0

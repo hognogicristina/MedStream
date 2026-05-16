@@ -2029,6 +2029,15 @@ body {
   gap: 16px;
 }
 
+.medstream-comparison-chart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
 .medstream-alerts-rate-stack {
   display: flex;
   width: 100%;
@@ -3138,6 +3147,51 @@ body {
 .medstream-compact-detail-field,
 .medstream-compact-summary-field {
   min-width: 0;
+}
+
+.medstream-compact-summary-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.medstream-vital-status {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-primary);
+  border-radius: 999px;
+  padding: 1px 7px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.medstream-vital-status-normal {
+  border-color: color-mix(in srgb, #037f0c 38%, var(--border-primary));
+  color: #037f0c;
+}
+
+.medstream-vital-status-high {
+  border-color: color-mix(in srgb, #ff9900 46%, var(--border-primary));
+  color: #9d5d00;
+}
+
+.medstream-vital-status-critical {
+  border-color: color-mix(in srgb, #d13212 46%, var(--border-primary));
+  color: #d13212;
+}
+
+[data-theme="dark"] .medstream-vital-status-normal {
+  color: #7ccf83;
+}
+
+[data-theme="dark"] .medstream-vital-status-high {
+  color: #f0b429;
+}
+
+[data-theme="dark"] .medstream-vital-status-critical {
+  color: #ff8a75;
 }
 
 .medstream-compact-detail-value,
@@ -4337,6 +4391,10 @@ input[type="search"]::-webkit-search-cancel-button {
 
   .medstream-streaming-vitals-grid {
     grid-template-columns: 1fr;
+  }
+
+  .medstream-comparison-chart-actions {
+    justify-content: flex-start;
   }
 
   .medstream-streaming-vital-panel,

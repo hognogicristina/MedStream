@@ -9,6 +9,7 @@ class PatientStatsRead(BaseModel):
     avg_temperature: float
     avg_oxygen: float
     alerts_count: int
+    treatment_outcomes: str | None = None
     computed_at: datetime
     model_config = {"from_attributes": True}
 
@@ -80,6 +81,10 @@ class ComparisonSummaryRead(BaseModel):
     total_alerts: int
     events_per_second: float
     alert_rate: float
+    batch_total_events: int | None = None
+    batch_total_alerts: int | None = None
+    batch_events_per_second: float | None = None
+    batch_alert_rate: float | None = None
 
 
 class PatientsPerDepartmentRead(BaseModel):

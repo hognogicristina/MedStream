@@ -170,6 +170,7 @@ export default function DashboardPage() {
             ...prev,
             {
               time: new Date().toLocaleTimeString(),
+              patient_id: v.patient_id,
               heart_rate: v.heart_rate,
               oxygen_saturation: v.oxygen_saturation,
               temperature: v.temperature,
@@ -217,6 +218,26 @@ export default function DashboardPage() {
   const oxygenDelta = recentVitals.length >= 2 ? recentVitals[0].oxygen_saturation - recentVitals[recentVitals.length - 1].oxygen_saturation : 0
   const temperatureDelta = recentVitals.length >= 2 ? recentVitals[0].temperature - recentVitals[recentVitals.length - 1].temperature : 0
   const formatDelta = (value) => value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1)
+  const renderVitalPopoverSeriesContent = useCallback(({series, x, y}) => {
+    const formattedValue = series.valueFormatter ? series.valueFormatter(y, x) : y
+
+    return {
+      key: series.title,
+      value: formattedValue,
+    }
+  }, [])
+  const formatDashboardVitalTick = useCallback((value) => {
+    if (!Number.isInteger(value)) {
+      return ""
+    }
+
+    const point = chartData[value - 1]
+    const time = point?.time ?? ""
+    const patientId = point?.patient_id ?? "--"
+    const idLabel = `ID: ${patientId}`
+
+    return `${time}${idLabel.padStart(26, "\u00a0")}`
+  }, [chartData])
 
   if (isLoadingDashboard) {
     return (
@@ -270,7 +291,11 @@ export default function DashboardPage() {
                 {isLoadingDashboard ? (
                   <Box color="text-body-secondary">Loading dashboard data...</Box>
                 ) : (
-                  <VitalsChart data={chartData}/>
+                  <VitalsChart
+                    data={chartData}
+                    detailPopoverSeriesContent={renderVitalPopoverSeriesContent}
+                    xTickFormatter={formatDashboardVitalTick}
+                  />
                 )}
                 <div className="medstream-vitals-insights">
                   <ColumnLayout columns={4} variant="text-grid">

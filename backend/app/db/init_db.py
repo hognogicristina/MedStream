@@ -44,10 +44,17 @@ def _ensure_updated_at_columns():
             "alerts_critical_count": "INTEGER DEFAULT 0",
             "alerts_high_count": "INTEGER DEFAULT 0",
             "alerts_stable_count": "INTEGER DEFAULT 0",
+            "total_events_count": "INTEGER DEFAULT 0",
+            "events_per_second": "DOUBLE PRECISION DEFAULT 0",
+            "alert_rate": "DOUBLE PRECISION DEFAULT 0",
+            "batch_latency_avg_seconds": "DOUBLE PRECISION DEFAULT 0",
             "patients_per_department_snapshot": "JSONB DEFAULT '[]'::jsonb",
             "top_diagnosis_snapshot": "JSONB DEFAULT '[]'::jsonb",
             "treatment_effectiveness_snapshot": "JSONB DEFAULT '{}'::jsonb",
             "medication_effectiveness_snapshot": "JSONB DEFAULT '[]'::jsonb",
+        },
+        "patient_stats": {
+            "treatment_outcomes": "VARCHAR(100) DEFAULT ''",
         },
     }
 
@@ -64,6 +71,8 @@ def _ensure_updated_at_columns():
                     connection.execute(text(f"UPDATE {table_name} SET {column_name} = '[]'::jsonb WHERE {column_name} IS NULL"))
                 elif column_type.startswith("JSONB DEFAULT '{}'"):
                     connection.execute(text(f"UPDATE {table_name} SET {column_name} = '{{}}'::jsonb WHERE {column_name} IS NULL"))
+                elif "DEFAULT ''" in column_type:
+                    connection.execute(text(f"UPDATE {table_name} SET {column_name} = '' WHERE {column_name} IS NULL"))
                 else:
                     connection.execute(text(f"UPDATE {table_name} SET {column_name} = 0 WHERE {column_name} IS NULL"))
 

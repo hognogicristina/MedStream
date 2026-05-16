@@ -1124,6 +1124,11 @@ export default function ProfilePage() {
                                   className={`medstream-profile-suggestion ${isSelectedSuggestion ? "medstream-profile-suggestion-selected" : ""}`}
                                   aria-current={isSelectedSuggestion ? "true" : undefined}
                                   onClick={() => {
+                                    if (isSelectedSuggestion) {
+                                      setAssignmentQuery("")
+                                      return
+                                    }
+
                                     setAssignmentQuery(`${patient.cnp} | ${formatPatientFullName(patient)}`)
                                   }}
                                 >
