@@ -1272,8 +1272,8 @@ export default function BatchMetricsPage() {
                               <div
                                 className={[
                                   "medstream-overall-legend-item",
-                                  hoveredOutcomeId === entry.id ? "medstream-overall-legend-item-active" : "",
-                                  hoveredOutcomeId && hoveredOutcomeId !== entry.id ? "medstream-overall-legend-item-muted" : "",
+                                  highlightedOutcomeId === entry.id ? "medstream-overall-legend-item-active" : "",
+                                  highlightedOutcomeId && highlightedOutcomeId !== entry.id ? "medstream-overall-legend-item-muted" : "",
                                 ].filter(Boolean).join(" ")}
                                 key={entry.id}
                                 onBlur={() => setHoveredOutcomeId("")}

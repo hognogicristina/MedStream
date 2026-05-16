@@ -2635,14 +2635,16 @@ body {
 .medstream-overall-tooltip {
   position: relative;
   min-width: 230px;
-  border: 2px solid #697386;
+  border: var(--border-width-popover-nflirh, 2px) solid var(--color-border-popover-1ye6tz, #656871);
   border-radius: 8px;
-  background: #1b2430;
-  box-shadow: none;
-  color: #d5dbdb;
-  padding: 14px 12px 12px;
-  font-size: 14px;
-  line-height: 1.25;
+  background: var(--color-background-popover-e20fy8, var(--chart-tooltip-bg));
+  box-shadow: var(--shadow-popover-pkane9, 0px 4px 20px 1px rgba(0, 4, 12, 0.16));
+  color: var(--color-text-body-default-vvtq8u, var(--chart-tooltip-text));
+  font-family: var(--font-family-base-gmnpzl, "Open Sans", "Helvetica Neue", Roboto, Arial, sans-serif);
+  font-size: var(--font-size-body-m-a7nh2n, 14px);
+  font-weight: var(--font-weight-normal-cxw1m3, 400);
+  line-height: var(--line-height-body-m-2mh3ke, 20px);
+  padding: var(--space-static-s-t763lu, 12px);
   pointer-events: none;
 }
 
@@ -2653,9 +2655,9 @@ body {
   width: 14px;
   height: 14px;
   transform: rotate(45deg);
-  border-bottom: 2px solid #697386;
-  border-left: 2px solid #697386;
-  background: #1b2430;
+  border-bottom: var(--border-width-popover-nflirh, 2px) solid var(--color-border-popover-1ye6tz, #656871);
+  border-left: var(--border-width-popover-nflirh, 2px) solid var(--color-border-popover-1ye6tz, #656871);
+  background: var(--color-background-popover-e20fy8, var(--chart-tooltip-bg));
   content: "";
 }
 
@@ -2664,9 +2666,12 @@ body {
   gap: 6px;
   align-items: center;
   margin-bottom: 10px;
-  color: #f2f3f3;
-  font-size: 14px;
-  font-weight: 800;
+  color: var(--color-text-body-default-vvtq8u, var(--chart-tooltip-text));
+  font-family: var(--font-family-heading-ugphat, "Open Sans", "Helvetica Neue", Roboto, Arial, sans-serif);
+  font-size: var(--font-size-heading-xs-j8yzxv, 14px);
+  font-weight: var(--font-weight-heading-xs-wqqpne, 700);
+  letter-spacing: var(--letter-spacing-heading-xs-fgog7a, normal);
+  line-height: var(--line-height-heading-xs-q9j004, 18px);
 }
 
 .medstream-overall-tooltip-title::before {
@@ -2691,12 +2696,12 @@ body {
 }
 
 .medstream-overall-tooltip-row span {
-  color: #c7cfd8;
+  color: var(--color-text-body-secondary-yna5sb, var(--text-secondary));
 }
 
 .medstream-overall-tooltip-row strong {
-  color: #f2f3f3;
-  font-weight: 600;
+  color: var(--color-text-body-default-vvtq8u, var(--chart-tooltip-text));
+  font-weight: var(--font-weight-normal-cxw1m3, 400);
   text-align: right;
   white-space: nowrap;
 }
