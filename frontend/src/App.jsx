@@ -151,7 +151,7 @@ function useDocumentTitle() {
               ? "Post-Discharge Clinical Summary"
               : ""
 
-    const fallbackPatientTitle = sectionTitle ? `Patient: #${patientId} - ${sectionTitle}` : `Patient: #${patientId}`
+    const fallbackPatientTitle = sectionTitle ? `Patient ID: ${patientId} - ${sectionTitle}` : `Patient ID: ${patientId}`
     document.title = fallbackPatientTitle
 
     const setPatientTitle = async () => {

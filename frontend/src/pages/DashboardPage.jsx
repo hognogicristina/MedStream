@@ -344,7 +344,7 @@ export default function DashboardPage() {
                           {alert.severity === "critical" ? "Critical" : "Warning"}
                         </StatusIndicator>
                       </Box>
-                      <Box variant="small">{`Patient #${alert.patient_id}`}</Box>
+                      <Box variant="small">{`Patient ID: ${alert.patient_id}`}</Box>
                       <Box color="text-body-secondary" variant="small">{alert.message}</Box>
                       <Box color="text-body-secondary" variant="small">{new Date(alert.created_at || Date.now()).toLocaleString()}</Box>
                     </SpaceBetween>

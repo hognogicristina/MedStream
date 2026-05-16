@@ -435,7 +435,7 @@ export default function StreamingMetricsPage() {
                         </Box>
                         <Box variant="small">{alert.message}</Box>
                         <Box color="text-body-secondary" variant="small">
-                            {alert.alert_type} | Patient #{alert.patient_id} | {formatAlertTime(alert.created_at)}
+                            {alert.alert_type} | Patient ID: {alert.patient_id} | {formatAlertTime(alert.created_at)}
                         </Box>
                       </SpaceBetween>
                     </Container>
