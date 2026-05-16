@@ -17,7 +17,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const status = error?.response?.status
-    if ((status === 401 || status === 403) && authFailureHandler && !isHandlingUnauthorized) {
+    if (status === 401 && authFailureHandler && !isHandlingUnauthorized) {
       isHandlingUnauthorized = true
       try {
         authFailureHandler()

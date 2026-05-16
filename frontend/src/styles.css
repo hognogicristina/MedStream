@@ -2720,6 +2720,18 @@ body {
   box-shadow: none;
 }
 
+.medstream-assigned-doctors-table,
+.medstream-assigned-doctors-table *,
+.medstream-assigned-doctors-table *::before,
+.medstream-assigned-doctors-table *::after {
+  border-radius: 0 !important;
+  border-start-start-radius: 0 !important;
+  border-start-end-radius: 0 !important;
+  border-end-start-radius: 0 !important;
+  border-end-end-radius: 0 !important;
+  clip-path: none !important;
+}
+
 .medstream-simple-list-table td[class*="awsui_body-cell"] {
   border-block-start-color: transparent !important;
   border-block-end-color: transparent !important;
@@ -3521,7 +3533,7 @@ body {
   gap: 4px;
   border: 0;
   background: transparent;
-  color: #006ce0;
+  color: var(--link);
   cursor: pointer;
   font: inherit;
   font-size: 14px;
@@ -3531,12 +3543,12 @@ body {
 }
 
 .medstream-history-toggle-button:hover {
-  color: #002b66;
+  color: var(--link-hover);
   text-decoration: underline;
 }
 
 .medstream-history-toggle-button:focus-visible {
-  outline: 2px solid #006ce0;
+  outline: 2px solid var(--link);
   outline-offset: 2px;
 }
 
