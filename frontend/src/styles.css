@@ -2732,6 +2732,27 @@ body {
   clip-path: none !important;
 }
 
+.medstream-assigned-doctors-table [class*="awsui_table"] {
+  width: 100% !important;
+  min-width: 100% !important;
+  table-layout: fixed !important;
+}
+
+.medstream-assigned-doctors-table [class*="awsui_body-cell-content"],
+.medstream-assigned-doctors-table [class*="awsui_header-cell-text"] {
+  max-width: 100%;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.medstream-assigned-doctors-table [class*="awsui_sticky-scrollbar"],
+.medstream-assigned-doctors-table [class*="awsui_sticky-scrollbar-content"] {
+  width: 100% !important;
+  inline-size: 100% !important;
+  max-width: 100% !important;
+}
+
 .medstream-simple-list-table td[class*="awsui_body-cell"] {
   border-block-start-color: transparent !important;
   border-block-end-color: transparent !important;
