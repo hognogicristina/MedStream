@@ -573,7 +573,7 @@ export default function DepartmentPage() {
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Alerts</Box>
-              <Box variant="h3"><CountValue value={aggregateAlerts}/></Box>
+              <Box variant="h3"><CountValue showFullValue value={aggregateAlerts}/></Box>
               <Box color="text-body-secondary">Aggregated alerts in this department.</Box>
             </SpaceBetween>
             <SpaceBetween size="xs">

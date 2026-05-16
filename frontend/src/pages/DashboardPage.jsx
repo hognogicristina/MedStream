@@ -265,7 +265,7 @@ export default function DashboardPage() {
           <ColumnLayout columns={4} variant="text-grid">
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Active patients</Box>
-              <Box variant="h2"><CountValue value={activePatientsCount}/></Box>
+              <Box variant="h2"><CountValue showFullValue value={activePatientsCount}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Total departments</Box>
@@ -277,7 +277,7 @@ export default function DashboardPage() {
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Total alerts tracked</Box>
-              <Box variant="h2"><CountValue value={totalAlerts}/></Box>
+              <Box variant="h2"><CountValue showFullValue value={totalAlerts}/></Box>
             </SpaceBetween>
           </ColumnLayout>
         </Container>
