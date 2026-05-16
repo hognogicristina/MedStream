@@ -13,6 +13,7 @@ import {
 import {getDepartments} from "../services/patientApi.js"
 import {getResponseData} from "../services/apiMessages.js"
 import InfoHelp from "./InfoHelp.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 export default function DepartmentTransferDialog({
                                                    currentDepartment,
@@ -185,8 +186,9 @@ export default function DepartmentTransferDialog({
             >
               <Textarea
                 value={reason}
-                onChange={({detail}) => setReason(detail.value)}
+                onChange={({detail}) => setReason(limitText(detail.value, INPUT_LIMITS.clinicalNote))}
                 placeholder="Enter the operational reason for this transfer."
+                maxLength={INPUT_LIMITS.clinicalNote}
                 rows={3}
                 disabled={isSubmitting}
               />

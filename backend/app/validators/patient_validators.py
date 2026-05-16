@@ -12,6 +12,7 @@ from app.validators.common_validators import (
     normalize_optional_text,
     require_non_empty,
     strip_string,
+    validate_text_length,
 )
 
 ROMANIA_COUNTRY = "Romania"
@@ -21,6 +22,16 @@ ALLOWED_ARRIVAL_METHODS = {"ambulance", "self"}
 
 def validate_required_text(value: str | None, field_label: str) -> str:
     return require_non_empty(value, field_label)
+
+
+def validate_patient_name(value: str | None, field_label: str) -> str:
+    name = require_non_empty(value, field_label)
+    return validate_text_length(name, field_label, 100)
+
+
+def validate_gender_value(value: str | None) -> str:
+    gender = require_non_empty(value, "Gender")
+    return validate_text_length(gender, "Gender", 20)
 
 
 def validate_department_value(value: str | None) -> str:

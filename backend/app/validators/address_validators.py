@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 from app.core.errors import ValidationError
-from app.validators.common_validators import normalize_optional_text
-from app.validators.patient_validators import validate_required_text
+from app.validators.common_validators import normalize_optional_text, require_non_empty, validate_text_length
 
 ROMANIA_COUNTRY = "Romania"
+
+
+def validate_required_address_text(value: str | None, field_label: str, max_length: int) -> str:
+    text = require_non_empty(value, field_label)
+    return validate_text_length(text, field_label, max_length)
+
+
+def validate_optional_address_text(value: str | None, field_label: str, max_length: int) -> str | None:
+    text = normalize_optional_text(value)
+    if text is None:
+        return None
+    return validate_text_length(text, field_label, max_length)
 
 
 def normalize_postal_code(value: str | None) -> str:
@@ -26,13 +37,13 @@ def validate_required_address_fields(address: dict | None) -> dict:
         raise ValidationError("ADDRESS_REQUIRED")
 
     return {
-        "street": validate_required_text(address.get("street"), "Address street"),
-        "number": validate_required_text(address.get("number"), "Address number"),
-        "city": validate_required_text(address.get("city"), "Address city"),
-        "county": validate_required_text(address.get("county"), "Address county"),
+        "street": validate_required_address_text(address.get("street"), "Address street", 120),
+        "number": validate_required_address_text(address.get("number"), "Address number", 30),
+        "city": validate_required_address_text(address.get("city"), "Address city", 100),
+        "county": validate_required_address_text(address.get("county"), "Address county", 100),
         "postal_code": validate_postal_code(address.get("postal_code")),
-        "apartment": normalize_optional_text(address.get("apartment")),
-        "country": validate_required_text(address.get("country") or ROMANIA_COUNTRY, "Address country"),
+        "apartment": validate_optional_address_text(address.get("apartment"), "Address apartment", 30),
+        "country": validate_required_address_text(address.get("country") or ROMANIA_COUNTRY, "Address country", 100),
     }
 
 

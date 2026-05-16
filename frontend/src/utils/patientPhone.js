@@ -1,7 +1,9 @@
+import {INPUT_LIMITS, limitDigits} from "./inputLimits.js"
+
 export const ROMANIA_PHONE_PLACEHOLDER = "0712345678"
 
 export function normalizeRomanianPhoneNumber(value) {
-  const digits = String(value || "").replace(/\D/g, "")
+  const digits = limitDigits(value, 15)
 
   if (!digits) {
     return ""
@@ -11,7 +13,7 @@ export function normalizeRomanianPhoneNumber(value) {
     return `0${digits.slice(2)}`
   }
 
-  return digits
+  return digits.slice(0, INPUT_LIMITS.phone)
 }
 
 export function buildPatientPhoneNumber(value) {

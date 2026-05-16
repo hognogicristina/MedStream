@@ -1,15 +1,15 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PatientAddressBase(BaseModel):
-    street: str
-    number: str
-    apartment: str | None = None
-    city: str
-    county: str
-    postal_code: str
+    street: str = Field(max_length=120)
+    number: str = Field(max_length=30)
+    apartment: str | None = Field(default=None, max_length=30)
+    city: str = Field(max_length=100)
+    county: str = Field(max_length=100)
+    postal_code: str = Field(max_length=20)
 
 
 class PatientAddressCreate(PatientAddressBase):
@@ -29,23 +29,23 @@ class PatientAddressRead(BaseModel):
 
 
 class PatientAddressUpdate(BaseModel):
-    street: str | None = None
-    number: str | None = None
-    apartment: str | None = None
-    city: str | None = None
-    county: str | None = None
-    postal_code: str | None = None
+    street: str | None = Field(default=None, max_length=120)
+    number: str | None = Field(default=None, max_length=30)
+    apartment: str | None = Field(default=None, max_length=30)
+    city: str | None = Field(default=None, max_length=100)
+    county: str | None = Field(default=None, max_length=100)
+    postal_code: str | None = Field(default=None, max_length=20)
 
 
 class PatientBase(BaseModel):
-    first_name: str
-    last_name: str
-    department: str
+    first_name: str = Field(max_length=100)
+    last_name: str = Field(max_length=100)
+    department: str = Field(max_length=50)
     cnp: str
     phone_number: str
     birth_date: date
-    gender: str
-    arrival_method: str = "self"
+    gender: str = Field(max_length=20)
+    arrival_method: str = Field(default="self", max_length=20)
     is_pregnant: bool = False
     address: PatientAddressCreate
 
@@ -55,13 +55,13 @@ class PatientCreate(PatientBase):
 
 
 class PatientUpdate(BaseModel):
-    first_name: str | None = None
-    last_name: str | None = None
-    department: str | None = None
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    department: str | None = Field(default=None, max_length=50)
     cnp: str | None = None
     phone_number: str | None = None
     birth_date: date | None = None
-    gender: str | None = None
+    gender: str | None = Field(default=None, max_length=20)
     is_pregnant: bool | None = None
     address: PatientAddressUpdate | None = None
 

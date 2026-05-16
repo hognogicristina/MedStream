@@ -4,6 +4,7 @@ import {requestAccountRecovery} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 export default function RecoverAccountPage() {
   const {notifySuccess, notifyError} = useNotifications()
@@ -70,9 +71,10 @@ export default function RecoverAccountPage() {
                   id="identifier"
                   type="text"
                   value={identifier}
-                  onChange={(event) => setIdentifier(event.target.value)}
+                  onChange={(event) => setIdentifier(limitText(event.target.value, INPUT_LIMITS.identifier))}
                   className="login-input"
                   placeholder={"Email address"}
+                  maxLength={INPUT_LIMITS.identifier}
                   required
                 />
               </div>

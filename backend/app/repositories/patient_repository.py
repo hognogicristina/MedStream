@@ -47,8 +47,10 @@ from app.validators.patient_validators import (
     validate_patient_assignment,
     validate_patient_editable,
     validate_patient_identity_uniqueness,
+    validate_patient_name,
     validate_patient_not_already_discharged,
     validate_required_text,
+    validate_gender_value,
     validate_update_value_present,
 )
 from app.alerts.alert_catalog import normalize_alert_type, vital_for_alert_type
@@ -1594,13 +1596,13 @@ class PatientRepository:
 
     def _prepare_create_payload(self, payload: dict) -> tuple[dict, dict]:
         patient_data = {
-            "first_name": validate_required_text(payload.get("first_name"), "First Name"),
-            "last_name": validate_required_text(payload.get("last_name"), "Last Name"),
+            "first_name": validate_patient_name(payload.get("first_name"), "First Name"),
+            "last_name": validate_patient_name(payload.get("last_name"), "Last Name"),
             "department": validate_department_value(payload.get("department")),
             "cnp": validate_cnp_value(payload.get("cnp")),
             "phone_number": normalize_phone_value(payload.get("phone_number")),
             "birth_date": payload.get("birth_date"),
-            "gender": validate_required_text(payload.get("gender"), "Gender"),
+            "gender": validate_gender_value(payload.get("gender")),
             "arrival_method": validate_arrival_method(payload.get("arrival_method")),
             "is_pregnant": bool(payload.get("is_pregnant", False)),
         }
@@ -1610,9 +1612,9 @@ class PatientRepository:
         updates: dict = {}
 
         if "first_name" in payload:
-            updates["first_name"] = validate_required_text(payload.get("first_name"), "First Name")
+            updates["first_name"] = validate_patient_name(payload.get("first_name"), "First Name")
         if "last_name" in payload:
-            updates["last_name"] = validate_required_text(payload.get("last_name"), "Last Name")
+            updates["last_name"] = validate_patient_name(payload.get("last_name"), "Last Name")
         if "department" in payload:
             updates["department"] = validate_department_value(payload.get("department"))
         if "cnp" in payload:
@@ -1620,7 +1622,7 @@ class PatientRepository:
         if "phone_number" in payload:
             updates["phone_number"] = normalize_phone_value(payload.get("phone_number"))
         if "gender" in payload:
-            updates["gender"] = validate_required_text(payload.get("gender"), "Gender")
+            updates["gender"] = validate_gender_value(payload.get("gender"))
         if "birth_date" in payload:
             updates["birth_date"] = payload.get("birth_date")
         if "is_pregnant" in payload:

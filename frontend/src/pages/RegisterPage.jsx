@@ -12,6 +12,7 @@ import {
   ROMANIA_PHONE_PLACEHOLDER,
 } from "../utils/patientPhone.js"
 import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
+import {INPUT_LIMITS, limitDigits, limitText} from "../utils/inputLimits.js"
 
 function getSelectedOption(options, value) {
   return options.find((option) => option.value === value) || null
@@ -72,11 +73,20 @@ export default function RegisterPage() {
 
   const handleChange = (event) => {
     const {name, value} = event.target
-    setForm((prev) => ({...prev, [name]: value}))
+    const fieldLimits = {
+      first_name: INPUT_LIMITS.firstName,
+      last_name: INPUT_LIMITS.lastName,
+      email: INPUT_LIMITS.email,
+      license_number: INPUT_LIMITS.licenseNumber,
+      password: INPUT_LIMITS.password,
+      confirm_password: INPUT_LIMITS.password,
+    }
+    const nextValue = fieldLimits[name] ? limitText(value, fieldLimits[name]) : value
+    setForm((prev) => ({...prev, [name]: nextValue}))
   }
 
   const handlePhoneChange = (event) => {
-    const digitsOnly = event.target.value.replace(/\D/g, "").slice(0, 10)
+    const digitsOnly = limitDigits(event.target.value, INPUT_LIMITS.phone)
 
     setForm((prev) => ({
       ...prev,
@@ -212,6 +222,7 @@ export default function RegisterPage() {
                         onChange={handleChange}
                         className="login-input"
                         placeholder={"Elena"}
+                        maxLength={100}
                         required
                       />
                     </div>
@@ -228,6 +239,7 @@ export default function RegisterPage() {
                         onChange={handleChange}
                         className="login-input"
                         placeholder={"Popescu"}
+                        maxLength={100}
                         required
                       />
                     </div>
@@ -245,6 +257,7 @@ export default function RegisterPage() {
                       onChange={handleChange}
                       className="login-input"
                       placeholder={"doctor@medstream.ro"}
+                      maxLength={255}
                       required
                     />
                   </div>
@@ -262,7 +275,7 @@ export default function RegisterPage() {
                       onChange={handlePhoneChange}
                       placeholder={ROMANIA_PHONE_PLACEHOLDER}
                       className="login-input"
-                      maxLength={10}
+                      maxLength={INPUT_LIMITS.phone}
                       required
                     />
                   </div>
@@ -306,6 +319,7 @@ export default function RegisterPage() {
                         onChange={handleChange}
                         className="login-input w-full"
                         placeholder={"DOC-20458"}
+                        maxLength={50}
                         required
                       />
                     </div>
@@ -350,6 +364,7 @@ export default function RegisterPage() {
                       value={form.password}
                       onChange={handleChange}
                       className="login-input"
+                      maxLength={72}
                       required
                     />
                   </div>
@@ -365,6 +380,7 @@ export default function RegisterPage() {
                       value={form.confirm_password}
                       onChange={handleChange}
                       className="login-input"
+                      maxLength={72}
                       required
                     />
                   </div>

@@ -4,6 +4,7 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import {requestPasswordReset} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 export default function ForgotPasswordPage() {
   const {notifySuccess, notifyError} = useNotifications()
@@ -72,9 +73,10 @@ export default function ForgotPasswordPage() {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  onChange={(event) => setEmail(limitText(event.target.value, INPUT_LIMITS.email))}
                   className="login-input"
                   placeholder={"Email address"}
+                  maxLength={INPUT_LIMITS.email}
                   required
                 />
               </div>

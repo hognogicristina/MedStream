@@ -4,6 +4,7 @@ import AwsDatePicker from "./AwsDatePicker.jsx"
 import AwsTimeInput from "./AwsTimeInput.jsx"
 import InfoHelp from "./InfoHelp.jsx"
 import {isValidTime} from "../utils/time.js"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 function ClearableInput({disabled = false, onChange, required = false, type = "text", value, ...props}) {
   return (
@@ -312,8 +313,9 @@ export default function ActivityDialog({
               id="activity-title"
               type="text"
               value={form.title}
-              onChange={(value) => setForm((current) => ({...current, title: value}))}
+              onChange={(value) => setForm((current) => ({...current, title: limitText(value, INPUT_LIMITS.activityTitle)}))}
               placeholder="Post-op monitoring review"
+              maxLength={INPUT_LIMITS.activityTitle}
               required
             />
           </div>
@@ -323,8 +325,9 @@ export default function ActivityDialog({
             <ClearableTextarea
               id="activity-description"
               value={form.description}
-              onChange={(value) => setForm((current) => ({...current, description: value}))}
+              onChange={(value) => setForm((current) => ({...current, description: limitText(value, INPUT_LIMITS.activityDescription)}))}
               placeholder="Optional details"
+              maxLength={INPUT_LIMITS.activityDescription}
               rows={2}
             />
           </div>
@@ -345,10 +348,11 @@ export default function ActivityDialog({
                     type="search"
                     value={patientSearchQuery}
                     onChange={(value) => {
-                      setPatientSearchQuery(value)
+                      setPatientSearchQuery(limitText(value, INPUT_LIMITS.search))
                       setPatientPage(1)
                     }}
                     placeholder="Search by full name"
+                    maxLength={INPUT_LIMITS.search}
                   />
                 </div>
 

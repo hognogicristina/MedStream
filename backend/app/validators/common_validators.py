@@ -14,6 +14,12 @@ def require_non_empty(value: str | None, field_label: str) -> str:
     return trimmed
 
 
+def validate_text_length(value: str, field_label: str, max_length: int) -> str:
+    if len(value) > max_length:
+        raise ValidationError("FIELD_TOO_LONG", context={"field": field_label, "max": max_length})
+    return value
+
+
 def normalize_optional_text(value: str | None) -> str | None:
     if value is None:
         return None

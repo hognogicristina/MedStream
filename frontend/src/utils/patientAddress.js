@@ -1,3 +1,5 @@
+import {INPUT_LIMITS, limitDigits, limitText} from "./inputLimits.js"
+
 export function buildEmptyPatientAddress() {
   return {
     street: "",
@@ -11,22 +13,22 @@ export function buildEmptyPatientAddress() {
 
 export function buildPatientAddressForm(address) {
   return {
-    street: address?.street || "",
-    number: address?.number || "",
-    apartment: address?.apartment || "",
-    city: address?.city || "",
-    county: address?.county || "",
-    postal_code: address?.postal_code || "",
+    street: limitText(address?.street, INPUT_LIMITS.addressStreet),
+    number: limitText(address?.number, INPUT_LIMITS.addressNumber),
+    apartment: limitText(address?.apartment, INPUT_LIMITS.addressApartment),
+    city: limitText(address?.city, INPUT_LIMITS.country),
+    county: limitText(address?.county, INPUT_LIMITS.country),
+    postal_code: limitDigits(address?.postal_code, INPUT_LIMITS.postalCode),
   }
 }
 
 export function normalizePatientAddress(address) {
   return {
-    street: String(address?.street || "").trim(),
-    number: String(address?.number || "").trim(),
-    apartment: String(address?.apartment || "").trim(),
-    city: String(address?.city || "").trim(),
-    county: String(address?.county || "").trim(),
-    postal_code: String(address?.postal_code || "").replace(/\D/g, ""),
+    street: limitText(address?.street, INPUT_LIMITS.addressStreet).trim(),
+    number: limitText(address?.number, INPUT_LIMITS.addressNumber).trim(),
+    apartment: limitText(address?.apartment, INPUT_LIMITS.addressApartment).trim(),
+    city: limitText(address?.city, INPUT_LIMITS.country).trim(),
+    county: limitText(address?.county, INPUT_LIMITS.country).trim(),
+    postal_code: limitDigits(address?.postal_code, INPUT_LIMITS.postalCode),
   }
 }

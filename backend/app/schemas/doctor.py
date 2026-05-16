@@ -1,18 +1,20 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+PASSWORD_MAX_LENGTH = 72
 
 
 class DoctorCreate(BaseModel):
-    first_name: str
-    last_name: str
-    email: str
+    first_name: str = Field(max_length=100)
+    last_name: str = Field(max_length=100)
+    email: str = Field(max_length=255)
     phone_number: str | None = None
     birth_date: date | None = None
-    password: str
-    confirm_password: str
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    confirm_password: str = Field(max_length=PASSWORD_MAX_LENGTH)
     specialization: str
-    license_number: str
+    license_number: str = Field(max_length=50)
 
 
 class DoctorRead(BaseModel):
@@ -35,21 +37,21 @@ class DoctorRead(BaseModel):
 
 
 class DoctorUpdate(BaseModel):
-    first_name: str | None = None
-    last_name: str | None = None
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
     specialization: str | None = None
-    license_number: str | None = None
+    license_number: str | None = Field(default=None, max_length=50)
     phone_number: str | None = None
     birth_date: date | None = None
 
 
 class DoctorEmailUpdate(BaseModel):
-    email: str
+    email: str = Field(max_length=255)
 
 
 class LoginRequest(BaseModel):
     identifier: str
-    password: str
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
 
 
 class LoginResponse(BaseModel):
@@ -69,8 +71,8 @@ class PasswordResetRequestResponse(BaseModel):
 
 class PasswordResetConfirm(BaseModel):
     token: str
-    new_password: str
-    confirm_password: str | None = None
+    new_password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    confirm_password: str | None = Field(default=None, max_length=PASSWORD_MAX_LENGTH)
 
 
 class PasswordResetConfirmResponse(BaseModel):

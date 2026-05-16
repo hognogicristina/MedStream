@@ -4,6 +4,7 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import {resetPassword} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
@@ -85,9 +86,10 @@ export default function ResetPasswordPage() {
                   id="new_password"
                   type="password"
                   value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
+                  onChange={(event) => setNewPassword(limitText(event.target.value, INPUT_LIMITS.password))}
                   className="login-input"
                   placeholder={"MedstreamSecure123"}
+                  maxLength={INPUT_LIMITS.password}
                   required
                 />
               </div>
@@ -100,9 +102,10 @@ export default function ResetPasswordPage() {
                   id="confirm_password"
                   type="password"
                   value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  onChange={(event) => setConfirmPassword(limitText(event.target.value, INPUT_LIMITS.password))}
                   className="login-input"
                   placeholder={"Repeat your new password"}
+                  maxLength={INPUT_LIMITS.password}
                   required
                 />
               </div>

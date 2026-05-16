@@ -33,6 +33,7 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import AwsBarChart from "../components/AwsBarChart.jsx"
+import {INPUT_LIMITS, limitDigits, limitText} from "../utils/inputLimits.js"
 
 const POLL_INTERVAL_MS = 30000
 const STATUS_POLL_INTERVAL_MS = 2500
@@ -916,9 +917,11 @@ export default function BatchMetricsPage() {
                   {(scheduleType === "seconds" || scheduleType === "minutes" || scheduleType === "hours") ? (
                     <FormField label={scheduleType === "seconds" ? "Seconds" : scheduleType === "minutes" ? "Minutes" : "Hours"}>
                       <Input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         value={scheduleValue}
-                        onChange={({detail}) => setScheduleValue(detail.value)}
+                        onChange={({detail}) => setScheduleValue(limitDigits(detail.value, INPUT_LIMITS.scheduleInterval))}
+                        maxLength={INPUT_LIMITS.scheduleInterval}
                       />
                     </FormField>
                   ) : null}
@@ -927,8 +930,9 @@ export default function BatchMetricsPage() {
                     <FormField label="Time">
                       <Input
                         value={scheduleTime}
-                        onChange={({detail}) => setScheduleTime(detail.value)}
+                        onChange={({detail}) => setScheduleTime(limitText(detail.value, INPUT_LIMITS.time))}
                         placeholder="08:00"
+                        maxLength={INPUT_LIMITS.time}
                       />
                     </FormField>
                   ) : null}

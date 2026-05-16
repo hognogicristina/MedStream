@@ -1,4 +1,5 @@
 import {Button, Container, FormField, Header, Select, SpaceBetween, Textarea} from "@cloudscape-design/components"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 function getSelectedOption(options, value) {
   return options.find((option) => option.value === value) || null
@@ -76,8 +77,9 @@ export default function PatientAdmissionActionCard({
             <FormField label="Reason for discharge">
           <Textarea
             value={dischargeReason}
-            onChange={({detail}) => onDischargeReasonChange(detail.value)}
+            onChange={({detail}) => onDischargeReasonChange(limitText(detail.value, INPUT_LIMITS.clinicalNote))}
             placeholder="Reason for discharge"
+            maxLength={INPUT_LIMITS.clinicalNote}
             disabled={!canManagePatient || isSubmittingDischarge}
           />
             </FormField>

@@ -20,6 +20,7 @@ import {buildPatientAddressForm, normalizePatientAddress} from "../utils/patient
 import AwsDatePicker from "./AwsDatePicker.jsx"
 import InfoHelp from "./InfoHelp.jsx"
 import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
+import {INPUT_LIMITS, limitDigits, limitText} from "../utils/inputLimits.js"
 
 const TOTAL_STEPS = 2
 
@@ -121,7 +122,12 @@ export default function EditPatientDialog({
 
   const handleFormValueChange = (name, value) => {
     setForm((current) => {
-      const next = {...current, [name]: value}
+      const fieldLimits = {
+        first_name: INPUT_LIMITS.firstName,
+        last_name: INPUT_LIMITS.lastName,
+      }
+      const nextValue = fieldLimits[name] ? limitText(value, fieldLimits[name]) : value
+      const next = {...current, [name]: nextValue}
 
       if (name === "gender" && value !== "female") {
         next.is_pregnant = false
@@ -138,7 +144,18 @@ export default function EditPatientDialog({
         return {...current, county: value, city: ""}
       }
 
-      return {...current, [name]: value}
+      const fieldLimits = {
+        street: INPUT_LIMITS.addressStreet,
+        number: INPUT_LIMITS.addressNumber,
+        apartment: INPUT_LIMITS.addressApartment,
+      }
+      const nextValue = name === "postal_code"
+        ? limitDigits(value, INPUT_LIMITS.postalCode)
+        : fieldLimits[name]
+          ? limitText(value, fieldLimits[name])
+          : value
+
+      return {...current, [name]: nextValue}
     })
   }
 
@@ -230,6 +247,7 @@ export default function EditPatientDialog({
                     value={form.first_name}
                     onChange={({detail}) => handleFormValueChange("first_name", detail.value)}
                     placeholder="Andrei"
+                    maxLength={100}
                   />
                 </FormField>
                 <FormField label="Last Name">
@@ -237,6 +255,7 @@ export default function EditPatientDialog({
                     value={form.last_name}
                     onChange={({detail}) => handleFormValueChange("last_name", detail.value)}
                     placeholder="Popescu"
+                    maxLength={100}
                   />
                 </FormField>
                 <FormField label="Gender">
@@ -259,8 +278,9 @@ export default function EditPatientDialog({
                   <Input
                     type="tel"
                     value={phoneNumber}
-                    onChange={({detail}) => setPhoneNumber(detail.value.replace(/\D/g, ""))}
+                    onChange={({detail}) => setPhoneNumber(limitDigits(detail.value, INPUT_LIMITS.phone))}
                     placeholder={ROMANIA_PHONE_PLACEHOLDER}
+                    maxLength={INPUT_LIMITS.phone}
                   />
                 </FormField>
                 <FormField
@@ -299,6 +319,7 @@ export default function EditPatientDialog({
                     value={address.street}
                     onChange={({detail}) => handleAddressChange({target: {name: "street", value: detail.value}})}
                     placeholder="Liberty Street"
+                    maxLength={120}
                   />
                 </FormField>
                 <FormField label="Number">
@@ -306,6 +327,7 @@ export default function EditPatientDialog({
                     value={address.number}
                     onChange={({detail}) => handleAddressChange({target: {name: "number", value: detail.value}})}
                     placeholder="12A"
+                    maxLength={30}
                   />
                 </FormField>
                 <FormField label="Apartment">
@@ -313,6 +335,7 @@ export default function EditPatientDialog({
                     value={address.apartment}
                     onChange={({detail}) => handleAddressChange({target: {name: "apartment", value: detail.value}})}
                     placeholder="24"
+                    maxLength={30}
                   />
                 </FormField>
                 <FormField label="County">
@@ -335,13 +358,14 @@ export default function EditPatientDialog({
                 <FormField label="Postal Code">
                   <Input
                     value={address.postal_code}
-                    onChange={({detail}) => handleAddressChange({target: {name: "postal_code", value: detail.value.replace(/\D/g, "")}})}
+                    onChange={({detail}) => handleAddressChange({target: {name: "postal_code", value: detail.value}})}
                     placeholder="010101"
+                    maxLength={INPUT_LIMITS.postalCode}
                   />
                 </FormField>
                 <div className="medstream-form-field-wide">
                   <FormField label="Country" stretch>
-                    <Input value="Romania" disabled/>
+                    <Input value="Romania" maxLength={INPUT_LIMITS.country} disabled/>
                   </FormField>
                 </div>
               </div>

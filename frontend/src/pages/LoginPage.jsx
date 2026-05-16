@@ -6,6 +6,7 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import {loginDoctor} from "../services/authApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -106,9 +107,10 @@ export default function LoginPage() {
                   id="identifier"
                   type="text"
                   value={identifier}
-                  onChange={(event) => setIdentifier(event.target.value)}
+                  onChange={(event) => setIdentifier(limitText(event.target.value, INPUT_LIMITS.identifier))}
                   className="login-input"
                   placeholder={"Enter your email or phone number"}
+                  maxLength={INPUT_LIMITS.identifier}
                   required
                 />
               </div>
@@ -118,9 +120,10 @@ export default function LoginPage() {
                   id="password"
                   type="password"
                   value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  onChange={(event) => setPassword(limitText(event.target.value, INPUT_LIMITS.password))}
                   className="login-input"
                   placeholder={"Enter your password"}
+                  maxLength={INPUT_LIMITS.password}
                   required
                 />
               </div>

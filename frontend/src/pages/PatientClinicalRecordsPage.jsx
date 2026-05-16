@@ -51,6 +51,7 @@ import {
   updatePatientDiagnosis,
 } from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 function formatDateTime(value) {
   if (!value) return "--"
@@ -1002,8 +1003,9 @@ export default function PatientClinicalRecordsPage() {
                     <FormField label="Diagnosis">
                       <Input
                         value={diagnosisForm.diagnosis}
-                        onChange={({detail}) => setDiagnosisForm({...diagnosisForm, diagnosis: detail.value})}
+                        onChange={({detail}) => setDiagnosisForm({...diagnosisForm, diagnosis: limitText(detail.value, INPUT_LIMITS.diagnosis)})}
                         placeholder="Enter diagnosis"
+                        maxLength={INPUT_LIMITS.diagnosis}
                         disabled={isSubmitting}
                       />
                     </FormField>
@@ -1020,8 +1022,9 @@ export default function PatientClinicalRecordsPage() {
                       <FormField label="Notes" stretch>
                         <Textarea
                           value={diagnosisForm.notes}
-                          onChange={({detail}) => setDiagnosisForm({...diagnosisForm, notes: detail.value})}
+                          onChange={({detail}) => setDiagnosisForm({...diagnosisForm, notes: limitText(detail.value, INPUT_LIMITS.clinicalNote)})}
                           placeholder="Optional clinical notes"
+                          maxLength={INPUT_LIMITS.clinicalNote}
                           rows={3}
                           disabled={isSubmitting}
                         />
@@ -1101,8 +1104,9 @@ export default function PatientClinicalRecordsPage() {
                     <FormField label="Search condition">
                       <Input
                         value={conditionSearch}
-                        onChange={({detail}) => setConditionSearch(detail.value)}
+                        onChange={({detail}) => setConditionSearch(limitText(detail.value, INPUT_LIMITS.search))}
                         placeholder="Search by condition name"
+                        maxLength={INPUT_LIMITS.search}
                         disabled={isSubmitting}
                       />
                     </FormField>
@@ -1128,8 +1132,9 @@ export default function PatientClinicalRecordsPage() {
                       <FormField label="Notes" stretch>
                         <Textarea
                           value={editDiagnosisForm.notes}
-                          onChange={({detail}) => setEditDiagnosisForm({...editDiagnosisForm, notes: detail.value})}
+                          onChange={({detail}) => setEditDiagnosisForm({...editDiagnosisForm, notes: limitText(detail.value, INPUT_LIMITS.clinicalNote)})}
                           placeholder="Clinical notes"
+                          maxLength={INPUT_LIMITS.clinicalNote}
                           rows={3}
                           disabled={isSubmitting}
                         />
@@ -1154,8 +1159,9 @@ export default function PatientClinicalRecordsPage() {
                       >
                         <Textarea
                           value={editDiagnosisForm.note}
-                          onChange={({detail}) => setEditDiagnosisForm({...editDiagnosisForm, note: detail.value})}
+                          onChange={({detail}) => setEditDiagnosisForm({...editDiagnosisForm, note: limitText(detail.value, INPUT_LIMITS.clinicalNote)})}
                           placeholder="Document the reason for the status update."
+                          maxLength={INPUT_LIMITS.clinicalNote}
                           rows={3}
                           disabled={isSubmitting}
                         />
@@ -1202,8 +1208,9 @@ export default function PatientClinicalRecordsPage() {
                       <FormField label="Reason / Notes" stretch>
                         <Textarea
                           value={editMedicationForm.note}
-                          onChange={({detail}) => setEditMedicationForm({...editMedicationForm, note: detail.value})}
+                          onChange={({detail}) => setEditMedicationForm({...editMedicationForm, note: limitText(detail.value, INPUT_LIMITS.clinicalNote)})}
                           placeholder="Document the reason for this medication update."
+                          maxLength={INPUT_LIMITS.clinicalNote}
                           rows={3}
                           disabled={isSubmitting}
                         />
@@ -1229,8 +1236,9 @@ export default function PatientClinicalRecordsPage() {
                       <FormField label="Reason / Notes" stretch>
                         <Textarea
                           value={editConditionForm.notes}
-                          onChange={({detail}) => setEditConditionForm({...editConditionForm, notes: detail.value})}
+                          onChange={({detail}) => setEditConditionForm({...editConditionForm, notes: limitText(detail.value, INPUT_LIMITS.clinicalNote)})}
                           placeholder="Document the reason for this condition update."
+                          maxLength={INPUT_LIMITS.clinicalNote}
                           rows={3}
                           disabled={isSubmitting}
                         />

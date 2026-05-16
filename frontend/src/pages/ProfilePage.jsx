@@ -53,6 +53,7 @@ import {getErrorMessage, getResponseData, getResponseMessage} from "../services/
 import {formatPatientFullName} from "../utils/patients.js"
 import {buildPatientPhoneNumber, normalizeRomanianPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone.js"
 import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
+import {INPUT_LIMITS, limitDigits, limitText} from "../utils/inputLimits.js"
 
 const DEACTIVATE_ACCOUNT_CONFIRMATION = "deactivate account"
 
@@ -529,9 +530,15 @@ export default function ProfilePage() {
 
   const handleFormChange = (event) => {
     const {name, value} = event.target
+    const fieldLimits = {
+      first_name: INPUT_LIMITS.firstName,
+      last_name: INPUT_LIMITS.lastName,
+      license_number: INPUT_LIMITS.licenseNumber,
+    }
+    const nextValue = fieldLimits[name] ? limitText(value, fieldLimits[name]) : value
     setForm((current) => ({
       ...current,
-      [name]: value,
+      [name]: nextValue,
     }))
   }
 
@@ -1044,12 +1051,12 @@ export default function ProfilePage() {
                         <div className="login-field">
                           <label className="login-label" htmlFor="first_name">First Name</label>
                           <input id="first_name" name="first_name" type="text" value={form.first_name} onChange={handleFormChange}
-                                 className="login-input" placeholder="Elena" required/>
+                                 className="login-input" placeholder="Elena" maxLength={100} required/>
                         </div>
                         <div className="login-field">
                           <label className="login-label" htmlFor="last_name">Last Name</label>
                           <input id="last_name" name="last_name" type="text" value={form.last_name} onChange={handleFormChange}
-                                 className="login-input" placeholder="Popescu" required/>
+                                 className="login-input" placeholder="Popescu" maxLength={100} required/>
                         </div>
                         <div className="login-field">
                           <span className="medstream-label-with-help">
@@ -1078,7 +1085,7 @@ export default function ProfilePage() {
                         <div className="login-field">
                           <label className="login-label" htmlFor="license_number">License Number</label>
                           <input id="license_number" name="license_number" type="text" value={form.license_number} onChange={handleFormChange}
-                                 className="login-input" placeholder="DOC-20458" required/>
+                                 className="login-input" placeholder="DOC-20458" maxLength={50} required/>
                         </div>
                         <div className="login-field">
                           <label className="login-label" htmlFor="doctor-birth-date">Birth Date</label>
@@ -1098,9 +1105,10 @@ export default function ProfilePage() {
                             id="doctor-phone-number"
                             type="tel"
                             value={phoneNumber}
-                            onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, ""))}
+                            onChange={(event) => setPhoneNumber(limitDigits(event.target.value, INPUT_LIMITS.phone))}
                             className="login-input"
                             placeholder={ROMANIA_PHONE_PLACEHOLDER}
+                            maxLength={INPUT_LIMITS.phone}
                           />
                         </div>
                       </div>
@@ -1142,9 +1150,10 @@ export default function ProfilePage() {
                           id="doctor-email"
                           type="email"
                           value={emailInput}
-                          onChange={(event) => setEmailInput(event.target.value)}
+                          onChange={(event) => setEmailInput(limitText(event.target.value, INPUT_LIMITS.email))}
                           className="login-input"
                           placeholder="doctor@medstream.local"
+                          maxLength={INPUT_LIMITS.email}
                           required
                         />
                       </div>
@@ -1291,9 +1300,10 @@ export default function ProfilePage() {
                 className="login-input"
                 placeholder={DEACTIVATE_ACCOUNT_CONFIRMATION}
                 value={deleteConfirmationText}
-                onChange={(event) => setDeleteConfirmationText(event.target.value)}
+                onChange={(event) => setDeleteConfirmationText(limitText(event.target.value, DEACTIVATE_ACCOUNT_CONFIRMATION.length))}
                 disabled={isDeletingAccount}
                 autoComplete="off"
+                maxLength={DEACTIVATE_ACCOUNT_CONFIRMATION.length}
               />
             </div>
           </Modal>

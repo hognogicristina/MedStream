@@ -14,10 +14,16 @@ from app.validators.auth_validators import (
     validate_license_number,
     validate_login_identifier,
     validate_password_confirmation,
+    validate_password_size,
     validate_password_strength,
     validate_token_value,
 )
-from app.validators.common_validators import normalize_optional_text, require_non_empty, validate_list_not_empty
+from app.validators.common_validators import (
+    normalize_optional_text,
+    require_non_empty,
+    validate_list_not_empty,
+    validate_text_length,
+)
 from app.validators.patient_validators import normalize_phone_value, validate_department_value
 
 
@@ -50,6 +56,11 @@ def validate_required_text(value: str | None, field_label: str) -> str:
     return require_non_empty(value, field_label)
 
 
+def validate_doctor_name(value: str | None, field_label: str) -> str:
+    name = require_non_empty(value, field_label)
+    return validate_text_length(name, field_label, 100)
+
+
 def normalize_email(value: str | None) -> str:
     return validate_email_address(value)
 
@@ -72,8 +83,8 @@ def validate_doctor_create_payload(payload) -> dict:
     validate_password_confirmation(password, confirm_password)
 
     return {
-        "first_name": require_non_empty(payload.first_name, "First Name"),
-        "last_name": require_non_empty(payload.last_name, "Last Name"),
+        "first_name": validate_doctor_name(payload.first_name, "First Name"),
+        "last_name": validate_doctor_name(payload.last_name, "Last Name"),
         "email": normalize_email(payload.email),
         "phone_number": normalize_phone_number(payload.phone_number),
         "birth_date": validate_birth_date(payload.birth_date),
@@ -87,9 +98,9 @@ def validate_doctor_update_payload(payload) -> dict:
     updates = payload.model_dump(exclude_unset=True)
 
     if "first_name" in updates:
-        updates["first_name"] = require_non_empty(updates.get("first_name"), "First Name")
+        updates["first_name"] = validate_doctor_name(updates.get("first_name"), "First Name")
     if "last_name" in updates:
-        updates["last_name"] = require_non_empty(updates.get("last_name"), "Last Name")
+        updates["last_name"] = validate_doctor_name(updates.get("last_name"), "Last Name")
     if "specialization" in updates:
         updates["specialization"] = validate_department_value(updates.get("specialization"))
     if "license_number" in updates:
@@ -139,7 +150,7 @@ def validate_doctor_uniqueness(
 
 def validate_login_payload(payload) -> tuple[str, str]:
     identifier = validate_login_identifier(payload.identifier)
-    password = require_non_empty(payload.password, "Password")
+    password = validate_password_size(payload.password)
     return identifier, password
 
 
