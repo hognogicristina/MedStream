@@ -71,24 +71,82 @@ function toMillis(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function filterHistoryByRange(points, rangeId) {
-  const selectedRange = CHART_TIME_RANGE_OPTIONS.find((range) => range.id === rangeId) || CHART_TIME_RANGE_OPTIONS[0]
-  const newestPointTime = [...points]
-    .reverse()
-    .map((point) => toMillis(point?.time_iso))
-    .find((time) => time != null)
+function buildSeriesLabelPoint(timestampMs, sourcePoint) {
+  return {
+    time_iso: new Date(timestampMs).toISOString(),
+    time: new Date(timestampMs).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}),
+    streaming_alerts_per_minute: 0,
+    batch_alerts_per_run: 0,
+    batch_timestamp: sourcePoint?.batch_timestamp || null,
+    streaming_latency_ms: Number(sourcePoint?.streaming_latency_ms) || 0,
+    batch_latency_ms: Number(sourcePoint?.batch_latency_ms) || 0,
+  }
+}
 
-  if (newestPointTime == null) {
-    return points
+function padHistoryToWindow(points, selectedRange, nowMs) {
+  if (!Array.isArray(points) || points.length === 0) {
+    const rangeStart = nowMs - (selectedRange.seconds * 1000)
+    return [buildSeriesLabelPoint(rangeStart)]
   }
 
-  const windowStart = newestPointTime - selectedRange.seconds * 1000
-  const visiblePoints = points.filter((point) => {
+  const pointsWithTime = points
+    .map((point) => ({point, time: toMillis(point?.time_iso)}))
+    .filter(({time}) => time != null && Number.isFinite(time))
+    .sort((a, b) => a.time - b.time)
+
+  if (pointsWithTime.length === 0) {
+    const rangeStart = nowMs - (selectedRange.seconds * 1000)
+    return [buildSeriesLabelPoint(rangeStart)]
+  }
+
+  const rangeStart = nowMs - (selectedRange.seconds * 1000)
+  const inRange = pointsWithTime.filter(({time}) => time >= rangeStart && time <= nowMs)
+
+  if (inRange.length === 0) {
+    const nearest = pointsWithTime[0]
+    const latestPoint = nearest.point
+
+    if (toMillis(latestPoint?.time_iso) == null) {
+      return [buildSeriesLabelPoint(rangeStart)]
+    }
+
+    return [
+      ...new Array(Math.max(1, Math.ceil((toMillis(latestPoint.time_iso) - rangeStart) / POLL_INTERVAL_MS)), (_, index) => (
+        buildSeriesLabelPoint(rangeStart + index * POLL_INTERVAL_MS, latestPoint)
+      )),
+      latestPoint,
+    ]
+  }
+
+  const firstInRange = inRange[0].point
+  const firstInRangeTime = inRange[0].time
+  const padded = []
+
+  if (firstInRangeTime > rangeStart + POLL_INTERVAL_MS) {
+    const anchorPoint = firstInRange
+    for (let timestampMs = rangeStart; timestampMs < firstInRangeTime; timestampMs += POLL_INTERVAL_MS) {
+      padded.push(buildSeriesLabelPoint(timestampMs, anchorPoint))
+    }
+  }
+
+  return [...padded, ...inRange.map(({point}) => point)]
+}
+
+function filterHistoryByRange(points, rangeId) {
+  const selectedRange = CHART_TIME_RANGE_OPTIONS.find((range) => range.id === rangeId) || CHART_TIME_RANGE_OPTIONS[0]
+  if (!Array.isArray(points) || points.length === 0) {
+    return [buildSeriesLabelPoint(Date.now() - selectedRange.seconds * 1000)]
+  }
+
+  const now = Date.now()
+  const padded = padHistoryToWindow(points, selectedRange, now)
+  const rangeStart = now - selectedRange.seconds * 1000
+  const clamped = padded.filter((point) => {
     const pointTime = toMillis(point?.time_iso)
-    return pointTime != null && pointTime >= windowStart
+    return pointTime != null && pointTime >= rangeStart && pointTime <= now
   })
 
-  return visiblePoints.length ? visiblePoints : points
+  return clamped.length > 0 ? clamped : [buildSeriesLabelPoint(rangeStart)]
 }
 
 function MetricCard({label, value, hint}) {
@@ -267,13 +325,24 @@ export default function StreamingBatchPage() {
       ]),
     ),
   ], [visibleLatencyHistory])
+
+  const handleChartTimeRangeChange = ({detail}) => {
+    const selectedRangeId = detail?.selectedId
+      || detail?.selectedOption?.value
+      || detail?.selectedOption?.id
+      || detail?.value
+      || chartTimeRange
+
+    setChartTimeRange(selectedRangeId)
+  }
+
   const renderChartTimeRangeControl = () => (
     <div className="medstream-comparison-chart-actions">
       <SegmentedControl
         selectedId={chartTimeRange}
         label="Chart time range"
         options={CHART_TIME_RANGE_OPTIONS.map(({id, text}) => ({id, text}))}
-        onChange={({detail}) => setChartTimeRange(detail.selectedId)}
+        onChange={handleChartTimeRangeChange}
       />
     </div>
   )

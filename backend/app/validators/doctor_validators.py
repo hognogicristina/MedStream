@@ -24,7 +24,7 @@ from app.validators.common_validators import (
     validate_list_not_empty,
     validate_text_length,
 )
-from app.validators.patient_validators import normalize_phone_value, validate_department_value
+from app.validators.patient_validators import normalize_phone_value, phone_uniqueness_values, validate_department_value
 
 
 def validate_authorization_header(authorization: str | None) -> str:
@@ -134,7 +134,8 @@ def validate_doctor_uniqueness(
             raise ValidationError("EMAIL_ALREADY_REGISTERED")
 
     if phone_number:
-        phone_query = select(doctor_model).where(doctor_model.phone_number == phone_number)
+        phone_values = phone_uniqueness_values(phone_number)
+        phone_query = select(doctor_model).where(doctor_model.phone_number.in_(phone_values))
         if doctor_id is not None:
             phone_query = phone_query.where(doctor_model.id != doctor_id)
         if db.execute(phone_query).scalar_one_or_none():
