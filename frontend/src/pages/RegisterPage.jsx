@@ -141,9 +141,6 @@ export default function RegisterPage() {
           <aside className="login-aside">
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
-              <Link className="auth-link" to="/login">
-                {"Back to login"}
-              </Link>
             </div>
 
             <h1 className="login-title">
@@ -383,7 +380,7 @@ export default function RegisterPage() {
                           type="button"
                           onClick={handlePreviousStep}
                           disabled={isSubmitting}
-                          className="console-button-secondary w-full rounded-2xl px-4 py-3 font-semibold"
+                          className="console-button-secondary auth-step-secondary-button w-full"
                         >
                           {"Back"}
                         </button>
@@ -393,7 +390,7 @@ export default function RegisterPage() {
                         type="button"
                         onClick={handleNextStep}
                         disabled={isSubmitting || (step === 1 ? !isStepOneValid : !isStepTwoValid)}
-                        className="login-button w-full"
+                        className="login-button auth-step-primary-button w-full"
                       >
                         {"Next"}
                       </button>
@@ -406,7 +403,7 @@ export default function RegisterPage() {
                         type="button"
                         onClick={handlePreviousStep}
                         disabled={isSubmitting}
-                        className="console-button-secondary w-full rounded-2xl px-4 py-3 font-semibold"
+                        className="console-button-secondary auth-step-secondary-button w-full"
                       >
                         {"Back"}
                       </button>

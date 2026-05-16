@@ -2,7 +2,6 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import {
   Alert,
   Box,
-  Button,
   ColumnLayout,
   Container,
   Header,
@@ -1296,7 +1295,10 @@ export default function PatientTreatmentAnalysisSection({
                   description={`Last update: ${latestAlertSummary.lastUpdated}`}
                   actions={
                     fullAlertHistory.length ? (
-                      <Button
+                      <button
+                        type="button"
+                        className="medstream-history-toggle-button"
+                        aria-expanded={showFullAlertHistory}
                         onClick={() => {
                           setShowFullAlertHistory((current) => {
                             const next = !current
@@ -1305,8 +1307,9 @@ export default function PatientTreatmentAnalysisSection({
                           })
                         }}
                       >
-                        {showFullAlertHistory ? "Hide full history" : "View full history"}
-                      </Button>
+                        <span className="medstream-history-toggle-icon" aria-hidden="true" />
+                        <span>{showFullAlertHistory ? "Show fewer" : "Show more"}</span>
+                      </button>
                     ) : null
                   }
                 >

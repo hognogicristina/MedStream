@@ -3514,6 +3514,68 @@ body {
   fill: currentColor !important;
 }
 
+.medstream-history-toggle-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: #006ce0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 18px;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.medstream-history-toggle-button:hover {
+  color: #002b66;
+  text-decoration: underline;
+}
+
+.medstream-history-toggle-button:focus-visible {
+  outline: 2px solid #006ce0;
+  outline-offset: 2px;
+}
+
+.medstream-history-toggle-icon {
+  position: relative;
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  flex: 0 0 auto;
+}
+
+.medstream-history-toggle-icon::before,
+.medstream-history-toggle-icon::after {
+  content: "";
+  position: absolute;
+  background: currentColor;
+}
+
+.medstream-history-toggle-icon::before {
+  top: 50%;
+  left: 2px;
+  right: 2px;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+.medstream-history-toggle-icon::after {
+  top: 2px;
+  bottom: 2px;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+.medstream-history-toggle-button[aria-expanded="true"] .medstream-history-toggle-icon::after {
+  display: none;
+}
+
 .medstream-attribute-main {
   min-width: 0;
 }
@@ -5054,7 +5116,6 @@ textarea {
 }
 
 .register-page .login-card,
-.register-page .login-layout,
 .register-page .login-panel,
 .register-page .login-form,
 .register-page .auth-section {
@@ -5065,6 +5126,9 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  border-radius: 8px;
+  background: var(--surface-1);
+  overflow: hidden;
 }
 
 .auth-divider {
@@ -5073,11 +5137,13 @@ textarea {
 
 .login-aside {
   border-bottom: 1px solid var(--border-primary);
+  border-radius: 8px 8px 0 0;
   background: var(--surface-muted);
   padding: 28px;
 }
 
 .login-panel {
+  border-radius: 0 0 8px 8px;
   background: var(--surface-1);
   padding: 28px 28px 32px;
 }
@@ -5165,6 +5231,29 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.auth-step-secondary-button {
+  min-height: var(--aws-control-height);
+  border-color: var(--accent-strong);
+  border-radius: 999px;
+  background: var(--surface-1);
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--accent-strong);
+}
+
+.auth-step-secondary-button:hover:not(:disabled) {
+  border-color: #075aa7;
+  background: color-mix(in srgb, var(--accent-strong) 7%, var(--surface-1));
+  color: #075aa7;
+}
+
+.auth-step-secondary-button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
 }
 
 .login-field {
@@ -5269,13 +5358,18 @@ select.console-input {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 1200;
+  z-index: 5000;
   width: min(288px, calc(100vw - 32px));
   border: 1px solid var(--input-avc-border);
   border-radius: 6px;
   background: var(--input-avc-bg);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
   padding: 12px;
+}
+
+.register-page .aws-date-picker-popover {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 
 .aws-date-picker-header {
@@ -6018,7 +6112,7 @@ textarea::placeholder {
 .login-button {
   width: 100%;
   border: 1px solid var(--accent);
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--accent);
   padding: 10px 16px;
   font-size: 0.95rem;
@@ -6038,6 +6132,29 @@ textarea::placeholder {
 .login-button:disabled {
   cursor: not-allowed;
   opacity: 0.68;
+  border-color: var(--border-strong);
+  background: var(--border-primary);
+  color: var(--text-secondary);
+}
+
+.login-button.auth-step-primary-button {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.login-button.auth-step-primary-button:hover:not(:disabled) {
+  border-color: #075aa7;
+  background: #075aa7;
+  color: #ffffff;
+}
+
+.login-button.auth-step-primary-button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.login-button.auth-step-primary-button:disabled {
   border-color: var(--border-strong);
   background: var(--border-primary);
   color: var(--text-secondary);
@@ -6217,6 +6334,7 @@ textarea::placeholder {
 
   .login-aside {
     border-bottom: 0;
+    border-radius: 8px 0 0 8px;
     padding: 36px;
   }
 
@@ -6235,6 +6353,7 @@ textarea::placeholder {
   }
 
   .login-panel {
+    border-radius: 0 8px 8px 0;
     padding: 36px 36px 40px;
   }
 
