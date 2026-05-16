@@ -5,6 +5,7 @@ import {useAuth} from "../components/AuthContext.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {loginDoctor} from "../services/authApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -92,6 +93,7 @@ export default function LoginPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Sign In"}</p>
               <h1 className="login-title">{"Doctor Login"}</h1>
               <p className="login-subtitle">{"Secure access to the hospital monitoring console."}</p>

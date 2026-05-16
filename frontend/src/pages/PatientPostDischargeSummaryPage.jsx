@@ -135,7 +135,7 @@ export default function PatientPostDischargeSummaryPage() {
                 </SpaceBetween>
                 <SpaceBetween size="xxs">
                   <Box color="text-body-secondary" variant="awsui-key-label">Patient ID</Box>
-                  <div className="post-discharge-page-status-value">Patient ID: {patientId}</div>
+                  <div className="post-discharge-page-status-value">{patientId}</div>
                 </SpaceBetween>
               </div>
             </Container>

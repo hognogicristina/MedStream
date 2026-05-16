@@ -3,6 +3,7 @@ import {Link, useNavigate} from "react-router-dom"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {requestPasswordReset} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate()
@@ -63,6 +64,7 @@ export default function ForgotPasswordPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Recovery"}</p>
               <h1 className="login-title">{"Forgot Password"}</h1>
               <p className="login-subtitle">{"Enter your email address to receive a password reset link."}</p>

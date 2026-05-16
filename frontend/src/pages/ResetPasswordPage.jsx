@@ -3,6 +3,7 @@ import {Link, useNavigate, useSearchParams} from "react-router-dom"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {resetPassword} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
@@ -72,6 +73,7 @@ export default function ResetPasswordPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Recovery"}</p>
               <h1 className="login-title">{"Reset Password"}</h1>
               <p className="login-subtitle">{"Choose a new password for your account."}</p>

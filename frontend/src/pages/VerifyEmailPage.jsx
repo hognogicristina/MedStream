@@ -7,6 +7,7 @@ import {
   VERIFICATION_LINK_REPLACED_MESSAGE,
 } from "../services/appMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
 
 export default function VerifyEmailPage() {
   const navigate = useNavigate()
@@ -95,6 +96,7 @@ export default function VerifyEmailPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Verification"}</p>
               <h1 className="login-title">{"Verify Email"}</h1>
               <p className="login-subtitle">{"Your verification request is being processed."}</p>

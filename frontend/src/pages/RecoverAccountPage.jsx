@@ -3,6 +3,7 @@ import {Link} from "react-router-dom"
 import {requestAccountRecovery} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
 
 export default function RecoverAccountPage() {
   const {notifySuccess, notifyError} = useNotifications()
@@ -60,6 +61,7 @@ export default function RecoverAccountPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Recovery"}</p>
               <h1 className="login-title">{"Recover Account"}</h1>
               <p className="login-subtitle">{"Enter your email to start account recovery."}</p>

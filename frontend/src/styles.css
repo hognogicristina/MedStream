@@ -4995,12 +4995,39 @@ textarea {
 }
 
 .login-page {
+  position: relative;
   display: flex;
   min-height: 100vh;
   justify-content: center;
   overflow-y: auto;
   padding: 32px 16px 48px;
   background: var(--app-bg);
+}
+
+.auth-theme-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-height: var(--aws-control-height);
+}
+
+.auth-theme-toggle [class*="awsui_toggle"] {
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .login-header {
+    padding-right: 0;
+  }
+
+  .login-header .auth-theme-toggle {
+    position: static;
+    width: fit-content;
+    margin: 0 0 14px auto;
+  }
 }
 
 .login-page-centered {
@@ -5051,7 +5078,10 @@ textarea {
 }
 
 .login-header {
+  position: relative;
+  min-height: 42px;
   margin-bottom: 22px;
+  padding-right: 150px;
 }
 
 .login-brand {

@@ -5,6 +5,7 @@ import {registerDoctor} from "../services/authApi.js"
 import {getDepartments} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
 import AwsDatePicker from "../components/AwsDatePicker.jsx"
 import {
   buildPatientPhoneNumber,
@@ -170,6 +171,7 @@ export default function RegisterPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">
                 {"Registration"}
               </p>
