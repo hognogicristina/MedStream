@@ -61,7 +61,7 @@ function getPatientSourceBreadcrumb(searchParams, sourceKey = "from") {
   }
 
   if (source === "profile") {
-    return {text: "Profile", href: "/profile"}
+    return {text: "My Profile", href: "/profile"}
   }
 
   return null

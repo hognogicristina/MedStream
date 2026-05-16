@@ -15,6 +15,7 @@ import {
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import PatientAdmissionActionCard from "../components/PatientAdmissionActionCard.jsx"
+import PatientAssignmentStatus from "../components/PatientAssignmentStatus.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {usePatientAdmissionActions} from "../hooks/usePatientAdmissionActions.js"
 import {useAuth} from "../components/AuthContext.jsx"
@@ -127,6 +128,7 @@ export default function PatientAdmissionHistoryPage() {
                 <StatusIndicator type={patient?.is_discharged ? "stopped" : "success"}>
                   {patientStatusText}
                 </StatusIndicator>
+                <PatientAssignmentStatus patientId={id}/>
                 <span className="medstream-department-badge">
                   <Badge color="blue">{patient?.department || "--"}</Badge>
                 </span>

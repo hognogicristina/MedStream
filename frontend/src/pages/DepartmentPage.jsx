@@ -401,7 +401,7 @@ export default function DepartmentPage() {
       header: "Alert count",
       width: isAllDepartments ? 92 : undefined,
       minWidth: isAllDepartments ? 86 : undefined,
-      cell: ({stat, alertSummary}) => <CountValue value={stat?.alerts_count ?? alertSummary.count}/>,
+      cell: ({stat, alertSummary}) => <CountValue showFullValue value={stat?.alerts_count ?? alertSummary.count}/>,
     },
     {
       id: "heartRate",
@@ -481,7 +481,7 @@ export default function DepartmentPage() {
           <ColumnLayout columns={4} variant="text-grid">
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Patients</Box>
-              <Box variant="h2"><CountValue value={patients.length}/></Box>
+              <Box variant="h2"><CountValue showFullValue value={patients.length}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Batch status</Box>
@@ -501,11 +501,11 @@ export default function DepartmentPage() {
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Critical patients</Box>
-              <Box variant="h2"><CountValue value={criticalPatientsCount}/></Box>
+              <Box variant="h2"><CountValue showFullValue value={criticalPatientsCount}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">High alert patients</Box>
-              <Box variant="h2"><CountValue value={highAlertPatientsCount}/></Box>
+              <Box variant="h2"><CountValue showFullValue value={highAlertPatientsCount}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Most problematic vital</Box>
@@ -578,7 +578,7 @@ export default function DepartmentPage() {
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Filtered rows</Box>
-              <Box variant="h3"><CountValue value={sortedRows.length}/></Box>
+              <Box variant="h3"><CountValue showFullValue value={sortedRows.length}/></Box>
               <Box color="text-body-secondary">Patients matching current filters.</Box>
             </SpaceBetween>
           </ColumnLayout>

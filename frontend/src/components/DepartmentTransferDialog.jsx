@@ -146,6 +146,13 @@ export default function DepartmentTransferDialog({
           </SpaceBetween>
         </ColumnLayout>
 
+        <details className="medstream-transfer-doctor-info">
+          <summary className="medstream-transfer-doctor-info-header">Doctor selection</summary>
+          <Box className="medstream-transfer-doctor-info-body" color="text-body-secondary">
+            In order to select a doctor, you must first choose a new department.
+          </Box>
+        </details>
+
         <div className="medstream-form-grid">
           <FormField label="New Department">
             <Select
@@ -159,15 +166,17 @@ export default function DepartmentTransferDialog({
               disabled={isSubmitting}
             />
           </FormField>
-          <FormField label="Assign Doctor">
-            <Select
-              selectedOption={selectedDoctorOption}
-              onChange={({detail}) => setNextDoctorId(detail.selectedOption.value)}
-              options={doctorOptions}
-              placeholder={nextDepartment ? "Select a doctor" : "Select a department first"}
-              disabled={isSubmitting || !nextDepartment}
-            />
-          </FormField>
+          <div className="medstream-transfer-doctor-select">
+            <FormField label="Assign Doctor">
+              <Select
+                selectedOption={selectedDoctorOption}
+                onChange={({detail}) => setNextDoctorId(detail.selectedOption.value)}
+                options={doctorOptions}
+                placeholder="Select a doctor"
+                disabled={isSubmitting || !nextDepartment}
+              />
+            </FormField>
+          </div>
           <div className="medstream-form-field-wide">
             <FormField
               label="Transfer Reason"

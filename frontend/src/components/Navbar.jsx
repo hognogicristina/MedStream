@@ -11,7 +11,7 @@ import {useTheme} from "./ThemeContext.jsx"
 import {getResponseData} from "../services/apiMessages.js"
 import {getDepartments} from "../services/patientApi.js"
 
-function resolveActiveHref(pathname) {
+function resolveActiveHref(pathname, search = "") {
   if (pathname === "/departments") {
     return "/departments"
   }
@@ -33,16 +33,28 @@ function resolveActiveHref(pathname) {
   if (pathname.startsWith("/how-it-works")) {
     return "/how-it-works"
   }
-  if (pathname.startsWith("/patients/new") || pathname.startsWith("/patient/") || pathname.startsWith("/patients/")) {
+  if (pathname.startsWith("/patients/new")) {
     return "/patients/new"
+  }
+  if (pathname.startsWith("/patient/") || pathname.startsWith("/patients/")) {
+    const params = new URLSearchParams(search)
+    const source = params.get("from")
+    const department = params.get("department")
+
+    if (source === "department" && department) {
+      return `/departments/${encodeURIComponent(department)}`
+    }
+    if (source === "departments") {
+      return "/departments"
+    }
   }
   return "/dashboard"
 }
 
 const METRIC_RAIL_ITEMS = [
-  {id: "/metrics/streaming", text: "Streaming"},
-  {id: "/metrics/batch", text: "Batch"},
-  {id: "/metrics/comparison", text: "Comparison"},
+  {id: "/metrics/streaming", text: "Live Monitoring"},
+  {id: "/metrics/batch", text: "Batch Analytics"},
+  {id: "/metrics/comparison", text: "Streaming vs Batch"},
 ]
 
 function VitalsHeartIcon() {
@@ -229,7 +241,7 @@ export function AppTopNavigation() {
           {isAccountMenuOpen && (
             <div className="medstream-account-options" role="menu" aria-label="Account options">
               <button className="medstream-account-option" onClick={() => handleAccountOption("profile")} role="menuitem" type="button">
-                <span className="medstream-account-option-text">Profile</span>
+                <span className="medstream-account-option-text">My Profile</span>
               </button>
               <button className="medstream-account-option" onClick={() => handleAccountOption("logout")} role="menuitem" type="button">
                 <span className="medstream-account-option-text">Sign out</span>
@@ -247,7 +259,7 @@ export function AppSideNavigation({onCollapse}) {
   const location = useLocation()
   const [departments, setDepartments] = useState([])
 
-  const activeHref = useMemo(() => resolveActiveHref(location.pathname), [location.pathname])
+  const activeHref = useMemo(() => resolveActiveHref(location.pathname, location.search), [location.pathname, location.search])
   const navItems = useMemo(() => createNavigationItems(departments), [departments])
 
   useEffect(() => {
@@ -300,7 +312,7 @@ export function AppIconRail({onOpen}) {
   const [departments, setDepartments] = useState([])
   const [departmentsDropdownRef, isDepartmentsDropdownOpen] = useButtonDropdownOpenState()
   const [metricsDropdownRef, isMetricsDropdownOpen] = useButtonDropdownOpenState()
-  const activeHref = useMemo(() => resolveActiveHref(location.pathname), [location.pathname])
+  const activeHref = useMemo(() => resolveActiveHref(location.pathname, location.search), [location.pathname, location.search])
   const isDepartmentsActive = activeHref.startsWith("/departments")
   const isMetricsActive = activeHref.startsWith("/metrics/")
   const departmentItems = useMemo(() => [

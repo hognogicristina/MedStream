@@ -269,11 +269,11 @@ export default function DashboardPage() {
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Total departments</Box>
-              <Box variant="h2"><CountValue value={departments.length}/></Box>
+              <Box variant="h2"><CountValue showFullValue value={departments.length}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Total doctors</Box>
-              <Box variant="h2"><CountValue value={doctors.length}/></Box>
+              <Box variant="h2"><CountValue showFullValue value={doctors.length}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Total alerts tracked</Box>

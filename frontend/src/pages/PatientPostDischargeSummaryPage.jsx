@@ -12,6 +12,7 @@ import {
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import PostDischargeClinicalSummaryCard from "../components/PostDischargeClinicalSummaryCard.jsx"
+import PatientAssignmentStatus from "../components/PatientAssignmentStatus.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {getPatient, getPatientPostDischargeSummary} from "../services/patientApi.js"
@@ -94,6 +95,7 @@ export default function PatientPostDischargeSummaryPage() {
                 <StatusIndicator type={patient?.is_discharged ? "stopped" : "success"}>
                   {patientStatusText}
                 </StatusIndicator>
+                <PatientAssignmentStatus patientId={patientId}/>
                 <span className="medstream-department-badge">
                   <Badge color="blue">{patient?.department || "--"}</Badge>
                 </span>
