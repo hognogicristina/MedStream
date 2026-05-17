@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Query
 
 from app.core.http import ApiResponse, success_response
@@ -16,6 +18,7 @@ from app.service.metrics import (
     get_comparison_history,
     get_comparison_metrics,
     get_latest_batch_metrics,
+    record_comparison_metric_sample,
     streaming_metrics_store,
 )
 
@@ -116,11 +119,20 @@ def get_metrics_comparison():
 
 @router.get("/comparison-history", response_model=ApiResponse[ComparisonHistoryRead])
 def get_metrics_comparison_history(
-        seconds: int = Query(default=3600, ge=60, le=3600),
-        interval_seconds: int = Query(default=4, ge=1, le=60),
+        seconds: int = Query(default=3600, ge=60, le=157680000),
+        interval_seconds: int = Query(default=4, ge=1, le=604800),
+        start_time: datetime | None = Query(default=None),
+        end_time: datetime | None = Query(default=None),
 ):
     with SessionLocal() as db:
-        history = get_comparison_history(db, seconds=seconds, interval_seconds=interval_seconds)
+        record_comparison_metric_sample(db)
+        history = get_comparison_history(
+            db,
+            seconds=seconds,
+            interval_seconds=interval_seconds,
+            start_time=start_time,
+            end_time=end_time,
+        )
 
     return success_response(
         "Comparison history retrieved successfully.",

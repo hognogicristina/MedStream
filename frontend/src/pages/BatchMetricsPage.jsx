@@ -1154,6 +1154,7 @@ export default function BatchMetricsPage() {
                         legendPosition="left"
                         seriesTitle="Treatments"
                         tooltipValueFormatter={(bar) => String(toTreatmentCount(bar.y))}
+                        yTitle="Treatment"
                         valueKey="count"
                         xTitle="Outcome"
                       />

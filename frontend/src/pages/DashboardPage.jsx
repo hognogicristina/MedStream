@@ -171,6 +171,7 @@ export default function DashboardPage() {
             ...prev,
             {
               time: formatBucharestTime(new Date()),
+              patient_id: v.patient_id,
               heart_rate: v.heart_rate,
               oxygen_saturation: v.oxygen_saturation,
               temperature: v.temperature,
@@ -226,6 +227,19 @@ export default function DashboardPage() {
       value: formattedValue,
     }
   }, [])
+  const renderVitalPopoverFooter = useCallback((xValue) => {
+    if (!Number.isInteger(xValue)) {
+      return null
+    }
+
+    const patientId = chartData[xValue - 1]?.patient_id
+
+    if (patientId === null || patientId === undefined || patientId === "") {
+      return null
+    }
+
+    return <Box variant="small">Patient ID: {patientId}</Box>
+  }, [chartData])
   if (isLoadingDashboard) {
     return (
       <ContentLayout>
@@ -280,6 +294,7 @@ export default function DashboardPage() {
                 ) : (
                   <VitalsChart
                     data={chartData}
+                    detailPopoverFooter={renderVitalPopoverFooter}
                     detailPopoverSeriesContent={renderVitalPopoverSeriesContent}
                   />
                 )}

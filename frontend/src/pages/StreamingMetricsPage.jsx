@@ -488,6 +488,7 @@ export default function StreamingMetricsPage() {
 
             <div className="medstream-streaming-vitals-spacer">
               <Container
+                className="medstream-streaming-vitals-card"
                 header={
                   <Header
                     variant="h2"
@@ -506,7 +507,7 @@ export default function StreamingMetricsPage() {
                     const displayValue = Number.isFinite(latestValue) ? latestValue : fallbackValue
 
                     return (
-                      <section className="medstream-streaming-vital-panel" key={vital.key} aria-label={`${vital.title} stream`}>
+                      <section className="medstream-streaming-vital-panel" key={`${vital.key}-panel`} aria-label={`${vital.title} stream`}>
                         <div className="medstream-streaming-vital-panel-header">
                           <div>
                             <Box color="text-body-secondary" variant="awsui-key-label">{vital.title}</Box>
@@ -532,7 +533,7 @@ export default function StreamingMetricsPage() {
                           <AwsLineChart
                             ariaLabel={`${vital.title} streaming trend`}
                             data={vitalsHistory}
-                            height={170}
+                            height={190}
                             highlightedSeriesTitle={highlightedVitalSeries === vital.title ? vital.title : null}
                             hideLegend
                             onHighlightedSeriesTitleChange={setHighlightedVitalSeries}
@@ -561,25 +562,25 @@ export default function StreamingMetricsPage() {
                   aria-label="Legend"
                   onMouseLeave={() => setHighlightedVitalSeries(null)}
                 >
-                  {VITAL_STREAMS.map((vital) => (
+                  {VITAL_STREAMS.map((vitalItem) => (
                     <button
                       className={[
                         "medstream-alerts-rate-legend-item",
-                        highlightedVitalSeries === vital.title ? "medstream-alerts-rate-legend-item-active" : "",
+                        highlightedVitalSeries === vitalItem.title ? "medstream-alerts-rate-legend-item-active" : "",
                       ].filter(Boolean).join(" ")}
-                      key={vital.key}
+                      key={vitalItem.key}
                       type="button"
-                      aria-pressed={highlightedVitalSeries === vital.title}
+                      aria-pressed={highlightedVitalSeries === vitalItem.title}
                       onBlur={() => setHighlightedVitalSeries(null)}
-                      onFocus={() => setHighlightedVitalSeries(vital.title)}
-                      onMouseEnter={() => setHighlightedVitalSeries(vital.title)}
+                      onFocus={() => setHighlightedVitalSeries(vitalItem.title)}
+                      onMouseEnter={() => setHighlightedVitalSeries(vitalItem.title)}
                     >
                       <span
                         className="medstream-alerts-rate-legend-line"
-                        style={{backgroundColor: vital.color}}
+                        style={{backgroundColor: vitalItem.color}}
                         aria-hidden="true"
                       />
-                      {vital.title}
+                      {vitalItem.title}
                     </button>
                   ))}
                 </div>

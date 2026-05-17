@@ -178,7 +178,12 @@ export default function AwsBarChart({
         <>
           <svg className="medstream-aws-bar-chart-svg" viewBox={`0 0 ${CHART_WIDTH} ${chartHeight}`} aria-hidden="true">
             {yTitle ? (
-              <text className="medstream-aws-bar-chart-title" x={PLOT.left - 40} y={20}>
+              <text
+                className="medstream-aws-bar-chart-title"
+                textAnchor="start"
+                x={0}
+                y="12"
+              >
                 {yTitle}
               </text>
             ) : null}

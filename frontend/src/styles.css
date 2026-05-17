@@ -1094,7 +1094,8 @@ body {
   display: flex;
   align-items: center;
   margin-top: 18px;
-  padding: 8px 0 2px;
+  padding: 14px 0 2px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .medstream-vitals-insights > * {
@@ -1999,16 +2000,25 @@ body {
   margin-top: 12px;
 }
 
+.medstream-streaming-vitals-card [class*="awsui_content-inner"] {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 .medstream-streaming-vitals-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .medstream-streaming-vital-panel {
   min-width: 0;
   padding: 0 16px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .medstream-streaming-vital-panel:first-child {
@@ -2070,9 +2080,11 @@ body {
 }
 
 .medstream-streaming-vital-chart {
-  height: 220px;
-  min-height: 220px;
-  overflow: hidden;
+  height: 240px;
+  min-height: 240px;
+  overflow: visible;
+  width: 100%;
+  max-width: 100%;
 }
 
 .medstream-streaming-vital-chart [class*="chart-container"],
@@ -2081,10 +2093,14 @@ body {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  overflow: visible;
+  padding-right: 0;
+  padding-left: 0;
 }
 
 .medstream-streaming-vital-chart svg {
   max-width: 100%;
+  margin-bottom: 32px;
 }
 
 .medstream-streaming-vital-chart [class*="series"] path {
@@ -2097,17 +2113,76 @@ body {
 }
 
 .medstream-streaming-vitals-legend {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 .medstream-comparison-chart-actions {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
+}
+
+.medstream-comparison-chart-actions > div {
+  min-width: 260px;
+}
+
+.medstream-comparison-custom-range-controls {
+  display: grid;
+  grid-template-columns: minmax(96px, 120px) minmax(132px, 160px) minmax(72px, auto);
+  gap: 8px;
+  align-items: end;
+}
+
+.medstream-comparison-custom-range-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #232f3e;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+}
+
+[data-theme="light"] .medstream-comparison-custom-range-popover {
+  border-color: #d5dbdb;
+  background: #ffffff;
+  color: #232f3e;
+}
+
+[data-theme="dark"] .medstream-comparison-custom-range-popover {
+  border-color: #3b424b;
+  background: #1b2430;
+  color: #f2f3f3;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.42);
+}
+
+.medstream-comparison-custom-range-duration,
+.medstream-comparison-custom-range-unit {
+  min-width: 0;
+}
+
+.medstream-comparison-custom-range-apply {
+  display: flex;
+  align-items: flex-end;
+  min-width: 110px;
+}
+
+.medstream-comparison-custom-range-apply .awsui_button_18eso_ci96j_5,
+.medstream-comparison-custom-range-apply button {
+  white-space: nowrap;
+  min-width: 110px;
 }
 
 .medstream-alerts-rate-stack {
@@ -2157,7 +2232,7 @@ body {
   align-items: center;
   justify-content: flex-start;
   min-width: 0;
-  margin-top: 10px;
+  margin-top: 42px;
 }
 
 .medstream-alerts-rate-legend-item {
@@ -2275,6 +2350,22 @@ body {
 .medstream-throughput-chart-panel {
   height: 260px;
   min-height: 260px;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.medstream-throughput-chart-panel [class*="chart-container"],
+.medstream-throughput-chart-panel [class*="chart-container-outer"],
+.medstream-throughput-chart-panel [class*="chart-container-inner"],
+.medstream-throughput-chart-panel [class*="content-inner"],
+.medstream-throughput-chart-panel [class*="content"],
+.medstream-throughput-chart-panel [class*="content-wrapper"] {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
 .medstream-throughput-legend {
@@ -2299,6 +2390,54 @@ body {
 
 .medstream-throughput-legend-item-dimmed {
   opacity: 0.55;
+}
+
+.medstream-comparison-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+  min-width: 0;
+}
+
+.medstream-comparison-latency-grid .medstream-chart-panel {
+  height: 360px;
+  min-height: 360px;
+}
+
+.medstream-latency-chart-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.medstream-latency-chart-panel [class*="series"] path {
+  transition: filter 0.16s ease, stroke-width 0.16s ease;
+}
+
+.medstream-latency-chart-panel-active [class*="series"] path {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--medstream-latency-series-color) 42%, transparent));
+  stroke-width: 3px;
+}
+
+.medstream-latency-legend {
+  margin-top: 12px;
+  padding: 0 20px 8px;
+}
+
+.medstream-latency-legend-item {
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.medstream-latency-legend-item:hover,
+.medstream-latency-legend-item:focus-visible,
+.medstream-latency-legend-item-active {
+  color: var(--text-primary);
 }
 
 .medstream-comparison-metric-card {
@@ -4608,11 +4747,37 @@ input[type="search"]::-webkit-search-cancel-button {
   }
 
   .medstream-streaming-vitals-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .medstream-comparison-chart-grid {
     grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .medstream-comparison-latency-grid .medstream-chart-panel {
+    height: 360px;
+    min-height: 360px;
   }
 
   .medstream-comparison-chart-actions {
     justify-content: flex-start;
+  }
+
+  .medstream-comparison-chart-actions,
+  .medstream-comparison-chart-actions > div {
+    width: 100%;
+  }
+
+  .medstream-comparison-custom-range-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .medstream-comparison-custom-range-popover {
+    right: auto;
+    left: 0;
+    width: 100%;
+    max-width: 100%;
   }
 
   .medstream-streaming-vital-panel,
@@ -5139,6 +5304,7 @@ textarea {
 
 @media (max-width: 520px) {
   .login-header {
+    --login-header-action-space: 0px;
     padding-right: 0;
   }
 
@@ -5201,10 +5367,11 @@ textarea {
 }
 
 .login-header {
+  --login-header-action-space: 150px;
   position: relative;
   min-height: 42px;
   margin-bottom: 22px;
-  padding-right: 150px;
+  padding-right: var(--login-header-action-space);
 }
 
 .login-brand {
@@ -5225,6 +5392,8 @@ textarea {
 }
 
 .login-subtitle {
+  width: calc(100% + var(--login-header-action-space, 0px));
+  max-width: calc(100% + var(--login-header-action-space, 0px));
   margin: 10px 0 0;
   font-size: 0.98rem;
   line-height: 1.6;

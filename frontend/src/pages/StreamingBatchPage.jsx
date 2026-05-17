@@ -1,11 +1,14 @@
-import {useEffect, useMemo, useState} from "react"
+import {useEffect, useMemo, useRef, useState} from "react"
 import {
   Box,
   Button,
   Container,
   ContentLayout,
+  FormField,
   Header,
+  Input,
   SegmentedControl,
+  Select,
   SpaceBetween,
 } from "@cloudscape-design/components"
 import {
@@ -20,23 +23,40 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import AwsLineChart from "../components/AwsLineChart.jsx"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
-import {formatBucharestTime} from "../utils/time.js"
+import {formatBucharestNumericDateTime, formatBucharestTime} from "../utils/time.js"
 
 const POLL_INTERVAL_MS = 4000
 const MAX_HISTORY_POINTS = 900
-const HISTORY_LOOKBACK_SECONDS = 60 * 60
+const CHART_HISTORY_MAX_SECONDS = 5 * 365 * 24 * 60 * 60
 const STORAGE_KEYS = {
   throughputHistory: "medstream.streamingBatch.v2.throughputHistory",
   latencyHistory: "medstream.streamingBatch.v2.latencyHistory",
   chartTimeRange: "medstream.streamingBatch.v2.chartTimeRange",
+  throughputChartTimeRange: "medstream.streamingBatch.v2.throughputChartTimeRange",
+  latencyChartTimeRange: "medstream.streamingBatch.v2.latencyChartTimeRange",
 }
-const CHART_TIME_RANGE_OPTIONS = [
-  {id: "1m", text: "1m", seconds: 60},
-  {id: "3m", text: "3m", seconds: 3 * 60},
-  {id: "5m", text: "5m", seconds: 5 * 60},
-  {id: "15m", text: "15m", seconds: 15 * 60},
-  {id: "1h", text: "1h", seconds: 60 * 60},
+const CHART_PRESET_RANGE_OPTIONS = [
+  {key: "15m", type: "relative", amount: 15, unit: "minute"},
+  {key: "30m", type: "relative", amount: 30, unit: "minute"},
+  {key: "1h", type: "relative", amount: 1, unit: "hour"},
 ]
+const DEFAULT_CUSTOM_CHART_TIME_RANGE = {key: "custom", type: "relative", amount: 1, unit: "minute"}
+const DEFAULT_CHART_TIME_RANGE = DEFAULT_CUSTOM_CHART_TIME_RANGE
+const CHART_RANGE_CONTROL_OPTIONS = [
+  {id: "15m", text: "15m"},
+  {id: "30m", text: "30m"},
+  {id: "1h", text: "1h"},
+  {id: "custom", text: "Custom"},
+]
+const CUSTOM_CHART_TIME_UNIT_OPTIONS = [
+  {label: "minutes", value: "minute"},
+  {label: "hours", value: "hour"},
+  {label: "days", value: "day"},
+  {label: "weeks", value: "week"},
+  {label: "months", value: "month"},
+  {label: "years", value: "year"},
+]
+const FULL_TIME_AXIS_RANGE_SECONDS = 24 * 60 * 60
 const THROUGHPUT_CHART_SERIES = [
   {key: "streaming_alerts_per_minute", title: "Streaming Alerts/minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)}`},
   {key: "batch_alerts_per_minute", title: "Batch Alerts/minute", color: "#60a5fa", valueFormatter: (value) => `${value.toFixed(2)}`},
@@ -44,6 +64,12 @@ const THROUGHPUT_CHART_SERIES = [
 const LATENCY_CHART_SERIES = [
   {key: "streaming_latency_ms", title: "Streaming Latency", color: "#f97316", valueFormatter: (value) => formatLatencyDuration(value)},
   {key: "batch_latency_ms", title: "Batch Latency Avg", color: "#60a5fa", valueFormatter: (value) => formatLatencyDuration(value)},
+]
+const STREAMING_LATENCY_CHART_SERIES = [
+  LATENCY_CHART_SERIES[0],
+]
+const BATCH_LATENCY_CHART_SERIES = [
+  LATENCY_CHART_SERIES[1],
 ]
 
 function formatFixed(value, digits = 2) {
@@ -74,6 +100,154 @@ function formatLatencyDuration(value) {
     return `${formatFixed(safeValue / 1000, 2)} sec`
   }
   return `${formatFixed(safeValue, 2)} ms`
+}
+
+function formatLatencyAxisValue(value, unit = "ms") {
+  const safeValue = Number.isFinite(value) ? value : 0
+
+  if (unit === "min") {
+    return `${formatFixed(safeValue / 60000, 2)} min`
+  }
+
+  return `${formatFixed(safeValue, 2)} ms`
+}
+
+function getRangeOptionByKey(key) {
+  return CHART_PRESET_RANGE_OPTIONS.find((range) => range.key === key) || null
+}
+
+function getRelativeRangeSeconds(value) {
+  if (!value || value.type !== "relative") {
+    return 0
+  }
+
+  const amount = Number(value.amount) || 0
+  if (value.unit === "second") {
+    return amount
+  }
+  if (value.unit === "minute") {
+    return amount * 60
+  }
+  if (value.unit === "hour") {
+    return amount * 60 * 60
+  }
+  if (value.unit === "day") {
+    return amount * 24 * 60 * 60
+  }
+  if (value.unit === "week") {
+    return amount * 7 * 24 * 60 * 60
+  }
+  if (value.unit === "month") {
+    return amount * 30 * 24 * 60 * 60
+  }
+  if (value.unit === "year") {
+    return amount * 365 * 24 * 60 * 60
+  }
+  return 0
+}
+
+function formatRelativeRangeLabel(value) {
+  const amount = Number(value?.amount) || 0
+  const unit = value?.unit || "minute"
+  const pluralUnit = amount === 1 ? unit : `${unit}s`
+
+  return `Last ${amount} ${pluralUnit}`
+}
+
+function parseStoredChartTimeRange(storedValue) {
+  if (!storedValue) {
+    return DEFAULT_CHART_TIME_RANGE
+  }
+
+  const legacyRange = getRangeOptionByKey(storedValue)
+  if (legacyRange) {
+    return legacyRange
+  }
+
+  try {
+    const parsedValue = JSON.parse(storedValue)
+    if (parsedValue?.type === "relative") {
+      const presetRange = getRangeOptionByKey(parsedValue.key)
+      if (presetRange) {
+        return presetRange
+      }
+      return {
+        key: "custom",
+        type: "relative",
+        amount: Number(parsedValue.amount) || DEFAULT_CHART_TIME_RANGE.amount,
+        unit: parsedValue.unit || DEFAULT_CHART_TIME_RANGE.unit,
+      }
+    }
+  } catch {
+    return DEFAULT_CHART_TIME_RANGE
+  }
+
+  return DEFAULT_CHART_TIME_RANGE
+}
+
+function getChartRangeWindow(rangeValue, nowMs = Date.now()) {
+  const seconds = getRelativeRangeSeconds(rangeValue)
+  return {startMs: nowMs - seconds * 1000, endMs: nowMs}
+}
+
+function getHistoryIntervalSeconds(seconds) {
+  return Math.max(Math.round(POLL_INTERVAL_MS / 1000), Math.ceil(seconds / Math.max(1, MAX_HISTORY_POINTS - 1)))
+}
+
+function getCombinedHistoryRequestParams(rangeValues) {
+  const seconds = Math.max(
+    60,
+    ...rangeValues.map((rangeValue) => getRelativeRangeSeconds(rangeValue) || 0),
+  )
+
+  return {
+    seconds,
+    interval_seconds: getHistoryIntervalSeconds(seconds),
+  }
+}
+
+function getChartRangeLabel(rangeValue) {
+  return formatRelativeRangeLabel(rangeValue || DEFAULT_CHART_TIME_RANGE)
+}
+
+function getChartRangeControlId(rangeValue) {
+  return getRangeOptionByKey(rangeValue?.key)?.key || "custom"
+}
+
+function getCustomTimeUnitOption(unit) {
+  return CUSTOM_CHART_TIME_UNIT_OPTIONS.find((option) => option.value === unit) || CUSTOM_CHART_TIME_UNIT_OPTIONS[1]
+}
+
+function shouldShowFullTimestamp(rangeValue) {
+  return getRelativeRangeSeconds(rangeValue) > FULL_TIME_AXIS_RANGE_SECONDS
+}
+
+function getHistoryPointLabel(point, useFullTimestamp) {
+  if (!point) {
+    return ""
+  }
+
+  if (!useFullTimestamp) {
+    return point.time || ""
+  }
+
+  if (point.time_iso) {
+    return formatBucharestNumericDateTime(point.time_iso, point.time || "")
+  }
+
+  return point.time || ""
+}
+
+function buildChartXAxisTickFormatter(points, rangeValue) {
+  const useFullTimestamp = shouldShowFullTimestamp(rangeValue)
+
+  return (value) => {
+    if (!Number.isInteger(value)) {
+      return ""
+    }
+
+    return getHistoryPointLabel(points[value - 1], useFullTimestamp)
+  }
 }
 
 function toMillis(value) {
@@ -145,12 +319,11 @@ function loadStoredHistory(storageKey) {
   }
 }
 
-function loadStoredChartTimeRange() {
-  const storedRangeId = getStoredValue(STORAGE_KEYS.chartTimeRange)
-  return CHART_TIME_RANGE_OPTIONS.some((range) => range.id === storedRangeId) ? storedRangeId : "1m"
+function loadStoredChartTimeRange(storageKey = STORAGE_KEYS.chartTimeRange) {
+  return parseStoredChartTimeRange(getStoredValue(storageKey) || getStoredValue(STORAGE_KEYS.chartTimeRange))
 }
 
-function padHistoryToWindow(points, selectedRange, nowMs) {
+function padHistoryToWindow(points, rangeWindow) {
   if (!Array.isArray(points) || points.length === 0) {
     return []
   }
@@ -164,8 +337,7 @@ function padHistoryToWindow(points, selectedRange, nowMs) {
     return []
   }
 
-  const rangeStart = nowMs - (selectedRange.seconds * 1000)
-  const inRange = pointsWithTime.filter(({time}) => time >= rangeStart && time <= nowMs)
+  const inRange = pointsWithTime.filter(({time}) => time >= rangeWindow.startMs && time <= rangeWindow.endMs)
 
   if (inRange.length === 0) {
     return []
@@ -174,18 +346,20 @@ function padHistoryToWindow(points, selectedRange, nowMs) {
   return inRange.map(({point}) => point)
 }
 
-function filterHistoryByRange(points, rangeId) {
-  const selectedRange = CHART_TIME_RANGE_OPTIONS.find((range) => range.id === rangeId) || CHART_TIME_RANGE_OPTIONS[0]
+function filterHistoryByRange(points, rangeValue) {
   if (!Array.isArray(points) || points.length === 0) {
     return []
   }
 
-  const now = Date.now()
-  const padded = padHistoryToWindow(points, selectedRange, now)
-  const rangeStart = now - selectedRange.seconds * 1000
+  const rangeWindow = getChartRangeWindow(rangeValue)
+  if (!rangeWindow) {
+    return []
+  }
+
+  const padded = padHistoryToWindow(points, rangeWindow)
   const clamped = padded.filter((point) => {
     const pointTime = toMillis(point?.time_iso)
-    return pointTime != null && pointTime >= rangeStart && pointTime <= now
+    return pointTime != null && pointTime >= rangeWindow.startMs && pointTime <= rangeWindow.endMs
   })
 
   return clamped
@@ -210,7 +384,16 @@ export default function StreamingBatchPage() {
   const [latencyHistory, setLatencyHistory] = useState(() => loadStoredHistory(STORAGE_KEYS.latencyHistory))
   const [isLoading, setIsLoading] = useState(true)
   const [highlightedThroughputSeries, setHighlightedThroughputSeries] = useState(null)
-  const [chartTimeRange, setChartTimeRange] = useState(loadStoredChartTimeRange)
+  const [highlightedStreamingLatencySeries, setHighlightedStreamingLatencySeries] = useState(null)
+  const [highlightedBatchLatencySeries, setHighlightedBatchLatencySeries] = useState(null)
+  const [throughputChartTimeRange, setThroughputChartTimeRange] = useState(() => loadStoredChartTimeRange(STORAGE_KEYS.throughputChartTimeRange))
+  const [latencyChartTimeRange, setLatencyChartTimeRange] = useState(() => loadStoredChartTimeRange(STORAGE_KEYS.latencyChartTimeRange))
+  const [isThroughputCustomRangeOpen, setIsThroughputCustomRangeOpen] = useState(false)
+  const [isLatencyCustomRangeOpen, setIsLatencyCustomRangeOpen] = useState(false)
+  const [throughputCustomRangeDraft, setThroughputCustomRangeDraft] = useState(throughputChartTimeRange)
+  const [latencyCustomRangeDraft, setLatencyCustomRangeDraft] = useState(latencyChartTimeRange)
+  const throughputCustomRangeRef = useRef(null)
+  const latencyCustomRangeRef = useRef(null)
 
   useEffect(() => {
     setStoredValue(STORAGE_KEYS.throughputHistory, JSON.stringify(throughputHistory.slice(-MAX_HISTORY_POINTS)))
@@ -221,8 +404,49 @@ export default function StreamingBatchPage() {
   }, [latencyHistory])
 
   useEffect(() => {
-    setStoredValue(STORAGE_KEYS.chartTimeRange, chartTimeRange)
-  }, [chartTimeRange])
+    setStoredValue(STORAGE_KEYS.throughputChartTimeRange, JSON.stringify(throughputChartTimeRange))
+  }, [throughputChartTimeRange])
+
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.latencyChartTimeRange, JSON.stringify(latencyChartTimeRange))
+  }, [latencyChartTimeRange])
+
+  useEffect(() => {
+    setThroughputCustomRangeDraft(throughputChartTimeRange)
+  }, [throughputChartTimeRange])
+
+  useEffect(() => {
+    setLatencyCustomRangeDraft(latencyChartTimeRange)
+  }, [latencyChartTimeRange])
+
+  useEffect(() => {
+    if (!isThroughputCustomRangeOpen && !isLatencyCustomRangeOpen) {
+      return undefined
+    }
+
+    const handleDocumentMouseDown = (event) => {
+      if (isThroughputCustomRangeOpen && !throughputCustomRangeRef.current?.contains(event.target)) {
+        setIsThroughputCustomRangeOpen(false)
+      }
+      if (isLatencyCustomRangeOpen && !latencyCustomRangeRef.current?.contains(event.target)) {
+        setIsLatencyCustomRangeOpen(false)
+      }
+    }
+    const handleDocumentKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsThroughputCustomRangeOpen(false)
+        setIsLatencyCustomRangeOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleDocumentMouseDown)
+    document.addEventListener("keydown", handleDocumentKeyDown)
+
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentMouseDown)
+      document.removeEventListener("keydown", handleDocumentKeyDown)
+    }
+  }, [isLatencyCustomRangeOpen, isThroughputCustomRangeOpen])
 
   useEffect(() => {
     let active = true
@@ -234,14 +458,12 @@ export default function StreamingBatchPage() {
       }
 
       try {
+        const historyRequestParams = getCombinedHistoryRequestParams([throughputChartTimeRange, latencyChartTimeRange])
         const [comparisonResponse, streamingResponse, batchResponse, historyResponse] = await Promise.all([
           getMetricsComparison(),
           getStreamingMetrics(),
           getBatchMetrics(),
-          getMetricsComparisonHistory({
-            seconds: HISTORY_LOOKBACK_SECONDS,
-            interval_seconds: Math.round(POLL_INTERVAL_MS / 1000),
-          }),
+          getMetricsComparisonHistory(historyRequestParams),
         ])
 
         if (!active) {
@@ -277,7 +499,7 @@ export default function StreamingBatchPage() {
       active = false
       window.clearInterval(intervalId)
     }
-  }, [notifyError])
+  }, [latencyChartTimeRange, notifyError, throughputChartTimeRange])
 
   const data = comparison ?? {
     streaming_latency_avg: 0,
@@ -293,19 +515,27 @@ export default function StreamingBatchPage() {
   }
 
   const batchLatencyMinutes = (Number(data.batch_latency_avg) || 0) / 60
-  const streamingLatencyMs = Number(streamingMetricsSnapshot?.execution_time_ms) || 0
-  const rawStreamingEventToAlertLatencyMs = Number(data.streaming_latency_avg) || 0
+  const streamingLatencyMs = Number(data.streaming_latency_avg) || 0
+  const streamingExecutionTimeMs = Number(streamingMetricsSnapshot?.execution_time_ms) || 0
   const batchLatencyMs = (Number(data.batch_latency_avg) || 0) * 1000
   const batchExecutionTimeMs = Number(batchMetricsSnapshot?.execution_time_ms) || 0
   const latestThroughputPoint = throughputHistory[throughputHistory.length - 1] || {}
   const latestLatencyPoint = latencyHistory[latencyHistory.length - 1] || {}
   const visibleThroughputHistory = useMemo(
-    () => filterHistoryByRange(throughputHistory, chartTimeRange),
-    [chartTimeRange, throughputHistory],
+    () => filterHistoryByRange(throughputHistory, throughputChartTimeRange),
+    [throughputChartTimeRange, throughputHistory],
   )
   const visibleLatencyHistory = useMemo(
-    () => filterHistoryByRange(latencyHistory, chartTimeRange),
-    [chartTimeRange, latencyHistory],
+    () => filterHistoryByRange(latencyHistory, latencyChartTimeRange),
+    [latencyChartTimeRange, latencyHistory],
+  )
+  const throughputXAxisTickFormatter = useMemo(
+    () => buildChartXAxisTickFormatter(visibleThroughputHistory, throughputChartTimeRange),
+    [throughputChartTimeRange, visibleThroughputHistory],
+  )
+  const latencyXAxisTickFormatter = useMemo(
+    () => buildChartXAxisTickFormatter(visibleLatencyHistory, latencyChartTimeRange),
+    [latencyChartTimeRange, visibleLatencyHistory],
   )
   const latestStreamingAlertsPerMinute = Number(latestThroughputPoint.streaming_alerts_per_minute) || 0
   const latestBatchAlertsPerMinute = Number(latestThroughputPoint.batch_alerts_per_minute) || 0
@@ -329,48 +559,148 @@ export default function StreamingBatchPage() {
       ]),
     ),
   ], [visibleThroughputHistory])
-  const latencyChartYDomain = useMemo(() => [
+  const streamingLatencyChartYDomain = useMemo(() => [
     0,
     Math.max(
       1,
-      ...visibleLatencyHistory.flatMap((point) => [
-        Number(point.streaming_latency_ms) || 0,
-        Number(point.batch_latency_ms) || 0,
-      ]),
+      ...visibleLatencyHistory.map((point) => Number(point.streaming_latency_ms) || 0),
+    ),
+  ], [visibleLatencyHistory])
+  const batchLatencyChartYDomain = useMemo(() => [
+    0,
+    Math.max(
+      1,
+      ...visibleLatencyHistory.map((point) => Number(point.batch_latency_ms) || 0),
     ),
   ], [visibleLatencyHistory])
 
-  const handleChartTimeRangeChange = ({detail}) => {
-    const selectedRangeId = detail?.selectedId
-      || detail?.selectedOption?.value
-      || detail?.selectedOption?.id
-      || detail?.value
-      || chartTimeRange
+  const updateChartTimeRange = ({detail}, currentRange, setRange, setIsOpen, setRangeDraft) => {
+    const selectedId = detail?.selectedId || DEFAULT_CHART_TIME_RANGE.key
+    const presetRange = getRangeOptionByKey(selectedId)
 
-    setChartTimeRange(selectedRangeId)
+    if (presetRange) {
+      setRange(presetRange)
+      setIsOpen(false)
+      return
+    }
+
+    setRangeDraft({
+      ...DEFAULT_CUSTOM_CHART_TIME_RANGE,
+      ...(getChartRangeControlId(currentRange) === "custom" ? currentRange : {}),
+      key: "custom",
+    })
+    setIsOpen(true)
   }
 
-  const renderChartTimeRangeControl = () => (
-    <div className="medstream-comparison-chart-actions">
+  const updateCustomDuration = ({detail}, setRangeDraft, setIsOpen) => {
+    const nextAmount = Math.max(1, Number(detail?.value) || 1)
+    setRangeDraft((currentRange) => ({
+      ...DEFAULT_CUSTOM_CHART_TIME_RANGE,
+      ...(getChartRangeControlId(currentRange) === "custom" ? currentRange : {}),
+      key: "custom",
+      amount: nextAmount,
+    }))
+    setIsOpen(true)
+  }
+
+  const updateCustomUnit = ({detail}, setRangeDraft, setIsOpen) => {
+    const nextUnit = detail?.selectedOption?.value || DEFAULT_CUSTOM_CHART_TIME_RANGE.unit
+    setRangeDraft((currentRange) => ({
+      ...DEFAULT_CUSTOM_CHART_TIME_RANGE,
+      ...(getChartRangeControlId(currentRange) === "custom" ? currentRange : {}),
+      key: "custom",
+      unit: nextUnit,
+    }))
+    setIsOpen(true)
+  }
+
+  const renderChartTimeRangeControl = ({
+    rangeValue,
+    setRangeValue,
+    rangeDraftValue,
+    setRangeDraftValue,
+    isOpen,
+    setIsOpen,
+    rangeRef,
+  }) => (
+    <div
+      className="medstream-comparison-chart-actions"
+      ref={rangeRef}
+      onClickCapture={(event) => {
+        const triggerButton = event.target.closest?.("button")
+        if (triggerButton?.textContent?.trim() === "Custom") {
+          setRangeDraftValue({
+            ...DEFAULT_CUSTOM_CHART_TIME_RANGE,
+            ...(getChartRangeControlId(rangeValue) === "custom" ? rangeValue : {}),
+            key: "custom",
+          })
+          setIsOpen(true)
+        }
+      }}
+    >
       <SegmentedControl
-        selectedId={chartTimeRange}
+        selectedId={getChartRangeControlId(rangeValue)}
         label="Chart time range"
-        options={CHART_TIME_RANGE_OPTIONS.map(({id, text}) => ({id, text}))}
-        onChange={handleChartTimeRangeChange}
+        options={CHART_RANGE_CONTROL_OPTIONS}
+        onChange={(event) => updateChartTimeRange(
+          event,
+          rangeValue,
+          setRangeValue,
+          setIsOpen,
+          setRangeDraftValue,
+        )}
       />
+      {isOpen && (
+        <div className="medstream-comparison-custom-range-popover" role="dialog" aria-label="Custom chart time range">
+          <div className="medstream-comparison-custom-range-controls">
+            <div className="medstream-comparison-custom-range-duration">
+              <FormField label="Duration">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={String(rangeDraftValue.amount || "")}
+                  placeholder="Duration"
+                  onChange={(event) => updateCustomDuration(event, setRangeDraftValue, setIsOpen)}
+                />
+              </FormField>
+            </div>
+            <div className="medstream-comparison-custom-range-unit">
+              <FormField label="Unit of time">
+                <Select
+                  selectedOption={getCustomTimeUnitOption(rangeDraftValue.unit)}
+                  options={CUSTOM_CHART_TIME_UNIT_OPTIONS}
+                  onChange={(event) => updateCustomUnit(event, setRangeDraftValue, setIsOpen)}
+                />
+              </FormField>
+            </div>
+            <div className="medstream-comparison-custom-range-apply">
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setRangeValue(rangeDraftValue)
+                  setIsOpen(false)
+                }}
+              >
+                Apply
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 
   const exportComparisonMetrics = () => {
     const exportTimestamp = new Date().toISOString()
-    const selectedRange = CHART_TIME_RANGE_OPTIONS.find((range) => range.id === chartTimeRange)
     const throughputDifference = latestBatchAlertsPerMinute - latestStreamingAlertsPerMinute
     const latencyDifferenceMs = batchLatencyMs - streamingLatencyMs
-    const executionTimeDifferenceMs = batchExecutionTimeMs - streamingLatencyMs
+    const executionTimeDifferenceMs = batchExecutionTimeMs - streamingExecutionTimeMs
     const rows = [
       ["summary_metric", "value"],
       ["export_timestamp", exportTimestamp],
-      ["chart_time_range", selectedRange?.text || chartTimeRange],
+      ["throughput_chart_time_range", getChartRangeLabel(throughputChartTimeRange)],
+      ["latency_chart_time_range", getChartRangeLabel(latencyChartTimeRange)],
       ["latest_history_timestamp", latestThroughputPoint.time_iso || latestLatencyPoint.time_iso || ""],
       ["latest_streaming_alerts_per_minute", latestStreamingAlertsPerMinute],
       ["latest_batch_alerts_per_minute", latestBatchAlertsPerMinute],
@@ -382,11 +712,11 @@ export default function StreamingBatchPage() {
       ["batch_latency_avg_minutes", roundNumber(batchLatencyMinutes, 4)],
       ["latency_difference_batch_minus_streaming_ms", roundNumber(latencyDifferenceMs)],
       ["latency_ratio_batch_to_streaming", ratioOrBlank(batchLatencyMs, streamingLatencyMs)],
-      ["raw_streaming_event_to_alert_latency_avg_ms", roundNumber(rawStreamingEventToAlertLatencyMs)],
-      ["streaming_execution_time_ms", roundNumber(streamingLatencyMs)],
+      ["streaming_event_to_alert_latency_avg_ms", roundNumber(streamingLatencyMs)],
+      ["streaming_execution_time_ms", roundNumber(streamingExecutionTimeMs)],
       ["batch_execution_time_ms", roundNumber(batchExecutionTimeMs)],
       ["execution_time_difference_batch_minus_streaming_ms", roundNumber(executionTimeDifferenceMs)],
-      ["execution_time_ratio_batch_to_streaming", ratioOrBlank(batchExecutionTimeMs, streamingLatencyMs)],
+      ["execution_time_ratio_batch_to_streaming", ratioOrBlank(batchExecutionTimeMs, streamingExecutionTimeMs)],
       ["total_events_window", Number(data.total_events) || 0],
       ["total_alerts_window", Number(data.total_alerts) || 0],
       ["events_per_second", roundNumber(eventsPerSecond, 4)],
@@ -472,11 +802,11 @@ export default function StreamingBatchPage() {
                     <MetricCard
                       label="Streaming Latency"
                       value={formatLatencyDuration(streamingLatencyMs)}
-                      hint="Streaming metric update time"
+                      hint="Event to alert processing time"
                     />
                     <MetricCard
                       label="Streaming Execution Time"
-                      value={formatLatencyDuration(streamingLatencyMs)}
+                      value={formatLatencyDuration(streamingExecutionTimeMs)}
                       hint="Time spent updating streaming metrics"
                     />
                     <MetricCard
@@ -518,7 +848,15 @@ export default function StreamingBatchPage() {
                     <Header
                       variant="h2"
                       description="Streaming and batch values are stored by the backend sampler, using comparable alerts-per-minute rates."
-                      actions={renderChartTimeRangeControl()}
+                      actions={renderChartTimeRangeControl({
+                        rangeValue: throughputChartTimeRange,
+                        setRangeValue: setThroughputChartTimeRange,
+                        rangeDraftValue: throughputCustomRangeDraft,
+                        setRangeDraftValue: setThroughputCustomRangeDraft,
+                        isOpen: isThroughputCustomRangeOpen,
+                        setIsOpen: setIsThroughputCustomRangeOpen,
+                        rangeRef: throughputCustomRangeRef,
+                      })}
                     >
                       Streaming throughput vs batch runs
                     </Header>
@@ -533,6 +871,8 @@ export default function StreamingBatchPage() {
                       onHighlightedSeriesTitleChange={setHighlightedThroughputSeries}
                       series={THROUGHPUT_CHART_SERIES}
                       xTitle="Time"
+                      yTitle=""
+                      xTickFormatter={throughputXAxisTickFormatter}
                       yDomain={throughputChartYDomain}
                       yTickFormatter={(value) => String(Math.round(value))}
                     />
@@ -585,21 +925,129 @@ export default function StreamingBatchPage() {
                     <Header
                       variant="h2"
                       description="Average time from recorded event to streaming alert or latest batch output."
-                      actions={renderChartTimeRangeControl()}
+                      actions={renderChartTimeRangeControl({
+                        rangeValue: latencyChartTimeRange,
+                        setRangeValue: setLatencyChartTimeRange,
+                        rangeDraftValue: latencyCustomRangeDraft,
+                        setRangeDraftValue: setLatencyCustomRangeDraft,
+                        isOpen: isLatencyCustomRangeOpen,
+                        setIsOpen: setIsLatencyCustomRangeOpen,
+                        rangeRef: latencyCustomRangeRef,
+                      })}
                     >
                       Latency trend
                     </Header>
                   }
                 >
-                  <div className="medstream-chart-panel">
-                    <AwsLineChart
-                      ariaLabel="Streaming latency"
-                      data={visibleLatencyHistory}
-                      series={LATENCY_CHART_SERIES}
-                      xTitle="Time"
-                      yDomain={latencyChartYDomain}
-                      yTickFormatter={(value) => formatLatencyDuration(Number(value) || 0)}
-                    />
+                  <div className="medstream-comparison-chart-grid medstream-comparison-latency-grid">
+                    <div
+                      className={[
+                        "medstream-chart-panel",
+                        "medstream-latency-chart-panel",
+                        highlightedStreamingLatencySeries ? "medstream-latency-chart-panel-active" : "",
+                      ].filter(Boolean).join(" ")}
+                      style={{"--medstream-latency-series-color": STREAMING_LATENCY_CHART_SERIES[0].color}}
+                    >
+                      <AwsLineChart
+                        ariaLabel="Streaming latency"
+                        data={visibleLatencyHistory}
+                        height={280}
+                        highlightedSeriesTitle={highlightedStreamingLatencySeries}
+                        hideLegend
+                        onHighlightedSeriesTitleChange={setHighlightedStreamingLatencySeries}
+                        series={STREAMING_LATENCY_CHART_SERIES}
+                        xTickFormatter={latencyXAxisTickFormatter}
+                        xTitle="Time"
+                        yDomain={streamingLatencyChartYDomain}
+                        yTitle=""
+                        yTickFormatter={(value) => formatLatencyAxisValue(Number(value) || 0, "ms")}
+                      />
+                      <div
+                        className="medstream-latency-legend awsui_root_1kjc7_qgpiu_167"
+                        role="toolbar"
+                        aria-label="Streaming latency legend"
+                        onMouseLeave={() => setHighlightedStreamingLatencySeries(null)}
+                      >
+                        <div className="awsui_list_1kjc7_qgpiu_206">
+                          <div
+                            className={[
+                              "awsui_marker_1kjc7_qgpiu_153",
+                              "medstream-latency-legend-item",
+                              highlightedStreamingLatencySeries ? "awsui_marker--highlighted_1kjc7_qgpiu_255" : "",
+                              highlightedStreamingLatencySeries ? "medstream-latency-legend-item-active" : "",
+                            ].filter(Boolean).join(" ")}
+                            role="button"
+                            aria-pressed={Boolean(highlightedStreamingLatencySeries)}
+                            tabIndex={0}
+                            onBlur={() => setHighlightedStreamingLatencySeries(null)}
+                            onFocus={() => setHighlightedStreamingLatencySeries(STREAMING_LATENCY_CHART_SERIES[0].title)}
+                            onMouseEnter={() => setHighlightedStreamingLatencySeries(STREAMING_LATENCY_CHART_SERIES[0].title)}
+                          >
+                            <span
+                              className="awsui_marker_1isd1_1nqfm_145 awsui_marker--line_1isd1_1nqfm_185"
+                              style={{backgroundColor: STREAMING_LATENCY_CHART_SERIES[0].color}}
+                              aria-hidden="true"
+                            />
+                            {" "}
+                            {STREAMING_LATENCY_CHART_SERIES[0].title}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div
+                      className={[
+                        "medstream-chart-panel",
+                        "medstream-latency-chart-panel",
+                        highlightedBatchLatencySeries ? "medstream-latency-chart-panel-active" : "",
+                      ].filter(Boolean).join(" ")}
+                      style={{"--medstream-latency-series-color": BATCH_LATENCY_CHART_SERIES[0].color}}
+                    >
+                      <AwsLineChart
+                        ariaLabel="Batch latency"
+                        data={visibleLatencyHistory}
+                        height={280}
+                        highlightedSeriesTitle={highlightedBatchLatencySeries}
+                        hideLegend
+                        onHighlightedSeriesTitleChange={setHighlightedBatchLatencySeries}
+                        series={BATCH_LATENCY_CHART_SERIES}
+                        xTickFormatter={latencyXAxisTickFormatter}
+                        xTitle="Time"
+                        yDomain={batchLatencyChartYDomain}
+                        yTitle=""
+                        yTickFormatter={(value) => formatLatencyAxisValue(Number(value) || 0, "min")}
+                      />
+                      <div
+                        className="medstream-latency-legend awsui_root_1kjc7_qgpiu_167"
+                        role="toolbar"
+                        aria-label="Batch latency legend"
+                        onMouseLeave={() => setHighlightedBatchLatencySeries(null)}
+                      >
+                        <div className="awsui_list_1kjc7_qgpiu_206">
+                          <div
+                            className={[
+                              "awsui_marker_1kjc7_qgpiu_153",
+                              "medstream-latency-legend-item",
+                              highlightedBatchLatencySeries ? "awsui_marker--highlighted_1kjc7_qgpiu_255" : "",
+                              highlightedBatchLatencySeries ? "medstream-latency-legend-item-active" : "",
+                            ].filter(Boolean).join(" ")}
+                            role="button"
+                            aria-pressed={Boolean(highlightedBatchLatencySeries)}
+                            tabIndex={0}
+                            onBlur={() => setHighlightedBatchLatencySeries(null)}
+                            onFocus={() => setHighlightedBatchLatencySeries(BATCH_LATENCY_CHART_SERIES[0].title)}
+                            onMouseEnter={() => setHighlightedBatchLatencySeries(BATCH_LATENCY_CHART_SERIES[0].title)}
+                          >
+                            <span
+                              className="awsui_marker_1isd1_1nqfm_145 awsui_marker--line_1isd1_1nqfm_185"
+                              style={{backgroundColor: BATCH_LATENCY_CHART_SERIES[0].color}}
+                              aria-hidden="true"
+                            />
+                            {" "}
+                            {BATCH_LATENCY_CHART_SERIES[0].title}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </Container>
               </SpaceBetween>
