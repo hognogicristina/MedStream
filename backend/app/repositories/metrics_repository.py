@@ -22,6 +22,10 @@ from app.validators.metrics_validators import validate_metric_value
 
 WINDOW_MINUTES = 60
 WINDOW_DELTA = timedelta(minutes=WINDOW_MINUTES)
+HISTORY_INTERVAL_SECONDS = 4
+HISTORY_MAX_POINTS = 900
+HISTORY_ALERT_WINDOW_SECONDS = 60
+HISTORY_ALERT_WINDOW_DELTA = timedelta(seconds=HISTORY_ALERT_WINDOW_SECONDS)
 
 
 def _empty_metrics():
@@ -430,6 +434,107 @@ def get_comparison_metrics(db: Session) -> dict:
         "batch_total_alerts": batch_total_alerts,
         "batch_events_per_second": round(float(latest_batch.events_per_second or 0), 4) if latest_batch is not None else 0.0,
         "batch_alert_rate": round(float(latest_batch.alert_rate or 0), 4) if latest_batch is not None else 0.0,
+    }
+
+
+def get_comparison_history(db: Session, *, seconds: int = 3600, interval_seconds: int = HISTORY_INTERVAL_SECONDS) -> dict:
+    now = utc_now()
+    safe_interval_seconds = max(1, int(interval_seconds or HISTORY_INTERVAL_SECONDS))
+    safe_seconds = max(safe_interval_seconds, int(seconds or safe_interval_seconds))
+    point_count = min(HISTORY_MAX_POINTS, max(2, (safe_seconds // safe_interval_seconds) + 1))
+    range_start = now - timedelta(seconds=(point_count - 1) * safe_interval_seconds)
+    alert_query_start = range_start - HISTORY_ALERT_WINDOW_DELTA
+
+    alert_rows = db.execute(
+        select(Alert.created_at, Vital.recorded_at)
+        .select_from(Alert)
+        .join(Vital, Vital.id == Alert.vital_id)
+        .where(
+            Alert.created_at >= alert_query_start,
+            Alert.created_at <= now,
+            Vital.recorded_at.is_not(None),
+        )
+        .order_by(Alert.created_at.asc(), Alert.id.asc())
+    ).all()
+
+    previous_batch = db.execute(
+        select(BatchAnalytics)
+        .where(BatchAnalytics.timestamp < range_start)
+        .order_by(BatchAnalytics.timestamp.desc(), BatchAnalytics.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    range_batches = db.execute(
+        select(BatchAnalytics)
+        .where(
+            BatchAnalytics.timestamp >= range_start,
+            BatchAnalytics.timestamp <= now,
+        )
+        .order_by(BatchAnalytics.timestamp.asc(), BatchAnalytics.id.asc())
+    ).scalars().all()
+    batch_rows = ([previous_batch] if previous_batch is not None else []) + list(range_batches)
+
+    alert_points = [
+        {
+            "created_at": to_utc(created_at),
+            "latency_ms": max(0.0, (to_utc(created_at) - to_utc(recorded_at)).total_seconds() * 1000),
+        }
+        for created_at, recorded_at in alert_rows
+        if created_at is not None and recorded_at is not None
+    ]
+
+    throughput = []
+    latency = []
+    alert_start_index = 0
+    alert_end_index = 0
+    alert_latency_sum = 0.0
+    batch_index = 0
+    current_batch = None
+
+    for point_index in range(point_count):
+        timestamp = range_start + timedelta(seconds=point_index * safe_interval_seconds)
+        window_start = timestamp - HISTORY_ALERT_WINDOW_DELTA
+
+        while alert_end_index < len(alert_points) and alert_points[alert_end_index]["created_at"] <= timestamp:
+            alert_latency_sum += alert_points[alert_end_index]["latency_ms"]
+            alert_end_index += 1
+
+        while alert_start_index < alert_end_index and alert_points[alert_start_index]["created_at"] < window_start:
+            alert_latency_sum -= alert_points[alert_start_index]["latency_ms"]
+            alert_start_index += 1
+
+        while batch_index < len(batch_rows) and to_utc(batch_rows[batch_index].timestamp) <= timestamp:
+            current_batch = batch_rows[batch_index]
+            batch_index += 1
+
+        window_alerts_count = alert_end_index - alert_start_index
+        streaming_latency_ms = (
+            round(alert_latency_sum / window_alerts_count, 2)
+            if window_alerts_count else 0.0
+        )
+        timestamp_utc = to_utc(timestamp)
+
+        throughput.append(
+            {
+                "time_iso": timestamp_utc,
+                "time": timestamp_utc.strftime("%H:%M:%S"),
+                "streaming_alerts_per_minute": window_alerts_count,
+                "batch_alerts_per_run": int(current_batch.alerts_count or 0) if current_batch is not None else 0,
+                "batch_timestamp": to_utc(current_batch.timestamp) if current_batch is not None else None,
+            }
+        )
+        latency.append(
+            {
+                "time_iso": timestamp_utc,
+                "time": timestamp_utc.strftime("%H:%M:%S"),
+                "streaming_latency_ms": streaming_latency_ms,
+                "batch_latency_ms": round(float(current_batch.batch_latency_avg_seconds or 0) * 1000, 2)
+                if current_batch is not None else 0.0,
+            }
+        )
+
+    return {
+        "throughput": throughput,
+        "latency": latency,
     }
 
 

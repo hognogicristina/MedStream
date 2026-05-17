@@ -4,6 +4,7 @@ from app.core.http import ApiResponse, success_response
 from app.db.session import SessionLocal
 from app.schemas.stats import (
     BatchAlertsHistoryPointRead,
+    ComparisonHistoryRead,
     BatchInsightsRead,
     ComparisonMetricsRead,
     ComparisonSummaryRead,
@@ -12,6 +13,7 @@ from app.schemas.stats import (
 from app.service.metrics import (
     get_batch_alerts_history,
     get_batch_insights_service,
+    get_comparison_history,
     get_comparison_metrics,
     get_latest_batch_metrics,
     streaming_metrics_store,
@@ -109,6 +111,20 @@ def get_metrics_comparison():
     return success_response(
         "Comparison metrics retrieved successfully.",
         comparison,
+    )
+
+
+@router.get("/comparison-history", response_model=ApiResponse[ComparisonHistoryRead])
+def get_metrics_comparison_history(
+        seconds: int = Query(default=3600, ge=60, le=3600),
+        interval_seconds: int = Query(default=4, ge=1, le=60),
+):
+    with SessionLocal() as db:
+        history = get_comparison_history(db, seconds=seconds, interval_seconds=interval_seconds)
+
+    return success_response(
+        "Comparison history retrieved successfully.",
+        history,
     )
 
 

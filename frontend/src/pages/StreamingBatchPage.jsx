@@ -8,7 +8,13 @@ import {
   SegmentedControl,
   SpaceBetween,
 } from "@cloudscape-design/components"
-import {getBatchMetrics, getMetricsComparison, getStreamingAlerts, getStreamingMetrics} from "../services/patientApi.js"
+import {
+  getBatchMetrics,
+  getMetricsComparison,
+  getMetricsComparisonHistory,
+  getStreamingAlerts,
+  getStreamingMetrics,
+} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
@@ -18,8 +24,14 @@ import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const POLL_INTERVAL_MS = 4000
 const MAX_HISTORY_POINTS = 900
+const HISTORY_LOOKBACK_SECONDS = 60 * 60
 const ALERTS_TELEMETRY_SIZE = 10
 const ALERTS_WINDOW_SECONDS = 60
+const STORAGE_KEYS = {
+  throughputHistory: "medstream.streamingBatch.throughputHistory",
+  latencyHistory: "medstream.streamingBatch.latencyHistory",
+  chartTimeRange: "medstream.streamingBatch.chartTimeRange",
+}
 const CHART_TIME_RANGE_OPTIONS = [
   {id: "1m", text: "1m", seconds: 60},
   {id: "3m", text: "3m", seconds: 3 * 60},
@@ -69,6 +81,75 @@ function formatLatencyDuration(value) {
 function toMillis(value) {
   const parsed = new Date(value).getTime()
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function getStoredValue(key) {
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function setStoredValue(key, value) {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // Chart history is useful but non-critical when browser storage is unavailable.
+  }
+}
+
+function normalizeHistoryPoint(point) {
+  const timestampMs = toMillis(point?.time_iso)
+  if (timestampMs == null) {
+    return null
+  }
+
+  return {
+    ...point,
+    time_iso: new Date(timestampMs).toISOString(),
+    time: new Date(timestampMs).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}),
+  }
+}
+
+function normalizeHistory(points) {
+  return (Array.isArray(points) ? points : [])
+    .map(normalizeHistoryPoint)
+    .filter(Boolean)
+    .sort((a, b) => toMillis(a.time_iso) - toMillis(b.time_iso))
+    .slice(-MAX_HISTORY_POINTS)
+}
+
+function mergeHistoryPoints(currentPoints, nextPoints) {
+  const pointsByTimestamp = new Map()
+
+  normalizeHistory(currentPoints).forEach((point) => {
+    pointsByTimestamp.set(point.time_iso, point)
+  })
+  normalizeHistory(nextPoints).forEach((point) => {
+    pointsByTimestamp.set(point.time_iso, point)
+  })
+
+  return normalizeHistory([...pointsByTimestamp.values()])
+}
+
+function loadStoredHistory(storageKey) {
+  const storedValue = getStoredValue(storageKey)
+  if (!storedValue) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(storedValue)
+    return normalizeHistory(parsed)
+  } catch {
+    return []
+  }
+}
+
+function loadStoredChartTimeRange() {
+  const storedRangeId = getStoredValue(STORAGE_KEYS.chartTimeRange)
+  return CHART_TIME_RANGE_OPTIONS.some((range) => range.id === storedRangeId) ? storedRangeId : "1m"
 }
 
 function buildSeriesLabelPoint(timestampMs, sourcePoint) {
@@ -164,12 +245,24 @@ export default function StreamingBatchPage() {
   const [comparison, setComparison] = useState(null)
   const [streamingMetricsSnapshot, setStreamingMetricsSnapshot] = useState(null)
   const [batchMetricsSnapshot, setBatchMetricsSnapshot] = useState(null)
-  const [throughputHistory, setThroughputHistory] = useState([])
-  const [latencyHistory, setLatencyHistory] = useState([])
+  const [throughputHistory, setThroughputHistory] = useState(() => loadStoredHistory(STORAGE_KEYS.throughputHistory))
+  const [latencyHistory, setLatencyHistory] = useState(() => loadStoredHistory(STORAGE_KEYS.latencyHistory))
   const [isLoading, setIsLoading] = useState(true)
   const [highlightedThroughputSeries, setHighlightedThroughputSeries] = useState(null)
-  const [chartTimeRange, setChartTimeRange] = useState("1m")
+  const [chartTimeRange, setChartTimeRange] = useState(loadStoredChartTimeRange)
   const seenAlertIdsRef = useRef({})
+
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.throughputHistory, JSON.stringify(throughputHistory.slice(-MAX_HISTORY_POINTS)))
+  }, [throughputHistory])
+
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.latencyHistory, JSON.stringify(latencyHistory.slice(-MAX_HISTORY_POINTS)))
+  }, [latencyHistory])
+
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.chartTimeRange, chartTimeRange)
+  }, [chartTimeRange])
 
   useEffect(() => {
     let active = true
@@ -181,11 +274,18 @@ export default function StreamingBatchPage() {
       }
 
       try {
-        const [comparisonResponse, streamingResponse, batchResponse, telemetryAlertsResponse] = await Promise.all([
+        const historyRequest = isFirstLoad
+          ? getMetricsComparisonHistory({
+            seconds: HISTORY_LOOKBACK_SECONDS,
+            interval_seconds: Math.round(POLL_INTERVAL_MS / 1000),
+          })
+          : Promise.resolve(null)
+        const [comparisonResponse, streamingResponse, batchResponse, telemetryAlertsResponse, historyResponse] = await Promise.all([
           getMetricsComparison(),
           getStreamingMetrics(),
           getBatchMetrics(),
           getStreamingAlerts(1, ALERTS_TELEMETRY_SIZE),
+          historyRequest,
         ])
 
         if (!active) {
@@ -196,6 +296,7 @@ export default function StreamingBatchPage() {
         const streamingMetrics = getResponseData(streamingResponse)
         const batchMetrics = getResponseData(batchResponse)
         const telemetryAlerts = getResponseData(telemetryAlertsResponse)
+        const comparisonHistory = historyResponse ? getResponseData(historyResponse) : null
         const tickDate = new Date()
         const tickTime = tickDate.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
         const tickIso = tickDate.toISOString()
@@ -225,25 +326,28 @@ export default function StreamingBatchPage() {
         })
         seenAlertIdsRef.current = nextSeenAlertIds
 
-        setThroughputHistory((current) => [
-          ...current.slice(-(MAX_HISTORY_POINTS - 1)),
-          {
-            time_iso: tickIso,
-            time: tickTime,
-            streaming_alerts_per_minute: Object.keys(nextSeenAlertIds).length,
-            batch_alerts_per_run: Number(batchMetrics?.alerts) || 0,
-            batch_timestamp: batchMetrics?.timestamp || null,
-          },
-        ])
-        setLatencyHistory((current) => [
-          ...current.slice(-(MAX_HISTORY_POINTS - 1)),
-          {
-            time_iso: tickIso,
-            time: tickTime,
-            streaming_latency_ms: Number(streamingMetrics?.execution_time_ms) || 0,
-            batch_latency_ms: (Number(nextComparison?.batch_latency_avg) || 0) * 1000,
-          },
-        ])
+        const nextThroughputPoint = {
+          time_iso: tickIso,
+          time: tickTime,
+          streaming_alerts_per_minute: Object.keys(nextSeenAlertIds).length,
+          batch_alerts_per_run: Number(batchMetrics?.alerts) || 0,
+          batch_timestamp: batchMetrics?.timestamp || null,
+        }
+        const nextLatencyPoint = {
+          time_iso: tickIso,
+          time: tickTime,
+          streaming_latency_ms: Number(nextComparison?.streaming_latency_avg) || 0,
+          batch_latency_ms: (Number(nextComparison?.batch_latency_avg) || 0) * 1000,
+        }
+
+        setThroughputHistory((current) => mergeHistoryPoints(
+          isFirstLoad ? mergeHistoryPoints(current, comparisonHistory?.throughput) : current,
+          [nextThroughputPoint],
+        ))
+        setLatencyHistory((current) => mergeHistoryPoints(
+          isFirstLoad ? mergeHistoryPoints(current, comparisonHistory?.latency) : current,
+          [nextLatencyPoint],
+        ))
       } catch (loadError) {
         if (active) {
           notifyError(getErrorMessage(loadError), {duration: 5000})

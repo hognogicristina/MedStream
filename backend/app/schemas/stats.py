@@ -87,6 +87,26 @@ class ComparisonSummaryRead(BaseModel):
     batch_alert_rate: float | None = None
 
 
+class ComparisonThroughputHistoryPointRead(BaseModel):
+    time_iso: datetime
+    time: str
+    streaming_alerts_per_minute: int
+    batch_alerts_per_run: int
+    batch_timestamp: datetime | None = None
+
+
+class ComparisonLatencyHistoryPointRead(BaseModel):
+    time_iso: datetime
+    time: str
+    streaming_latency_ms: float
+    batch_latency_ms: float
+
+
+class ComparisonHistoryRead(BaseModel):
+    throughput: list[ComparisonThroughputHistoryPointRead]
+    latency: list[ComparisonLatencyHistoryPointRead]
+
+
 class PatientsPerDepartmentRead(BaseModel):
     department: str
     patients: int
