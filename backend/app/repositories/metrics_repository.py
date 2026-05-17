@@ -3,12 +3,13 @@ from datetime import timedelta
 from threading import Lock
 from time import perf_counter
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import delete, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.batch.status import batch_status_store, utc_now
 from app.models.alert import Alert
 from app.models.batch_analytics import BatchAnalytics
+from app.models.comparison_metric_sample import ComparisonMetricSample
 from app.models.patient.patient import Patient
 from app.models.patient.patient_condition_assignment import PatientConditionAssignment
 from app.models.patient.patient_diagnosis import PatientDiagnosis
@@ -22,6 +23,11 @@ from app.validators.metrics_validators import validate_metric_value
 
 WINDOW_MINUTES = 60
 WINDOW_DELTA = timedelta(minutes=WINDOW_MINUTES)
+HISTORY_INTERVAL_SECONDS = 4
+HISTORY_MAX_POINTS = 900
+HISTORY_ALERT_WINDOW_SECONDS = 60
+HISTORY_ALERT_WINDOW_DELTA = timedelta(seconds=HISTORY_ALERT_WINDOW_SECONDS)
+METRIC_SAMPLE_RETENTION_HOURS = 6
 
 
 def _empty_metrics():
@@ -430,6 +436,122 @@ def get_comparison_metrics(db: Session) -> dict:
         "batch_total_alerts": batch_total_alerts,
         "batch_events_per_second": round(float(latest_batch.events_per_second or 0), 4) if latest_batch is not None else 0.0,
         "batch_alert_rate": round(float(latest_batch.alert_rate or 0), 4) if latest_batch is not None else 0.0,
+    }
+
+
+def record_comparison_metric_sample(db: Session, *, retention_hours: int = METRIC_SAMPLE_RETENTION_HOURS) -> dict:
+    now = utc_now()
+    window_start = now - HISTORY_ALERT_WINDOW_DELTA
+
+    streaming_alerts_count = int(
+        db.execute(
+            select(func.count(Alert.id)).where(
+                Alert.created_at >= window_start,
+                Alert.created_at <= now,
+            )
+        ).scalar_one()
+        or 0
+    )
+    streaming_latency_seconds = db.execute(
+        select(
+            func.avg(
+                func.extract(
+                    "epoch",
+                    Alert.created_at - Vital.recorded_at,
+                )
+            )
+        )
+        .select_from(Alert)
+        .join(Vital, Vital.id == Alert.vital_id)
+        .where(
+            Alert.created_at >= window_start,
+            Alert.created_at <= now,
+            Vital.recorded_at.is_not(None),
+        )
+    ).scalar_one()
+    latest_batch = get_latest_batch_analytics(db)
+    has_batch_snapshot = latest_batch is not None
+    batch_window_alerts = (
+        int(latest_batch.alerts_critical_count or 0)
+        + int(latest_batch.alerts_high_count or 0)
+        + int(latest_batch.alerts_stable_count or 0)
+        if latest_batch is not None else None
+    )
+    batch_alerts_per_minute = (
+        round(batch_window_alerts / max(1, WINDOW_MINUTES), 4)
+        if batch_window_alerts is not None else None
+    )
+
+    sample = ComparisonMetricSample(
+        timestamp=now,
+        streaming_alerts_per_minute=streaming_alerts_count,
+        batch_alerts_per_minute=batch_alerts_per_minute,
+        streaming_latency_ms=round(float((streaming_latency_seconds or 0) * 1000), 2),
+        batch_latency_ms=round(float(latest_batch.batch_latency_avg_seconds or 0) * 1000, 2)
+        if latest_batch is not None else None,
+        batch_timestamp=to_utc(latest_batch.timestamp) if latest_batch is not None else None,
+        has_batch_snapshot=has_batch_snapshot,
+    )
+    db.add(sample)
+
+    retention_cutoff = now - timedelta(hours=max(1, int(retention_hours or METRIC_SAMPLE_RETENTION_HOURS)))
+    db.execute(delete(ComparisonMetricSample).where(ComparisonMetricSample.timestamp < retention_cutoff))
+    db.commit()
+    db.refresh(sample)
+
+    return {
+        "time_iso": to_utc(sample.timestamp),
+        "time": to_utc(sample.timestamp).strftime("%H:%M:%S"),
+        "streaming_alerts_per_minute": int(sample.streaming_alerts_per_minute or 0),
+        "batch_alerts_per_minute": sample.batch_alerts_per_minute,
+        "streaming_latency_ms": round(float(sample.streaming_latency_ms or 0), 2),
+        "batch_latency_ms": sample.batch_latency_ms,
+        "batch_timestamp": to_utc(sample.batch_timestamp),
+        "has_batch_snapshot": bool(sample.has_batch_snapshot),
+    }
+
+
+def get_comparison_history(db: Session, *, seconds: int = 3600, interval_seconds: int = HISTORY_INTERVAL_SECONDS) -> dict:
+    now = utc_now()
+    safe_interval_seconds = max(1, int(interval_seconds or HISTORY_INTERVAL_SECONDS))
+    safe_seconds = max(safe_interval_seconds, int(seconds or safe_interval_seconds))
+    range_start = now - timedelta(seconds=min(safe_seconds, safe_interval_seconds * (HISTORY_MAX_POINTS - 1)))
+    rows_desc = db.execute(
+        select(ComparisonMetricSample)
+        .where(
+            ComparisonMetricSample.timestamp >= range_start,
+            ComparisonMetricSample.timestamp <= now,
+        )
+        .order_by(ComparisonMetricSample.timestamp.desc(), ComparisonMetricSample.id.desc())
+        .limit(HISTORY_MAX_POINTS)
+    ).scalars().all()
+    rows = list(reversed(rows_desc))
+
+    throughput = [
+        {
+            "time_iso": to_utc(row.timestamp),
+            "time": to_utc(row.timestamp).strftime("%H:%M:%S"),
+            "streaming_alerts_per_minute": int(row.streaming_alerts_per_minute or 0),
+            "batch_alerts_per_minute": row.batch_alerts_per_minute,
+            "batch_timestamp": to_utc(row.batch_timestamp),
+            "has_batch_snapshot": bool(row.has_batch_snapshot),
+        }
+        for row in rows
+    ]
+    latency = [
+        {
+            "time_iso": to_utc(row.timestamp),
+            "time": to_utc(row.timestamp).strftime("%H:%M:%S"),
+            "streaming_latency_ms": round(float(row.streaming_latency_ms or 0), 2),
+            "batch_latency_ms": row.batch_latency_ms,
+            "has_batch_snapshot": bool(row.has_batch_snapshot),
+        }
+        for row in rows
+    ]
+
+    return {
+        "throughput": throughput,
+        "latency": latency,
     }
 
 

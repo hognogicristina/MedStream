@@ -176,6 +176,10 @@ export function getMetricsComparison() {
   return api.get("/metrics/comparison")
 }
 
+export function getMetricsComparisonHistory(params) {
+  return api.get("/metrics/comparison-history", {params})
+}
+
 export function getBatchInsights(params) {
   return api.get("/metrics/batch-insights", {params})
 }

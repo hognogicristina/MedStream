@@ -26,7 +26,8 @@ function toLineData(data, yKey) {
   return (Array.isArray(data) ? data : [])
     .map((point, index) => {
       const x = index + 1
-      const y = Number(point?.[yKey])
+      const rawY = point?.[yKey]
+      const y = rawY === null || rawY === "" || rawY === undefined ? Number.NaN : Number(rawY)
 
       return {x, y}
     })

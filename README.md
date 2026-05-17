@@ -1,22 +1,20 @@
 # MedStream
 
-MedStream is a full-stack hospital monitoring application for patient operations, live vital signs, clinical alerts, medical records, and batch analytics. It models a complete hospital workflow where doctors can authenticate, manage patients, track patient condition in real time, and compare streaming processing with batch processing.
+MedStream is a full-stack hospital monitoring demo for patient operations, live vital signs, clinical alerts, medical records, and streaming-versus-batch analytics.
 
-The project is designed as a demo/portfolio application for real-time healthcare data pipelines and operational dashboards.
+The application is built around a doctor workflow: authenticate, manage assigned patients, monitor patient condition in real time, review clinical context, and compare immediate streaming signals with scheduled batch insights.
 
-## Main Features
+## Features
 
-- Doctor authentication, registration, email verification, account recovery, and password reset.
-- Doctor profile management with specialization, personal details, assigned patients, clinical activities, and account deactivation.
-- Patient management: admission, editing, doctor assignment, transfer, discharge, and readmission.
-- Department views with filterable patient lists, admission status, alert severity, and treatment outcome filters.
-- Live patient monitoring for heart rate, oxygen saturation, temperature, and blood pressure.
-- Automated clinical alerts for abnormal vital signs and normalization events.
-- Clinical records for diagnoses, allergies, medical conditions, medication, and admission history.
-- Patient treatment analysis with events, alerts, medication context, and clinical timeline data.
-- Post-discharge clinical summaries generated from batch processing.
-- Streaming metrics, batch metrics, and direct comparison of latency, throughput, alert rates, and data stability.
-- Backend simulator for continuously generating patients, vitals, alerts, and clinical events.
+- Doctor registration, login, email verification, password reset, and account recovery.
+- Doctor profile management, assigned patients, clinical activities, and account deactivation.
+- Patient admission, editing, doctor assignment, department transfer, discharge, and readmission.
+- Department views with patient filters and batch status context.
+- Live monitoring for heart rate, oxygen saturation, temperature, and alert events.
+- Clinical records for diagnoses, allergies, conditions, medication, admission history, and activities.
+- Treatment analysis and post-discharge clinical summaries.
+- Streaming metrics, batch metrics, comparison history, alert history, and manual batch runs.
+- Background simulator that generates patients, vital signs, alerts, activities, transfers, and discharges for demo data.
 
 ## Tech Stack
 
@@ -27,19 +25,18 @@ The project is designed as a demo/portfolio application for real-time healthcare
 | Database | PostgreSQL |
 | Streaming | Kafka, Confluent Kafka client, WebSocket |
 | Batch processing | APScheduler, Python aggregation jobs |
-| Local infrastructure | Docker Compose, pgAdmin, Kafka UI, MailCatcher |
-| Testing | Pytest for validators and medical logic |
+| Local tooling | Docker Compose, pgAdmin, Kafka UI, MailCatcher |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  Doctor["Doctor in browser"] --> Frontend["React + Vite"]
+  Doctor["Doctor browser"] --> Frontend["React + Vite"]
   Frontend --> API["FastAPI REST API"]
   Frontend --> WS["WebSocket /ws"]
   API --> DB["PostgreSQL"]
   API --> Batch["Batch scheduler"]
-  Simulator["Patient/vitals simulator"] --> Kafka["Kafka topics"]
+  Simulator["Simulator"] --> Kafka["Kafka topics"]
   Kafka --> Consumer["Kafka consumer"]
   Consumer --> DB
   Consumer --> WS
@@ -47,7 +44,7 @@ flowchart LR
   API --> Mail["MailCatcher SMTP"]
 ```
 
-The live flow starts from the simulator or Kafka events. The consumer stores vital signs, updates streaming metrics, and broadcasts events to the frontend through WebSocket. The batch layer runs periodically, aggregates historical data, and produces more stable insights for dashboards and reports.
+The backend initializes the database schema from SQLAlchemy models, ensures Kafka topics exist, starts the Kafka consumer, starts the simulator, and schedules the batch job when the API starts.
 
 ## Project Structure
 
@@ -55,119 +52,72 @@ The live flow starts from the simulator or Kafka events. The consumer stores vit
 MedStream/
   backend/
     app/
-      api/              # REST and WebSocket routes
-      alerts/           # vital-sign alert rules
-      batch/            # scheduler and batch jobs
-      core/             # configuration, errors, standard responses
-      db/               # database initialization and SQLAlchemy sessions
-      helpers/          # CSV data for diagnoses, medication, counties, etc.
-      kafka/            # producers, consumers, and topics
-      models/           # SQLAlchemy models
-      repositories/     # data access layer
-      schemas/          # Pydantic DTOs
-      service/          # business logic
-      simulator/        # patient, vital, activity, and event generation
-      validators/       # domain validators
-    tests/              # Pytest tests
+      api/              REST and WebSocket routes
+      alerts/           vital-sign alert classification
+      batch/            scheduler, runtime status, aggregation job
+      core/             configuration, errors, shared HTTP response format
+      db/               database setup and sessions
+      helpers/          CSV source data for clinical options
+      kafka/            topic setup, producer, consumer
+      models/           SQLAlchemy models
+      repositories/     data access layer
+      schemas/          Pydantic request/response models
+      service/          business logic
+      simulator/        demo data generation
+      validators/       domain validation helpers
   frontend/
     src/
-      components/       # reusable UI components
-      hooks/            # notification and patient-action hooks
-      pages/            # application pages
-      services/         # API and WebSocket clients
-      utils/            # formatting, date, phone, and alert utilities
+      components/       reusable UI components
+      hooks/            notification and patient-action hooks
+      pages/            route pages
+      services/         REST and WebSocket clients
+      utils/            formatting and UI helpers
   docker-compose.yml
 ```
 
-## Key Pages
+## Run Locally With Docker
 
-| Route | Purpose |
-| --- | --- |
-| `/login`, `/register` | Doctor access, account creation, and email verification |
-| `/dashboard` | High-level view of patients, alerts, and monitoring activity |
-| `/departments` and `/departments/:name` | Patients grouped by department, filters, and batch status |
-| `/patients/new` | Patient intake/admission form |
-| `/patient/:id` | Patient monitoring, live vitals, alerts, and main patient actions |
-| `/patients/:id/clinical-records` | Diagnoses, allergies, conditions, and medication |
-| `/patients/:id/admission-history` | Admission, discharge, and readmission history |
-| `/patients/:id/analysis` | Treatment analysis and clinical correlations |
-| `/patients/:id/post-discharge-summary` | Post-discharge clinical summary |
-| `/alerts` | Global alert feed and severity charts |
-| `/metrics/streaming` | Live streaming-processing monitoring |
-| `/metrics/batch` | Batch analytics, schedule, status, and manual run controls |
-| `/metrics/comparison` | Streaming vs batch comparison |
-| `/profile` | Doctor profile, assigned patients, and clinical activities |
-| `/how-it-works` | Visual explanation of streaming, batch, and comparison logic |
-
-## Main API Endpoints
-
-- `POST /register`, `POST /login`, `GET /auth/verify-email`, `POST /auth/forgot-password`, `POST /auth/reset-password`
-- `GET /doctors/me`, `PATCH /doctors/me`, `PATCH /doctors/me/email`
-- `GET /doctors/{doctor_id}/patients`, `POST /doctors/{doctor_id}/patients/{patient_id}`
-- `GET /patients`, `POST /patients`, `GET /patients/{id}`, `PATCH /patients/{id}`
-- `PATCH /patients/{id}/discharge`, `POST /patients/{id}/readmit`, `POST /patients/{id}/transfer`
-- `GET /patients/{id}/diagnosis`, `GET /patients/{id}/allergies`, `GET /patients/{id}/conditions`, `GET /patients/{id}/medications`
-- `GET /vitals?patient_id=...`, `GET /alerts`, `GET /alerts/dashboard-summary`
-- `GET /metrics/streaming`, `GET /metrics/batch`, `GET /metrics/comparison`, `GET /metrics/batch-insights`
-- `GET /batch/status`, `GET /batch/schedule`, `POST /batch/schedule`, `POST /batch/run`
-- `GET /health`, `WS /ws`
-
-FastAPI interactive documentation is available locally at `http://localhost:8000/docs`.
-
-## Run With Docker
-
-Docker is required. From the project root:
+Docker is the recommended setup because the app depends on PostgreSQL, Kafka, and MailCatcher.
 
 ```bash
 docker compose up -d
 ```
 
-Started services:
+Services:
 
 | Service | URL |
 | --- | --- |
 | Frontend | `http://localhost:5173` |
 | Backend API | `http://localhost:8000` |
-| Swagger / OpenAPI | `http://localhost:8000/docs` |
-| PostgreSQL | `localhost:5432` |
+| API docs | `http://localhost:8000/docs` |
 | pgAdmin | `http://localhost:5050` |
 | Kafka UI | `http://localhost:8080` |
 | MailCatcher | `http://localhost:1080` |
+| PostgreSQL | `localhost:5432` |
+| Kafka | `localhost:9092` |
 
-Default pgAdmin credentials:
+Default pgAdmin credentials from `docker-compose.yml`:
 
 ```text
 Email: admin@medstream.com
 Password: admin123
 ```
 
-## Configuration
+Stop the stack:
 
-The backend reads configuration from `.env` in the project root or from `backend/.env`. Important variables:
-
-```env
-DATABASE_URL=postgresql://medstream_user:medstream_pass@localhost:5432/medstream
-KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-KAFKA_VITALS_TOPIC=vitals-events
-KAFKA_ALERTS_TOPIC=alerts-events
-KAFKA_BATCH_TOPIC=batch-events
-FRONTEND_BASE_URL=http://localhost:5173
-SMTP_HOST=localhost
-SMTP_PORT=1025
-BATCH_INTERVAL_SECONDS=30
-AUTH_SECRET_KEY=medstream-dev-auth-secret
+```bash
+docker compose down
 ```
 
-The frontend uses:
+Remove local database and tool volumes:
 
-```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_WS_URL=ws://localhost:8000/ws
+```bash
+docker compose down -v
 ```
 
-These values are already configured for local Docker Compose usage.
+## Manual Development
 
-## Manual Run
+Manual development still requires PostgreSQL, Kafka, and MailCatcher to be running locally or reachable through custom environment variables.
 
 Backend:
 
@@ -187,18 +137,91 @@ npm install
 npm run dev
 ```
 
-For a full manual setup, PostgreSQL, Kafka, and MailCatcher must also be configured separately or started through Docker.
+## Configuration
 
-## Testing
+The backend reads environment variables from the project `.env` and `backend/.env`.
 
-Backend:
+Important backend variables:
 
-```bash
-source .venv/bin/activate
-pytest
+```env
+DATABASE_URL=postgresql://medstream_user:medstream_pass@localhost:5432/medstream
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+KAFKA_VITALS_TOPIC=vitals-events
+KAFKA_ALERTS_TOPIC=alerts-events
+KAFKA_BATCH_TOPIC=batch-events
+BATCH_INTERVAL_SECONDS=30
+FRONTEND_BASE_URL=http://localhost:5173
+SMTP_HOST=localhost
+SMTP_PORT=1025
+AUTH_SECRET_KEY=medstream-dev-auth-secret
+AUTH_TOKEN_TTL_MINUTES=4320
+HEART_RATE_ALERT_THRESHOLD=120
+OXYGEN_ALERT_THRESHOLD=92
+TEMPERATURE_ALERT_THRESHOLD=39
 ```
 
-Frontend:
+Frontend variables:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WS_URL=ws://localhost:8000/ws
+```
+
+For Docker Compose, container-specific values are already defined in `docker-compose.yml`.
+
+## Main App Routes
+
+| Route | Purpose |
+| --- | --- |
+| `/login`, `/register` | Doctor authentication and account creation |
+| `/forgot-password`, `/reset-password`, `/recover-account` | Account recovery flows |
+| `/dashboard` | Operational overview, patient status, and alert summary |
+| `/departments`, `/departments/:name` | Department patient views and filters |
+| `/patients/new` | Patient intake |
+| `/patient/:id` | Live patient monitoring and patient actions |
+| `/patients/:id/clinical-records` | Diagnoses, allergies, conditions, and medication |
+| `/patients/:id/admission-history` | Admission, discharge, transfer, and readmission history |
+| `/patients/:id/analysis` | Treatment analysis and clinical timeline |
+| `/patients/:id/post-discharge-summary` | Batch-backed post-discharge summary |
+| `/alerts` | Global alert feed and severity data |
+| `/metrics/streaming` | Live streaming metrics |
+| `/metrics/batch` | Batch analytics, schedule, status, and manual run controls |
+| `/metrics/comparison` | Streaming and batch comparison |
+| `/profile` | Current doctor profile, activities, and assignments |
+| `/how-it-works` | Visual explanation of the data flow |
+
+## Main API Areas
+
+FastAPI documentation is available at `http://localhost:8000/docs` when the backend is running.
+
+- Auth: `POST /login`, `POST /register`, `GET /auth/verify-email`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `POST /auth/recover-account`.
+- Doctors: `/doctors`, `/doctors/me`, doctor activities, doctor-patient assignments, profile updates, and account deactivation.
+- Patients: `/patients`, search, patient details, discharge, readmission, transfer, doctors, activities, clinical records, treatment analysis, and post-discharge summary.
+- Clinical options: diagnoses, allergies, medications, dosages, conditions, activities, condition statuses, and discharge types.
+- Monitoring: `/vitals`, `/alerts`, `/alerts/dashboard-summary`, `WS /ws`.
+- Metrics: `/metrics/streaming`, `/metrics/batch`, `/metrics/batch-insights`, `/metrics/streaming-alerts`, `/metrics/comparison`, `/metrics/comparison-history`, `/metrics/batch-alerts-history`.
+- Batch runtime: `/batch/status`, `/batch/schedule`, `POST /batch/schedule`, `POST /batch/run`.
+- Health: `GET /health`.
+
+## Streaming And Batch Behavior
+
+Streaming handles fast operational signals. Vital-sign events are consumed from Kafka, saved to PostgreSQL, reflected in streaming metrics, and broadcast to the frontend through WebSocket.
+
+Batch processing handles slower analysis. The scheduler aggregates historical data, refreshes batch snapshots, computes comparison metrics, and supports interval, daily, weekly, custom cron, and manual runs from the batch page.
+
+Patient state thresholds used by the simulator:
+
+| Signal | High / unstable | Critical |
+| --- | --- | --- |
+| Heart rate | `> 110` | `> 130` |
+| Oxygen saturation | `< 92` | `< 88` |
+| Temperature | `> 38` | `> 39` |
+
+Configurable alert thresholds are also available through environment variables for heart rate, oxygen, and temperature.
+
+## Quality Checks
+
+Frontend checks:
 
 ```bash
 cd frontend
@@ -206,54 +229,13 @@ npm run lint
 npm run build
 ```
 
-The existing tests cover address, doctor, and patient validators, plus treatment outcome logic.
-
-## Data and Simulation
-
-When the backend starts, it initializes the database schema directly from the SQLAlchemy models. The application includes helper CSV files for departments, diagnoses, allergies, medication, frequencies, dosages, and activity types.
-
-The simulator runs in the background with the backend and can generate:
-
-- new patients;
-- vital sign events;
-- alerts on state transitions;
-- clinical activities;
-- automatic transfers or discharges;
-- enough demo data for streaming vs batch comparisons.
-
-Relevant alert thresholds:
-
-- heart rate above `110` becomes `high`, above `130` becomes `critical`;
-- oxygen saturation below `92` becomes `low`, below `88` becomes `critical`;
-- temperature above `38` becomes `high`, above `39` becomes `critical`.
-
-## Streaming vs Batch
-
-Streaming is used for fast reactions: vital signs are processed immediately, alerts appear almost instantly, and patient/dashboard pages update live.
-
-Batch processing is used for stability and analysis: it aggregates data over time windows, computes averages, department distributions, frequent diagnoses, treatment effectiveness, medication effectiveness, and post-discharge summaries.
-
-The `/metrics/comparison` page shows the difference between the two approaches through metrics such as latency, processed events, alerts, throughput, and alert rate.
-
-## Recommended Manual Review Flow
-
-For a quick, text-only review, walk through these key pages:
-
-- `/dashboard` — application overview, status cards, alert preview, and main navigation.
-- `/patient/:id` — patient monitoring with vitals and alert context.
-- `/patients/:id/clinical-records` — diagnoses, allergies, conditions, and medication.
-- `/alerts` — alert feed and severity details.
-- `/metrics/streaming` — live metrics and streaming execution behavior.
-- `/metrics/batch` — batch insights, scheduling, and run status.
-- `/metrics/comparison` — latency, processed events, alerts, throughput, and alert rate.
-- `/departments` — patient lists, filters, and department-level batch status.
-- `/patients/:id/analysis` — treatment reasoning and clinical timeline.
-- `/how-it-works` — concise explanation of streaming and batch workflow.
+There is no committed backend test suite in the current repository. If backend tests are added, keep them under a dedicated test directory and run them with `pytest`.
 
 ## Development Notes
 
-- `init_db()` creates the schema directly from models; long-lived environments should use explicit migrations, for example Alembic.
+- This is a demo/portfolio application, not a production clinical system.
+- Simulator data is synthetic and must not be treated as real medical data.
+- `init_db()` creates tables directly from models; use migrations such as Alembic before running this pattern in long-lived environments.
 - CORS is open for local development.
-- `AUTH_SECRET_KEY` should be changed outside development.
-- MailCatcher is intended for development email testing, not real email delivery.
-- Simulator-generated data is demo data and should not be treated as real clinical data.
+- Change `AUTH_SECRET_KEY` outside local development.
+- MailCatcher is for local email testing only.

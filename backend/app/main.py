@@ -28,6 +28,7 @@ from app.db.session import SessionLocal
 from app.kafka.consumer import run as run_consumer
 from app.kafka.topics import ensure_topics
 from app.service.metrics import refresh_batch_snapshot
+from app.service.metrics_sampler import metrics_sampler_controller
 from app.simulator.run_simulator import run as run_simulator
 
 background_threads_started = False
@@ -67,6 +68,7 @@ def start_background_threads(app: FastAPI):
         threading.Thread(target=run_consumer, args=(app.state.loop,), daemon=True, name="medstream-consumer").start()
         threading.Thread(target=run_simulator, daemon=True, name="medstream-simulator").start()
         batch_runtime_controller.start(execute_batch_job, settings.batch_interval_seconds)
+        metrics_sampler_controller.start()
         background_threads_started = True
 
 
@@ -77,6 +79,7 @@ async def lifespan(app: FastAPI):
     ensure_topics()
     start_background_threads(app)
     yield
+    metrics_sampler_controller.shutdown()
     batch_runtime_controller.shutdown()
 
 

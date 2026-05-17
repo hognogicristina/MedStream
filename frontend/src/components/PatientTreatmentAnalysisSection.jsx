@@ -965,6 +965,7 @@ export default function PatientTreatmentAnalysisSection({
       medicationName: treatment.medication_name,
       medication: treatment.medication_name,
       time: treatment.displayed_date,
+      timestampLabel: formatCompactDate(treatment.timestamp || treatment.updated_at || treatment.created_at),
       decisionTimeLabel: treatment.timestamp ? formatTime(treatment.timestamp) : "",
       previousAlertType: treatment.previous_alert?.alert_type || "--",
       previousAlertSeverity: treatment.previous_alert?.severity || "--",
@@ -975,6 +976,10 @@ export default function PatientTreatmentAnalysisSection({
     }))
   }, [normalizedTreatments])
   const treatmentOutcomeAreaSeries = useMemo(() => {
+    const formatOutcomeFlag = (x, outcome) => {
+      const point = chartData.find((entry) => Number(entry.treatmentIndex) === Number(x))
+      return point?.outcome === outcome ? "1" : "0"
+    }
     const toAreaData = (minimumLevel) => chartData.map((point) => {
       const level = Number(point.outcomeValue) + 1
 
@@ -990,23 +995,31 @@ export default function PatientTreatmentAnalysisSection({
         title: "Ineffective",
         color: OUTCOME_CONFIG.Ineffective.color,
         data: toAreaData(1),
-        valueFormatter: (value) => value > 0 ? "Ineffective" : "-",
+        valueFormatter: (_value, x) => formatOutcomeFlag(x, "Ineffective"),
       },
       {
         type: "area",
         title: "Improving",
         color: OUTCOME_CONFIG.Improving.color,
         data: toAreaData(2),
-        valueFormatter: (value) => value > 0 ? "Improving" : "-",
+        valueFormatter: (_value, x) => formatOutcomeFlag(x, "Improving"),
       },
       {
         type: "area",
         title: "Effective",
         color: OUTCOME_CONFIG.Effective.color,
         data: toAreaData(3),
-        valueFormatter: (value) => value > 0 ? "Effective" : "-",
+        valueFormatter: (_value, x) => formatOutcomeFlag(x, "Effective"),
       },
     ]
+  }, [chartData])
+  const formatTreatmentOutcomeXTick = useCallback((value) => {
+    if (!Number.isInteger(value)) {
+      return ""
+    }
+
+    const point = chartData.find((entry) => Number(entry.treatmentIndex) === Number(value))
+    return point?.timestampLabel || ""
   }, [chartData])
   const treatmentOutcomeXDomain = useMemo(() => {
     const xValues = chartData.map((point) => Number(point.treatmentIndex)).filter(Number.isFinite)
@@ -1267,7 +1280,7 @@ export default function PatientTreatmentAnalysisSection({
                   xDomain={treatmentOutcomeXDomain}
                   xScaleType="linear"
                   xTitle="Treatment"
-                  xTickFormatter={(value) => Number.isInteger(value) ? String(value) : ""}
+                  xTickFormatter={formatTreatmentOutcomeXTick}
                   yDomain={[0, 3]}
                   yTickFormatter={formatOutcomeScale}
                   yTitle="Outcome"

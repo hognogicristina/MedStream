@@ -11,6 +11,7 @@ import {
 } from "@cloudscape-design/components"
 import {
   getMetricsComparison,
+  getMetricsComparisonHistory,
   getStreamingAlerts,
   getStreamingMetrics,
 } from "../services/patientApi.js"
@@ -23,9 +24,9 @@ import LoadingSpinner from "../components/LoadingSpinner.jsx"
 
 const POLL_INTERVAL_MS = 2500
 const MAX_POINTS = 30
+const MAX_ALERT_RATE_POINTS = 900
+const ALERTS_HISTORY_SECONDS = 60 * 60
 const ALERTS_PAGE_SIZE = 2
-const ALERTS_TELEMETRY_SIZE = 10
-const ALERTS_WINDOW_SECONDS = 60
 
 const VITAL_STREAMS = [
   {
@@ -112,11 +113,6 @@ function formatStreamTime(value, fallback = "") {
   return date.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
 }
 
-function toMillis(value) {
-  const parsed = new Date(value).getTime()
-  return Number.isFinite(parsed) ? parsed : null
-}
-
 function normalizeRecentVitals(rawVitals) {
   return (Array.isArray(rawVitals) ? rawVitals : [])
     .map((point) => ({
@@ -135,6 +131,41 @@ function normalizeRecentVitals(rawVitals) {
     .slice(-MAX_POINTS)
 }
 
+function normalizeAlertsRateHistory(rawPoints) {
+  const normalizedPoints = (Array.isArray(rawPoints) ? rawPoints : [])
+    .map((point) => {
+      const timestampMs = new Date(point?.time_iso).getTime()
+      const alertsPerMinute = Number(point?.streaming_alerts_per_minute)
+
+      if (!Number.isFinite(timestampMs) || !Number.isFinite(alertsPerMinute)) {
+        return null
+      }
+
+      return {
+        time_iso: new Date(timestampMs).toISOString(),
+        time: formatStreamTime(timestampMs),
+        alerts_per_minute: alertsPerMinute,
+        alerts_per_second: Number((alertsPerMinute / 60).toFixed(3)),
+      }
+    })
+    .filter(Boolean)
+    .sort((left, right) => new Date(left.time_iso).getTime() - new Date(right.time_iso).getTime())
+    .slice(-MAX_ALERT_RATE_POINTS)
+
+  return normalizedPoints.map((point, index) => {
+    const previousPoint = normalizedPoints[index - 1]
+    const previousAlertsPerMinute = Number(previousPoint?.alerts_per_minute)
+    const newAlertsTick = Number.isFinite(previousAlertsPerMinute)
+      ? Math.max(0, Number(point.alerts_per_minute) - previousAlertsPerMinute)
+      : Number(point.alerts_per_minute)
+
+    return {
+      ...point,
+      new_alerts_tick: newAlertsTick,
+    }
+  })
+}
+
 function getPaddedAlertsRateYMax(points) {
   const maxValue = Math.max(1, ...points.map((point) => Number(point.alerts_per_minute) || 0))
   return Math.ceil(maxValue + Math.max(1, maxValue * 0.1))
@@ -149,8 +180,6 @@ export default function StreamingMetricsPage() {
   const [vitalsHistory, setVitalsHistory] = useState([])
   const [alertsRateHistory, setAlertsRateHistory] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [, setSeenAlertIds] = useState({})
-  const [, setLastAlertTime] = useState(null)
   const [highlightedAlertsRateSeries, setHighlightedAlertsRateSeries] = useState(null)
   const [highlightedVitalSeries, setHighlightedVitalSeries] = useState(null)
 
@@ -163,11 +192,14 @@ export default function StreamingMetricsPage() {
         setIsLoading(true)
       }
       try {
-        const [metricsResponse, alertsResponse, telemetryAlertsResponse, comparisonResponse] = await Promise.all([
+        const [metricsResponse, alertsResponse, comparisonResponse, comparisonHistoryResponse] = await Promise.all([
           getStreamingMetrics(),
           getStreamingAlerts(alertsPage, ALERTS_PAGE_SIZE),
-          getStreamingAlerts(1, ALERTS_TELEMETRY_SIZE),
           getMetricsComparison(),
+          getMetricsComparisonHistory({
+            seconds: ALERTS_HISTORY_SECONDS,
+            interval_seconds: Math.round(POLL_INTERVAL_MS / 1000),
+          }),
         ])
 
         if (!active) {
@@ -176,8 +208,8 @@ export default function StreamingMetricsPage() {
 
         const nextMetrics = getResponseData(metricsResponse)
         const nextAlerts = getResponseData(alertsResponse)
-        const telemetryAlerts = getResponseData(telemetryAlertsResponse)
         const nextComparison = getResponseData(comparisonResponse)
+        const comparisonHistory = getResponseData(comparisonHistoryResponse)
         setComparison(nextComparison || null)
         const totalPages = Math.max(1, Math.ceil((nextAlerts.total || 0) / ALERTS_PAGE_SIZE))
 
@@ -205,56 +237,7 @@ export default function StreamingMetricsPage() {
             },
           ])
         }
-
-        const telemetryItems = Array.isArray(telemetryAlerts.items) ? telemetryAlerts.items : []
-        const newestAlert = telemetryItems[0]
-        if (newestAlert?.created_at) {
-          setLastAlertTime(newestAlert.created_at)
-        }
-
-        setSeenAlertIds((currentSeen) => {
-          const nextSeen = {...currentSeen}
-          const nowMs = Date.now()
-          const windowStartMs = nowMs - ALERTS_WINDOW_SECONDS * 1000
-          let newAlerts = 0
-
-          telemetryItems.forEach((alert) => {
-            if (alert?.id == null) {
-              return
-            }
-            const createdAtMs = toMillis(alert.created_at)
-            if (createdAtMs == null) {
-              return
-            }
-            const key = String(alert.id)
-            if (!nextSeen[key]) {
-              nextSeen[key] = createdAtMs
-              newAlerts += 1
-            }
-          })
-
-          Object.keys(nextSeen).forEach((key) => {
-            if ((nextSeen[key] || 0) < windowStartMs) {
-              delete nextSeen[key]
-            }
-          })
-
-          const activeCount = Object.keys(nextSeen).length
-          const perSecond = activeCount / ALERTS_WINDOW_SECONDS
-          const perMinute = activeCount
-
-          setAlertsRateHistory((current) => [
-            ...current.slice(-(MAX_POINTS - 1)),
-            {
-              time: tickTime,
-              alerts_per_second: Number(perSecond.toFixed(3)),
-              alerts_per_minute: perMinute,
-              new_alerts_tick: newAlerts,
-            },
-          ])
-
-          return nextSeen
-        })
+        setAlertsRateHistory(normalizeAlertsRateHistory(comparisonHistory?.throughput))
       } catch (loadError) {
         if (active) {
           notifyError(getErrorMessage(loadError), {duration: 5000})
@@ -460,7 +443,7 @@ export default function StreamingMetricsPage() {
                     className="medstream-streaming-card"
                     fitHeight
                     header={
-                      <Header variant="h2" description="Computed from newly observed alerts in a rolling 60-second window.">
+                      <Header variant="h2" description="Stored by the backend sampler from alerts in a rolling 60-second window.">
                         Alerts per minute
                       </Header>
                     }
