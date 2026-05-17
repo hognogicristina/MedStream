@@ -37,33 +37,14 @@ import {useAuth} from "../components/AuthContext.jsx"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import HoverTextDropdown from "../components/HoverTextDropdown.jsx"
 import InfoHelp from "../components/InfoHelp.jsx"
+import {formatBucharestDate, formatBucharestDateTime} from "../utils/time.js"
 
 function formatDateTime(value) {
-  if (!value) {
-    return "--"
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(new Date(value))
+  return formatBucharestDateTime(value)
 }
 
 function formatDate(value) {
-  if (!value) {
-    return "--"
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value))
+  return formatBucharestDate(value)
 }
 
 function formatArrivalMethod(value) {

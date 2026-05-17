@@ -1,3 +1,5 @@
+import {getBucharestDateParts} from "./time.js"
+
 export function formatDateAsIso(date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, "0")
@@ -7,7 +9,8 @@ export function formatDateAsIso(date) {
 }
 
 export function getTodayIsoDate() {
-  return formatDateAsIso(new Date())
+  const parts = getBucharestDateParts(new Date())
+  return parts ? `${parts.year}-${parts.month}-${parts.day}` : formatDateAsIso(new Date())
 }
 
 export function parseIsoDate(value) {

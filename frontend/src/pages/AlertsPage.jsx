@@ -23,6 +23,7 @@ import {createWebSocket} from "../services/ws.js"
 import {formatPatientFullName} from "../utils/patients.js"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import {formatBucharestNumericDateTime} from "../utils/time.js"
 
 const ALL_ALERTS_TITLE = "Alert System"
 const PATIENT_TITLE_FALLBACK = "Alert System - Patient"
@@ -81,19 +82,7 @@ function buildPatientTitle(patient) {
 }
 
 function formatDateTimeWithSeconds(value) {
-  const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) {
-    return "--"
-  }
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date)
+  return formatBucharestNumericDateTime(value)
 }
 
 function getSeverityIndicator(severity) {

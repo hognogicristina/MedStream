@@ -7,21 +7,10 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import {createPatientDiagnosis, getPatient, getPatientDiagnosis} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
+import {formatBucharestDateTime} from "../utils/time.js"
 
 function formatDateTime(value) {
-  if (!value) {
-    return "--"
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(new Date(value))
+  return formatBucharestDateTime(value)
 }
 
 export default function PatientDiagnosisPage() {

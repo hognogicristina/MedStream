@@ -20,6 +20,7 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import AwsLineChart from "../components/AwsLineChart.jsx"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import {formatBucharestTime} from "../utils/time.js"
 
 const POLL_INTERVAL_MS = 4000
 const MAX_HISTORY_POINTS = 900
@@ -105,7 +106,7 @@ function normalizeHistoryPoint(point) {
   return {
     ...point,
     time_iso: new Date(timestampMs).toISOString(),
-    time: new Date(timestampMs).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}),
+    time: formatBucharestTime(timestampMs),
   }
 }
 

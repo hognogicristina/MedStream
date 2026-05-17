@@ -21,6 +21,7 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import AwsLineChart from "../components/AwsLineChart.jsx"
 import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import {formatBucharestTime} from "../utils/time.js"
 
 const POLL_INTERVAL_MS = 2500
 const MAX_POINTS = 30
@@ -88,16 +89,7 @@ function MetricTile({label, value}) {
 }
 
 function formatAlertTime(value) {
-  if (!value) {
-    return "Unknown time"
-  }
-
-  return new Date(value).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    timeZone: "Europe/Bucharest",
-  })
+  return formatBucharestTime(value, "Unknown time")
 }
 
 function formatStreamTime(value, fallback = "") {
@@ -110,7 +102,7 @@ function formatStreamTime(value, fallback = "") {
     return fallback
   }
 
-  return date.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
+  return formatBucharestTime(date, fallback)
 }
 
 function normalizeRecentVitals(rawVitals) {
@@ -221,7 +213,7 @@ export default function StreamingMetricsPage() {
         setMetrics(nextMetrics)
         setRecentAlerts(nextAlerts)
 
-        const tickTime = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
+        const tickTime = formatBucharestTime(new Date())
         const nextVitalHistory = normalizeRecentVitals(nextMetrics.recent_vitals)
 
         if (nextVitalHistory.length) {
@@ -461,7 +453,7 @@ export default function StreamingMetricsPage() {
                         hideLegend
                         onHighlightedSeriesTitleChange={setHighlightedAlertsRateSeries}
                         series={[
-                          {key: "alerts_per_minute", title: "Alerts/Minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)} alerts`},
+                          {key: "alerts_per_minute", title: "Alerts/Minute", color: "#f97316", valueFormatter: (value) => `${value.toFixed(0)}`},
                         ]}
                         xTitle="Time"
                         yDomain={[0, alertsRateYMax]}

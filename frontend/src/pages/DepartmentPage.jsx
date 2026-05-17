@@ -21,6 +21,7 @@ import {formatPatientFullName} from "../utils/patients.js"
 import {alertTypeToVital, getAlertSeverityLevel, normalizeAlertType} from "../utils/alerts.js"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
+import {formatBucharestDate, formatBucharestTime} from "../utils/time.js"
 
 const PAGE_SIZE = 10
 const ALL_DEPARTMENTS_VALUE = "__all_departments__"
@@ -429,7 +430,7 @@ export default function DepartmentPage() {
       header: "Snapshot",
       width: isAllDepartments ? 104 : undefined,
       minWidth: isAllDepartments ? 96 : undefined,
-      cell: ({stat}) => stat?.computed_at ? new Date(stat.computed_at).toLocaleTimeString() : "--",
+      cell: ({stat}) => formatBucharestTime(stat?.computed_at),
     },
     ...(isAllDepartments ? [{
       id: "department",
@@ -568,8 +569,8 @@ export default function DepartmentPage() {
           <ColumnLayout columns={3} variant="text-grid">
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Last successful batch run</Box>
-              <Box variant="h3">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleTimeString() : "--"}</Box>
-              <Box color="text-body-secondary">{lastSuccessfulBatchRun ? new Date(lastSuccessfulBatchRun).toLocaleDateString() : "No successful run yet"}</Box>
+              <Box variant="h3">{formatBucharestTime(lastSuccessfulBatchRun)}</Box>
+              <Box color="text-body-secondary">{formatBucharestDate(lastSuccessfulBatchRun, "No successful run yet")}</Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Alerts</Box>

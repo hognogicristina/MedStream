@@ -16,7 +16,13 @@ import {getPatient, getPatientTreatmentAnalysis} from "../services/patientApi.js
 import {createWebSocket} from "../services/ws.js"
 import LoadingSpinner from "./LoadingSpinner.jsx"
 import {alertTypeToVital, getAlertSeverityLevel, isNormalizedAlertType, normalizeAlertType} from "../utils/alerts.js"
-import {formatAlertFriendlyTime} from "../utils/time.js"
+import {
+  formatAlertFriendlyTime,
+  formatBucharestCompactDateTime,
+  formatBucharestDateTime,
+  formatBucharestShortDateTime,
+  formatBucharestTime,
+} from "../utils/time.js"
 
 const DIAGNOSIS_PAGE_SIZE = 3
 const CONDITION_PAGE_SIZE = 3
@@ -82,46 +88,15 @@ const toTimestamp = (value) => {
 }
 
 function formatDate(value) {
-  const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) {
-    return "--"
-  }
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date)
+  return formatBucharestDateTime(value)
 }
 
 function formatTime(value) {
-  const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) {
-    return ""
-  }
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  })
+  return formatBucharestTime(value, "")
 }
 
 function formatAlertLastUpdated(value) {
-  const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) {
-    return "--"
-  }
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    day: "numeric",
-    month: "short",
-    hour12: false,
-  }).format(date)
+  return formatBucharestShortDateTime(value)
 }
 
 function compareAlertsNewestFirst(left, right) {
@@ -157,18 +132,7 @@ function compareTreatmentsAscending(left, right) {
 }
 
 function formatCompactDate(value) {
-  const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) {
-    return "--"
-  }
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date)
+  return formatBucharestCompactDateTime(value)
 }
 
 function formatDisplayValue(value) {

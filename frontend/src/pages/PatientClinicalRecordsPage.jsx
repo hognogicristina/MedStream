@@ -52,19 +52,10 @@ import {
 } from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
+import {formatBucharestNumericDateTime} from "../utils/time.js"
 
 function formatDateTime(value) {
-  if (!value) return "--"
-
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(new Date(value))
+  return formatBucharestNumericDateTime(value)
 }
 
 function trimValue(value) {
