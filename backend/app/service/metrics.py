@@ -8,6 +8,7 @@ from app.repositories.metrics_repository import (
     get_latest_batch_analytics,
     get_latest_batch_metrics,
     paginate_items,
+    record_comparison_metric_sample,
     refresh_batch_snapshot,
     streaming_metrics_store,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "get_latest_batch_analytics",
     "get_latest_batch_metrics",
     "paginate_items",
+    "record_comparison_metric_sample",
     "refresh_batch_snapshot",
     "streaming_metrics_store",
 ]

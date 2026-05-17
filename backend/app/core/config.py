@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     kafka_alerts_topic: str = "alerts-events"
     kafka_batch_topic: str = "batch-events"
     batch_interval_seconds: int = 30
+    metrics_sample_interval_seconds: int = 4
+    metrics_sample_retention_hours: int = 6
     smtp_host: str = "localhost"
     smtp_port: int = 1025
     smtp_user: str = ""

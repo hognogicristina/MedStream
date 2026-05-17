@@ -91,15 +91,17 @@ class ComparisonThroughputHistoryPointRead(BaseModel):
     time_iso: datetime
     time: str
     streaming_alerts_per_minute: int
-    batch_alerts_per_run: int
+    batch_alerts_per_minute: float | None = None
     batch_timestamp: datetime | None = None
+    has_batch_snapshot: bool = False
 
 
 class ComparisonLatencyHistoryPointRead(BaseModel):
     time_iso: datetime
     time: str
     streaming_latency_ms: float
-    batch_latency_ms: float
+    batch_latency_ms: float | None = None
+    has_batch_snapshot: bool = False
 
 
 class ComparisonHistoryRead(BaseModel):
