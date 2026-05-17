@@ -22,6 +22,7 @@ import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import AwsDatePicker from "../components/AwsDatePicker.jsx"
 import InfoHelp from "../components/InfoHelp.jsx"
 import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
+import {INPUT_LIMITS, limitDigits, limitText} from "../utils/inputLimits.js"
 
 const TOTAL_STEPS = 2
 const GENDER_OPTIONS = [
@@ -83,7 +84,13 @@ export default function AddPatientPage() {
   const handleChange = (event) => {
     const {name, value} = event.target
     setForm((prev) => {
-      const updates = {[name]: name === "is_pregnant" ? value === "true" : value}
+      const fieldLimits = {
+        first_name: INPUT_LIMITS.firstName,
+        last_name: INPUT_LIMITS.lastName,
+        cnp: INPUT_LIMITS.cnp,
+      }
+      const nextValue = fieldLimits[name] ? limitText(value, fieldLimits[name]) : value
+      const updates = {[name]: name === "is_pregnant" ? value === "true" : nextValue}
       if (name === "gender" && value !== "female") {
         updates.is_pregnant = false
       }
@@ -98,7 +105,18 @@ export default function AddPatientPage() {
         return {...current, county: value, city: ""}
       }
 
-      return {...current, [name]: value}
+      const fieldLimits = {
+        street: INPUT_LIMITS.addressStreet,
+        number: INPUT_LIMITS.addressNumber,
+        apartment: INPUT_LIMITS.addressApartment,
+      }
+      const nextValue = name === "postal_code"
+        ? limitDigits(value, INPUT_LIMITS.postalCode)
+        : fieldLimits[name]
+          ? limitText(value, fieldLimits[name])
+          : value
+
+      return {...current, [name]: nextValue}
     })
   }
 
@@ -207,12 +225,12 @@ export default function AddPatientPage() {
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-first-name">{"First Name"}</label>
                     <input id="patient-first-name" type="text" name="first_name" value={form.first_name} onChange={handleChange}
-                           placeholder={"Andrei"} className="login-input" required/>
+                           placeholder={"Andrei"} className="login-input" maxLength={100} required/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-last-name">{"Last Name"}</label>
                     <input id="patient-last-name" type="text" name="last_name" value={form.last_name} onChange={handleChange}
-                           placeholder={"Popescu"} className="login-input" required/>
+                           placeholder={"Popescu"} className="login-input" maxLength={100} required/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-gender">{"Gender"}</label>
@@ -239,13 +257,13 @@ export default function AddPatientPage() {
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-cnp">CNP</label>
                     <input id="patient-cnp" type="text" name="cnp" value={form.cnp} onChange={handleChange}
-                           placeholder={"6010101123451"} className="login-input" required/>
+                           placeholder={"6010101123451"} className="login-input" maxLength={13} required/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="patient-phone-number">{"Phone Number"}</label>
                     <input id="patient-phone-number" type="tel" value={phoneNumber}
-                           onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, ""))}
-                           placeholder={ROMANIA_PHONE_PLACEHOLDER} className="login-input" required/>
+                           onChange={(event) => setPhoneNumber(limitDigits(event.target.value, INPUT_LIMITS.phone))}
+                           placeholder={ROMANIA_PHONE_PLACEHOLDER} className="login-input" maxLength={INPUT_LIMITS.phone} required/>
                   </div>
                   <div className="login-field">
                     <span className="medstream-label-with-help">
@@ -288,17 +306,17 @@ export default function AddPatientPage() {
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-street">{"Street"}</label>
                     <input id="add-street" type="text" name="street" value={address.street} onChange={handleAddressChange}
-                           placeholder={"Liberty Street"} className="login-input" required/>
+                           placeholder={"Liberty Street"} className="login-input" maxLength={120} required/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-number">{"Number"}</label>
                     <input id="add-number" type="text" name="number" value={address.number} onChange={handleAddressChange}
-                           placeholder={"12A"} className="login-input" required/>
+                           placeholder={"12A"} className="login-input" maxLength={30} required/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-apartment">{"Apartment"}</label>
                     <input id="add-apartment" type="text" name="apartment" value={address.apartment} onChange={handleAddressChange}
-                           placeholder={"24"} className="login-input"/>
+                           placeholder={"24"} className="login-input" maxLength={30}/>
                   </div>
                   <div className="login-field">
                     <label className="login-label" htmlFor="add-county">{"County"}</label>
@@ -328,13 +346,13 @@ export default function AddPatientPage() {
                            onChange={(event) => handleAddressChange({
                              target: {
                                name: "postal_code",
-                               value: event.target.value.replace(/\D/g, ""),
+                               value: event.target.value,
                              }
-                           })} placeholder="010101" className="login-input" required/>
+                           })} placeholder="010101" className="login-input" maxLength={INPUT_LIMITS.postalCode} required/>
                   </div>
                   <div className="login-field medstream-form-field-wide">
                     <label className="login-label" htmlFor="add-country">{"Country"}</label>
-                    <input id="add-country" type="text" value={"Romania"} className="login-input" disabled/>
+                    <input id="add-country" type="text" value={"Romania"} className="login-input" maxLength={INPUT_LIMITS.country} disabled/>
                   </div>
                 </div>
               </SpaceBetween>

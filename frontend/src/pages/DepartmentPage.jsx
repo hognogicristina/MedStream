@@ -40,9 +40,11 @@ const STATUS_FILTERS = [
 
 const TREATMENT_OUTCOME_FILTERS = [
   {value: "all", label: "All treatment outcomes"},
-  {value: "effective", label: "Had effective treatments"},
-  {value: "ineffective", label: "Had ineffective treatments"},
+  {value: "effective", label: "Final treatment effective"},
+  {value: "ineffective", label: "Final treatment ineffective"},
 ]
+
+const FINAL_TREATMENT_OUTCOME_VALUES = new Set(["effective", "ineffective"])
 
 const SORT_OPTIONS = [
   {value: "status_then_name", label: "Admitted first, then name"},
@@ -82,6 +84,10 @@ function comparePatientsByStatusThenName(leftPatient, rightPatient) {
 
 function getSelectedOption(options, value) {
   return options.find((option) => option.value === value) || (value ? {label: value, value} : options[0])
+}
+
+function isFinalTreatmentOutcomeFilter(value) {
+  return FINAL_TREATMENT_OUTCOME_VALUES.has(String(value || "").trim().toLowerCase())
 }
 
 function getStrongestSeverity(alertSummary) {
@@ -188,6 +194,7 @@ export default function DepartmentPage() {
   const [treatmentOutcomeFilter, setTreatmentOutcomeFilter] = useState("all")
   const [sortOrder, setSortOrder] = useState("status_then_name")
   const [currentPage, setCurrentPage] = useState(1)
+  const isStatusLockedToDischarged = isFinalTreatmentOutcomeFilter(treatmentOutcomeFilter)
 
   useEffect(() => {
     const loadDepartments = async () => {
@@ -394,7 +401,7 @@ export default function DepartmentPage() {
       header: "Alert count",
       width: isAllDepartments ? 92 : undefined,
       minWidth: isAllDepartments ? 86 : undefined,
-      cell: ({stat, alertSummary}) => <CountValue value={stat?.alerts_count ?? alertSummary.count}/>,
+      cell: ({stat, alertSummary}) => <CountValue showFullValue value={stat?.alerts_count ?? alertSummary.count}/>,
     },
     {
       id: "heartRate",
@@ -474,7 +481,7 @@ export default function DepartmentPage() {
           <ColumnLayout columns={4} variant="text-grid">
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Patients</Box>
-              <Box variant="h2"><CountValue value={patients.length}/></Box>
+              <Box variant="h2"><CountValue showFullValue value={patients.length}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Batch status</Box>
@@ -494,11 +501,11 @@ export default function DepartmentPage() {
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Critical patients</Box>
-              <Box variant="h2"><CountValue value={criticalPatientsCount}/></Box>
+              <Box variant="h2"><CountValue showFullValue value={criticalPatientsCount}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">High alert patients</Box>
-              <Box variant="h2"><CountValue value={highAlertPatientsCount}/></Box>
+              <Box variant="h2"><CountValue showFullValue value={highAlertPatientsCount}/></Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Most problematic vital</Box>
@@ -533,13 +540,20 @@ export default function DepartmentPage() {
               selectedOption={getSelectedOption(STATUS_FILTERS, statusFilter)}
               options={STATUS_FILTERS}
               selectedAriaLabel="Selected patient status"
+              disabled={isStatusLockedToDischarged}
               onChange={({detail}) => setStatusFilter(detail.selectedOption.value || "all")}
             />
             <Select
               selectedOption={getSelectedOption(TREATMENT_OUTCOME_FILTERS, treatmentOutcomeFilter)}
               options={TREATMENT_OUTCOME_FILTERS}
               selectedAriaLabel="Selected treatment outcome"
-              onChange={({detail}) => setTreatmentOutcomeFilter(detail.selectedOption.value || "all")}
+              onChange={({detail}) => {
+                const nextTreatmentOutcome = detail.selectedOption.value || "all"
+                setTreatmentOutcomeFilter(nextTreatmentOutcome)
+                if (isFinalTreatmentOutcomeFilter(nextTreatmentOutcome)) {
+                  setStatusFilter("discharged")
+                }
+              }}
             />
             <Select
               selectedOption={getSelectedOption(SORT_OPTIONS, sortOrder)}
@@ -559,12 +573,12 @@ export default function DepartmentPage() {
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Alerts</Box>
-              <Box variant="h3"><CountValue value={aggregateAlerts}/></Box>
+              <Box variant="h3"><CountValue showFullValue value={aggregateAlerts}/></Box>
               <Box color="text-body-secondary">Aggregated alerts in this department.</Box>
             </SpaceBetween>
             <SpaceBetween size="xs">
               <Box color="text-body-secondary" variant="awsui-key-label">Filtered rows</Box>
-              <Box variant="h3"><CountValue value={sortedRows.length}/></Box>
+              <Box variant="h3"><CountValue showFullValue value={sortedRows.length}/></Box>
               <Box color="text-body-secondary">Patients matching current filters.</Box>
             </SpaceBetween>
           </ColumnLayout>

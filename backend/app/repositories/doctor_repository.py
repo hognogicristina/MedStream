@@ -64,7 +64,7 @@ from app.validators.doctor_validators import (
     validate_login_payload,
     validate_password_reset_payload,
 )
-from app.validators.patient_validators import validate_patient_assignment
+from app.validators.patient_validators import phone_uniqueness_values, validate_patient_assignment
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -535,14 +535,15 @@ class DoctorRepository:
 
         with SessionLocal() as db:
             duplicate_filters = [Doctor.email == validated_payload["email"], Doctor.license_number == validated_payload["license_number"]]
+            phone_values = phone_uniqueness_values(validated_payload["phone_number"])
             if validated_payload["phone_number"]:
-                duplicate_filters.append(Doctor.phone_number == validated_payload["phone_number"])
+                duplicate_filters.append(Doctor.phone_number.in_(phone_values))
 
             matching_doctors = db.execute(select(Doctor).where(or_(*duplicate_filters))).scalars().all()
 
             email_match = next((doctor for doctor in matching_doctors if doctor.email == validated_payload["email"]), None)
             phone_match = next((doctor for doctor in matching_doctors if
-                                validated_payload["phone_number"] and doctor.phone_number == validated_payload["phone_number"]), None)
+                                validated_payload["phone_number"] and doctor.phone_number in phone_values), None)
             license_match = next((doctor for doctor in matching_doctors if doctor.license_number == validated_payload["license_number"]),
                                  None)
 

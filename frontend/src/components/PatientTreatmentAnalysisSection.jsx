@@ -2,7 +2,6 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import {
   Alert,
   Box,
-  Button,
   ColumnLayout,
   Container,
   Header,
@@ -202,12 +201,21 @@ function DetailField({label, children}) {
   )
 }
 
-function SummaryValue({label, value, meta}) {
+function SummaryValue({label, value, meta, alert}) {
   const displayValue = value == null || value === "" ? "--" : value
+  const status = alert ? getAlertHistoryStatus(alert) : null
+  const statusId = status?.id || "unknown"
 
   return (
-    <div className="medstream-compact-summary-field">
-      <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
+    <div className={`medstream-compact-summary-field medstream-compact-summary-field-${statusId}`}>
+      <div className="medstream-compact-summary-heading">
+        <Box color="text-body-secondary" variant="awsui-key-label">{label}</Box>
+        {status ? (
+          <span className={`medstream-vital-status medstream-vital-status-${status.id}`}>
+            {status.label}
+          </span>
+        ) : null}
+      </div>
       <div className="medstream-compact-summary-value">{displayValue}</div>
       {meta ? <Box color="text-body-secondary">{meta}</Box> : null}
     </div>
@@ -1287,7 +1295,10 @@ export default function PatientTreatmentAnalysisSection({
                   description={`Last update: ${latestAlertSummary.lastUpdated}`}
                   actions={
                     fullAlertHistory.length ? (
-                      <Button
+                      <button
+                        type="button"
+                        className="medstream-history-toggle-button"
+                        aria-expanded={showFullAlertHistory}
                         onClick={() => {
                           setShowFullAlertHistory((current) => {
                             const next = !current
@@ -1296,8 +1307,9 @@ export default function PatientTreatmentAnalysisSection({
                           })
                         }}
                       >
-                        {showFullAlertHistory ? "Hide full history" : "View full history"}
-                      </Button>
+                        <span className="medstream-history-toggle-icon" aria-hidden="true" />
+                        <span>{showFullAlertHistory ? "Show fewer" : "Show more"}</span>
+                      </button>
                     ) : null
                   }
                 >
@@ -1320,16 +1332,19 @@ export default function PatientTreatmentAnalysisSection({
                     label="Heart rate"
                     value={latestAlertSummary.heartRate != null ? `${latestAlertSummary.heartRate} bpm` : "--"}
                     meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.heartRate?.created_at)}
+                    alert={latestAlertSummary.latestVitalAlerts.heartRate}
                   />
                   <SummaryValue
                     label="Oxygen"
                     value={latestAlertSummary.oxygen != null ? `${latestAlertSummary.oxygen}%` : "--"}
                     meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.oxygen?.created_at)}
+                    alert={latestAlertSummary.latestVitalAlerts.oxygen}
                   />
                   <SummaryValue
                     label="Temperature"
                     value={latestAlertSummary.temperature != null ? `${latestAlertSummary.temperature}°C` : "--"}
                     meta={formatAlertFriendlyTime(latestAlertSummary.latestVitalAlerts.temperature?.created_at)}
+                    alert={latestAlertSummary.latestVitalAlerts.temperature}
                   />
                 </ColumnLayout>
                 <p className="medstream-latest-alert-copy">{latestAlertSummary.summary}</p>

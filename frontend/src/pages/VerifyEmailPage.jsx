@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react"
-import {Link, useNavigate, useSearchParams} from "react-router-dom"
+import {useNavigate, useSearchParams} from "react-router-dom"
 import {resendVerificationEmail, verifyEmailToken} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 import {
@@ -7,6 +7,7 @@ import {
   VERIFICATION_LINK_REPLACED_MESSAGE,
 } from "../services/appMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
 
 export default function VerifyEmailPage() {
   const navigate = useNavigate()
@@ -83,9 +84,6 @@ export default function VerifyEmailPage() {
           <aside className="login-aside">
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
-              <Link className="auth-link" to="/login">
-                {"Back to login"}
-              </Link>
             </div>
             <h1 className="login-title">{"Email Verification"}</h1>
             <p className="login-subtitle">{"Confirm your doctor account email using the secure verification link."}</p>
@@ -95,6 +93,7 @@ export default function VerifyEmailPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Verification"}</p>
               <h1 className="login-title">{"Verify Email"}</h1>
               <p className="login-subtitle">{"Your verification request is being processed."}</p>

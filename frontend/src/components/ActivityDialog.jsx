@@ -1,8 +1,10 @@
 import {useMemo, useState} from "react"
-import {Box, Button, Header, Modal, Pagination, Select, SpaceBetween} from "@cloudscape-design/components"
+import {Box, Button, Header, Modal, Multiselect, Pagination, RadioGroup, Select, SpaceBetween} from "@cloudscape-design/components"
 import AwsDatePicker from "./AwsDatePicker.jsx"
 import AwsTimeInput from "./AwsTimeInput.jsx"
+import InfoHelp from "./InfoHelp.jsx"
 import {isValidTime} from "../utils/time.js"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 function ClearableInput({disabled = false, onChange, required = false, type = "text", value, ...props}) {
   return (
@@ -63,14 +65,11 @@ function buildScheduledAt(date, time) {
   return `${date}T${time}`
 }
 
-function matchesParticipantSearch(item, query) {
-  if (!query) {
-    return true
-  }
-
-  const normalizedQuery = query.trim().toLowerCase()
-  const fullName = `${item.last_name || ""} ${item.first_name || ""}`.trim().toLowerCase()
-  return fullName.includes(normalizedQuery)
+function normalizeSearchValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
 }
 
 export default function ActivityDialog({
@@ -86,12 +85,12 @@ export default function ActivityDialog({
                                          patientSelectionMode = "multiple",
                                          patients,
                                        }) {
-  const patientPageSize = 8
+  const patientPageSize = 4
   const buildInitialForm = () => {
     const selectedDoctorIds = Array.from(new Set([
       currentDoctorId,
       ...(activity?.doctor_ids || []),
-    ].filter(Boolean)))
+    ].filter((doctorId) => doctorId !== undefined && doctorId !== null)))
     const selectedPatientIds = activity?.patient_ids?.length
       ? activity.patient_ids
       : patients.filter((patient) => patient.isCurrent).map((patient) => patient.id)
@@ -104,12 +103,12 @@ export default function ActivityDialog({
       scheduledDate: date,
       scheduledTime: time,
       doctorIds: selectedDoctorIds,
-      patientIds: patientSelectionMode === "hidden" ? selectedPatientIds.slice(0, 1) : selectedPatientIds,
+      patientIds: selectedPatientIds.slice(0, 1),
     }
   }
   const [form, setForm] = useState(buildInitialForm)
-  const [patientQuery, setPatientQuery] = useState("")
   const [patientPage, setPatientPage] = useState(1)
+  const [patientSearchQuery, setPatientSearchQuery] = useState("")
   const activityTypeOptions = activityTypes.map((activityType) => ({label: activityType, value: activityType}))
 
   const filteredPatients = useMemo(
@@ -117,43 +116,87 @@ export default function ActivityDialog({
       .filter((patient) =>
         !patient.is_discharged &&
         patient.department === doctors.find(d => d.id === currentDoctorId)?.specialization
-      )
-      .filter((patient) => matchesParticipantSearch(patient, patientQuery)),
-    [patientQuery, patients, doctors, currentDoctorId],
+      ),
+    [patients, doctors, currentDoctorId],
   )
-  const maxPatientPage = Math.max(1, Math.ceil(filteredPatients.length / patientPageSize))
+  const patientOptions = useMemo(
+    () => filteredPatients.map((patient) => ({
+      label: `${patient.last_name} ${patient.first_name}${patient.isCurrent ? " (Current patient)" : ""}`,
+      value: String(patient.id),
+    })),
+    [filteredPatients],
+  )
+  const patientSearchValues = useMemo(
+    () => new Map(filteredPatients.map((patient) => [
+      String(patient.id),
+      normalizeSearchValue(`${patient.last_name} ${patient.first_name}`),
+    ])),
+    [filteredPatients],
+  )
+  const filteredPatientOptions = useMemo(() => {
+    const query = normalizeSearchValue(patientSearchQuery.trim())
+
+    if (!query) {
+      return patientOptions
+    }
+
+    return patientOptions.filter((option) => patientSearchValues.get(option.value)?.includes(query))
+  }, [patientOptions, patientSearchQuery, patientSearchValues])
+  const patientByValue = useMemo(
+    () => new Map(filteredPatients.map((patient) => [String(patient.id), patient])),
+    [filteredPatients],
+  )
+  const selectedPatientValue = form.patientIds.length ? String(form.patientIds[0]) : null
+  const maxPatientPage = Math.max(1, Math.ceil(filteredPatientOptions.length / patientPageSize))
   const currentPatientPage = Math.min(patientPage, maxPatientPage)
-  const visiblePatients = filteredPatients.slice((currentPatientPage - 1) * patientPageSize, currentPatientPage * patientPageSize)
+  const visiblePatientOptions = filteredPatientOptions.slice((currentPatientPage - 1) * patientPageSize, currentPatientPage * patientPageSize)
+  const doctorOptions = useMemo(
+    () => doctors.map((doctor) => {
+      const isCurrentDoctor = doctor.id === currentDoctorId
+
+      return {
+        label: `Dr. ${doctor.first_name} ${doctor.last_name}${isCurrentDoctor ? " (You)" : ""}`,
+        value: String(doctor.id),
+        disabled: isCurrentDoctor,
+      }
+    }),
+    [doctors, currentDoctorId],
+  )
+  const doctorByValue = useMemo(
+    () => new Map(doctors.map((doctor) => [String(doctor.id), doctor])),
+    [doctors],
+  )
+  const selectedDoctorOptions = useMemo(() => {
+    const selectedValues = new Set(form.doctorIds.map((doctorId) => String(doctorId)))
+
+    if (currentDoctorId !== undefined && currentDoctorId !== null) {
+      selectedValues.add(String(currentDoctorId))
+    }
+
+    return doctorOptions.filter((option) => selectedValues.has(option.value))
+  }, [doctorOptions, form.doctorIds, currentDoctorId])
 
   if (!isOpen) {
     return null
   }
 
-  const toggleDoctorSelection = (doctorId, keepSelected = false) => {
-    setForm((current) => {
-      const values = new Set(current.doctorIds)
+  const selectDoctors = (selectedOptions) => {
+    const nextDoctorIds = selectedOptions
+      .map((option) => doctorByValue.get(option.value)?.id)
+      .filter((doctorId) => doctorId !== undefined && doctorId !== null)
 
-      if (values.has(doctorId) && !keepSelected) {
-        values.delete(doctorId)
-      } else {
-        values.add(doctorId)
-      }
-
-      return {
-        ...current,
-        doctorIds: Array.from(values),
-      }
-    })
-  }
-
-  const selectPatient = (patientId) => {
     setForm((current) => ({
       ...current,
-      patientIds: patientSelectionMode === "single"
-        ? [patientId]
-        : current.patientIds.includes(patientId)
-          ? current.patientIds.filter((id) => id !== patientId)
-          : [...current.patientIds, patientId],
+      doctorIds: Array.from(new Set([currentDoctorId, ...nextDoctorIds].filter((doctorId) => doctorId !== undefined && doctorId !== null))),
+    }))
+  }
+
+  const selectPatient = (patientValue) => {
+    const nextPatientId = patientByValue.get(patientValue)?.id
+
+    setForm((current) => ({
+      ...current,
+      patientIds: nextPatientId !== undefined && nextPatientId !== null ? [nextPatientId] : [],
     }))
   }
 
@@ -174,7 +217,7 @@ export default function ActivityDialog({
       title: form.title.trim(),
       description: form.description.trim(),
       scheduled_at: buildScheduledAt(form.scheduledDate, form.scheduledTime),
-      doctor_ids: Array.from(new Set([currentDoctorId, ...form.doctorIds].filter(Boolean))),
+      doctor_ids: Array.from(new Set([currentDoctorId, ...form.doctorIds].filter((doctorId) => doctorId !== undefined && doctorId !== null))),
     }
 
     if (mode !== "edit") {
@@ -270,8 +313,9 @@ export default function ActivityDialog({
               id="activity-title"
               type="text"
               value={form.title}
-              onChange={(value) => setForm((current) => ({...current, title: value}))}
+              onChange={(value) => setForm((current) => ({...current, title: limitText(value, INPUT_LIMITS.activityTitle)}))}
               placeholder="Post-op monitoring review"
+              maxLength={INPUT_LIMITS.activityTitle}
               required
             />
           </div>
@@ -281,8 +325,9 @@ export default function ActivityDialog({
             <ClearableTextarea
               id="activity-description"
               value={form.description}
-              onChange={(value) => setForm((current) => ({...current, description: value}))}
+              onChange={(value) => setForm((current) => ({...current, description: limitText(value, INPUT_LIMITS.activityDescription)}))}
               placeholder="Optional details"
+              maxLength={INPUT_LIMITS.activityDescription}
               rows={2}
             />
           </div>
@@ -294,50 +339,38 @@ export default function ActivityDialog({
                   <p className="medstream-activity-panel-title">
                     {patientSelectionMode === "single" ? "Patient" : "Patients Involved"}
                   </p>
-                  <span className="medstream-activity-panel-count">{filteredPatients.length}</span>
+                  <span className="medstream-activity-panel-count">{filteredPatientOptions.length}</span>
                 </div>
 
-                <div className="login-field medstream-activity-search">
-                  <label className="login-label" htmlFor="activity-patient-search">Search patient</label>
+                <div className="medstream-activity-patient-search">
                   <ClearableInput
-                    id="activity-patient-search"
-                    value={patientQuery}
+                    aria-label="Search patient by full name"
+                    type="search"
+                    value={patientSearchQuery}
                     onChange={(value) => {
-                      setPatientQuery(value)
+                      setPatientSearchQuery(limitText(value, INPUT_LIMITS.search))
                       setPatientPage(1)
                     }}
-                    placeholder="Search by name"
+                    placeholder="Search by full name"
+                    maxLength={INPUT_LIMITS.search}
                   />
                 </div>
 
-                <div className="medstream-activity-choice-list custom-scrollbar" role="listbox" aria-label={patientSelectionMode === "single" ? "Patient" : "Patients involved"}>
-                  {visiblePatients.map((patient) => (
-                    <label
-                      key={patient.id}
-                      className="medstream-activity-choice"
-                      role="option"
-                      aria-selected={form.patientIds.includes(patient.id)}
-                    >
-                      <input
-                        className="medstream-choice-input"
-                        type={patientSelectionMode === "single" ? "radio" : "checkbox"}
-                        name={patientSelectionMode === "single" ? "activity-patient" : undefined}
-                        checked={form.patientIds.includes(patient.id)}
-                        onChange={() => selectPatient(patient.id)}
-                      />
-                      <span className="medstream-activity-choice-text">
-                        {patient.last_name} {patient.first_name}
-                        {patient.isCurrent ? " (Current patient)" : ""}
-                      </span>
-                    </label>
-                  ))}
-                  {visiblePatients.length === 0 && (
-                    <p className="medstream-activity-empty">No patients match the current search.</p>
+                <div className="medstream-activity-participant-multiselect">
+                  {visiblePatientOptions.length > 0 ? (
+                    <RadioGroup
+                      ariaLabel={patientSelectionMode === "single" ? "Patient" : "Patients involved"}
+                      value={selectedPatientValue}
+                      onChange={({detail}) => selectPatient(detail.value)}
+                      items={visiblePatientOptions}
+                    />
+                  ) : (
+                    <Box color="text-body-secondary">No patients match your search.</Box>
                   )}
                 </div>
 
                 {maxPatientPage > 1 && (
-                  <div className="medstream-activity-pagination">
+                  <div className="medstream-activity-participant-pagination">
                     <Pagination
                       currentPageIndex={currentPatientPage}
                       pagesCount={maxPatientPage}
@@ -349,34 +382,30 @@ export default function ActivityDialog({
             )}
             <section className="medstream-activity-participant-panel">
               <div className="medstream-activity-panel-header">
-                <p className="medstream-activity-panel-title">Doctors Involved</p>
+                <div className="medstream-activity-panel-title-row">
+                  <p className="medstream-activity-panel-title">Doctors Involved</p>
+                  <InfoHelp
+                    ariaLabel="Doctors involved information"
+                    title="Default doctor"
+                    body="The doctor creating the activity is required for ownership and audit history, so they stay selected and cannot be removed."
+                  />
+                </div>
                 <span className="medstream-activity-panel-count">{doctors.length}</span>
               </div>
-              <div className="medstream-activity-choice-list medstream-activity-doctor-list custom-scrollbar" role="listbox" aria-label="Doctors involved">
-                {doctors.map((doctor) => {
-                  const isCurrentDoctor = doctor.id === currentDoctorId
-                  const isSelectedDoctor = form.doctorIds.includes(doctor.id) || isCurrentDoctor
-                  return (
-                    <label
-                      key={doctor.id}
-                      className="medstream-activity-choice"
-                      role="option"
-                      aria-selected={isSelectedDoctor}
-                    >
-                      <input
-                        className="medstream-choice-input"
-                        type="checkbox"
-                        checked={isSelectedDoctor}
-                        disabled={isCurrentDoctor}
-                        onChange={() => toggleDoctorSelection(doctor.id, isCurrentDoctor)}
-                      />
-                      <span className="medstream-activity-choice-text">
-                        Dr. {doctor.first_name} {doctor.last_name}
-                        {isCurrentDoctor ? " (You)" : ""}
-                      </span>
-                    </label>
-                  )
-                })}
+              <div className="medstream-activity-doctor-multiselect">
+                <Multiselect
+                  ariaLabel="Doctors involved"
+                  selectedOptions={selectedDoctorOptions}
+                  onChange={({detail}) => selectDoctors(detail.selectedOptions)}
+                  options={doctorOptions}
+                  placeholder="Choose options"
+                  selectedAriaLabel="Selected doctor"
+                  deselectAriaLabel={(option) => `Remove ${option.label}`}
+                  empty="No doctors available"
+                  enableSelectAll
+                  keepOpen
+                  i18nStrings={{selectAllText: "Select all"}}
+                />
               </div>
             </section>
           </div>

@@ -5,6 +5,8 @@ import {useAuth} from "../components/AuthContext.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {loginDoctor} from "../services/authApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -92,6 +94,7 @@ export default function LoginPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Sign In"}</p>
               <h1 className="login-title">{"Doctor Login"}</h1>
               <p className="login-subtitle">{"Secure access to the hospital monitoring console."}</p>
@@ -104,9 +107,10 @@ export default function LoginPage() {
                   id="identifier"
                   type="text"
                   value={identifier}
-                  onChange={(event) => setIdentifier(event.target.value)}
+                  onChange={(event) => setIdentifier(limitText(event.target.value, INPUT_LIMITS.identifier))}
                   className="login-input"
                   placeholder={"Enter your email or phone number"}
+                  maxLength={INPUT_LIMITS.identifier}
                   required
                 />
               </div>
@@ -116,9 +120,10 @@ export default function LoginPage() {
                   id="password"
                   type="password"
                   value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  onChange={(event) => setPassword(limitText(event.target.value, INPUT_LIMITS.password))}
                   className="login-input"
                   placeholder={"Enter your password"}
+                  maxLength={INPUT_LIMITS.password}
                   required
                 />
               </div>

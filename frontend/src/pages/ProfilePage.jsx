@@ -53,6 +53,7 @@ import {getErrorMessage, getResponseData, getResponseMessage} from "../services/
 import {formatPatientFullName} from "../utils/patients.js"
 import {buildPatientPhoneNumber, normalizeRomanianPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone.js"
 import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
+import {INPUT_LIMITS, limitDigits, limitText} from "../utils/inputLimits.js"
 
 const DEACTIVATE_ACCOUNT_CONFIRMATION = "deactivate account"
 
@@ -275,7 +276,7 @@ export default function ProfilePage() {
   const [selectedActivity, setSelectedActivity] = useState(null)
   const [activityPendingCancellation, setActivityPendingCancellation] = useState(null)
   const [activityPage, setActivityPage] = useState(1)
-  const activityPageSize = assignedPatients.length >= 4 ? 2 : 1
+  const activityPageSize = 4
   const paginatedActivities = useMemo(() => {
     const start = (activityPage - 1) * activityPageSize
     return activities.slice(start, start + activityPageSize)
@@ -419,6 +420,10 @@ export default function ProfilePage() {
       patient.department === doctor?.specialization
       && patient.is_discharged === false
   )
+  const assignmentPatientOptions = filteredAssignedPatients.map((patient) => ({
+    label: `${patient.cnp} | ${formatPatientFullName(patient)}`,
+    value: String(patient.id),
+  }))
   const activityPatients = assignedPatients.filter((patient) => patient.department === doctor?.specialization)
   const activityDoctors = allDoctors.filter((item) => item.specialization === doctor?.specialization)
   const departmentOptions = departments.map((department) => ({label: department, value: department}))
@@ -443,26 +448,8 @@ export default function ProfilePage() {
   const isPendingEmail = Boolean(doctor?.pending_email) || doctor?.email_confirmed === false
   const isEmailDirty = emailInput.trim() && emailInput.trim() !== displayedEmail
   const shouldShowResendVerification = Boolean(doctor?.email_confirmed === false && doctor?.email_verification_expired === true)
-  const normalizedAssignmentQuery = assignmentQuery.trim().toLowerCase()
-  const selectedPatient = filteredAssignedPatients.find((patient) => {
-    const patientName = formatPatientFullName(patient)
-    const normalizedPatientName = patientName.toLowerCase()
-    const optionLabel = `${patient.cnp} | ${patientName}`.toLowerCase()
-    return (
-      patient.cnp === assignmentQuery.trim()
-      || normalizedPatientName === normalizedAssignmentQuery
-      || optionLabel === normalizedAssignmentQuery
-    )
-  })
-  const matchingAssignmentSuggestions = filteredAssignedPatients.filter((patient) => {
-    if (!normalizedAssignmentQuery || selectedPatient) {
-      return true
-    }
-
-    const patientName = formatPatientFullName(patient).toLowerCase()
-    return patient.cnp.toLowerCase().includes(normalizedAssignmentQuery) || patientName.includes(normalizedAssignmentQuery)
-  })
-  const assignmentSuggestions = selectedPatient ? filteredAssignedPatients : matchingAssignmentSuggestions
+  const selectedPatient = filteredAssignedPatients.find((patient) => String(patient.id) === String(assignmentQuery))
+  const selectedAssignmentPatientOption = getSelectedOption(assignmentPatientOptions, assignmentQuery)
 
   useEffect(() => {
     if (!doctor || doctor.email_confirmed) {
@@ -543,9 +530,15 @@ export default function ProfilePage() {
 
   const handleFormChange = (event) => {
     const {name, value} = event.target
+    const fieldLimits = {
+      first_name: INPUT_LIMITS.firstName,
+      last_name: INPUT_LIMITS.lastName,
+      license_number: INPUT_LIMITS.licenseNumber,
+    }
+    const nextValue = fieldLimits[name] ? limitText(value, fieldLimits[name]) : value
     setForm((current) => ({
       ...current,
-      [name]: value,
+      [name]: nextValue,
     }))
   }
 
@@ -831,21 +824,21 @@ export default function ProfilePage() {
                   </SpaceBetween>
                   <SpaceBetween size="xs">
                     <Box color="text-body-secondary" variant="awsui-key-label">Assigned patients</Box>
-                    <Box variant="h2"><CountValue value={assignedPatients.length}/></Box>
+                    <Box variant="h2"><CountValue showFullValue value={assignedPatients.length}/></Box>
                   </SpaceBetween>
                   <SpaceBetween size="xs">
                     <Box color="text-body-secondary" variant="awsui-key-label">Available patients</Box>
-                    <Box variant="h2"><CountValue value={filteredAssignedPatients.length}/></Box>
+                    <Box variant="h2"><CountValue showFullValue value={filteredAssignedPatients.length}/></Box>
                   </SpaceBetween>
                   <SpaceBetween size="xs">
                     <Box color="text-body-secondary" variant="awsui-key-label">Incoming activities</Box>
-                    <Box variant="h2"><CountValue value={activities.filter((activity) => activity.status === "incoming").length}/></Box>
+                    <Box variant="h2"><CountValue showFullValue value={activities.filter((activity) => activity.status === "incoming").length}/></Box>
                   </SpaceBetween>
                 </ColumnLayout>
               </Container>
 
-              <div className="medstream-dashboard-split">
-                <div className="medstream-stretch-container">
+              <div className="medstream-profile-workspace-grid">
+                <div className="medstream-stretch-container medstream-assigned-patients-card">
                   <Container
                     header={
                       <Header
@@ -857,6 +850,48 @@ export default function ProfilePage() {
                       </Header>
                     }
                   >
+                    <form className="medstream-assignment-form" onSubmit={handleAssignPatient}>
+                      <div className="login-field medstream-assignment-field">
+                        <label className="login-label" htmlFor="assigned_patient">Patient CNP or Full Name</label>
+                        <div className="medstream-assignment-row">
+                          <div className="medstream-assignment-select">
+                            <Select
+                              controlId="assigned_patient"
+                              selectedOption={selectedAssignmentPatientOption}
+                              onChange={({detail}) => setAssignmentQuery(detail.selectedOption.value)}
+                              options={assignmentPatientOptions}
+                              placeholder="Choose option"
+                              selectedAriaLabel="Selected patient"
+                              empty="No patients available"
+                              noMatch="No patients match your search"
+                              filteringType="auto"
+                              filteringPlaceholder="Search by CNP or full name."
+                              disabled={assignmentPatientOptions.length === 0 || isAssigningPatient}
+                            />
+                            {assignmentQuery && (
+                              <Button
+                                formAction="none"
+                                variant="icon"
+                                iconName="close"
+                                ariaLabel="Clear selected patient"
+                                className="medstream-assignment-clear-button"
+                                onClick={() => setAssignmentQuery("")}
+                                disabled={isAssigningPatient}
+                              />
+                            )}
+                          </div>
+                          <Button
+                            formAction="submit"
+                            variant="primary"
+                            className="medstream-submit-button medstream-assign-button"
+                            disabled={!selectedPatient || isAssigningPatient}
+                          >
+                            Assign
+                          </Button>
+                        </div>
+                      </div>
+                    </form>
+
                     <DataTable
                       items={assignedPatients}
                       loading={isLoading}
@@ -907,7 +942,7 @@ export default function ProfilePage() {
                   </Container>
                 </div>
 
-                <div className="medstream-stretch-container">
+                <div className="medstream-stretch-container medstream-upcoming-activities-card">
                   <Container
                     header={
                       <Header
@@ -946,14 +981,31 @@ export default function ProfilePage() {
                           return (
                             <Container key={activity.id} fitHeight>
                               <SpaceBetween size="xxs">
-                                <Box variant="small">
-                                  <StatusIndicator
-                                    type={getActivityStatusType(activity.status)}
-                                    colorOverride={getActivityStatusColor(activity.status)}
-                                  >
-                                    {formatActivityStatus(activity.status)}
-                                  </StatusIndicator>
-                                </Box>
+                                <div className="medstream-profile-activity-status-row">
+                                  <Box variant="small">
+                                    <StatusIndicator
+                                      type={getActivityStatusType(activity.status)}
+                                      colorOverride={getActivityStatusColor(activity.status)}
+                                    >
+                                      {formatActivityStatus(activity.status)}
+                                    </StatusIndicator>
+                                  </Box>
+                                  <div className="medstream-profile-activity-actions">
+                                    <Button
+                                      onClick={() => canEdit && handleActivityEdit(activity)}
+                                      disabled={!canEdit}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      variant="primary"
+                                      onClick={() => canCancel && setActivityPendingCancellation(activity)}
+                                      disabled={!canCancel}
+                                    >
+                                      Cancel activity
+                                    </Button>
+                                  </div>
+                                </div>
                                 <Box variant="h3">{activity.title}</Box>
                                 <Box color="text-body-secondary" variant="small">{activity.type}</Box>
                                 {activity.description && (
@@ -966,20 +1018,6 @@ export default function ProfilePage() {
                                 <Box color="text-body-secondary" variant="small">
                                   Patients: {formatActivityPeople(activity.patients)}
                                 </Box>
-                                <div className="medstream-profile-activity-actions">
-                                  <Button
-                                    onClick={() => canEdit && handleActivityEdit(activity)}
-                                    disabled={!canEdit}
-                                  >
-                                    Edit
-                                  </Button>
-                                  <Button
-                                    onClick={() => canCancel && setActivityPendingCancellation(activity)}
-                                    disabled={!canCancel}
-                                  >
-                                    Cancel activity
-                                  </Button>
-                                </div>
                               </SpaceBetween>
                             </Container>
                           )
@@ -997,10 +1035,7 @@ export default function ProfilePage() {
                     )}
                   </Container>
                 </div>
-              </div>
-
-              <div className="medstream-profile-settings-grid">
-                <div className="medstream-stretch-container">
+                <div className="medstream-stretch-container medstream-editable-profile-card">
                   <Container
                     header={
                       <Header
@@ -1016,12 +1051,12 @@ export default function ProfilePage() {
                         <div className="login-field">
                           <label className="login-label" htmlFor="first_name">First Name</label>
                           <input id="first_name" name="first_name" type="text" value={form.first_name} onChange={handleFormChange}
-                                 className="login-input" placeholder="Elena" required/>
+                                 className="login-input" placeholder="Elena" maxLength={100} required/>
                         </div>
                         <div className="login-field">
                           <label className="login-label" htmlFor="last_name">Last Name</label>
                           <input id="last_name" name="last_name" type="text" value={form.last_name} onChange={handleFormChange}
-                                 className="login-input" placeholder="Popescu" required/>
+                                 className="login-input" placeholder="Popescu" maxLength={100} required/>
                         </div>
                         <div className="login-field">
                           <span className="medstream-label-with-help">
@@ -1050,7 +1085,7 @@ export default function ProfilePage() {
                         <div className="login-field">
                           <label className="login-label" htmlFor="license_number">License Number</label>
                           <input id="license_number" name="license_number" type="text" value={form.license_number} onChange={handleFormChange}
-                                 className="login-input" placeholder="DOC-20458" required/>
+                                 className="login-input" placeholder="DOC-20458" maxLength={50} required/>
                         </div>
                         <div className="login-field">
                           <label className="login-label" htmlFor="doctor-birth-date">Birth Date</label>
@@ -1070,9 +1105,10 @@ export default function ProfilePage() {
                             id="doctor-phone-number"
                             type="tel"
                             value={phoneNumber}
-                            onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, ""))}
+                            onChange={(event) => setPhoneNumber(limitDigits(event.target.value, INPUT_LIMITS.phone))}
                             className="login-input"
                             placeholder={ROMANIA_PHONE_PLACEHOLDER}
+                            maxLength={INPUT_LIMITS.phone}
                           />
                         </div>
                       </div>
@@ -1091,70 +1127,7 @@ export default function ProfilePage() {
                   </Container>
                 </div>
 
-                <div className="medstream-stretch-container">
-                  <Container
-                    header={
-                      <Header variant="h2" description="Assign an admitted patient from your specialization.">
-                        Assign patient
-                      </Header>
-                    }
-                  >
-                    <form className="medstream-form" onSubmit={handleAssignPatient}>
-                      <div className="login-field relative">
-                        <label className="login-label" htmlFor="assigned_patient">Patient CNP or Full Name</label>
-                        <input
-                          id="assigned_patient"
-                          type="text"
-                          value={assignmentQuery}
-                          onChange={(event) => setAssignmentQuery(event.target.value)}
-                          className="login-input"
-                          placeholder="6010101123451 or Popescu Andrei"
-                          autoComplete="off"
-                          disabled={filteredAssignedPatients.length === 0 || isAssigningPatient}
-                        />
-
-                        {assignmentSuggestions.length > 0 && (
-                          <div className="medstream-profile-suggestions custom-scrollbar">
-                            {assignmentSuggestions.map((patient) => {
-                              const isSelectedSuggestion = selectedPatient?.id === patient.id
-                              return (
-                                <button
-                                  type="button"
-                                  key={patient.id}
-                                  className={`medstream-profile-suggestion ${isSelectedSuggestion ? "medstream-profile-suggestion-selected" : ""}`}
-                                  aria-current={isSelectedSuggestion ? "true" : undefined}
-                                  onClick={() => {
-                                    setAssignmentQuery(`${patient.cnp} | ${formatPatientFullName(patient)}`)
-                                  }}
-                                >
-                                  <span className="font-semibold text-[var(--text-primary)]">{patient.cnp}</span>
-                                  <span className="text-[var(--text-muted)]"> | {formatPatientFullName(patient)}</span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-
-                        <p className="mt-2 text-xs text-[var(--text-muted)]">
-                          Start with CNP or full name. Suggestions show both identifiers together.
-                        </p>
-                      </div>
-
-                      <div className="medstream-form-actions">
-                        <Button
-                          formAction="submit"
-                          variant="primary"
-                          className="medstream-submit-button"
-                          disabled={!selectedPatient || isAssigningPatient}
-                        >
-                          {isAssigningPatient ? "Assigning..." : "Assign patient"}
-                        </Button>
-                      </div>
-                    </form>
-                  </Container>
-                </div>
-
-                <div className="medstream-stretch-container">
+                <div className="medstream-stretch-container medstream-account-email-card">
                   <Container
                     header={
                       <Header
@@ -1177,9 +1150,10 @@ export default function ProfilePage() {
                           id="doctor-email"
                           type="email"
                           value={emailInput}
-                          onChange={(event) => setEmailInput(event.target.value)}
+                          onChange={(event) => setEmailInput(limitText(event.target.value, INPUT_LIMITS.email))}
                           className="login-input"
                           placeholder="doctor@medstream.local"
+                          maxLength={INPUT_LIMITS.email}
                           required
                         />
                       </div>
@@ -1208,7 +1182,7 @@ export default function ProfilePage() {
                   </Container>
                 </div>
 
-                <div className="medstream-stretch-container">
+                <div className="medstream-stretch-container medstream-account-status-card">
                   <Container
                     header={
                       <Header variant="h2" description="Deactivate the current doctor account when policy allows it.">
@@ -1326,9 +1300,10 @@ export default function ProfilePage() {
                 className="login-input"
                 placeholder={DEACTIVATE_ACCOUNT_CONFIRMATION}
                 value={deleteConfirmationText}
-                onChange={(event) => setDeleteConfirmationText(event.target.value)}
+                onChange={(event) => setDeleteConfirmationText(limitText(event.target.value, DEACTIVATE_ACCOUNT_CONFIRMATION.length))}
                 disabled={isDeletingAccount}
                 autoComplete="off"
+                maxLength={DEACTIVATE_ACCOUNT_CONFIRMATION.length}
               />
             </div>
           </Modal>

@@ -13,6 +13,7 @@ import {
 import {getDepartments} from "../services/patientApi.js"
 import {getResponseData} from "../services/apiMessages.js"
 import InfoHelp from "./InfoHelp.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 export default function DepartmentTransferDialog({
                                                    currentDepartment,
@@ -146,6 +147,13 @@ export default function DepartmentTransferDialog({
           </SpaceBetween>
         </ColumnLayout>
 
+        <details className="medstream-transfer-doctor-info">
+          <summary className="medstream-transfer-doctor-info-header">Doctor selection</summary>
+          <Box className="medstream-transfer-doctor-info-body" color="text-body-secondary">
+            In order to select a doctor, you must first choose a new department.
+          </Box>
+        </details>
+
         <div className="medstream-form-grid">
           <FormField label="New Department">
             <Select
@@ -159,15 +167,17 @@ export default function DepartmentTransferDialog({
               disabled={isSubmitting}
             />
           </FormField>
-          <FormField label="Assign Doctor">
-            <Select
-              selectedOption={selectedDoctorOption}
-              onChange={({detail}) => setNextDoctorId(detail.selectedOption.value)}
-              options={doctorOptions}
-              placeholder={nextDepartment ? "Select a doctor" : "Select a department first"}
-              disabled={isSubmitting || !nextDepartment}
-            />
-          </FormField>
+          <div className="medstream-transfer-doctor-select">
+            <FormField label="Assign Doctor">
+              <Select
+                selectedOption={selectedDoctorOption}
+                onChange={({detail}) => setNextDoctorId(detail.selectedOption.value)}
+                options={doctorOptions}
+                placeholder="Select a doctor"
+                disabled={isSubmitting || !nextDepartment}
+              />
+            </FormField>
+          </div>
           <div className="medstream-form-field-wide">
             <FormField
               label="Transfer Reason"
@@ -176,8 +186,9 @@ export default function DepartmentTransferDialog({
             >
               <Textarea
                 value={reason}
-                onChange={({detail}) => setReason(detail.value)}
+                onChange={({detail}) => setReason(limitText(detail.value, INPUT_LIMITS.clinicalNote))}
                 placeholder="Enter the operational reason for this transfer."
+                maxLength={INPUT_LIMITS.clinicalNote}
                 rows={3}
                 disabled={isSubmitting}
               />

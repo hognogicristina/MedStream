@@ -10,6 +10,7 @@ import {
 } from "@cloudscape-design/components"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import PatientTreatmentAnalysisSection from "../components/PatientTreatmentAnalysisSection.jsx"
+import PatientAssignmentStatus from "../components/PatientAssignmentStatus.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {getPatient} from "../services/patientApi.js"
@@ -76,6 +77,7 @@ export default function PatientTreatmentAnalysisPage() {
                 <StatusIndicator type={patient?.is_discharged ? "stopped" : "success"}>
                   {patientStatusText}
                 </StatusIndicator>
+                <PatientAssignmentStatus patientId={patientId}/>
                 <span className="medstream-department-badge">
                   <Badge color="blue">{patient?.department || "--"}</Badge>
                 </span>

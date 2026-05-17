@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useState} from "react"
 import {Pagination, Select} from "@cloudscape-design/components"
 import LoadingSpinner from "./LoadingSpinner.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 function getSelectedOption(options, value) {
   return options.find((option) => String(option.value) === String(value)) || null
@@ -89,11 +90,13 @@ export default function DataTable({
                 type="text"
                 value={filterValues[filter.id] ?? ""}
                 onChange={(event) => {
-                  setFilterValues((current) => ({...current, [filter.id]: event.target.value}))
-                  filter.onChange?.(event.target.value)
+                  const value = limitText(event.target.value, filter.maxLength ?? INPUT_LIMITS.search)
+                  setFilterValues((current) => ({...current, [filter.id]: value}))
+                  filter.onChange?.(value)
                 }}
                 placeholder={filter.placeholder}
                 disabled={filter.disabled}
+                maxLength={filter.maxLength ?? INPUT_LIMITS.search}
                 className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[var(--text-subtle)]"
               />
             ) : (

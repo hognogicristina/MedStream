@@ -7,6 +7,7 @@ GENERIC_FORBIDDEN = "Forbidden request."
 
 ERROR_MESSAGES = {
     "REQUIRED_FIELD": "{field} is required.",
+    "FIELD_TOO_LONG": "{field} must be at most {max} characters.",
     "AT_LEAST_ONE_REQUIRED": "At least one {field} must be provided.",
     "NO_UPDATES_PROVIDED": "No updates were provided.",
     "INVALID_DEPARTMENT": "Department is invalid.",
@@ -53,6 +54,7 @@ ERROR_MESSAGES = {
     "INVALID_WINDOW_MINUTES": "Window minutes must be positive.",
     "INVALID_EMAIL_FORMAT": "Email format is invalid.",
     "PASSWORD_TOO_SHORT": "Password must be at least 8 characters long.",
+    "PASSWORD_TOO_LONG": "Password must be at most 72 characters long.",
     "PASSWORD_MISSING_UPPERCASE": "Password must contain at least one uppercase letter.",
     "PASSWORD_MISSING_NUMBER": "Password must contain at least one number.",
     "PASSWORDS_MISMATCH": "Passwords do not match.",

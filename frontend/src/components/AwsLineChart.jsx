@@ -50,6 +50,7 @@ export default function AwsLineChart({
   highlightedSeriesTitle = undefined,
   hideFilter = true,
   hideLegend = false,
+  detailPopoverSeriesContent,
   onHighlightedSeriesTitleChange = null,
   series,
   thresholds = EMPTY_THRESHOLDS,
@@ -105,6 +106,7 @@ export default function AwsLineChart({
       hideFilter={hideFilter}
       hideLegend={hideLegend}
       i18nStrings={DEFAULT_I18N_STRINGS}
+      detailPopoverSeriesContent={detailPopoverSeriesContent}
       series={chartSeries}
       statusType="finished"
       visibleSeries={chartSeries}

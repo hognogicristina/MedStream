@@ -435,7 +435,7 @@ export default function StreamingMetricsPage() {
                         </Box>
                         <Box variant="small">{alert.message}</Box>
                         <Box color="text-body-secondary" variant="small">
-                            {alert.alert_type} | Patient #{alert.patient_id} | {formatAlertTime(alert.created_at)}
+                            {alert.alert_type} | Patient ID: {alert.patient_id} | {formatAlertTime(alert.created_at)}
                         </Box>
                       </SpaceBetween>
                     </Container>
@@ -517,9 +517,7 @@ export default function StreamingMetricsPage() {
                   <Header
                     variant="h2"
                     description="Each stream uses its own clinical scale and alert thresholds, so changes are visible as events arrive."
-                    actions={
-                      <Button iconName="download" onClick={exportVitalStreams}>Export metrics</Button>
-                    }
+                    actions={<Button iconName="download" onClick={exportVitalStreams}>Export metrics</Button>}
                   >
                     Vital streams by alert rule
                   </Header>

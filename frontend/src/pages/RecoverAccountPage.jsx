@@ -3,6 +3,8 @@ import {Link} from "react-router-dom"
 import {requestAccountRecovery} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 export default function RecoverAccountPage() {
   const {notifySuccess, notifyError} = useNotifications()
@@ -36,9 +38,6 @@ export default function RecoverAccountPage() {
           <aside className="login-aside">
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
-              <Link className="auth-link" to="/login">
-                {"Back to login"}
-              </Link>
             </div>
             <h1 className="login-title">{"Account Recovery"}</h1>
             <p className="login-subtitle">{"Request an account recovery email for the doctor account associated with MedStream."}</p>
@@ -60,6 +59,7 @@ export default function RecoverAccountPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Recovery"}</p>
               <h1 className="login-title">{"Recover Account"}</h1>
               <p className="login-subtitle">{"Enter your email to start account recovery."}</p>
@@ -71,9 +71,10 @@ export default function RecoverAccountPage() {
                   id="identifier"
                   type="text"
                   value={identifier}
-                  onChange={(event) => setIdentifier(event.target.value)}
+                  onChange={(event) => setIdentifier(limitText(event.target.value, INPUT_LIMITS.identifier))}
                   className="login-input"
                   placeholder={"Email address"}
+                  maxLength={INPUT_LIMITS.identifier}
                   required
                 />
               </div>

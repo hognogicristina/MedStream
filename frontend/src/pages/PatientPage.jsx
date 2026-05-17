@@ -25,6 +25,7 @@ import {
   getPatientAlerts,
   getPatientDoctors,
   getVitals,
+  transferPatient,
   updatePatient,
   updatePatientDepartment,
 } from "../services/patientApi.js"
@@ -308,6 +309,7 @@ export default function PatientPage() {
 
   const handleDepartmentTransfer = async ({department: nextDepartment, doctorId: nextDoctorId, reason}) => {
     setIsUpdatingDepartment(true)
+    const sourceDepartment = department
 
     try {
       const response = await updatePatientDepartment(id, {
@@ -322,14 +324,17 @@ export default function PatientPage() {
       setIsTransferDialogOpen(false)
 
       if (nextDoctorId) {
-        try {
-          await assignPatientToDoctor(nextDoctorId, id, authHeaders)
-        } catch (e) {
-          notifyError(getErrorMessage(e))
-        }
+        await transferPatient(
+          id,
+          {
+            from_doctor_id: currentDoctor.id,
+            to_doctor_id: Number(nextDoctorId),
+          },
+          authHeaders,
+        )
       }
 
-      const oldDepartmentDocs = doctors.filter(doc => doc.specialization === department)
+      const oldDepartmentDocs = doctors.filter(doc => doc.specialization === sourceDepartment)
       await Promise.allSettled(
         oldDepartmentDocs.map(async (doc) => {
           try {

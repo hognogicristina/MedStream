@@ -12,6 +12,7 @@ from app.validators.common_validators import (
     normalize_optional_text,
     require_non_empty,
     strip_string,
+    validate_text_length,
 )
 
 ROMANIA_COUNTRY = "Romania"
@@ -21,6 +22,16 @@ ALLOWED_ARRIVAL_METHODS = {"ambulance", "self"}
 
 def validate_required_text(value: str | None, field_label: str) -> str:
     return require_non_empty(value, field_label)
+
+
+def validate_patient_name(value: str | None, field_label: str) -> str:
+    name = require_non_empty(value, field_label)
+    return validate_text_length(name, field_label, 100)
+
+
+def validate_gender_value(value: str | None) -> str:
+    gender = require_non_empty(value, "Gender")
+    return validate_text_length(gender, "Gender", 20)
 
 
 def validate_department_value(value: str | None) -> str:
@@ -60,14 +71,14 @@ def normalize_phone_value(value: str | None):
     if not digits:
         return None
 
-    if digits.startswith("0040") and len(digits) == 14:
-        digits = digits[2:]
+    if digits.startswith("0040") and len(digits) == 13 and digits[4] == "7":
+        return f"+{digits[2:]}"
 
     if digits.startswith("40") and len(digits) == 11 and digits[2] == "7":
-        return f"0{digits[2:]}"
+        return f"+{digits}"
 
     if digits.startswith("07") and len(digits) == 10:
-        return digits
+        return f"+4{digits}"
 
     if 8 <= len(digits) <= 15 and (has_plus_prefix or not digits.startswith("0")):
         return f"+{digits}"
@@ -75,10 +86,24 @@ def normalize_phone_value(value: str | None):
     raise ValidationError("INVALID_PHONE_FORMAT")
 
 
+def phone_uniqueness_values(value: str | None) -> set[str]:
+    normalized = normalize_phone_value(value)
+    if not normalized:
+        return set()
+
+    values = {normalized}
+    digits = "".join(char for char in normalized if char.isdigit())
+
+    if digits.startswith("40") and len(digits) == 11 and digits[2] == "7":
+        values.add(f"0{digits[2:]}")
+
+    return values
+
+
 def normalize_phone_lookup(value: str | None):
     try:
         normalized = normalize_phone_value(value)
-    except ValueError:
+    except ValidationError:
         return ""
 
     if not normalized:
@@ -137,7 +162,8 @@ def validate_patient_identity_uniqueness(
             raise ConflictError("CNP_ALREADY_REGISTERED")
 
     if phone_number:
-        phone_query = select(Patient).where(Patient.phone_number == phone_number)
+        phone_values = phone_uniqueness_values(phone_number)
+        phone_query = select(Patient).where(Patient.phone_number.in_(phone_values))
         if patient_id is not None:
             phone_query = phone_query.where(Patient.id != patient_id)
         if db.execute(phone_query).scalar_one_or_none():

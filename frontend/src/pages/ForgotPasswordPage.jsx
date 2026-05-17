@@ -1,11 +1,12 @@
 import {useState} from "react"
-import {Link, useNavigate} from "react-router-dom"
+import {Link} from "react-router-dom"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {requestPasswordReset} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 export default function ForgotPasswordPage() {
-  const navigate = useNavigate()
   const {notifySuccess, notifyError} = useNotifications()
   const [email, setEmail] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -38,9 +39,6 @@ export default function ForgotPasswordPage() {
           <aside className="login-aside">
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
-              <Link className="auth-link" to="/login">
-                {"Back to login"}
-              </Link>
             </div>
             <h1 className="login-title">{"Password Recovery"}</h1>
             <p className="login-subtitle">{"Request a secure password reset email for your doctor account."}</p>
@@ -63,6 +61,7 @@ export default function ForgotPasswordPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Recovery"}</p>
               <h1 className="login-title">{"Forgot Password"}</h1>
               <p className="login-subtitle">{"Enter your email address to receive a password reset link."}</p>
@@ -74,9 +73,10 @@ export default function ForgotPasswordPage() {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  onChange={(event) => setEmail(limitText(event.target.value, INPUT_LIMITS.email))}
                   className="login-input"
                   placeholder={"Email address"}
+                  maxLength={INPUT_LIMITS.email}
                   required
                 />
               </div>
@@ -94,9 +94,6 @@ export default function ForgotPasswordPage() {
                   <Link className="auth-link" to="/login">
                     {"Back to login"}
                   </Link>
-                  <button type="button" className="auth-link" onClick={() => navigate("/login")}>
-                    {"Go to login"}
-                  </button>
                 </div>
               </div>
             </form>

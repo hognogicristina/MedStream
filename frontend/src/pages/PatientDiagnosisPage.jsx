@@ -6,6 +6,7 @@ import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {createPatientDiagnosis, getPatient, getPatientDiagnosis} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 function formatDateTime(value) {
   if (!value) {
@@ -64,7 +65,11 @@ export default function PatientDiagnosisPage() {
 
   const handleChange = (event) => {
     const {name, value} = event.target
-    setForm((current) => ({...current, [name]: value}))
+    const fieldLimits = {
+      diagnosis: INPUT_LIMITS.diagnosis,
+      notes: INPUT_LIMITS.clinicalNote,
+    }
+    setForm((current) => ({...current, [name]: limitText(value, fieldLimits[name])}))
   }
 
   const handleSubmit = async (event) => {
@@ -134,6 +139,7 @@ export default function PatientDiagnosisPage() {
                   onChange={handleChange}
                   placeholder="Diagnosis"
                   className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                  maxLength={INPUT_LIMITS.diagnosis}
                   required
                 />
 
@@ -143,6 +149,7 @@ export default function PatientDiagnosisPage() {
                   onChange={handleChange}
                   placeholder="Notes"
                   className="console-input min-h-28 w-full rounded-2xl px-4 py-3 outline-none"
+                  maxLength={INPUT_LIMITS.clinicalNote}
                 />
 
                 <Button

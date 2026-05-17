@@ -1,8 +1,9 @@
 import {useEffect, useState} from "react"
-import {Link, useNavigate, useSearchParams} from "react-router-dom"
+import {useNavigate, useSearchParams} from "react-router-dom"
 import {verifyRecoverAccountToken} from "../services/authApi.js"
 import {getErrorMessage} from "../services/apiMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
 
 export default function RecoverAccountVerifyPage() {
   const navigate = useNavigate()
@@ -58,9 +59,6 @@ export default function RecoverAccountVerifyPage() {
           <aside className="login-aside">
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
-              <Link className="auth-link" to="/login">
-                {"Back to login"}
-              </Link>
             </div>
             <h1 className="login-title">{"Account Recovery"}</h1>
             <p className="login-subtitle">{"Validate your recovery link to reactivate your account."}</p>
@@ -70,6 +68,7 @@ export default function RecoverAccountVerifyPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Recovery"}</p>
               <h1 className="login-title">{"Verify Recovery Link"}</h1>
               <p className="login-subtitle">{"Your recovery verification request is being processed."}</p>

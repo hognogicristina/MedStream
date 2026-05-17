@@ -3,6 +3,8 @@ import {Link, useNavigate, useSearchParams} from "react-router-dom"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {resetPassword} from "../services/authApi.js"
 import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
+import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
+import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
@@ -48,9 +50,6 @@ export default function ResetPasswordPage() {
           <aside className="login-aside">
             <div className="flex items-center justify-between gap-3">
               <p className="login-brand">MedStream Console</p>
-              <Link className="auth-link" to="/login">
-                {"Back to login"}
-              </Link>
             </div>
             <h1 className="login-title">{"Reset Doctor Password"}</h1>
             <p className="login-subtitle">{"Complete the secure reset flow from the email you received."}</p>
@@ -72,6 +71,7 @@ export default function ResetPasswordPage() {
 
           <div className="login-panel">
             <div className="login-header">
+              <AuthThemeToggle/>
               <p className="login-brand">{"Recovery"}</p>
               <h1 className="login-title">{"Reset Password"}</h1>
               <p className="login-subtitle">{"Choose a new password for your account."}</p>
@@ -86,9 +86,10 @@ export default function ResetPasswordPage() {
                   id="new_password"
                   type="password"
                   value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
+                  onChange={(event) => setNewPassword(limitText(event.target.value, INPUT_LIMITS.password))}
                   className="login-input"
                   placeholder={"MedstreamSecure123"}
+                  maxLength={INPUT_LIMITS.password}
                   required
                 />
               </div>
@@ -101,9 +102,10 @@ export default function ResetPasswordPage() {
                   id="confirm_password"
                   type="password"
                   value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  onChange={(event) => setConfirmPassword(limitText(event.target.value, INPUT_LIMITS.password))}
                   className="login-input"
                   placeholder={"Repeat your new password"}
+                  maxLength={INPUT_LIMITS.password}
                   required
                 />
               </div>
