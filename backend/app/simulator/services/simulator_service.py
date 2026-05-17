@@ -68,6 +68,7 @@ DEBUG_ALERT_BURST_TRIGGER_PROBABILITY = 0.05
 DEBUG_ALERT_BURST_CYCLES_RANGE = (2, 4)
 DEBUG_ALERT_BURST_ABNORMAL_PROBABILITY = 0.58
 DEBUG_ALERT_BURST_COOLDOWN_SECONDS_RANGE = (4, 8)
+STREAMING_ALERT_PROCESSING_LATENCY_MS_RANGE = (50, 500)
 DEBUG_RECOVERED_DISCHARGE_LOGS = False
 TREATMENT_ESCALATION_NOTE = "Treatment not working, patient got worse. Dose/frequency adjusted after persistent alerts."
 SUCCESSFUL_RECOVERY_DISCHARGE_NOTE = (
@@ -115,6 +116,10 @@ class SimulatorService:
         self.producer = producer
         self.active_patients: list[dict] = []
         self.counter = 1
+
+    def _sample_streaming_alert_processing_delay(self) -> timedelta:
+        min_ms, max_ms = STREAMING_ALERT_PROCESSING_LATENCY_MS_RANGE
+        return timedelta(milliseconds=random.randint(min_ms, max_ms))
 
     def get_latest_vital_state(
             self,
@@ -758,7 +763,9 @@ class SimulatorService:
         if self.block_post_discharge_vital_and_alert_generation(db, patient_id):
             return False
 
-        event_time = now_utc()
+        alert_processing_delay = self._sample_streaming_alert_processing_delay()
+        alert_created_at = now_utc()
+        event_time = alert_created_at - alert_processing_delay
         patient_data["timeline_cursor"] = event_time
 
         vitals = self._generate_vitals_for_patient(patient_data)
@@ -783,6 +790,7 @@ class SimulatorService:
             vitals,
             patient_data=patient_data,
             recorded_at=event_time,
+            alert_created_at=alert_created_at,
         )
         high_or_critical_count = int(alert_stats.get("high_or_critical_count", 0))
         if high_or_critical_count > 0:
@@ -957,6 +965,7 @@ class SimulatorService:
             *,
             patient_data: dict,
             recorded_at: datetime,
+            alert_created_at: datetime,
             emit_events: bool = True,
             include_buffer: bool = True,
     ) -> dict:
@@ -1047,7 +1056,7 @@ class SimulatorService:
                 alert_type=alert_type,
                 message=message,
                 severity=severity,
-                created_at=recorded_at,
+                created_at=alert_created_at,
             )
             if created_alert is None:
                 return
@@ -1069,8 +1078,8 @@ class SimulatorService:
             if include_buffer:
                 self.buffers.append_alert_sample(patient_id, alert_type)
             generated_in_cycle += 1
-            recent_alert_timestamps.append(recorded_at)
-            patient_data["last_alert_timestamp"] = recorded_at
+            recent_alert_timestamps.append(alert_created_at)
+            patient_data["last_alert_timestamp"] = alert_created_at
 
             if severity in {"high", "critical"}:
                 count += 1

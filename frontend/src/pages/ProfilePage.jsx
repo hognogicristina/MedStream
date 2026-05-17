@@ -54,6 +54,7 @@ import {formatPatientFullName} from "../utils/patients.js"
 import {buildPatientPhoneNumber, normalizeRomanianPhoneNumber, ROMANIA_PHONE_PLACEHOLDER} from "../utils/patientPhone.js"
 import {getTodayIsoDate, isIsoDateInRange} from "../utils/date.js"
 import {INPUT_LIMITS, limitDigits, limitText} from "../utils/inputLimits.js"
+import {formatBucharestDateTime} from "../utils/time.js"
 
 const DEACTIVATE_ACCOUNT_CONFIRMATION = "deactivate account"
 
@@ -182,19 +183,7 @@ function sortAssignedPatients(items) {
 }
 
 function formatActivityDateTime(value) {
-  if (!value) {
-    return "--"
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(new Date(value))
+  return formatBucharestDateTime(value)
 }
 
 function formatActivityPeople(items, prefix = "") {
@@ -1211,7 +1200,7 @@ export default function ProfilePage() {
                         </SpaceBetween>
                         <SpaceBetween size="xs">
                           <Box color="text-body-secondary" variant="awsui-key-label">Deactivated at</Box>
-                          <Box>{doctor.deleted_at ? new Date(doctor.deleted_at).toLocaleString() : "--"}</Box>
+                          <Box>{formatBucharestDateTime(doctor.deleted_at)}</Box>
                         </SpaceBetween>
                       </ColumnLayout>
 

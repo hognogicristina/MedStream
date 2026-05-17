@@ -19,6 +19,7 @@ import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import VitalsChart from "../components/VitalsChart.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
+import {formatBucharestDateTime, formatBucharestTime} from "../utils/time.js"
 
 const MAX_PREVIEW_ALERTS = 4
 const MAX_ALERTS = 60
@@ -160,7 +161,7 @@ export default function DashboardPage() {
         setVitals((prev) => [
           {
             ...v,
-            time: new Date().toLocaleTimeString(),
+            time: formatBucharestTime(new Date()),
           },
           ...prev.slice(0, 20),
         ])
@@ -169,7 +170,7 @@ export default function DashboardPage() {
           const updated = [
             ...prev,
             {
-              time: new Date().toLocaleTimeString(),
+              time: formatBucharestTime(new Date()),
               patient_id: v.patient_id,
               heart_rate: v.heart_rate,
               oxygen_saturation: v.oxygen_saturation,
@@ -226,19 +227,19 @@ export default function DashboardPage() {
       value: formattedValue,
     }
   }, [])
-  const formatDashboardVitalTick = useCallback((value) => {
-    if (!Number.isInteger(value)) {
-      return ""
+  const renderVitalPopoverFooter = useCallback((xValue) => {
+    if (!Number.isInteger(xValue)) {
+      return null
     }
 
-    const point = chartData[value - 1]
-    const time = point?.time ?? ""
-    const patientId = point?.patient_id ?? "--"
-    const idLabel = `ID: ${patientId}`
+    const patientId = chartData[xValue - 1]?.patient_id
 
-    return `${time}${idLabel.padStart(26, "\u00a0")}`
+    if (patientId === null || patientId === undefined || patientId === "") {
+      return null
+    }
+
+    return <Box variant="small">Patient ID: {patientId}</Box>
   }, [chartData])
-
   if (isLoadingDashboard) {
     return (
       <ContentLayout>
@@ -293,8 +294,8 @@ export default function DashboardPage() {
                 ) : (
                   <VitalsChart
                     data={chartData}
+                    detailPopoverFooter={renderVitalPopoverFooter}
                     detailPopoverSeriesContent={renderVitalPopoverSeriesContent}
-                    xTickFormatter={formatDashboardVitalTick}
                   />
                 )}
                 <div className="medstream-vitals-insights">
@@ -346,7 +347,7 @@ export default function DashboardPage() {
                       </Box>
                       <Box variant="small">{`Patient ID: ${alert.patient_id}`}</Box>
                       <Box color="text-body-secondary" variant="small">{alert.message}</Box>
-                      <Box color="text-body-secondary" variant="small">{new Date(alert.created_at || Date.now()).toLocaleString()}</Box>
+                      <Box color="text-body-secondary" variant="small">{formatBucharestDateTime(alert.created_at || Date.now())}</Box>
                     </SpaceBetween>
                   </Container>
                 ))}

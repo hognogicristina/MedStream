@@ -47,6 +47,7 @@ export default function VitalsChart({
   height = 250,
   highlightedSeriesTitle = undefined,
   hideLegend = false,
+  detailPopoverFooter = undefined,
   detailPopoverSeriesContent = undefined,
   onHighlightedSeriesTitleChange = null,
   xTickFormatter = undefined,
@@ -62,6 +63,7 @@ export default function VitalsChart({
       height={height}
       highlightedSeriesTitle={highlightedSeriesTitle}
       hideLegend={hideLegend}
+      detailPopoverFooter={detailPopoverFooter}
       detailPopoverSeriesContent={detailPopoverSeriesContent}
       onHighlightedSeriesTitleChange={onHighlightedSeriesTitleChange}
       series={[

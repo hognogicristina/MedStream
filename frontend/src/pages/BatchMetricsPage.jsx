@@ -34,6 +34,7 @@ import BackButton from "../components/BackButton.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import AwsBarChart from "../components/AwsBarChart.jsx"
 import {INPUT_LIMITS, limitDigits, limitText} from "../utils/inputLimits.js"
+import {formatBucharestDate, formatBucharestDateTime} from "../utils/time.js"
 
 const POLL_INTERVAL_MS = 30000
 const STATUS_POLL_INTERVAL_MS = 2500
@@ -109,11 +110,7 @@ const TREATMENT_CATEGORY_DESCRIPTION = {
 const OUTCOME_FILTER_IDS = ["effective", "improving", "ineffective"]
 
 function formatBatchTimestamp(value) {
-  if (!value) {
-    return "No batch run yet"
-  }
-
-  return new Date(value).toLocaleString("en-GB", {timeZone: "Europe/Bucharest"})
+  return formatBucharestDateTime(value, "No batch run yet")
 }
 
 function formatMetric(value, unit = "", hasData = false) {
@@ -159,7 +156,7 @@ function OverallOutcomeTooltip({active, payload, total}) {
   const row = payload[0]?.payload || {}
   const value = Number(row.rawValue ?? row.value ?? 0)
   const percentage = formatOutcomePercentage(value, total)
-  const lastUpdate = row.timestamp ? new Date(row.timestamp).toLocaleDateString("en-US", {month: "short", day: "numeric", year: "numeric"}) : "No batch run"
+  const lastUpdate = formatBucharestDate(row.timestamp, "No batch run")
 
   return (
     <div
@@ -1157,6 +1154,7 @@ export default function BatchMetricsPage() {
                         legendPosition="left"
                         seriesTitle="Treatments"
                         tooltipValueFormatter={(bar) => String(toTreatmentCount(bar.y))}
+                        yTitle="Treatment"
                         valueKey="count"
                         xTitle="Outcome"
                       />

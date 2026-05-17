@@ -1,5 +1,6 @@
 from collections import Counter, deque
 from datetime import timedelta
+from math import ceil
 from threading import Lock
 from time import perf_counter
 
@@ -511,22 +512,70 @@ def record_comparison_metric_sample(db: Session, *, retention_hours: int = METRI
     }
 
 
-def get_comparison_history(db: Session, *, seconds: int = 3600, interval_seconds: int = HISTORY_INTERVAL_SECONDS) -> dict:
+def _downsample_history_rows(rows: list[ComparisonMetricSample], *, range_start, interval_seconds: int):
+    if len(rows) <= HISTORY_MAX_POINTS:
+        return rows
+
+    buckets = {}
+    for row in rows:
+        bucket_index = int(max(0, (to_utc(row.timestamp) - range_start).total_seconds()) // interval_seconds)
+        buckets[bucket_index] = row
+
+    sampled_rows = list(buckets.values())
+    if len(sampled_rows) <= HISTORY_MAX_POINTS:
+        return sampled_rows
+
+    step = ceil(len(sampled_rows) / HISTORY_MAX_POINTS)
+    reduced_rows = sampled_rows[::step]
+    if sampled_rows[-1] is not reduced_rows[-1]:
+        reduced_rows[-1] = sampled_rows[-1]
+
+    return reduced_rows
+
+
+def get_comparison_history(
+        db: Session,
+        *,
+        seconds: int = 3600,
+        interval_seconds: int = HISTORY_INTERVAL_SECONDS,
+        start_time=None,
+        end_time=None,
+) -> dict:
     now = utc_now()
     safe_interval_seconds = max(1, int(interval_seconds or HISTORY_INTERVAL_SECONDS))
-    safe_seconds = max(safe_interval_seconds, int(seconds or safe_interval_seconds))
-    range_start = now - timedelta(seconds=min(safe_seconds, safe_interval_seconds * (HISTORY_MAX_POINTS - 1)))
-    rows_desc = db.execute(
-        select(ComparisonMetricSample)
-        .where(
-            ComparisonMetricSample.timestamp >= range_start,
-            ComparisonMetricSample.timestamp <= now,
-        )
-        .order_by(ComparisonMetricSample.timestamp.desc(), ComparisonMetricSample.id.desc())
-        .limit(HISTORY_MAX_POINTS)
-    ).scalars().all()
-    rows = list(reversed(rows_desc))
+    if start_time is not None and end_time is not None:
+        range_start = to_utc(start_time)
+        range_end = min(to_utc(end_time), now)
+        if range_start >= range_end:
+            rows = []
+        else:
+            safe_seconds = max(safe_interval_seconds, int((range_end - range_start).total_seconds()))
+            safe_interval_seconds = max(safe_interval_seconds, ceil(safe_seconds / max(1, HISTORY_MAX_POINTS - 1)))
+            rows = db.execute(
+                select(ComparisonMetricSample)
+                .where(
+                    ComparisonMetricSample.timestamp >= range_start,
+                    ComparisonMetricSample.timestamp <= range_end,
+                )
+                .order_by(ComparisonMetricSample.timestamp.asc(), ComparisonMetricSample.id.asc())
+            ).scalars().all()
+            rows = _downsample_history_rows(rows, range_start=range_start, interval_seconds=safe_interval_seconds)
+    else:
+        safe_seconds = max(safe_interval_seconds, int(seconds or safe_interval_seconds))
+        range_end = now
+        range_start = now - timedelta(seconds=safe_seconds)
+        safe_interval_seconds = max(safe_interval_seconds, ceil(safe_seconds / max(1, HISTORY_MAX_POINTS - 1)))
+        rows = db.execute(
+            select(ComparisonMetricSample)
+            .where(
+                ComparisonMetricSample.timestamp >= range_start,
+                ComparisonMetricSample.timestamp <= range_end,
+            )
+            .order_by(ComparisonMetricSample.timestamp.asc(), ComparisonMetricSample.id.asc())
+        ).scalars().all()
+        rows = _downsample_history_rows(rows, range_start=range_start, interval_seconds=safe_interval_seconds)
 
+    rows = list(rows)
     throughput = [
         {
             "time_iso": to_utc(row.timestamp),

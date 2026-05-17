@@ -3,7 +3,7 @@ import {Box, Button, Header, Modal, Multiselect, Pagination, RadioGroup, Select,
 import AwsDatePicker from "./AwsDatePicker.jsx"
 import AwsTimeInput from "./AwsTimeInput.jsx"
 import InfoHelp from "./InfoHelp.jsx"
-import {isValidTime} from "../utils/time.js"
+import {getBucharestDateParts, isValidTime} from "../utils/time.js"
 import {INPUT_LIMITS, limitText} from "../utils/inputLimits.js"
 
 function ClearableInput({disabled = false, onChange, required = false, type = "text", value, ...props}) {
@@ -45,15 +45,14 @@ function toDateParts(value) {
     return {date: "", time: ""}
   }
 
-  const scheduled = new Date(value)
-  if (Number.isNaN(scheduled.getTime())) {
+  const scheduled = getBucharestDateParts(value)
+  if (!scheduled) {
     return {date: "", time: ""}
   }
 
-  const pad = (part) => String(part).padStart(2, "0")
   return {
-    date: `${scheduled.getFullYear()}-${pad(scheduled.getMonth() + 1)}-${pad(scheduled.getDate())}`,
-    time: `${pad(scheduled.getHours())}:${pad(scheduled.getMinutes())}`,
+    date: `${scheduled.year}-${scheduled.month}-${scheduled.day}`,
+    time: `${scheduled.hour}:${scheduled.minute}`,
   }
 }
 

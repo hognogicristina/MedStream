@@ -51,6 +51,7 @@ export default function AwsLineChart({
   highlightedSeriesTitle = undefined,
   hideFilter = true,
   hideLegend = false,
+  detailPopoverFooter,
   detailPopoverSeriesContent,
   onHighlightedSeriesTitleChange = null,
   series,
@@ -107,6 +108,7 @@ export default function AwsLineChart({
       hideFilter={hideFilter}
       hideLegend={hideLegend}
       i18nStrings={DEFAULT_I18N_STRINGS}
+      detailPopoverFooter={detailPopoverFooter}
       detailPopoverSeriesContent={detailPopoverSeriesContent}
       series={chartSeries}
       statusType="finished"
