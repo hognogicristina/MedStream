@@ -143,7 +143,7 @@ export default function AwsBarChart({
     const heightRatio = Math.max(0, Math.min(1, point.y / maxDomainValue))
     const barHeight = Math.max(point.y > 0 ? 3 : 0, plotHeight * heightRatio)
     const svgX = PLOT.left + (index * categoryWidth) + ((categoryWidth - barWidth) / 2)
-    const y = plotBottom - barHeight
+    const svgY = plotBottom - barHeight
 
     return {
       ...point,
@@ -153,9 +153,9 @@ export default function AwsBarChart({
       svgX,
       tooltipY: Math.min(
         plotBottom - 26,
-        Math.max(plotTop + 26, y + (barHeight / 2)),
+        Math.max(plotTop + 26, svgY + (barHeight / 2)),
       ),
-      y,
+      svgY,
     }
   })
   const hoveredBar = activeKey == null ? null : bars.find((bar) => bar.x === activeKey) || null
@@ -219,7 +219,7 @@ export default function AwsBarChart({
                   ry="5"
                   width={bar.barWidth}
                   x={bar.svgX}
-                  y={bar.y}
+                  y={bar.svgY}
                 />
                 {activeKey === bar.x ? (
                   <rect
@@ -229,7 +229,7 @@ export default function AwsBarChart({
                     ry="5"
                     width={bar.barWidth}
                     x={bar.svgX}
-                    y={bar.y}
+                    y={bar.svgY}
                   />
                 ) : null}
                 <text className="medstream-aws-bar-chart-x-label" x={bar.centerX} y={plotBottom + 32} textAnchor="middle">

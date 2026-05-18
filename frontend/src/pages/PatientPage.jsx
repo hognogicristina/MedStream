@@ -425,7 +425,7 @@ export default function PatientPage() {
       {label: "Critical", value: counts.critical, color: "var(--chart-outcome-ineffective)"},
       {label: "High", value: counts.high, color: "var(--chart-outcome-improving)"},
       {label: "Normal", value: counts.normal, color: "var(--chart-outcome-effective)"},
-    ]
+    ].filter((entry) => entry.value > 0)
   }, [alerts, id])
   const averageHeartRate = Number.isFinite(batchMetrics?.avg_heart_rate) ? batchMetrics.avg_heart_rate.toFixed(1) : "--"
   const averageOxygen = Number.isFinite(batchMetrics?.avg_oxygen) ? batchMetrics.avg_oxygen.toFixed(1) : "--"
