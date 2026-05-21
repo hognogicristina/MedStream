@@ -1,6 +1,6 @@
-import {createContext, useCallback, useEffect, useMemo, useRef, useState} from "react"
+import {useCallback, useEffect, useMemo, useRef, useState} from "react"
+import {NotificationContext} from "./notificationContext.js"
 
-export const NotificationContext = createContext(null)
 const DEFAULT_NOTIFICATION_DURATION = 5000
 const MAX_NOTIFICATIONS = 4
 

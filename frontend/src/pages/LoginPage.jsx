@@ -1,7 +1,7 @@
 import {Link} from "react-router-dom"
 import {useEffect, useRef, useState} from "react"
 import {useLocation, useNavigate, useSearchParams} from "react-router-dom"
-import {useAuth} from "../components/AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {loginDoctor} from "../services/authApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"

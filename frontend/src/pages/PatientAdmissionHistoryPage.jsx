@@ -18,7 +18,7 @@ import PatientAdmissionActionCard from "../components/PatientAdmissionActionCard
 import PatientAssignmentStatus from "../components/PatientAssignmentStatus.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {usePatientAdmissionActions} from "../hooks/usePatientAdmissionActions.js"
-import {useAuth} from "../components/AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 import {getPatient, getPatientAdmissionHistory} from "../services/patientApi.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {formatBucharestDateTime} from "../utils/time.js"

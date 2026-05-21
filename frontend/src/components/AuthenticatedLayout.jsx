@@ -1,7 +1,7 @@
 import {Outlet, useLocation} from "react-router-dom"
 import {useCallback, useEffect, useMemo, useState} from "react"
 import {AppIconRail, AppSideNavigation, AppTopNavigation} from "./Navbar.jsx"
-import {useAuth} from "./AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 import {resendVerificationEmail} from "../services/authApi.js"
 import {getCurrentDoctor} from "../services/doctorApi.js"
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"

@@ -1,14 +1,8 @@
-import {createContext, useContext, useEffect, useMemo, useState} from "react"
+import {useEffect, useMemo, useState} from "react"
 import {applyMode, Mode} from "@cloudscape-design/global-styles"
+import {DEFAULT_THEME, ThemeContext} from "./themeContext.js"
 
 const THEME_STORAGE_KEY = "medstream-theme"
-const DEFAULT_THEME = "light"
-
-const ThemeContext = createContext({
-  theme: DEFAULT_THEME,
-  setTheme: () => {},
-  toggleTheme: () => {},
-})
 
 function normalizeTheme(value) {
   return value === "light" ? "light" : "dark"
@@ -53,8 +47,4 @@ export function ThemeProvider({children}) {
       {children}
     </ThemeContext.Provider>
   )
-}
-
-export function useTheme() {
-  return useContext(ThemeContext)
 }

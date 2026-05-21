@@ -10,7 +10,7 @@ import {
   SpaceBetween,
 } from "@cloudscape-design/components"
 import {useNotifications} from "../hooks/useNotifications.js"
-import {useAuth} from "../components/AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 import {useNavigate} from "react-router-dom"
 import {createPatient} from "../services/patientApi.js"
 import {assignPatientToDoctor, getCurrentDoctor} from "../services/doctorApi.js"

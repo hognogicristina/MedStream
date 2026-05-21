@@ -33,7 +33,7 @@ import {assignPatientToDoctor, getCurrentDoctor, listDoctors, removePatientFromD
 import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
 import {createWebSocket} from "../services/ws.js"
 import {formatPatientPhoneWithCode} from "../utils/patientPhone.js"
-import {useAuth} from "../components/AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import HoverTextDropdown from "../components/HoverTextDropdown.jsx"
 import InfoHelp from "../components/InfoHelp.jsx"

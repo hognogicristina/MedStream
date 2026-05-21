@@ -1,5 +1,5 @@
 import {Toggle} from "@cloudscape-design/components"
-import {useTheme} from "./ThemeContext.jsx"
+import {useTheme} from "../hooks/useTheme.js"
 
 export default function AuthThemeToggle() {
   const {theme, setTheme} = useTheme()

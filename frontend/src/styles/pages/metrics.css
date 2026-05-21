@@ -267,6 +267,11 @@
   --batch-job-state-border: color-mix(in srgb, #d13212 48%, transparent);
 }
 
+.medstream-batch-job-state-idle {
+  --batch-job-state-color: #687078;
+  --batch-job-state-border: color-mix(in srgb, #687078 42%, transparent);
+}
+
 .medstream-batch-job-state-indicator {
   display: inline-grid;
   place-items: center;
@@ -325,16 +330,26 @@
   transform: rotate(-45deg);
 }
 
+.medstream-batch-job-state-idle .medstream-batch-job-status-icon::before,
 .medstream-batch-job-state-idle .medstream-batch-job-status-icon::after {
   position: absolute;
-  top: 5px;
-  left: 9px;
-  width: 2px;
-  height: 8px;
   border-radius: 999px;
   background: var(--batch-job-state-color);
-  box-shadow: 0 5px 0 var(--batch-job-state-color);
   content: "";
+}
+
+.medstream-batch-job-state-idle .medstream-batch-job-status-icon::before {
+  top: 10px;
+  left: 5px;
+  width: 7px;
+  height: 2px;
+}
+
+.medstream-batch-job-state-idle .medstream-batch-job-status-icon::after {
+  top: 4px;
+  left: 10px;
+  width: 2px;
+  height: 8px;
 }
 
 .medstream-batch-job-state-copy {

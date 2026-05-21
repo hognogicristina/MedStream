@@ -24,7 +24,7 @@ import AwsDatePicker from "../components/AwsDatePicker.jsx"
 import HoverTextDropdown from "../components/HoverTextDropdown.jsx"
 import InfoHelp from "../components/InfoHelp.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
-import {useAuth} from "../components/AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 import {resendVerificationEmail} from "../services/authApi.js"
 import {
   assignPatientToDoctor,

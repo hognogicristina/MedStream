@@ -1,10 +1,9 @@
-import {createContext, useContext, useEffect, useMemo, useState} from "react"
+import {useEffect, useMemo, useState} from "react"
 import {getCurrentDoctor} from "../services/doctorApi.js"
 import {getResponseData} from "../services/apiMessages.js"
+import {AuthContext} from "./authContext.js"
 
 const AUTH_STORAGE_KEY = "medstream_token"
-
-const AuthContext = createContext(null)
 
 function parseJwtExpMs(token) {
   if (!token) {
@@ -128,14 +127,4 @@ export function AuthProvider({children}) {
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider")
-  }
-
-  return context
 }

@@ -127,6 +127,12 @@
 .medstream-profile-patient-link {
   font-size: 1rem;
   font-weight: 700;
+  text-decoration: none;
+}
+
+.medstream-profile-patient-link:hover,
+.medstream-profile-patient-link:focus {
+  text-decoration: none;
 }
 
 .medstream-profile-row-meta {

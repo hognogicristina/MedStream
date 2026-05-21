@@ -1,6 +1,6 @@
 import {useEffect, useState} from "react"
 import {StatusIndicator} from "@cloudscape-design/components"
-import {useAuth} from "./AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 import {getCurrentDoctor} from "../services/doctorApi.js"
 import {getPatientDoctors} from "../services/patientApi.js"
 import {getResponseData} from "../services/apiMessages.js"

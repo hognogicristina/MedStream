@@ -6,8 +6,8 @@ import {
   SideNavigation,
   TopNavigation,
 } from "@cloudscape-design/components"
-import {useAuth} from "./AuthContext.jsx"
-import {useTheme} from "./ThemeContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
+import {useTheme} from "../hooks/useTheme.js"
 import {getResponseData} from "../services/apiMessages.js"
 import {getDepartments} from "../services/patientApi.js"
 
