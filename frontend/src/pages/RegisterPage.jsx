@@ -149,7 +149,7 @@ export default function RegisterPage() {
       <div className="login-card monitor-card">
         <div className="login-layout">
           <aside className="login-aside">
-            <div className="flex items-center justify-between gap-3">
+            <div className="auth-brand-row">
               <p className="login-brand">MedStream Console</p>
             </div>
 
@@ -191,15 +191,14 @@ export default function RegisterPage() {
                 {"Enter account and professional details to activate console access."}
               </p>
 
-              <div
-                className="mt-4 inline-flex rounded-full border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
+              <div className="auth-step-indicator">
                 {"Step"} {step} / 3
               </div>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
               {step === 1 && (
-                <div className="auth-section register-step-card transition-all duration-200">
+                <div className="auth-section register-step-card">
                   <div className="auth-section-header">
                     <p className="auth-section-label">
                       {"Account Details"}
@@ -283,7 +282,7 @@ export default function RegisterPage() {
               )}
 
               {step === 2 && (
-                <div className="auth-section register-step-card transition-all duration-200">
+                <div className="auth-section register-step-card">
                   <div className="auth-section-header">
                     <p className="auth-section-label">
                       {"Professional Details"}
@@ -293,8 +292,8 @@ export default function RegisterPage() {
                     </p>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="login-field relative z-0">
+                  <div className="register-professional-grid">
+                    <div className="login-field register-field-layer">
                       <label className="login-label" htmlFor="specialization">
                         {"Specialization"}
                       </label>
@@ -307,7 +306,7 @@ export default function RegisterPage() {
                       />
                     </div>
 
-                    <div className="login-field relative z-0">
+                    <div className="login-field register-field-layer">
                       <label className="login-label" htmlFor="license_number">
                         {"License Number"}
                       </label>
@@ -317,14 +316,14 @@ export default function RegisterPage() {
                         type="text"
                         value={form.license_number}
                         onChange={handleChange}
-                        className="login-input w-full"
+                        className="login-input"
                         placeholder={"DOC-20458"}
                         maxLength={50}
                         required
                       />
                     </div>
 
-                    <div className="login-field relative z-20 sm:col-span-2">
+                    <div className="login-field register-field-layer-raised register-field-wide">
                       <label className="login-label" htmlFor="birth_date">
                         {"Birth Date"}
                       </label>
@@ -333,7 +332,7 @@ export default function RegisterPage() {
                         name="birth_date"
                         value={form.birth_date}
                         onChange={(value) => handleChange({target: {name: "birth_date", value}})}
-                        className="login-input w-full"
+                        className="login-input"
                         max={maxBirthDate}
                         required
                       />
@@ -343,7 +342,7 @@ export default function RegisterPage() {
               )}
 
               {step === 3 && (
-                <div className="auth-section register-step-card transition-all duration-200">
+                <div className="auth-section register-step-card">
                   <div className="auth-section-header">
                     <p className="auth-section-label">
                       {"Password Setup"}
@@ -389,14 +388,14 @@ export default function RegisterPage() {
 
               <div className="auth-actions">
                 {step < 3 ? (
-                  <div className="form-action-block w-full">
-                    <div className="flex w-full gap-3">
+                  <div className="form-action-block auth-action-full">
+                    <div className="auth-button-row">
                       {step > 1 && (
                         <button
                           type="button"
                           onClick={handlePreviousStep}
                           disabled={isSubmitting}
-                          className="console-button-secondary auth-step-secondary-button w-full"
+                          className="console-button-secondary auth-step-secondary-button auth-button-fill"
                         >
                           {"Back"}
                         </button>
@@ -406,20 +405,20 @@ export default function RegisterPage() {
                         type="button"
                         onClick={handleNextStep}
                         disabled={isSubmitting || (step === 1 ? !isStepOneValid : !isStepTwoValid)}
-                        className="login-button auth-step-primary-button w-full"
+                        className="login-button auth-step-primary-button auth-button-fill"
                       >
                         {"Next"}
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="form-action-block w-full">
-                    <div className="flex w-full gap-3">
+                  <div className="form-action-block auth-action-full">
+                    <div className="auth-button-row">
                       <button
                         type="button"
                         onClick={handlePreviousStep}
                         disabled={isSubmitting}
-                        className="console-button-secondary auth-step-secondary-button w-full"
+                        className="console-button-secondary auth-step-secondary-button auth-button-fill"
                       >
                         {"Back"}
                       </button>
@@ -427,7 +426,7 @@ export default function RegisterPage() {
                       <button
                         type="submit"
                         disabled={!isStepThreeValid || isSubmitting}
-                        className="login-button w-full"
+                        className="login-button auth-button-fill"
                       >
                         {isSubmitting
                           ? ("Creating account...")
@@ -437,7 +436,7 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between gap-3 text-sm">
+                <div className="auth-link-row">
                   <Link className="auth-link" to="/login">
                     {"Already have an account? Login"}
                   </Link>

@@ -24,14 +24,13 @@ import AwsDatePicker from "../components/AwsDatePicker.jsx"
 import HoverTextDropdown from "../components/HoverTextDropdown.jsx"
 import InfoHelp from "../components/InfoHelp.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
-import {useAuth} from "../components/AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 import {resendVerificationEmail} from "../services/authApi.js"
 import {
   assignPatientToDoctor,
   createDoctorActivity,
   deactivateDoctor,
   getAvailableDoctors,
-  getCurrentDoctor,
   getDoctorActivities,
   getDoctorPatients,
   listDoctors,
@@ -220,10 +219,9 @@ function formatActivityStatus(status) {
 }
 
 export default function ProfilePage() {
-  const EMAIL_VERIFICATION_STATUS_POLL_MS = 30000
   const navigate = useNavigate()
   const {notifyError, notifySuccess} = useNotifications()
-  const {token, logout} = useAuth()
+  const {currentDoctor, refreshCurrentDoctor, setCurrentDoctorData, token, logout} = useAuth()
   const [doctor, setDoctor] = useState(null)
   const [patients, setPatients] = useState([])
   const [assignedPatients, setAssignedPatients] = useState([])
@@ -265,12 +263,22 @@ export default function ProfilePage() {
   const [selectedActivity, setSelectedActivity] = useState(null)
   const [activityPendingCancellation, setActivityPendingCancellation] = useState(null)
   const [activityPage, setActivityPage] = useState(1)
-  const activityPageSize = 4
+  const shouldExtendProfileWorkspace = assignedPatients.length >= 4 && activities.length > 0
+  const activityPageSize = shouldExtendProfileWorkspace
+    ? 4
+    : assignedPatients.length === 1
+      ? 1
+      : 2
   const paginatedActivities = useMemo(() => {
     const start = (activityPage - 1) * activityPageSize
     return activities.slice(start, start + activityPageSize)
   }, [activities, activityPage, activityPageSize])
   const totalActivityPages = Math.ceil(activities.length / activityPageSize)
+  const profileWorkspaceClassName = `medstream-profile-workspace-grid ${
+    shouldExtendProfileWorkspace
+      ? "medstream-profile-workspace-grid-extended"
+      : "medstream-profile-workspace-grid-compact"
+  }`
 
   const authHeaders = useMemo(() => ({
     Authorization: `Bearer ${token}`,
@@ -340,11 +348,13 @@ export default function ProfilePage() {
   }
 
   const refetchDoctorProfile = useCallback(async () => {
-    const response = await getCurrentDoctor(authHeaders)
-    const doctorData = getResponseData(response)
+    const doctorData = await refreshCurrentDoctor()
+    if (!doctorData) {
+      return null
+    }
     setDoctor((current) => ({...(current || {}), ...doctorData}))
     return doctorData
-  }, [authHeaders])
+  }, [refreshCurrentDoctor])
 
   useEffect(() => {
     const loadWorkspace = async () => {
@@ -356,8 +366,11 @@ export default function ProfilePage() {
       setIsLoading(true)
 
       try {
-        const doctorResponse = await getCurrentDoctor(authHeaders)
-        const currentDoctor = getResponseData(doctorResponse)
+        const currentDoctor = await refreshCurrentDoctor()
+        if (!currentDoctor) {
+          setIsLoading(false)
+          return
+        }
         const [assignedPatientsResponse, patientsResponse, activitiesResponse, doctorsResponse, departmentsResponse, activityTypesResponse] = await Promise.all([
           getDoctorPatients(currentDoctor.id),
           listPatients({page: 1, limit: 100}),
@@ -399,7 +412,37 @@ export default function ProfilePage() {
     }
 
     loadWorkspace()
-  }, [authHeaders, notifyError, token])
+  }, [notifyError, refreshCurrentDoctor, token])
+
+  useEffect(() => {
+    if (!currentDoctor || doctor?.id !== currentDoctor.id) {
+      return
+    }
+
+    const emailStatusChanged = doctor.email !== currentDoctor.email
+      || doctor.pending_email !== currentDoctor.pending_email
+      || doctor.email_confirmed !== currentDoctor.email_confirmed
+      || doctor.email_verification_expired !== currentDoctor.email_verification_expired
+
+    setDoctor((previousDoctor) => {
+      if (!previousDoctor || previousDoctor.id !== currentDoctor.id) {
+        return previousDoctor
+      }
+
+      return {...previousDoctor, ...currentDoctor}
+    })
+
+    if (emailStatusChanged) {
+      setEmailInput(currentDoctor.pending_email || currentDoctor.email || "")
+    }
+  }, [
+    currentDoctor,
+    doctor?.email,
+    doctor?.email_confirmed,
+    doctor?.email_verification_expired,
+    doctor?.id,
+    doctor?.pending_email,
+  ])
 
   const availablePatients = patients.filter(
     (patient) => !assignedPatients.some((assignedPatient) => assignedPatient.id === patient.id),
@@ -439,24 +482,6 @@ export default function ProfilePage() {
   const shouldShowResendVerification = Boolean(doctor?.email_confirmed === false && doctor?.email_verification_expired === true)
   const selectedPatient = filteredAssignedPatients.find((patient) => String(patient.id) === String(assignmentQuery))
   const selectedAssignmentPatientOption = getSelectedOption(assignmentPatientOptions, assignmentQuery)
-
-  useEffect(() => {
-    if (!doctor || doctor.email_confirmed) {
-      return
-    }
-
-    const pollId = window.setInterval(async () => {
-      try {
-        await refetchDoctorProfile()
-      } catch (error) {
-        void error
-      }
-    }, EMAIL_VERIFICATION_STATUS_POLL_MS)
-
-    return () => {
-      window.clearInterval(pollId)
-    }
-  }, [doctor, refetchDoctorProfile])
 
   const handleActivitySubmit = async (payload) => {
     if (!doctor || isSubmittingActivity) {
@@ -553,6 +578,7 @@ export default function ProfilePage() {
 
       const doctorData = getResponseData(response)
       setDoctor(doctorData)
+      setCurrentDoctorData(doctorData)
       setForm(buildDoctorProfileForm(doctorData))
       setPhoneNumber(normalizeRomanianPhoneNumber(doctorData.phone_number))
       const [doctorsResponse] = await Promise.all([
@@ -581,6 +607,7 @@ export default function ProfilePage() {
       const response = await updateCurrentDoctorEmail({email: emailInput.trim()}, authHeaders)
       const doctorData = getResponseData(response)
       setDoctor(doctorData)
+      setCurrentDoctorData(doctorData)
       setEmailInput(doctorData.pending_email || doctorData.email || "")
       notifySuccess(getResponseMessage(response))
     } catch (error) {
@@ -826,7 +853,7 @@ export default function ProfilePage() {
                 </ColumnLayout>
               </Container>
 
-              <div className="medstream-profile-workspace-grid">
+              <div className={profileWorkspaceClassName}>
                 <div className="medstream-stretch-container medstream-assigned-patients-card">
                   <Container
                     header={
@@ -886,7 +913,7 @@ export default function ProfilePage() {
                       loading={isLoading}
                       emptyMessage="No patients are currently assigned to this doctor."
                       pageSize={4}
-                      controlsLayoutClassName="hidden"
+                      controlsLayoutClassName="medstream-hidden"
                       getItemKey={(patient) => patient.id}
                       shellClassName="medstream-profile-list-shell"
                       bodyClassName="medstream-profile-list"
@@ -894,8 +921,8 @@ export default function ProfilePage() {
                         <div className="medstream-profile-list-row">
                           <div className="medstream-profile-row-main">
                             <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}?from=profile`}>
+                              <div className="medstream-profile-patient-heading-row">
+                                <Link className="console-link medstream-profile-patient-link" to={`/patient/${patient.id}?from=profile`}>
                                   {formatPatientFullName(patient)}
                                 </Link>
                                 {patient.is_discharged && (
@@ -903,7 +930,7 @@ export default function ProfilePage() {
                                 )}
                               </div>
                               <p className="medstream-profile-row-meta">{patient.department}</p>
-                              <p className="mt-1 text-sm text-[var(--text-secondary)]">{patient.cnp}</p>
+                              <p className="medstream-profile-row-cnp">{patient.cnp}</p>
                             </div>
                             {(() => {
                               const hasCount = Object.prototype.hasOwnProperty.call(patientDoctorCounts, patient.id)
@@ -1153,7 +1180,7 @@ export default function ProfilePage() {
                             type="button"
                             onClick={handleResendVerification}
                             disabled={isResendingVerification}
-                            className="console-button-secondary rounded-lg px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                            className="console-button-secondary medstream-profile-resend-button"
                           >
                             {isResendingVerification ? "Resending..." : "Resend email"}
                           </button>

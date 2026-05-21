@@ -1117,7 +1117,7 @@ class SimulatorService:
             recorded_at: datetime,
             vitals: dict,
     ) -> None:
-        latest_treatment = PatientRepository._latest_treatment_action_outcome(db, patient_id)
+        latest_treatment = PatientRepository.get_latest_treatment_action_outcome(db, patient_id)
         latest_outcome = str((latest_treatment or {}).get("outcome") or "").strip().lower()
         if latest_outcome not in {"effective", "improving", "ineffective"}:
             latest_outcome = "effective" if not self._has_abnormal_vitals(vitals) else "ineffective"
@@ -1473,7 +1473,7 @@ class SimulatorService:
         if str((patient_data.get("monitoring_status") or "active")).lower() == "transferred":
             return False
 
-        final_treatment = PatientRepository._latest_treatment_action_outcome(db, patient.id)
+        final_treatment = PatientRepository.get_latest_treatment_action_outcome(db, patient.id)
         can_discharge, reason_code, debug_payload = self.can_discharge_patient_as_recovered(
             db,
             patient.id,

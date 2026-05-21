@@ -19,7 +19,7 @@ import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 import AwsLineChart from "../components/AwsLineChart.jsx"
-import BackButton from "../components/BackButton.jsx"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import {formatBucharestTime} from "../utils/time.js"
 
@@ -358,7 +358,7 @@ export default function StreamingMetricsPage() {
     <ContentLayout>
       <SpaceBetween size="m">
         <div className="medstream-page-header">
-          <BackButton fallbackTo="/dashboard"/>
+          <AppBreadcrumbs/>
           <div className="medstream-page-heading-row">
             <div>
               <h1 className="medstream-page-title">Streaming Alert Processing</h1>
@@ -419,7 +419,7 @@ export default function StreamingMetricsPage() {
                   )}
                   </SpaceBetween>
 
-                  <div className="mt-4 flex justify-end">
+                  <div className="medstream-pagination-end medstream-pagination-end-medium">
                   <Pagination
                     currentPageIndex={recentAlerts.page || 1}
                     pagesCount={alertsTotalPages}

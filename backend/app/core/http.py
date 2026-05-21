@@ -13,11 +13,6 @@ class ApiResponse(BaseModel, Generic[T]):
     data: T | None = None
 
 
-class ApiErrorResponse(BaseModel):
-    success: bool = False
-    message: str
-
-
 def success_response(message: str, data=None, status_code: int = 200) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,

@@ -1,6 +1,6 @@
-import {createContext, useCallback, useEffect, useMemo, useRef, useState} from "react"
+import {useCallback, useEffect, useMemo, useRef, useState} from "react"
+import {NotificationContext} from "./notificationContext.js"
 
-export const NotificationContext = createContext(null)
 const DEFAULT_NOTIFICATION_DURATION = 5000
 const MAX_NOTIFICATIONS = 4
 
@@ -38,6 +38,26 @@ export function NotificationProvider({children}) {
     }
 
     setNotifications((current) => current.filter((notification) => notification.id !== id))
+  }, [])
+
+  const dismissNotificationByDedupeKey = useCallback((dedupeKey) => {
+    if (!dedupeKey) {
+      return
+    }
+
+    setNotifications((current) => current.filter((notification) => {
+      if (notification.dedupeKey !== dedupeKey) {
+        return true
+      }
+
+      const timeoutId = timeoutIdsRef.current.get(notification.id)
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+        timeoutIdsRef.current.delete(notification.id)
+      }
+
+      return false
+    }))
   }, [])
 
   const showNotification = useCallback(({
@@ -97,7 +117,8 @@ export function NotificationProvider({children}) {
       showNotification({message, type: "warning", ...resolveDurationOptions(options), duration: 5000})
     },
     dismissNotification,
-  }), [dismissNotification, showNotification])
+    dismissNotificationByDedupeKey,
+  }), [dismissNotification, dismissNotificationByDedupeKey, showNotification])
 
   return (
     <NotificationContext.Provider value={contextValue}>

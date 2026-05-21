@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useState} from "react"
 import {useParams} from "react-router-dom"
 import {Button, Pagination} from "@cloudscape-design/components"
-import BackButton from "../components/BackButton.jsx"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
 import {createPatientDiagnosis, getPatient, getPatientDiagnosis} from "../services/patientApi.js"
@@ -99,35 +99,37 @@ export default function PatientDiagnosisPage() {
   }, [diagnosisPage, maxDiagnosisPage])
 
   return (
-    <div className="app-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        <header className="console-topbar rounded-3xl p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-4">
+    <div className="app-shell medstream-diagnosis-page">
+      <div className="medstream-diagnosis-shell">
+        <header className="console-topbar medstream-diagnosis-topbar">
+          <div className="medstream-diagnosis-header-row">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff9900]">Diagnosis</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{patientName}</h1>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Structured diagnosis entries for this patient.</p>
+              <p className="medstream-diagnosis-eyebrow medstream-diagnosis-page-eyebrow">Diagnosis</p>
+              <h1 className="medstream-diagnosis-title">{patientName}</h1>
+              <p className="medstream-diagnosis-subtitle">Structured diagnosis entries for this patient.</p>
             </div>
-            <BackButton/>
+            <AppBreadcrumbs/>
           </div>
         </header>
 
         {isLoading ? <LoadingSpinner/> : (
-          <section className="grid gap-6 xl:grid-cols-[0.95fr_1.25fr]">
-            <div className="monitor-card rounded-[28px] p-6">
-              <div className="mb-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Add Diagnosis</p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">New Entry</h2>
+          <section className="medstream-diagnosis-layout">
+            <div className="monitor-card medstream-diagnosis-card">
+              <div className="medstream-diagnosis-card-header">
+                <div>
+                  <p className="medstream-diagnosis-eyebrow">Add Diagnosis</p>
+                  <h2 className="medstream-diagnosis-section-title">New Entry</h2>
+                </div>
               </div>
 
-              <form className="space-y-4" onSubmit={handleSubmit}>
+              <form className="medstream-diagnosis-form" onSubmit={handleSubmit}>
                 <input
                   type="text"
                   name="diagnosis"
                   value={form.diagnosis}
                   onChange={handleChange}
                   placeholder="Diagnosis"
-                  className="console-input w-full rounded-2xl px-4 py-3 outline-none"
+                  className="console-input medstream-diagnosis-input"
                   maxLength={INPUT_LIMITS.diagnosis}
                   required
                 />
@@ -137,7 +139,7 @@ export default function PatientDiagnosisPage() {
                   value={form.notes}
                   onChange={handleChange}
                   placeholder="Notes"
-                  className="console-input min-h-28 w-full rounded-2xl px-4 py-3 outline-none"
+                  className="console-input medstream-diagnosis-input medstream-diagnosis-textarea"
                   maxLength={INPUT_LIMITS.clinicalNote}
                 />
 
@@ -152,18 +154,18 @@ export default function PatientDiagnosisPage() {
               </form>
             </div>
 
-            <div className="monitor-card rounded-[28px] p-6">
-              <div className="mb-5 flex items-center justify-between gap-3">
+            <div className="monitor-card medstream-diagnosis-card">
+              <div className="medstream-diagnosis-card-header">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff9900]">Entries</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Diagnosis Timeline</h2>
+                  <p className="medstream-diagnosis-eyebrow">Entries</p>
+                  <h2 className="medstream-diagnosis-section-title">Diagnosis Timeline</h2>
                 </div>
-                <span className="console-chip rounded-full px-3 py-1 text-xs font-semibold">
+                <span className="console-chip medstream-diagnosis-count">
                 {diagnosisTotal} total
               </span>
               </div>
 
-              <div className="mb-4 flex justify-end">
+              <div className="medstream-diagnosis-pagination">
                 <Pagination
                   currentPageIndex={diagnosisPage}
                   pagesCount={maxDiagnosisPage}
@@ -171,26 +173,26 @@ export default function PatientDiagnosisPage() {
                 />
               </div>
 
-              <ul className="space-y-3">
+              <ul className="medstream-diagnosis-list">
                 {diagnosisEntries.length === 0 && (
-                  <li className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
+                  <li className="medstream-diagnosis-empty">
                     {isLoading ? "Loading diagnosis entries..." : "No diagnosis entries recorded for this patient."}
                   </li>
                 )}
 
                 {diagnosisEntries.map((entry) => (
-                  <li key={entry.id} className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-4">
-                    <div className="flex items-start justify-between gap-4">
+                  <li key={entry.id} className="medstream-diagnosis-entry">
+                    <div className="medstream-diagnosis-entry-row">
                       <div>
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">{entry.diagnosis}</p>
+                        <p className="medstream-diagnosis-entry-title">{entry.diagnosis}</p>
                         {entry.notes && (
-                          <p className="mt-2 text-sm text-[var(--text-secondary)]">{entry.notes}</p>
+                          <p className="medstream-diagnosis-entry-note">{entry.notes}</p>
                         )}
                         {String(entry.modified_by || "").trim() ? (
-                          <p className="mt-2 text-sm text-[var(--text-primary)]">Modified by doctor: {entry.modified_by}</p>
+                          <p className="medstream-diagnosis-entry-doctor">Modified by doctor: {entry.modified_by}</p>
                         ) : null}
                       </div>
-                      <span className="text-xs text-[var(--text-muted)]">{formatDateTime(entry.updated_at || entry.created_at)}</span>
+                      <span className="medstream-diagnosis-entry-date">{formatDateTime(entry.updated_at || entry.created_at)}</span>
                     </div>
                   </li>
                 ))}

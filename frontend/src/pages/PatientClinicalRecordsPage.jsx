@@ -24,7 +24,7 @@ import DataTable from "../components/DataTable.jsx"
 import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import InfoHelp from "../components/InfoHelp.jsx"
 import {useNotifications} from "../hooks/useNotifications.js"
-import {useAuth} from "../components/AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 import {getCurrentDoctor} from "../services/doctorApi.js"
 import {
   administerMedication,
@@ -852,7 +852,7 @@ export default function PatientClinicalRecordsPage() {
               loading={isLoading}
               pageSize={8}
               emptyMessage="No records match the current filter."
-              controlsLayoutClassName="hidden"
+              controlsLayoutClassName="medstream-hidden"
               shellClassName="medstream-clinical-record-shell"
               bodyClassName="medstream-clinical-record-list"
               getItemKey={(item) => `${item.type}-${item.id}`}

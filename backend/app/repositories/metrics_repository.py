@@ -679,7 +679,7 @@ def build_batch_insights_snapshot(db: Session) -> dict:
 
         patient_alerts = alerts_by_patient.get(patient_id, [])
         patient_vitals = vitals_by_patient.get(patient_id, [])
-        treatment_actions = PatientRepository._build_treatment_actions(patient_medications)
+        treatment_actions = PatientRepository.build_treatment_actions(patient_medications)
         if not treatment_actions:
             continue
 
@@ -689,7 +689,7 @@ def build_batch_insights_snapshot(db: Session) -> dict:
             if not medication_name:
                 continue
 
-            evaluation = PatientRepository._evaluate_treatment_action(
+            evaluation = PatientRepository.evaluate_treatment_action(
                 patient=patient,
                 action_index=action_index,
                 treatment_actions=treatment_actions,

@@ -1,10 +1,10 @@
-import {createContext, useContext, useEffect, useMemo, useState} from "react"
+import {useCallback, useEffect, useMemo, useState} from "react"
 import {getCurrentDoctor} from "../services/doctorApi.js"
 import {getResponseData} from "../services/apiMessages.js"
+import {subscribeToEmailVerified} from "../services/emailVerificationEvents.js"
+import {AuthContext} from "./authContext.js"
 
 const AUTH_STORAGE_KEY = "medstream_token"
-
-const AuthContext = createContext(null)
 
 function parseJwtExpMs(token) {
   if (!token) {
@@ -52,6 +52,26 @@ export function AuthProvider({children}) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [currentDoctor, setCurrentDoctor] = useState(null)
 
+  const refreshCurrentDoctor = useCallback(async () => {
+    if (!token) {
+      setCurrentDoctor(null)
+      setIsAuthenticated(false)
+      setIsAuthResolved(true)
+      return null
+    }
+
+    const response = await getCurrentDoctor({Authorization: `Bearer ${token}`})
+    const doctorData = getResponseData(response)
+    setCurrentDoctor(doctorData)
+    setIsAuthenticated(true)
+    setIsAuthResolved(true)
+    return doctorData
+  }, [token])
+
+  const setCurrentDoctorData = useCallback((doctorData) => {
+    setCurrentDoctor(doctorData)
+  }, [])
+
   useEffect(() => {
     if (!token) {
       localStorage.removeItem(AUTH_STORAGE_KEY)
@@ -64,10 +84,11 @@ export function AuthProvider({children}) {
     const validateToken = async () => {
       try {
         const response = await getCurrentDoctor({Authorization: `Bearer ${token}`})
+        const doctorData = getResponseData(response)
         if (!active) {
           return
         }
-        setCurrentDoctor(getResponseData(response))
+        setCurrentDoctor(doctorData)
         setIsAuthenticated(true)
         setIsAuthResolved(true)
       } catch {
@@ -89,10 +110,22 @@ export function AuthProvider({children}) {
     }
   }, [token])
 
+  useEffect(() => {
+    if (!token) {
+      return undefined
+    }
+
+    return subscribeToEmailVerified(() => {
+      refreshCurrentDoctor().catch(() => {})
+    })
+  }, [refreshCurrentDoctor, token])
+
   const value = useMemo(
     () => ({
       token,
       currentDoctor,
+      refreshCurrentDoctor,
+      setCurrentDoctorData,
       isAuthenticated,
       isAuthResolved,
       login(nextToken) {
@@ -124,18 +157,8 @@ export function AuthProvider({children}) {
         setToken(null)
       },
     }),
-    [currentDoctor, isAuthenticated, isAuthResolved, token],
+    [currentDoctor, isAuthenticated, isAuthResolved, refreshCurrentDoctor, setCurrentDoctorData, token],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider")
-  }
-
-  return context
 }

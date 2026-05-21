@@ -229,8 +229,6 @@ npm run lint
 npm run build
 ```
 
-There is no committed backend test suite in the current repository. If backend tests are added, keep them under a dedicated test directory and run them with `pytest`.
-
 ## Development Notes
 
 - This is a demo/portfolio application, not a production clinical system.

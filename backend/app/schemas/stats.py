@@ -69,11 +69,6 @@ class ComparisonMetricsRead(BaseModel):
     recent_vitals: list[dict] | None = None
 
 
-class MetricsComparisonRead(BaseModel):
-    streaming: ComparisonMetricsRead
-    batch: ComparisonMetricsRead
-
-
 class ComparisonSummaryRead(BaseModel):
     streaming_latency_avg: float
     batch_latency_avg: float

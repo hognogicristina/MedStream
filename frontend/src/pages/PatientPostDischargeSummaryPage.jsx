@@ -17,6 +17,44 @@ import {useNotifications} from "../hooks/useNotifications.js"
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {getPatient, getPatientPostDischargeSummary} from "../services/patientApi.js"
 
+function SummaryStatusPanel({patient, patientId, patientStatusText, patientStatusType, summaryStatusText, summaryStatusType}) {
+  return (
+    <Container
+      header={
+        <Header
+          variant="h2"
+          description="Discharge state, summary generation status, and patient context."
+        >
+          Summary status
+        </Header>
+      }
+    >
+      <div className="post-discharge-fit-grid">
+        <SpaceBetween size="xxs">
+          <Box color="text-body-secondary" variant="awsui-key-label">Patient status</Box>
+          <div className="post-discharge-page-status-value">
+            <StatusIndicator type={patientStatusType}>{patientStatusText}</StatusIndicator>
+          </div>
+        </SpaceBetween>
+        <SpaceBetween size="xxs">
+          <Box color="text-body-secondary" variant="awsui-key-label">Summary status</Box>
+          <div className="post-discharge-page-status-value">
+            <StatusIndicator type={summaryStatusType}>{summaryStatusText}</StatusIndicator>
+          </div>
+        </SpaceBetween>
+        <SpaceBetween size="xxs">
+          <Box color="text-body-secondary" variant="awsui-key-label">Department</Box>
+          <div className="post-discharge-page-status-value">{patient?.department || "--"}</div>
+        </SpaceBetween>
+        <SpaceBetween size="xxs">
+          <Box color="text-body-secondary" variant="awsui-key-label">Patient ID</Box>
+          <div className="post-discharge-page-status-value">{patientId}</div>
+        </SpaceBetween>
+      </div>
+    </Container>
+  )
+}
+
 export default function PatientPostDischargeSummaryPage() {
   const {id} = useParams()
   const {notifyError} = useNotifications()
@@ -76,11 +114,14 @@ export default function PatientPostDischargeSummaryPage() {
   }, [notifyError, patientId])
 
   const patientName = patient ? `${patient.last_name || ""} ${patient.first_name || ""}`.trim() || "Patient" : "Patient"
-  const patientStatusText = patient?.is_discharged ? "Discharged" : "Admitted"
-  const summaryStatus = String(summary?.status || "").trim().toLowerCase()
-  const hasSummary = summaryStatus === "ready" || summaryStatus === "pending"
-  const summaryStatusText = summaryStatus === "ready" ? "Ready" : summaryStatus === "pending" ? "Preparing" : "Unavailable"
-  const summaryStatusType = summaryStatus === "ready" ? "success" : summaryStatus === "pending" ? "pending" : "stopped"
+  const patientStatusText = patient ? (patient.is_discharged ? "Discharged" : "Admitted") : "--"
+  const patientStatusType = patient ? (patient.is_discharged ? "stopped" : "success") : "pending"
+  const rawSummaryStatus = String(summary?.status || "").trim().toLowerCase()
+  const summaryStatus = rawSummaryStatus || (patient?.is_discharged ? "pending" : "not_available")
+  const isSummaryReady = summaryStatus === "ready"
+  const isSummaryPending = summaryStatus === "pending"
+  const summaryStatusText = isSummaryReady ? "Ready" : isSummaryPending ? "Calculating" : "Incoming"
+  const summaryStatusType = isSummaryReady ? "success" : "pending"
 
   return (
     <ContentLayout>
@@ -106,50 +147,21 @@ export default function PatientPostDischargeSummaryPage() {
 
         {isLoading ? (
           <LoadingSpinner/>
-        ) : hasSummary ? (
-          <SpaceBetween size="l">
-            <Container
-              header={
-                <Header
-                  variant="h2"
-                  description="Discharge state, summary generation status, and patient context."
-                >
-                  Summary status
-                </Header>
-              }
-            >
-              <div className="post-discharge-fit-grid">
-                <SpaceBetween size="xxs">
-                  <Box color="text-body-secondary" variant="awsui-key-label">Patient status</Box>
-                  <div className="post-discharge-page-status-value">{patientStatusText}</div>
-                </SpaceBetween>
-                <SpaceBetween size="xxs">
-                  <Box color="text-body-secondary" variant="awsui-key-label">Summary status</Box>
-                  <div className="post-discharge-page-status-value">
-                    <StatusIndicator type={summaryStatusType}>{summaryStatusText}</StatusIndicator>
-                  </div>
-                </SpaceBetween>
-                <SpaceBetween size="xxs">
-                  <Box color="text-body-secondary" variant="awsui-key-label">Department</Box>
-                  <div className="post-discharge-page-status-value">{patient?.department || "--"}</div>
-                </SpaceBetween>
-                <SpaceBetween size="xxs">
-                  <Box color="text-body-secondary" variant="awsui-key-label">Patient ID</Box>
-                  <div className="post-discharge-page-status-value">{patientId}</div>
-                </SpaceBetween>
-              </div>
-            </Container>
-
-            <PostDischargeClinicalSummaryCard summary={summary}/>
-          </SpaceBetween>
         ) : (
-          <Container
-            header={<Header variant="h2">Post-Discharge Clinical Summary</Header>}
-          >
-            <Box color="text-body-secondary">
-              No post-discharge clinical summary is available for this patient.
-            </Box>
-          </Container>
+          <SpaceBetween size="l">
+            <SummaryStatusPanel
+              patient={patient}
+              patientId={patientId}
+              patientStatusText={patientStatusText}
+              patientStatusType={patientStatusType}
+              summaryStatusText={summaryStatusText}
+              summaryStatusType={summaryStatusType}
+            />
+
+            {(isSummaryReady || isSummaryPending) && (
+              <PostDischargeClinicalSummaryCard summary={summary}/>
+            )}
+          </SpaceBetween>
         )}
       </SpaceBetween>
     </ContentLayout>

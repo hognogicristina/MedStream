@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
       <div className="login-card monitor-card">
         <div className="login-layout">
           <aside className="login-aside">
-            <div className="flex items-center justify-between gap-3">
+            <div className="auth-brand-row">
               <p className="login-brand">MedStream Console</p>
             </div>
             <h1 className="login-title">{"Password Recovery"}</h1>
@@ -90,7 +90,7 @@ export default function ForgotPasswordPage() {
                   {isSubmitting ? ("Requesting...") : ("Request Password Reset")}
                 </button>
 
-                <div className="flex items-center justify-between gap-3 text-sm">
+                <div className="auth-link-row">
                   <Link className="auth-link" to="/login">
                     {"Back to login"}
                   </Link>

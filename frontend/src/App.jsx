@@ -1,7 +1,7 @@
 import {BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate} from "react-router-dom"
 import {lazy, Suspense, useEffect} from "react"
 import AuthenticatedLayout from "./components/AuthenticatedLayout.jsx"
-import {useAuth} from "./components/AuthContext.jsx"
+import {useAuth} from "./hooks/useAuth.js"
 import ProtectedRoute from "./components/ProtectedRoute.jsx"
 import PublicOnlyRoute from "./components/PublicOnlyRoute.jsx"
 import LoadingSpinner from "./components/LoadingSpinner.jsx"

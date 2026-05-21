@@ -30,7 +30,7 @@ import {
 import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
-import BackButton from "../components/BackButton.jsx"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import AwsBarChart from "../components/AwsBarChart.jsx"
 import {INPUT_LIMITS, limitDigits, limitText} from "../utils/inputLimits.js"
@@ -861,7 +861,7 @@ export default function BatchMetricsPage() {
       <div className="medstream-batch-metrics-page">
         <SpaceBetween size="m">
         <div className="medstream-page-header">
-          <BackButton fallbackTo="/dashboard"/>
+          <AppBreadcrumbs/>
           <div className="medstream-page-heading-row">
             <div>
               <h1 className="medstream-page-title">Batch Metrics</h1>
@@ -1063,7 +1063,7 @@ export default function BatchMetricsPage() {
                 />
               </div>
 
-              <div className="mt-4 flex justify-end">
+              <div className="medstream-pagination-end medstream-pagination-end-medium">
               <Pagination
                 currentPageIndex={departmentsPage}
                 pagesCount={departmentsTotalPages}
@@ -1097,7 +1097,7 @@ export default function BatchMetricsPage() {
                   ]}
                 />
               </div>
-              <div className="mt-2 flex justify-end">
+              <div className="medstream-pagination-end medstream-pagination-end-small">
               <Pagination
                 currentPageIndex={diagnosesPage}
                 pagesCount={diagnosesTotalPages}

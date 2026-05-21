@@ -12,13 +12,6 @@ class VitalCreate(BaseModel):
     diastolic_bp: int
 
 
-class VitalRead(VitalCreate):
-    id: int
-    recorded_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
 class VitalTimelineRead(BaseModel):
     recorded_at: datetime
     heart_rate: int

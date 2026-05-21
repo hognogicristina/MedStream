@@ -22,10 +22,6 @@ function splitTime(value) {
   }
 }
 
-function isValidTime(value) {
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
-}
-
 export default function AwsTimeInput({
   id,
   name,

@@ -1,62 +1,52 @@
 import {Outlet, useLocation} from "react-router-dom"
 import {useCallback, useEffect, useMemo, useState} from "react"
 import {AppIconRail, AppSideNavigation, AppTopNavigation} from "./Navbar.jsx"
-import {useAuth} from "./AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 import {resendVerificationEmail} from "../services/authApi.js"
-import {getCurrentDoctor} from "../services/doctorApi.js"
-import {getErrorMessage, getResponseData, getResponseMessage} from "../services/apiMessages.js"
+import {getErrorMessage, getResponseMessage} from "../services/apiMessages.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 
 const EMAIL_NOT_VERIFIED_WARNING = "Your email is not verified. Please verify your email."
+const EMAIL_NOT_VERIFIED_WARNING_KEY = "email-not-verified-warning"
 const EMAIL_WARNING_INTERVAL_MS = 15000
 const EMAIL_WARNING_DURATION_MS = 5000
 const EMAIL_STATUS_REFRESH_MS = 30000
 
 export default function AuthenticatedLayout() {
   const location = useLocation()
-  const {token} = useAuth()
-  const {notifyError, notifySuccess, notifyWarning} = useNotifications()
-  const [doctor, setDoctor] = useState(null)
+  const {currentDoctor: doctor, refreshCurrentDoctor, token} = useAuth()
+  const {dismissNotificationByDedupeKey, notifyError, notifySuccess, notifyWarning} = useNotifications()
   const [isResending, setIsResending] = useState(false)
   const [navigationOpen, setNavigationOpen] = useState(true)
 
   const authHeaders = useMemo(() => token ? {Authorization: `Bearer ${token}`} : undefined, [token])
+  const currentDoctorId = doctor?.id
+  const isEmailConfirmed = doctor?.email_confirmed
 
   useEffect(() => {
     if (!authHeaders) {
-      setDoctor(null)
       return
     }
 
-    let active = true
     const loadDoctor = async () => {
       try {
-        const response = await getCurrentDoctor(authHeaders)
-        if (!active) {
-          return
-        }
-        setDoctor(getResponseData(response))
+        await refreshCurrentDoctor()
       } catch (error) {
         void error
       }
     }
 
     loadDoctor()
-
-    return () => {
-      active = false
-    }
-  }, [authHeaders, location.pathname])
+  }, [authHeaders, location.pathname, refreshCurrentDoctor])
 
   useEffect(() => {
-    if (!authHeaders || !doctor || doctor.email_confirmed) {
+    if (!authHeaders || !currentDoctorId || isEmailConfirmed) {
       return
     }
 
     const refreshId = window.setInterval(async () => {
       try {
-        const response = await getCurrentDoctor(authHeaders)
-        setDoctor(getResponseData(response))
+        await refreshCurrentDoctor()
       } catch (error) {
         void error
       }
@@ -65,7 +55,36 @@ export default function AuthenticatedLayout() {
     return () => {
       window.clearInterval(refreshId)
     }
-  }, [authHeaders, doctor])
+  }, [authHeaders, currentDoctorId, isEmailConfirmed, refreshCurrentDoctor])
+
+  useEffect(() => {
+    if (!authHeaders || !currentDoctorId || isEmailConfirmed) {
+      return
+    }
+
+    const refreshEmailStatus = () => {
+      refreshCurrentDoctor().catch(() => {})
+    }
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        refreshEmailStatus()
+      }
+    }
+
+    window.addEventListener("focus", refreshEmailStatus)
+    document.addEventListener("visibilitychange", refreshWhenVisible)
+
+    return () => {
+      window.removeEventListener("focus", refreshEmailStatus)
+      document.removeEventListener("visibilitychange", refreshWhenVisible)
+    }
+  }, [authHeaders, currentDoctorId, isEmailConfirmed, refreshCurrentDoctor])
+
+  useEffect(() => {
+    if (isEmailConfirmed) {
+      dismissNotificationByDedupeKey(EMAIL_NOT_VERIFIED_WARNING_KEY)
+    }
+  }, [dismissNotificationByDedupeKey, isEmailConfirmed])
 
   const showResend = Boolean(doctor?.email_confirmed === false && doctor?.email_verification_expired)
 
@@ -78,14 +97,13 @@ export default function AuthenticatedLayout() {
     try {
       const response = await resendVerificationEmail({headers: authHeaders})
       notifySuccess(getResponseMessage(response))
-      const doctorResponse = await getCurrentDoctor(authHeaders)
-      setDoctor(getResponseData(doctorResponse))
+      await refreshCurrentDoctor()
     } catch (error) {
       notifyError(getErrorMessage(error))
     } finally {
       setIsResending(false)
     }
-  }, [authHeaders, isResending, notifyError, notifySuccess, showResend])
+  }, [authHeaders, isResending, notifyError, notifySuccess, refreshCurrentDoctor, showResend])
 
   useEffect(() => {
     if (!doctor || doctor.email_confirmed) {
@@ -95,7 +113,7 @@ export default function AuthenticatedLayout() {
     const intervalId = window.setInterval(() => {
       notifyWarning(EMAIL_NOT_VERIFIED_WARNING, {
         duration: EMAIL_WARNING_DURATION_MS,
-        dedupeKey: "email-not-verified-warning",
+        dedupeKey: EMAIL_NOT_VERIFIED_WARNING_KEY,
         actionLabel: showResend ? (isResending ? "Sending..." : "Resend email") : "",
         onAction: showResend && !isResending ? handleResend : null,
       })

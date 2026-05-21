@@ -20,8 +20,8 @@ export default function DataTable({
                                     renderHeader,
                                     renderRow,
                                     rowClassName,
-                                    bodyClassName = "divide-y divide-[#3b424b]",
-                                    shellClassName = "overflow-hidden rounded-[24px] border border-[var(--border-primary)] bg-[var(--surface-2)]",
+                                    bodyClassName = "medstream-data-table-body",
+                                    shellClassName = "medstream-data-table-shell",
                                     controlsLayoutClassName,
                                     bottomControls,
                                     simplePagination = false,
@@ -78,10 +78,10 @@ export default function DataTable({
 
   return (
     <>
-      <div className={controlsLayoutClassName ?? "mb-6 grid gap-4 rounded-[24px] border border-[var(--border-primary)] bg-[var(--surface-2)] p-4 lg:grid-cols-4"}>
+      <div className={controlsLayoutClassName ?? "medstream-data-table-controls"}>
         {filters.map((filter) => (
           <div key={filter.id}>
-            <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]" htmlFor={filter.id}>
+            <label className="medstream-data-table-label" htmlFor={filter.id}>
               {filter.label}
             </label>
             {filter.type === "text" ? (
@@ -97,7 +97,7 @@ export default function DataTable({
                 placeholder={filter.placeholder}
                 disabled={filter.disabled}
                 maxLength={filter.maxLength ?? INPUT_LIMITS.search}
-                className="console-input w-full rounded-2xl px-4 py-3 outline-none disabled:cursor-not-allowed disabled:text-[var(--text-subtle)]"
+                className="console-input medstream-data-table-input"
               />
             ) : (
               <Select
@@ -118,7 +118,7 @@ export default function DataTable({
 
         {sortOptions.length > 0 && (
           <div>
-            <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]" htmlFor="dataTableSort">
+            <label className="medstream-data-table-label" htmlFor="dataTableSort">
               Sort Order
             </label>
             <Select
@@ -131,7 +131,7 @@ export default function DataTable({
         )}
 
         <div>
-          <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]" htmlFor="dataTablePageSize">
+          <label className="medstream-data-table-label" htmlFor="dataTablePageSize">
             Page Size
           </label>
           <Select
@@ -150,7 +150,7 @@ export default function DataTable({
           {renderHeader?.()}
 
           {paginatedItems.length === 0 && (
-            <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
+            <div className="medstream-data-table-empty-state">
               {emptyMessage}
             </div>
           )}
@@ -167,8 +167,8 @@ export default function DataTable({
         </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4 flex-wrap">
+      <div className="medstream-data-table-footer">
+        <div className="medstream-data-table-bottom-controls">
           {bottomControls}
         </div>
         <Pagination

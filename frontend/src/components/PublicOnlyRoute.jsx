@@ -1,5 +1,5 @@
 import {Navigate} from "react-router-dom"
-import {useAuth} from "./AuthContext.jsx"
+import {useAuth} from "../hooks/useAuth.js"
 
 export default function PublicOnlyRoute({children}) {
   const {isAuthenticated, isAuthResolved} = useAuth()

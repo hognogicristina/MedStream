@@ -56,6 +56,7 @@ function connectSocket() {
       const data = JSON.parse(event.data)
       broadcastMessage(data)
     } catch {
+      return
     }
   }
 

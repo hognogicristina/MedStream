@@ -100,23 +100,6 @@ def phone_uniqueness_values(value: str | None) -> set[str]:
     return values
 
 
-def normalize_phone_lookup(value: str | None):
-    try:
-        normalized = normalize_phone_value(value)
-    except ValidationError:
-        return ""
-
-    if not normalized:
-        return ""
-
-    digits = "".join(char for char in normalized if char.isdigit())
-
-    if digits.startswith("40") and len(digits) == 11 and digits[2] == "7":
-        return f"0{digits[2:]}"
-
-    return digits
-
-
 def validate_arrival_method(value: str | None) -> str:
     normalized = validate_required_text(value or "self", "Arrival method").lower()
     if normalized not in ALLOWED_ARRIVAL_METHODS:
