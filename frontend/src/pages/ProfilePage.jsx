@@ -31,7 +31,6 @@ import {
   createDoctorActivity,
   deactivateDoctor,
   getAvailableDoctors,
-  getCurrentDoctor,
   getDoctorActivities,
   getDoctorPatients,
   listDoctors,
@@ -220,10 +219,9 @@ function formatActivityStatus(status) {
 }
 
 export default function ProfilePage() {
-  const EMAIL_VERIFICATION_STATUS_POLL_MS = 30000
   const navigate = useNavigate()
   const {notifyError, notifySuccess} = useNotifications()
-  const {token, logout} = useAuth()
+  const {currentDoctor, refreshCurrentDoctor, setCurrentDoctorData, token, logout} = useAuth()
   const [doctor, setDoctor] = useState(null)
   const [patients, setPatients] = useState([])
   const [assignedPatients, setAssignedPatients] = useState([])
@@ -350,11 +348,13 @@ export default function ProfilePage() {
   }
 
   const refetchDoctorProfile = useCallback(async () => {
-    const response = await getCurrentDoctor(authHeaders)
-    const doctorData = getResponseData(response)
+    const doctorData = await refreshCurrentDoctor()
+    if (!doctorData) {
+      return null
+    }
     setDoctor((current) => ({...(current || {}), ...doctorData}))
     return doctorData
-  }, [authHeaders])
+  }, [refreshCurrentDoctor])
 
   useEffect(() => {
     const loadWorkspace = async () => {
@@ -366,8 +366,11 @@ export default function ProfilePage() {
       setIsLoading(true)
 
       try {
-        const doctorResponse = await getCurrentDoctor(authHeaders)
-        const currentDoctor = getResponseData(doctorResponse)
+        const currentDoctor = await refreshCurrentDoctor()
+        if (!currentDoctor) {
+          setIsLoading(false)
+          return
+        }
         const [assignedPatientsResponse, patientsResponse, activitiesResponse, doctorsResponse, departmentsResponse, activityTypesResponse] = await Promise.all([
           getDoctorPatients(currentDoctor.id),
           listPatients({page: 1, limit: 100}),
@@ -409,7 +412,37 @@ export default function ProfilePage() {
     }
 
     loadWorkspace()
-  }, [authHeaders, notifyError, token])
+  }, [notifyError, refreshCurrentDoctor, token])
+
+  useEffect(() => {
+    if (!currentDoctor || doctor?.id !== currentDoctor.id) {
+      return
+    }
+
+    const emailStatusChanged = doctor.email !== currentDoctor.email
+      || doctor.pending_email !== currentDoctor.pending_email
+      || doctor.email_confirmed !== currentDoctor.email_confirmed
+      || doctor.email_verification_expired !== currentDoctor.email_verification_expired
+
+    setDoctor((previousDoctor) => {
+      if (!previousDoctor || previousDoctor.id !== currentDoctor.id) {
+        return previousDoctor
+      }
+
+      return {...previousDoctor, ...currentDoctor}
+    })
+
+    if (emailStatusChanged) {
+      setEmailInput(currentDoctor.pending_email || currentDoctor.email || "")
+    }
+  }, [
+    currentDoctor,
+    doctor?.email,
+    doctor?.email_confirmed,
+    doctor?.email_verification_expired,
+    doctor?.id,
+    doctor?.pending_email,
+  ])
 
   const availablePatients = patients.filter(
     (patient) => !assignedPatients.some((assignedPatient) => assignedPatient.id === patient.id),
@@ -449,24 +482,6 @@ export default function ProfilePage() {
   const shouldShowResendVerification = Boolean(doctor?.email_confirmed === false && doctor?.email_verification_expired === true)
   const selectedPatient = filteredAssignedPatients.find((patient) => String(patient.id) === String(assignmentQuery))
   const selectedAssignmentPatientOption = getSelectedOption(assignmentPatientOptions, assignmentQuery)
-
-  useEffect(() => {
-    if (!doctor || doctor.email_confirmed) {
-      return
-    }
-
-    const pollId = window.setInterval(async () => {
-      try {
-        await refetchDoctorProfile()
-      } catch (error) {
-        void error
-      }
-    }, EMAIL_VERIFICATION_STATUS_POLL_MS)
-
-    return () => {
-      window.clearInterval(pollId)
-    }
-  }, [doctor, refetchDoctorProfile])
 
   const handleActivitySubmit = async (payload) => {
     if (!doctor || isSubmittingActivity) {
@@ -563,6 +578,7 @@ export default function ProfilePage() {
 
       const doctorData = getResponseData(response)
       setDoctor(doctorData)
+      setCurrentDoctorData(doctorData)
       setForm(buildDoctorProfileForm(doctorData))
       setPhoneNumber(normalizeRomanianPhoneNumber(doctorData.phone_number))
       const [doctorsResponse] = await Promise.all([
@@ -591,6 +607,7 @@ export default function ProfilePage() {
       const response = await updateCurrentDoctorEmail({email: emailInput.trim()}, authHeaders)
       const doctorData = getResponseData(response)
       setDoctor(doctorData)
+      setCurrentDoctorData(doctorData)
       setEmailInput(doctorData.pending_email || doctorData.email || "")
       notifySuccess(getResponseMessage(response))
     } catch (error) {

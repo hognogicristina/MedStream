@@ -40,6 +40,26 @@ export function NotificationProvider({children}) {
     setNotifications((current) => current.filter((notification) => notification.id !== id))
   }, [])
 
+  const dismissNotificationByDedupeKey = useCallback((dedupeKey) => {
+    if (!dedupeKey) {
+      return
+    }
+
+    setNotifications((current) => current.filter((notification) => {
+      if (notification.dedupeKey !== dedupeKey) {
+        return true
+      }
+
+      const timeoutId = timeoutIdsRef.current.get(notification.id)
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+        timeoutIdsRef.current.delete(notification.id)
+      }
+
+      return false
+    }))
+  }, [])
+
   const showNotification = useCallback(({
                                           message,
                                           type = "success",
@@ -97,7 +117,8 @@ export function NotificationProvider({children}) {
       showNotification({message, type: "warning", ...resolveDurationOptions(options), duration: 5000})
     },
     dismissNotification,
-  }), [dismissNotification, showNotification])
+    dismissNotificationByDedupeKey,
+  }), [dismissNotification, dismissNotificationByDedupeKey, showNotification])
 
   return (
     <NotificationContext.Provider value={contextValue}>

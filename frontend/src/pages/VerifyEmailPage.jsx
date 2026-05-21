@@ -6,11 +6,14 @@ import {
   VERIFICATION_LINK_EXPIRED_MESSAGE,
   VERIFICATION_LINK_REPLACED_MESSAGE,
 } from "../services/appMessages.js"
+import {announceEmailVerified} from "../services/emailVerificationEvents.js"
+import {useAuth} from "../hooks/useAuth.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 import AuthThemeToggle from "../components/AuthThemeToggle.jsx"
 
 export default function VerifyEmailPage() {
   const navigate = useNavigate()
+  const {refreshCurrentDoctor, token: authToken} = useAuth()
   const {notifySuccess, notifyError} = useNotifications()
   const [searchParams] = useSearchParams()
   const token = searchParams.get("token")
@@ -31,6 +34,10 @@ export default function VerifyEmailPage() {
         }
 
         setResultMessage("Email verified successfully.")
+        announceEmailVerified()
+        if (authToken) {
+          refreshCurrentDoctor().catch(() => {})
+        }
         notifySuccess("Email verified successfully.", {duration: 5000})
         setShowResendButton(false)
       } catch (error) {
@@ -58,7 +65,7 @@ export default function VerifyEmailPage() {
     return () => {
       active = false
     }
-  }, [navigate, notifyError, notifySuccess, token])
+  }, [authToken, navigate, notifyError, notifySuccess, refreshCurrentDoctor, token])
 
   const handleResend = async () => {
     if (isResending || !showResendButton) {
