@@ -28,14 +28,14 @@ export default function ActivityList({
 
   if (activities.length === 0) {
     return (
-      <div className="rounded-2xl border border-[var(--border-primary)] bg-[var(--surface-2)] px-4 py-5 text-sm text-[var(--text-secondary)]">
+      <div className="activity-empty-state">
         {emptyMessage}
       </div>
     )
   }
 
   return (
-    <ul className="space-y-3">
+    <ul className="activity-list">
       {activities.map((activity) => {
         const isCanceled = activity.status === "canceled"
         const isCompleted = activity.status === "completed"
@@ -48,19 +48,19 @@ export default function ActivityList({
         return (
           <li
             key={activity.id}
-            className={`rounded-2xl border p-4 ${isCanceled ? "activity-card-canceled" : "border-[var(--border-primary)] bg-[var(--surface-2)]"}`}
+            className={`activity-card ${isCanceled ? "activity-card-canceled" : ""}`}
           >
-            <div className="flex flex-col gap-3">
-              <div className="flex justify-between items-start gap-4">
+            <div className="activity-card-body">
+              <div className="activity-card-header">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffcc80]">{activity.type}</p>
-                  <p className={`mt-1 text-sm font-semibold ${isCanceled ? "text-[var(--text-secondary)]" : "text-[var(--text-primary)]"}`}>
+                  <p className="activity-card-type">{activity.type}</p>
+                  <p className={`activity-card-title ${isCanceled ? "activity-card-title-canceled" : ""}`}>
                     {activity.title}
                   </p>
                 </div>
-                <div className="flex items-start gap-2">
+                <div className="activity-card-actions">
                   <span
-                    className={`activity-status-pill inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                    className={`activity-status-pill ${
                       isCanceled
                         ? "activity-status-pill-canceled"
                         : isIncoming
@@ -75,26 +75,26 @@ export default function ActivityList({
                       type="button"
                       onClick={() => canEdit && onEdit(activity)}
                       disabled={!canEdit}
-                      className={`${isReadOnly ? "activity-action-muted" : "console-button-secondary"} rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]`}
+                      className={`${isReadOnly ? "activity-action-muted" : "console-button-secondary"} activity-edit-button`}
                     >
                       Edit
                     </button>
                   )}
                 </div>
               </div>
-              {activity.description && <p className={`text-sm ${isCanceled ? "text-[var(--text-muted)]" : "text-[var(--text-secondary)]"}`}>{activity.description}</p>}
-              <div className={`space-y-1 text-xs ${isCanceled ? "text-[var(--text-subtle)]" : "text-[var(--text-muted)]"}`}>
+              {activity.description && <p className={`activity-card-description ${isCanceled ? "activity-card-description-canceled" : ""}`}>{activity.description}</p>}
+              <div className={`activity-card-meta ${isCanceled ? "activity-card-meta-canceled" : ""}`}>
                 <p>{formatDateTime(activity.scheduled_at)}</p>
                 <p>Doctors: {formatPersonNames(activity.doctors, "Dr. ")}</p>
                 <p>Patients: {formatPersonNames(activity.patients)}</p>
               </div>
               {onCancel && (
-                <div className="flex justify-end">
+                <div className="activity-card-cancel-row">
                   <button
                     type="button"
                     onClick={() => canCancel && onCancel(activity)}
                     disabled={!canCancel}
-                    className={`${isReadOnly ? "activity-action-muted" : "activity-action-danger"} rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]`}
+                    className={isReadOnly ? "activity-action-muted" : "activity-action-danger"}
                   >
                     Cancel Activity
                   </button>

@@ -265,12 +265,22 @@ export default function ProfilePage() {
   const [selectedActivity, setSelectedActivity] = useState(null)
   const [activityPendingCancellation, setActivityPendingCancellation] = useState(null)
   const [activityPage, setActivityPage] = useState(1)
-  const activityPageSize = 4
+  const shouldExtendProfileWorkspace = assignedPatients.length >= 4 && activities.length > 0
+  const activityPageSize = shouldExtendProfileWorkspace
+    ? 4
+    : assignedPatients.length === 1
+      ? 1
+      : 2
   const paginatedActivities = useMemo(() => {
     const start = (activityPage - 1) * activityPageSize
     return activities.slice(start, start + activityPageSize)
   }, [activities, activityPage, activityPageSize])
   const totalActivityPages = Math.ceil(activities.length / activityPageSize)
+  const profileWorkspaceClassName = `medstream-profile-workspace-grid ${
+    shouldExtendProfileWorkspace
+      ? "medstream-profile-workspace-grid-extended"
+      : "medstream-profile-workspace-grid-compact"
+  }`
 
   const authHeaders = useMemo(() => ({
     Authorization: `Bearer ${token}`,
@@ -826,7 +836,7 @@ export default function ProfilePage() {
                 </ColumnLayout>
               </Container>
 
-              <div className="medstream-profile-workspace-grid">
+              <div className={profileWorkspaceClassName}>
                 <div className="medstream-stretch-container medstream-assigned-patients-card">
                   <Container
                     header={
@@ -886,7 +896,7 @@ export default function ProfilePage() {
                       loading={isLoading}
                       emptyMessage="No patients are currently assigned to this doctor."
                       pageSize={4}
-                      controlsLayoutClassName="hidden"
+                      controlsLayoutClassName="medstream-hidden"
                       getItemKey={(patient) => patient.id}
                       shellClassName="medstream-profile-list-shell"
                       bodyClassName="medstream-profile-list"
@@ -894,8 +904,8 @@ export default function ProfilePage() {
                         <div className="medstream-profile-list-row">
                           <div className="medstream-profile-row-main">
                             <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Link className="console-link text-base font-semibold transition" to={`/patient/${patient.id}?from=profile`}>
+                              <div className="medstream-profile-patient-heading-row">
+                                <Link className="console-link medstream-profile-patient-link" to={`/patient/${patient.id}?from=profile`}>
                                   {formatPatientFullName(patient)}
                                 </Link>
                                 {patient.is_discharged && (
@@ -903,7 +913,7 @@ export default function ProfilePage() {
                                 )}
                               </div>
                               <p className="medstream-profile-row-meta">{patient.department}</p>
-                              <p className="mt-1 text-sm text-[var(--text-secondary)]">{patient.cnp}</p>
+                              <p className="medstream-profile-row-cnp">{patient.cnp}</p>
                             </div>
                             {(() => {
                               const hasCount = Object.prototype.hasOwnProperty.call(patientDoctorCounts, patient.id)
@@ -1153,7 +1163,7 @@ export default function ProfilePage() {
                             type="button"
                             onClick={handleResendVerification}
                             disabled={isResendingVerification}
-                            className="console-button-secondary rounded-lg px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--border-primary)] disabled:text-[var(--text-secondary)]"
+                            className="console-button-secondary medstream-profile-resend-button"
                           >
                             {isResendingVerification ? "Resending..." : "Resend email"}
                           </button>

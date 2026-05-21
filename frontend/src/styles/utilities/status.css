@@ -1,0 +1,399 @@
+.alert-critical {
+  color: #fff0f2;
+  background: #3a1f25;
+  border-color: #a33a45;
+}
+
+.alert-normal {
+  color: #dbe2ea;
+  background: var(--surface-muted);
+  border-color: var(--border-strong);
+}
+
+[data-theme="light"] .alert-critical {
+  color: #9f1239;
+  background: #ffe7ec;
+  border-color: #e38a98;
+}
+
+[data-theme="light"] .alert-high {
+  color: #92400e;
+  background: #fff2df;
+  border-color: #e8b169;
+}
+
+[data-theme="light"] .alert-normal {
+  color: #166534;
+  background: #e9f8ef;
+  border-color: #86d2ac;
+}
+
+.status-pill {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.status-pill-danger {
+  border-color: #7f1d1d;
+  background: #3b1010;
+  color: #fecaca;
+}
+
+.status-pill-success {
+  border-color: #1f4d36;
+  background: #0e2519;
+  color: #bbf7d0;
+}
+
+.status-pill-neutral {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .status-pill-danger {
+  border-color: #e38a98;
+  background: #ffe7ec;
+  color: #9f1239;
+}
+
+[data-theme="light"] .status-pill-success {
+  border-color: #86d2ac;
+  background: #e9f8ef;
+  color: #166534;
+}
+
+[data-theme="light"] .status-pill-neutral {
+  border-color: #b7c7d9;
+  background: #edf2f7;
+  color: #334155;
+}
+
+.status-surface {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.status-surface-danger {
+  border-color: #5b2a2f;
+  background: #2a1618;
+}
+
+.status-surface-warning {
+  border-color: #5d4a1f;
+  background: #2a2111;
+}
+
+.status-surface-success {
+  border-color: #1f4f3a;
+  background: #11251c;
+}
+
+.status-surface-info {
+  border-color: #245267;
+  background: #11232c;
+}
+
+.status-surface-neutral {
+  border-color: var(--border-subtle);
+  background: var(--surface-3);
+}
+
+[data-theme="light"] .status-surface-danger {
+  border-color: #e59cab;
+  background: #fdebf0;
+}
+
+[data-theme="light"] .status-surface-warning {
+  border-color: #edc58b;
+  background: #fff5e8;
+}
+
+[data-theme="light"] .status-surface-success {
+  border-color: #9ad8b7;
+  background: #ecfaf2;
+}
+
+[data-theme="light"] .status-surface-info {
+  border-color: #a5c7e8;
+  background: #eef5fd;
+}
+
+[data-theme="light"] .status-surface-neutral {
+  border-color: #cad7e5;
+  background: #f2f6fa;
+}
+
+.warning-banner {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.warning-banner-danger {
+  border-color: #7f1d1d;
+  background: #2b1212;
+  color: #fecaca;
+}
+
+[data-theme="light"] .warning-banner-danger {
+  border-color: #e38a98;
+  background: #ffe9ee;
+  color: #9f1239;
+}
+
+.discharge-summary-banner {
+  border: 1px solid #6b1d1d;
+  background: #241212;
+}
+
+.discharge-summary-title {
+  color: #fca5a5;
+}
+
+.discharge-summary-label {
+  color: #bfa7a7;
+}
+
+[data-theme="light"] .discharge-summary-banner {
+  border-color: #e59cab;
+  background: #ffedf1;
+}
+
+[data-theme="light"] .discharge-summary-title {
+  color: #9f1239;
+}
+
+[data-theme="light"] .discharge-summary-label {
+  color: #be123c;
+}
+
+.activity-card-canceled {
+  border-color: #5b616b;
+  background: #10151b;
+  opacity: 0.72;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-empty-state,
+.activity-card {
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.activity-empty-state {
+  padding: 20px 16px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.activity-card {
+  padding: 16px;
+}
+
+.activity-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.activity-card-type {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #ffcc80;
+}
+
+.activity-card-title {
+  margin: 4px 0 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.activity-card-title-canceled {
+  color: var(--text-secondary);
+}
+
+.activity-card-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.activity-card-description {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.activity-card-description-canceled {
+  color: var(--text-muted);
+}
+
+.activity-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.activity-card-meta p {
+  margin: 0;
+}
+
+.activity-card-meta-canceled {
+  color: var(--text-subtle);
+}
+
+.activity-card-cancel-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+[data-theme="light"] .activity-card-canceled {
+  border-color: #cfd8e3;
+  background: #f4f7fa;
+  opacity: 1;
+}
+
+.activity-status-pill {
+  display: inline-flex;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.activity-status-pill-incoming {
+  border-color: #8b6914;
+  background: #2d2208;
+  color: #ffd76b;
+}
+
+.activity-status-pill-completed {
+  border-color: #1f4d36;
+  background: #0e2519;
+  color: #bbf7d0;
+}
+
+.activity-status-pill-canceled,
+.activity-status-pill-cancelled {
+  border-color: #5b616b;
+  background: #1a2028;
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .activity-status-pill-incoming {
+  border-color: #e8b169;
+  background: #fff2df;
+  color: #92400e;
+}
+
+[data-theme="light"] .activity-status-pill-completed {
+  border-color: #8fd3af;
+  background: #eaf9f0;
+  color: #166534;
+}
+
+[data-theme="light"] .activity-status-pill-canceled,
+[data-theme="light"] .activity-status-pill-cancelled {
+  border-color: #e5b5be;
+  background: #fdf1f3;
+  color: #9f1239;
+}
+
+.activity-action-danger {
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 16px;
+  border-color: #a33a45;
+  background: #3a1f25;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #ffd8dc;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+.activity-action-danger:hover {
+  background: #47262d;
+}
+
+[data-theme="light"] .activity-action-danger {
+  border-color: #e38a98;
+  background: #ffe7ec;
+  color: #9f1239;
+}
+
+[data-theme="light"] .activity-action-danger:hover {
+  background: #ffdce4;
+}
+
+.activity-action-muted {
+  border-width: 1px;
+  border-style: solid;
+  border-color: #5f6a77;
+  border-radius: 16px;
+  background: #1b2430;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #9aa5b1;
+  cursor: pointer;
+}
+
+.activity-action-muted:hover {
+  background: #1f2a37;
+}
+
+[data-theme="light"] .activity-action-muted {
+  border-color: #c7d2df;
+  background: #eef2f6;
+  color: #64748b;
+}
+
+[data-theme="light"] .activity-action-muted:hover {
+  background: #e8edf3;
+}
+
+.activity-edit-button {
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activity-action-danger:disabled,
+.activity-action-muted:disabled,
+.activity-edit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  border-color: var(--border-strong);
+  background: var(--border-primary);
+  color: var(--text-secondary);
+}

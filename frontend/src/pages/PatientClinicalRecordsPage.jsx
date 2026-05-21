@@ -852,7 +852,7 @@ export default function PatientClinicalRecordsPage() {
               loading={isLoading}
               pageSize={8}
               emptyMessage="No records match the current filter."
-              controlsLayoutClassName="hidden"
+              controlsLayoutClassName="medstream-hidden"
               shellClassName="medstream-clinical-record-shell"
               bodyClassName="medstream-clinical-record-list"
               getItemKey={(item) => `${item.type}-${item.id}`}

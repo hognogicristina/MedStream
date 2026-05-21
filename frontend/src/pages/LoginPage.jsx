@@ -70,7 +70,7 @@ export default function LoginPage() {
       <div className="login-card monitor-card">
         <div className="login-layout">
           <aside className="login-aside">
-            <div className="flex items-center justify-between gap-3">
+            <div className="auth-brand-row">
               <p className="login-brand">MedStream Console</p>
             </div>
             <h1 className="login-title">{"Doctor Access"}</h1>
@@ -128,7 +128,7 @@ export default function LoginPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-3 text-sm">
+              <div className="auth-link-row">
                 <Link className="auth-link" to="/forgot-password">
                   {"Forgot password?"}
                 </Link>
@@ -145,7 +145,7 @@ export default function LoginPage() {
                 {isSubmitting ? ("Signing in...") : ("Login")}
               </button>
 
-              <div className="flex items-center justify-between gap-3 text-sm">
+              <div className="auth-link-row">
                 <Link className="auth-link" to="/register">
                   {"Need an account? Register"}
                 </Link>

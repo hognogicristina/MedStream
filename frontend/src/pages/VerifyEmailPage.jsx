@@ -82,7 +82,7 @@ export default function VerifyEmailPage() {
       <div className="login-card monitor-card">
         <div className="login-layout">
           <aside className="login-aside">
-            <div className="flex items-center justify-between gap-3">
+            <div className="auth-brand-row">
               <p className="login-brand">MedStream Console</p>
             </div>
             <h1 className="login-title">{"Email Verification"}</h1>

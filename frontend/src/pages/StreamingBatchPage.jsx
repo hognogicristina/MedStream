@@ -21,7 +21,7 @@ import {getErrorMessage, getResponseData} from "../services/apiMessages.js"
 import {downloadCSV} from "../utils/downloadCSV.js"
 import {useNotifications} from "../hooks/useNotifications.js"
 import AwsLineChart from "../components/AwsLineChart.jsx"
-import BackButton from "../components/BackButton.jsx"
+import AppBreadcrumbs from "../components/AppBreadcrumbs.jsx"
 import LoadingSpinner from "../components/LoadingSpinner.jsx"
 import {formatBucharestNumericDateTime, formatBucharestTime} from "../utils/time.js"
 
@@ -783,7 +783,7 @@ export default function StreamingBatchPage() {
       <div className="medstream-comparison-page">
         <SpaceBetween size="m">
         <div className="medstream-page-header">
-          <BackButton fallbackTo="/dashboard"/>
+          <AppBreadcrumbs/>
           <div className="medstream-page-heading-row">
             <div>
               <h1 className="medstream-page-title">Streaming vs Batch</h1>
