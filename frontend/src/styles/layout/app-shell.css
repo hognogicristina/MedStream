@@ -36,6 +36,7 @@
 .medstream-sidebar-collapsed {
   z-index: 120;
   width: 64px;
+  border-right: 0;
 }
 
 .medstream-sidebar-panel {
@@ -69,6 +70,7 @@
 }
 
 .medstream-icon-rail {
+  position: relative;
   z-index: 120;
   display: flex;
   width: 100%;
@@ -81,6 +83,17 @@
   box-shadow: inset 0 2px 0 var(--border-primary);
   overflow: visible;
   padding: 16px 8px 24px;
+}
+
+.medstream-icon-rail::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-primary);
+  content: "";
+  pointer-events: none;
 }
 
 .medstream-rail-dropdown-icon {
